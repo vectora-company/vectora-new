@@ -20,6 +20,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from backend.evaluation.metrics import BenchmarkMetric, RunProvenance
+
 RunStatus = Literal["passed", "failed", "blocked", "skipped", "not_run"]
 _SENSITIVE_ENV = re.compile(
     r"(?:API[_-]?KEY|ACCESS[_-]?KEY|(?:^|_)KEY(?:_|$)|AUTH|"
@@ -56,6 +58,8 @@ class InstalledSmokeReport(BaseModel):
     profile_isolated: bool = True
     workspace_isolated: bool = True
     host: dict[str, str] = Field(default_factory=dict)
+    provenance: RunProvenance
+    metrics: list[BenchmarkMetric] = Field(default_factory=list)
     diagnostics: list[EvaluationDiagnostic] = Field(default_factory=list)
 
 
@@ -180,6 +184,25 @@ def _report(
         duration_ms=duration_ms,
         exit_code=exit_code,
         host={"system": platform.system(), "machine": platform.machine() or "unknown"},
+        provenance=RunProvenance(
+            run_id=run_id,
+            scenario_id="installed-app-startup",
+            started_at=started_at.isoformat(),
+            host_system=platform.system(),
+            host_machine=platform.machine() or "unknown",
+        ),
+        metrics=[
+            BenchmarkMetric(
+                run_id=run_id,
+                scenario_id="installed-app-startup",
+                stage="installed_app_startup",
+                name="duration",
+                value=float(duration_ms),
+                unit="ms",
+                dimension="performance",
+                source="python.monotonic_ns",
+            )
+        ],
         diagnostics=[
             EvaluationDiagnostic(
                 stage="installed_app_startup",

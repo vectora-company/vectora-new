@@ -91,6 +91,9 @@ def test_eval_smoke_cli_writes_structured_report(
     expected = installed.InstalledSmokeReport(
         run_id="run-test",
         status="passed",
+        provenance=installed.RunProvenance(
+            run_id="run-test", scenario_id="installed-app-startup"
+        ),
         app_path="/opt/vectora",
         started_at="2026-11-24T00:00:00+00:00",
         finished_at="2026-11-24T00:00:01+00:00",
