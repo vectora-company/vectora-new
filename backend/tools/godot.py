@@ -127,32 +127,30 @@ async def _terminate_process_tree(
     """Encerra a árvore inteira e sempre tenta coletar o processo principal."""
     current_platform = platform_name or os.name
     if current_platform == "nt":
-        try:
-            killer = await asyncio.create_subprocess_exec(
-                "taskkill",
-                "/F",
-                "/T",
-                "/PID",
-                str(process.pid),
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
+        taskkill = shutil.which("taskkill")
+        if taskkill is not None:
             try:
-                await asyncio.wait_for(killer.wait(), timeout=5)
-            except TimeoutError:
-                killer.kill()
-        except OSError:
-            pass
+                killer = await asyncio.create_subprocess_exec(
+                    taskkill,
+                    "/F",
+                    "/T",
+                    "/PID",
+                    str(process.pid),
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                try:
+                    await asyncio.wait_for(killer.wait(), timeout=5)
+                except TimeoutError:
+                    killer.kill()
+            except OSError:
+                pass
     else:
-        try:
+        with contextlib.suppress(ProcessLookupError):
             os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
     if process.returncode is None:
-        try:
+        with contextlib.suppress(ProcessLookupError):
             process.kill()
-        except ProcessLookupError:
-            pass
 
 
 @vtool(
