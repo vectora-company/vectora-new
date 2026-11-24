@@ -91,11 +91,13 @@ Para verificar que a interface realmente montou conteúdo, use
 `vectora eval ui-smoke --app /caminho/para/Vectora --report ui-smoke.json`.
 Esse modo usa uma porta CDP efêmera restrita a `127.0.0.1`, espera o renderer
 instalado concluir o carregamento e exige a rota React e a titlebar montadas
-dentro de `#root`. O relatório usa `scenario_id=installed-app-ui` e guarda o
-resultado em `renderer_status`, sem classificar o teste como execução de tarefa,
-teste de qualidade ou evidência de provider. O app e os processos filhos são encerrados
-ao terminar a verificação; o limite total inclui inicialização, inspeção e
-encerramento. O endpoint não é habilitado no smoke comum nem em uso normal.
+dentro de `#root`. Em seguida, aciona o botão de recarga da titlebar e verifica
+que a rota e a barra voltaram a montar; a duração da ação fica em
+`renderer_reload_duration_ms`. O relatório usa `scenario_id=installed-app-ui` e
+mantém o resultado separado de execução de tarefa, teste de qualidade ou
+evidência de provider. O app e os processos filhos são encerrados ao terminar a
+verificação; o limite total inclui inicialização, interação e encerramento. O
+endpoint não é habilitado no smoke comum nem em uso normal.
 
 O backend recebe o mesmo `run_id` e pode registrar etapas estruturadas para
 migrations SQLite, tabela de sessões, storage configurado, worker de embeddings,

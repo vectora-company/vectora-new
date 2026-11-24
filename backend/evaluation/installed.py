@@ -94,6 +94,8 @@ class InstalledSmokeReport(BaseModel):
     renderer_root_children: int | None = Field(default=None, ge=0)
     renderer_route_mounted: bool | None = None
     renderer_titlebar_mounted: bool | None = None
+    renderer_reload_status: RunStatus = "not_run"
+    renderer_reload_duration_ms: float | None = Field(default=None, ge=0)
     host: dict[str, str] = Field(default_factory=dict)
     app_version: str | None = None
     electron_version: str | None = None
@@ -121,8 +123,8 @@ def _available_loopback_port() -> int:
 
 def _inspect_installed_renderer(
     port: int, timeout_seconds: float
-) -> tuple[str, int, bool, bool]:
-    """Verify a mounted React root over the temporary, loopback-only CDP endpoint."""
+) -> tuple[str, int, bool, bool, float]:
+    """Exercise titlebar reload and verify the installed React route remounts."""
     from playwright.sync_api import sync_playwright
 
     endpoint = f"http://127.0.0.1:{port}"
@@ -170,7 +172,30 @@ def _inspect_installed_renderer(
                 or titlebar_mounted is not True
             ):
                 raise RuntimeError("O renderer não retornou estado verificável.")
-            return ready_state, root_children, route_mounted, titlebar_mounted
+            reload_started_ns = time.monotonic_ns()
+            reload_button = page.locator("#root [data-titlebar] button").nth(1)
+            if reload_button.count() == 0:
+                raise RuntimeError("A ação de recarregar da titlebar não existe.")
+            reload_button.click(timeout=max(1, round(timeout_seconds * 1000)))
+            page.wait_for_function(
+                """() => {
+                  const root = document.querySelector('#root');
+                  const navigation = performance.getEntriesByType('navigation')[0];
+                  return document.readyState === 'complete' &&
+                    navigation?.type === 'reload' &&
+                    root?.querySelector('[data-route]') &&
+                    root.querySelector('[data-titlebar]');
+                }""",
+                timeout=max(1, round(timeout_seconds * 1000)),
+            )
+            reload_duration_ms = (time.monotonic_ns() - reload_started_ns) / 1_000_000
+            return (
+                ready_state,
+                root_children,
+                route_mounted,
+                titlebar_mounted,
+                reload_duration_ms,
+            )
         finally:
             with suppress(Exception):
                 browser.close()
@@ -287,6 +312,8 @@ def _report(
     renderer_root_children: int | None = None,
     renderer_route_mounted: bool | None = None,
     renderer_titlebar_mounted: bool | None = None,
+    renderer_reload_status: RunStatus = "not_run",
+    renderer_reload_duration_ms: float | None = None,
 ) -> InstalledSmokeReport:
     """Create a terminal report without copying application logs or user data."""
     finished_ns = time.monotonic_ns()
@@ -387,6 +414,8 @@ def _report(
         renderer_root_children=renderer_root_children,
         renderer_route_mounted=renderer_route_mounted,
         renderer_titlebar_mounted=renderer_titlebar_mounted,
+        renderer_reload_status=renderer_reload_status,
+        renderer_reload_duration_ms=renderer_reload_duration_ms,
         stage_timings_ms=timings,
         backend_stages=backend_stage_records,
         provenance=RunProvenance(
@@ -412,6 +441,22 @@ def _report(
             ),
             *stage_metrics,
             *backend_stage_metrics,
+            *(
+                [
+                    BenchmarkMetric(
+                        run_id=run_id,
+                        scenario_id=scenario_id,
+                        stage="installed_app_ui",
+                        name="titlebar_reload_duration",
+                        value=renderer_reload_duration_ms,
+                        unit="ms",
+                        dimension="performance",
+                        source="playwright.cdp.monotonic_ns",
+                    )
+                ]
+                if renderer_reload_duration_ms is not None
+                else []
+            ),
             *(resource_metrics or []),
         ],
         diagnostics=[
@@ -436,6 +481,22 @@ def _report(
                             f"titlebar={renderer_titlebar_mounted}"
                             if renderer_status == "passed"
                             else "o renderer instalado não passou pela verificação CDP"
+                        ),
+                    )
+                ]
+                if ui_test
+                else []
+            ),
+            *(
+                [
+                    EvaluationDiagnostic(
+                        stage="renderer_titlebar_reload",
+                        status=renderer_reload_status,
+                        duration_ms=round(renderer_reload_duration_ms or 0),
+                        detail=(
+                            "recarregamento via titlebar remontou a rota e a titlebar"
+                            if renderer_reload_status == "passed"
+                            else "ação de recarga da titlebar não foi verificada"
                         ),
                     )
                 ]
@@ -533,6 +594,8 @@ def run_installed_smoke(  # noqa: PLR0911
         renderer_root_children: int | None = None
         renderer_route_mounted: bool | None = None
         renderer_titlebar_mounted: bool | None = None
+        renderer_reload_duration_ms: float | None = None
+        renderer_reload_status: RunStatus = "not_run"
         backend_stages: dict[str, BackendStageRecord] = {}
         app_metadata: tuple[str, str, str, str | None, bool | None] | None = None
         marker_lock = threading.Lock()
@@ -633,11 +696,13 @@ def run_installed_smoke(  # noqa: PLR0911
                     renderer_root_children,
                     renderer_route_mounted,
                     renderer_titlebar_mounted,
+                    renderer_reload_duration_ms,
                 ) = _inspect_installed_renderer(
                     cdp_port,
                     max(0.1, deadline - time.monotonic()),
                 )
                 renderer_status = "passed"
+                renderer_reload_status = "passed"
                 exit_code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
             else:
                 exit_code = process.wait(timeout=timeout_seconds)
@@ -659,6 +724,8 @@ def run_installed_smoke(  # noqa: PLR0911
                 renderer_root_children=renderer_root_children,
                 renderer_route_mounted=renderer_route_mounted,
                 renderer_titlebar_mounted=renderer_titlebar_mounted,
+                renderer_reload_status=renderer_reload_status,
+                renderer_reload_duration_ms=renderer_reload_duration_ms,
             )
         except Exception as exc:
             _terminate_process_tree(process)
@@ -679,6 +746,8 @@ def run_installed_smoke(  # noqa: PLR0911
                 renderer_status="failed" if ui_test else "not_run",
                 renderer_route_mounted=renderer_route_mounted,
                 renderer_titlebar_mounted=renderer_titlebar_mounted,
+                renderer_reload_status="failed" if ui_test else "not_run",
+                renderer_reload_duration_ms=renderer_reload_duration_ms,
             )
         except KeyboardInterrupt:
             _terminate_process_tree(process)
@@ -698,6 +767,8 @@ def run_installed_smoke(  # noqa: PLR0911
                 renderer_root_children=renderer_root_children,
                 renderer_route_mounted=renderer_route_mounted,
                 renderer_titlebar_mounted=renderer_titlebar_mounted,
+                renderer_reload_status=renderer_reload_status,
+                renderer_reload_duration_ms=renderer_reload_duration_ms,
             )
         finally:
             if process.poll() is None:
@@ -743,4 +814,6 @@ def run_installed_smoke(  # noqa: PLR0911
             renderer_root_children=renderer_root_children,
             renderer_route_mounted=renderer_route_mounted,
             renderer_titlebar_mounted=renderer_titlebar_mounted,
+            renderer_reload_status=renderer_reload_status,
+            renderer_reload_duration_ms=renderer_reload_duration_ms,
         )
