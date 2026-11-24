@@ -1,0 +1,119 @@
+name: PR maintenance filter
+
+on:
+  workflow_call:
+    inputs:
+      workflow_name:
+        description: Nome do workflow que precisa de um resultado anterior aprovado
+        required: true
+        type: string
+    outputs:
+      run_checks:
+        description: Se o diff efetivo do PR precisa ser validado novamente
+        value: ${{ jobs.classify.outputs.run_checks }}
+
+jobs:
+  classify:
+    name: Detecta atualização sem mudança no diff
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      run_checks: ${{ steps.classify.outputs.run_checks }}
+    steps:
+      - name: Compara com o último diff aprovado
+        id: classify
+        uses: actions/github-script@v8
+        with:
+          script: |
+            core.setOutput('run_checks', 'true');
+            const pullRequest = context.payload.pull_request;
+            const runChecks = (reason) => {
+              core.info(`CI será executado: ${reason}`);
+              core.setOutput('run_checks', 'true');
+            };
+
+            try {
+              if (!pullRequest || context.payload.action !== 'synchronize') {
+                runChecks('não é um evento de sincronização de commits do PR');
+                return;
+              }
+
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const workflowName = core.getInput('workflow_name');
+              const runs = await github.paginate(
+                github.rest.actions.listWorkflowRunsForRepo,
+                {
+                  owner,
+                  repo,
+                  branch: pullRequest.head.ref,
+                  event: 'pull_request',
+                  per_page: 100,
+                },
+              );
+              const previousRun = runs.find((run) =>
+                run.name === workflowName &&
+                run.conclusion === 'success' &&
+                run.head_sha !== pullRequest.head.sha &&
+                run.pull_requests?.some((item) => item.number === pullRequest.number),
+              );
+
+              if (!previousRun) {
+                runChecks('não existe uma execução aprovada anterior para este PR');
+                return;
+              }
+
+              const previousPullRequest = previousRun.pull_requests.find(
+                (item) => item.number === pullRequest.number,
+              );
+              const previousBase = previousPullRequest?.base?.sha;
+              const previousHead = previousRun.head_sha;
+              const currentBase = pullRequest.base.sha;
+              const currentHead = pullRequest.head.sha;
+
+              if (!previousBase || !previousHead || !currentBase || !currentHead) {
+                runChecks('faltam SHAs para comparar os diffs');
+                return;
+              }
+
+              const compare = async (base, head) => {
+                const response = await github.rest.repos.compareCommitsWithBasehead({
+                  owner,
+                  repo,
+                  basehead: `${base}...${head}`,
+                });
+                const files = response.data.files;
+                if (!Array.isArray(files) || files.some((file) => typeof file.patch !== 'string')) {
+                  return null;
+                }
+                return files
+                  .map((file) => ({
+                    filename: file.filename,
+                    previous_filename: file.previous_filename ?? null,
+                    status: file.status,
+                    additions: file.additions,
+                    deletions: file.deletions,
+                    patch: file.patch,
+                  }))
+                  .sort((left, right) => left.filename.localeCompare(right.filename));
+              };
+
+              const [oldDiff, newDiff] = await Promise.all([
+                compare(previousBase, previousHead),
+                compare(currentBase, currentHead),
+              ]);
+
+              if (oldDiff !== null && newDiff !== null &&
+                  JSON.stringify(oldDiff) === JSON.stringify(newDiff)) {
+                core.info('O diff atual é idêntico ao último diff aprovado; os jobs pesados serão pulados.');
+                core.setOutput('run_checks', 'false');
+                return;
+              }
+              runChecks('o diff mudou ou a comparação não foi conclusiva');
+            } catch (error) {
+              core.warning(`Falha ao classificar a atualização; CI seguirá normalmente: ${error.message}`);
+              runChecks('a classificação falhou e o filtro é fail-open');
+            }

@@ -10,14 +10,28 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
+  pull-requests: read
 
 env:
   PYTHON_VERSION: "3.13"
 
 jobs:
+  pr_maintenance:
+    if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+    uses: ./.github/workflows/pr-maintenance-check.yml
+    with:
+      workflow_name: ${{ github.workflow }}
+
   security:
     name: Security Scanning
+    needs: pr_maintenance
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+      github.event.action != 'synchronize' ||
+      needs.pr_maintenance.outputs.run_checks != 'false')
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
