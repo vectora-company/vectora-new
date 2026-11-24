@@ -86,6 +86,53 @@ def test_cancelled_pending_effect_becomes_uncertain_and_cannot_repeat() -> None:
     assert journal.prepare("another-run", "effect-1")
 
 
+def test_effect_journal_survives_executor_restart_and_blocks_redispatch(
+    tmp_path: Path,
+) -> None:
+    journal_path = tmp_path / "state" / "effects.sqlite3"
+    first_executor = EffectJournal(journal_path)
+    assert first_executor.prepare("run", "external-write")
+    first_executor.close()
+
+    resumed_executor = EffectJournal(journal_path)
+    assert resumed_executor.status("run", "external-write") == "prepared"
+    result = cancel_guarded_run(resumed_executor, "run")
+    assert result.status == "cancelled"
+    resumed_executor.close()
+
+    recovered_executor = EffectJournal(journal_path)
+    assert recovered_executor.status("run", "external-write") == "uncertain"
+    assert not recovered_executor.prepare("run", "external-write")
+    assert recovered_executor.prepare("new-run", "external-write")
+    recovered_executor.close()
+
+
+def test_multiple_executors_reserve_a_persistent_effect_only_once(
+    tmp_path: Path,
+) -> None:
+    journal_path = tmp_path / "effects.sqlite3"
+    journals = [EffectJournal(journal_path), EffectJournal(journal_path)]
+    barrier = threading.Barrier(2)
+    results: list[bool] = []
+
+    def reserve(journal: EffectJournal) -> None:
+        barrier.wait(timeout=2)
+        results.append(journal.prepare("run", "same-effect"))
+
+    threads = [
+        threading.Thread(target=reserve, args=(journal,)) for journal in journals
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=3)
+        assert not thread.is_alive()
+    for journal in journals:
+        journal.close()
+
+    assert sorted(results) == [False, True]
+
+
 def test_guarded_effect_rechecks_policy_and_deduplicates_dispatch(
     tmp_path: Path,
 ) -> None:

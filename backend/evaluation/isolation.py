@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -66,52 +67,89 @@ class ScenarioIsolationGuard:
 
 
 class EffectJournal:
-    """Journal local que bloqueia replay ambíguo de efeitos externos."""
+    """Journal SQLite que bloqueia replay ambíguo de efeitos externos."""
 
-    def __init__(self) -> None:
-        self._effects: dict[tuple[str, str], EffectStatus] = {}
+    def __init__(self, path: Path | str = ":memory:") -> None:
+        """Abre o journal; um caminho em disco preserva estados entre processos."""
+        if str(path) != ":memory:":
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        self._connection = sqlite3.connect(
+            str(path), timeout=5, check_same_thread=False
+        )
+        self._connection.execute(
+            """CREATE TABLE IF NOT EXISTS evaluation_effect_journal (
+                run_id TEXT NOT NULL,
+                effect_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (
+                    status IN ('prepared', 'applied', 'failed', 'uncertain')
+                ),
+                PRIMARY KEY (run_id, effect_id)
+            )"""
+        )
+        self._connection.commit()
 
     def prepare(self, run_id: str, effect_id: str) -> bool:
         """Reserva um efeito uma única vez antes do dispatch."""
-        key = (run_id, effect_id)
+        if not run_id or not effect_id:
+            raise ValueError("run_id e effect_id são obrigatórios")
         with self._lock:
-            if key in self._effects:
-                return False
-            self._effects[key] = "prepared"
-            return True
+            cursor = self._connection.execute(
+                "INSERT OR IGNORE INTO evaluation_effect_journal "
+                "(run_id, effect_id, status) VALUES (?, ?, 'prepared')",
+                (run_id, effect_id),
+            )
+            self._connection.commit()
+            return cursor.rowcount == 1
 
     def finish(self, run_id: str, effect_id: str, *, applied: bool) -> None:
         """Registra o desfecho de um efeito preparado."""
-        key = (run_id, effect_id)
         with self._lock:
-            if self._effects.get(key) != "prepared":
+            cursor = self._connection.execute(
+                "UPDATE evaluation_effect_journal SET status = ? "
+                "WHERE run_id = ? AND effect_id = ? AND status = 'prepared'",
+                ("applied" if applied else "failed", run_id, effect_id),
+            )
+            self._connection.commit()
+            if cursor.rowcount != 1:
                 raise ValueError("efeito não está preparado")
-            self._effects[key] = "applied" if applied else "failed"
 
     def mark_uncertain(self, run_id: str, effect_id: str) -> None:
         """Marca dispatch interrompido como ambíguo; não será repetido."""
-        key = (run_id, effect_id)
         with self._lock:
-            if self._effects.get(key) != "prepared":
+            cursor = self._connection.execute(
+                "UPDATE evaluation_effect_journal SET status = 'uncertain' "
+                "WHERE run_id = ? AND effect_id = ? AND status = 'prepared'",
+                (run_id, effect_id),
+            )
+            self._connection.commit()
+            if cursor.rowcount != 1:
                 raise ValueError("efeito não está preparado")
-            self._effects[key] = "uncertain"
 
     def status(self, run_id: str, effect_id: str) -> EffectStatus | None:
         """Retorna o estado isolado do efeito daquela execução."""
         with self._lock:
-            return self._effects.get((run_id, effect_id))
+            row = self._connection.execute(
+                "SELECT status FROM evaluation_effect_journal "
+                "WHERE run_id = ? AND effect_id = ?",
+                (run_id, effect_id),
+            ).fetchone()
+            return row[0] if row is not None else None
 
     def mark_run_cancelled(self, run_id: str) -> None:
         """Marca efeitos em voo como incertos para bloquear retomada duplicada."""
         with self._lock:
-            pending = [
-                effect_id
-                for (effect_run_id, effect_id), status in self._effects.items()
-                if effect_run_id == run_id and status == "prepared"
-            ]
-        for effect_id in pending:
-            self.mark_uncertain(run_id, effect_id)
+            self._connection.execute(
+                "UPDATE evaluation_effect_journal SET status = 'uncertain' "
+                "WHERE run_id = ? AND status = 'prepared'",
+                (run_id,),
+            )
+            self._connection.commit()
+
+    def close(self) -> None:
+        """Fecha a conexão para permitir retomada em outro executor."""
+        with self._lock:
+            self._connection.close()
 
 
 @dataclass(frozen=True)
