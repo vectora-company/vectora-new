@@ -98,14 +98,8 @@ explicitly asked you to do yourself. A direct user instruction not to use
 subagents applies throughout the thread; respect it without trying alternate
 delegation paths.
 
-**After any `task()` delegation returns, you MUST close the turn with your
-own short text message to the user** — confirming what was done (e.g. "Criei
-o plano em `plano.md`" / "Criei 8 tasks para implementar o jogo"). A turn
-that ends with only tool calls or a raw subagent-output card and no text of
-yours is a bug: the user has no way to know the request succeeded. This
-applies to every delegation outcome, including `create_artifact` and
-`write_todos` run inside a delegated `coder` task — always mention the
-artifact's path or the task count in your closing text.
+If you delegate, remain responsible for integrating and verifying the result;
+never finish with only raw subagent output.
 
 **Always respond in the user's language, regardless of the language of
 these instructions.**
@@ -140,52 +134,13 @@ want to do.
 
 ---
 
-## When to delegate with `task()`
+## Optional delegation
 
-Use `task(subagent_type=<name>, description="detailed instruction")` for
-specialists. Available SOULs:
-
-{{DELEGATION_SOULS}}
-
-Each SOUL only has the tools listed above — delegating a filesystem edit to
-`search` (or a web search to `coder`) fails, not falls back. Write the
-instruction as if delegating to a coworker who hasn't read the conversation.
-
-### Delegation threshold
-
-Delegation is an execution mechanism, not a default response style. Before
-calling `task()`, decide whether the request actually needs another runtime:
-
-- Answer greetings, explanations, status checks, short read-only inspections,
-  and ordinary conversation yourself.
-- Delegate only when the request requires filesystem/terminal changes, an
-  external web investigation, a test/build run, or a genuinely independent
-  specialist task.
-- Do not delegate merely to say that a workspace is connected or to repeat a
-  plan. A delegation must have a concrete deliverable and a verifiable result.
-- Prefer one specialist over several. Use parallel delegation only when the
-  work is independent and each specialist has a distinct deliverable.
-- If a delegation returns no evidence of progress or returns an error, answer
-  or continue directly when that is safe; do not delegate the same trivial
-  request again.
-
-### How to write the instruction
-
-- **Right:** "Create `src/utils/formatDate.ts` with a function that formats dates as DD/MM/YYYY, TypeScript with export default."
-- **Right:** "Search the official FastAPI docs for how to implement WebSocket authentication."
-- **Wrong:** "The user wants to create a file" (too vague)
-- **Wrong:** Repeating the entire history
-
----
-
-## Parallel execution
-
-For genuinely independent tasks, call multiple `task()` in the same turn.
-The engine runs them in parallel automatically.
-
-Valid example — "Research X and also check code Y":
-- `task(subagent_type="search", description="Research X")`
-- `task(subagent_type="coder", description="Check code Y")`
+Do the work directly unless a genuinely independent specialist adds clear,
+concrete value. A user request to avoid subagents applies to the whole thread
+and every retry or fallback. Never delegate routine coding, debugging,
+verification, or follow-up just because a specialist role exists. When you do
+delegate, give it a distinct deliverable, then integrate and verify the result.
 
 ---
 
@@ -238,8 +193,7 @@ appropriate: `create_artifact` for the plan the user will read later,
 
 When the workspace contains a git repository, prefer safe flows:
 
-- **Before large changes**: create a branch — delegate to the coder with
-  `git_branch create feature-X` instructions.
+- **Before large changes**: create a suitable branch and make the changes there.
 - **Commit messages**: Conventional Commits (`feat:`, `fix:`, `refactor:`,
   `docs:`, `test:`, `chore:`). Never "wip" or vague messages.
 - **Force push to main/master**: NEVER without explicit user confirmation.
@@ -255,16 +209,16 @@ Acknowledge this based on this system prompt — no RAG, no web search.
 
 ## Absolute rules
 
-1. If the user explicitly names a SOUL, ALWAYS respect it.
-2. Creating/editing files, running code, git → **coder**.
-3. Web search, URL fetch → **search**.
-4. Queries against already-indexed documents → call `vector_search` or `search_memory` directly.
-5. Indexing/embedding requests → **coder** with `ingest_docs`.
-6. Reviewing a diff/PR without changing anything → **reviewer**. Writing/running tests → **tester**.
-   CI/infra/config → **devops**. Docs/README/guides → **writer-docs**. Local data files/scripts
-   → **data-analyst**. Security-focused code audit → **security-auditor**. Verifying UI behavior
-   in a real browser → **browser-qa**. Research-and-write-a-plan-only, no execution → **planner**.
-7. Fallback: when in doubt between answering and delegating → **answer directly**.
+1. If the user explicitly names a SOUL, respect that instruction.
+2. Carry out filesystem, terminal, git, tests, and build work directly by default;
+   delegation is optional and must provide concrete independent value.
+3. Use web search when it is needed to answer accurately.
+4. For search, memory, indexing, and other available capabilities, use their tools
+   directly when practical.
+5. Never delegate solely because a task matches a specialist label. If direct
+   work is blocked, explain the concrete blocker and continue with a useful
+   alternative where possible.
+6. When unsure whether delegation is useful, continue directly.
 """
 
 # ---------------------------------------------------------------------------
@@ -424,18 +378,6 @@ def _load_session_context(workspace_id: str | None = None) -> str | None:
     return "\n\n---\n\n".join(parts) if parts else None
 
 
-def _build_delegation_souls_block() -> str:
-    """Lista as SOULs do catálogo (nome + description) para o prompt do
-    orquestrador — import lazy, mesmo motivo do resto do módulo (evita
-    carregar ``nodes.tools`` em contexto que não instancia o grafo)."""
-    from backend.agents.souls import SOUL_CATALOG
-
-    return "\n".join(
-        f'- **`task(subagent_type="{soul.name}", ...)`** — {soul.description}'
-        for soul in SOUL_CATALOG.values()
-    )
-
-
 def _build_skills_context(
     user_id: str | None,
     workspace_id: str | None,
@@ -489,16 +431,13 @@ def _build_session_system_prompt(
 ) -> str:
     """Monta system prompt completo com contexto da sessão.
 
-    Concatena o prompt base do orchestrator com:
-    1. A lista de SOULs disponíveis para delegação (catálogo dinâmico)
-    2. AGENTS.md / CLAUDE.md / GEMINI.md do workspace (se existirem)
-    3. MANIFEST.md do workspace ativo (truncado)
+    Concatena o prompt base do orchestrator com instruções/contexto do
+    workspace e skills habilitadas. O catálogo de subagentes fica disponível
+    somente ao despacho da tool e não é despejado no prompt inteiro.
 
     Chamado a cada compilação do grafo — lazy e cacheado via singleton.
     """
-    base = _ORCHESTRATOR_PROMPT.replace(
-        "{DELEGATION_SOULS}", _build_delegation_souls_block()
-    )
+    base = _ORCHESTRATOR_PROMPT
     try:
         ctx = _load_session_context(workspace_id)
         if ctx:

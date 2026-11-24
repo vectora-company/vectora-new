@@ -14,6 +14,21 @@ from backend.services.agent_factory import _build_session_system_prompt
 
 
 class TestWorkspaceContextEnvelope:
+    def test_prompt_prefers_direct_work_and_omits_catalog_of_subagents(self):
+        with patch(
+            "backend.services.agent_factory._load_project_docs", return_value=None
+        ):
+            prompt = _build_session_system_prompt()
+        normalized = " ".join(prompt.split())
+
+        assert (
+            "Carry out filesystem, terminal, git, tests, and build work directly"
+            in normalized
+        )
+        assert "Creating/editing files, running code, git → **coder**" not in normalized
+        assert 'task(subagent_type="coder"' not in prompt
+        assert "genuinely independent specialist adds clear" in normalized
+
     def test_project_docs_wrapped_in_non_authoritative_envelope(self):
         with patch(
             "backend.services.agent_factory._load_project_docs",
