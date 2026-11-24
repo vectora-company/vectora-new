@@ -8,6 +8,7 @@ import plistlib
 import re
 import shutil
 import signal
+import socket
 import subprocess  # nosec B404
 import tempfile
 import threading
@@ -87,6 +88,10 @@ class InstalledSmokeReport(BaseModel):
     workspace_isolated: bool = True
     real_provider_tested: Literal[False] = False
     scenario_task_executed: Literal[False] = False
+    renderer_tested: bool = False
+    renderer_status: RunStatus = "not_run"
+    renderer_ready_state: str | None = None
+    renderer_root_children: int | None = Field(default=None, ge=0)
     host: dict[str, str] = Field(default_factory=dict)
     app_version: str | None = None
     electron_version: str | None = None
@@ -100,9 +105,60 @@ class InstalledSmokeReport(BaseModel):
     diagnostics: list[EvaluationDiagnostic] = Field(default_factory=list)
 
 
-def _build_launch_command(app_path: Path) -> list[str]:
+def _build_launch_command(app_path: Path, *, ui_test: bool = False) -> list[str]:
     """Build the argument vector for the installed app's startup scenario."""
-    return [str(app_path), "--smoke-test"]
+    return [str(app_path), "--ui-smoke-test" if ui_test else "--smoke-test"]
+
+
+def _available_loopback_port() -> int:
+    """Choose an ephemeral loopback port for the disposable Electron CDP endpoint."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return int(listener.getsockname()[1])
+
+
+def _inspect_installed_renderer(port: int, timeout_seconds: float) -> tuple[str, int]:
+    """Verify a mounted React root over the temporary, loopback-only CDP endpoint."""
+    from playwright.sync_api import sync_playwright
+
+    endpoint = f"http://127.0.0.1:{port}"
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.connect_over_cdp(
+            endpoint,
+            timeout=max(1, round(timeout_seconds * 1000)),
+        )
+        try:
+            pages = [
+                page
+                for context in browser.contexts
+                for page in context.pages
+                if not page.url.startswith("devtools://")
+            ]
+            if not pages:
+                raise RuntimeError("Electron não expôs uma página do app via CDP.")
+            page = pages[0]
+            page.wait_for_function(
+                """() => {
+                  const root = document.querySelector('#root');
+                  return document.readyState === 'complete' &&
+                    root instanceof HTMLElement && root.childElementCount > 0;
+                }""",
+                timeout=max(1, round(timeout_seconds * 1000)),
+            )
+            state = page.evaluate(
+                """() => ({
+                  readyState: document.readyState,
+                  rootChildren: document.querySelector('#root')?.childElementCount ?? 0,
+                })"""
+            )
+            ready_state = state.get("readyState")
+            root_children = state.get("rootChildren")
+            if ready_state != "complete" or not isinstance(root_children, int):
+                raise RuntimeError("O renderer não retornou estado verificável.")
+            return ready_state, root_children
+        finally:
+            with suppress(Exception):
+                browser.close()
 
 
 def _resolve_app_executable(candidate: Path) -> tuple[Path | None, str | None]:
@@ -210,16 +266,21 @@ def _report(
     backend_stages: dict[str, BackendStageRecord] | None = None,
     app_metadata: tuple[str, str, str, str | None, bool | None] | None = None,
     resource_metrics: list[BenchmarkMetric] | None = None,
+    ui_test: bool = False,
+    renderer_status: RunStatus = "not_run",
+    renderer_ready_state: str | None = None,
+    renderer_root_children: int | None = None,
 ) -> InstalledSmokeReport:
     """Create a terminal report without copying application logs or user data."""
     finished_ns = time.monotonic_ns()
     duration_ms = max(0, (finished_ns - started_ns) // 1_000_000)
     finished_at = datetime.now(UTC)
     timings = stage_timings_ms or {}
+    scenario_id = "installed-app-ui" if ui_test else "installed-app-startup"
     stage_metrics = [
         BenchmarkMetric(
             run_id=run_id,
-            scenario_id="installed-app-startup",
+            scenario_id=scenario_id,
             stage="electron_startup",
             name=f"{stage}_elapsed",
             value=elapsed_ms,
@@ -246,7 +307,7 @@ def _report(
     backend_stage_metrics = [
         BenchmarkMetric(
             run_id=run_id,
-            scenario_id="installed-app-startup",
+            scenario_id=scenario_id,
             stage="backend_startup",
             name=f"{stage}_elapsed",
             value=record.elapsed_ms,
@@ -297,16 +358,21 @@ def _report(
         duration_ms=duration_ms,
         exit_code=exit_code,
         host=host,
+        scenario_id=scenario_id,
         app_version=app_version,
         electron_version=electron_version,
         chromium_version=chromium_version,
         source_revision=source_revision,
         source_dirty=source_dirty,
+        renderer_tested=ui_test,
+        renderer_status=renderer_status,
+        renderer_ready_state=renderer_ready_state,
+        renderer_root_children=renderer_root_children,
         stage_timings_ms=timings,
         backend_stages=backend_stage_records,
         provenance=RunProvenance(
             run_id=run_id,
-            scenario_id="installed-app-startup",
+            scenario_id=scenario_id,
             started_at=started_at.isoformat(),
             runtime_version=app_version,
             source_revision=source_revision,
@@ -317,8 +383,8 @@ def _report(
         metrics=[
             BenchmarkMetric(
                 run_id=run_id,
-                scenario_id="installed-app-startup",
-                stage="installed_app_startup",
+                scenario_id=scenario_id,
+                stage="installed_app_ui" if ui_test else "installed_app_startup",
                 name="duration",
                 value=float(duration_ms),
                 unit="ms",
@@ -331,13 +397,30 @@ def _report(
         ],
         diagnostics=[
             EvaluationDiagnostic(
-                stage="installed_app_startup",
+                stage="installed_app_ui" if ui_test else "installed_app_startup",
                 status=status,
                 duration_ms=duration_ms,
                 detail=reason,
             ),
             *stage_diagnostics,
             *backend_stage_diagnostics,
+            *(
+                [
+                    EvaluationDiagnostic(
+                        stage="renderer_react_root",
+                        status=renderer_status,
+                        duration_ms=0,
+                        detail=(
+                            f"document.readyState={renderer_ready_state}; "
+                            f"#root possui {renderer_root_children} elementos filhos"
+                            if renderer_status == "passed"
+                            else "o renderer instalado não passou pela verificação CDP"
+                        ),
+                    )
+                ]
+                if ui_test
+                else []
+            ),
         ],
     )
 
@@ -346,12 +429,14 @@ def run_installed_smoke(  # noqa: PLR0911
     app_path: str | Path,
     *,
     timeout_seconds: float = 120,
+    ui_test: bool = False,
 ) -> InstalledSmokeReport:
     """Open the installed app in a disposable profile and validate its startup.
 
-    The app's own ``--smoke-test`` path exits only after the backend and
-    renderer have reached their ready marker. No provider is invoked and the
-    user's checkout and application profile are never used.
+    The app's own smoke path waits for backend and renderer readiness. In UI
+    mode, a temporary loopback CDP endpoint also verifies that React mounted
+    content before the app is closed. No provider is invoked and the user's
+    checkout and application profile are never used.
     """
     run_id = uuid4().hex
     started_at = datetime.now(UTC)
@@ -366,6 +451,7 @@ def run_installed_smoke(  # noqa: PLR0911
             status="failed",
             reason="O limite de tempo precisa ser positivo.",
             exit_code=None,
+            ui_test=ui_test,
         )
     app, resolution_error = _resolve_app_executable(candidate)
     if app is None:
@@ -377,6 +463,7 @@ def run_installed_smoke(  # noqa: PLR0911
             status="blocked",
             reason=resolution_error,
             exit_code=None,
+            ui_test=ui_test,
         )
 
     try:
@@ -390,6 +477,7 @@ def run_installed_smoke(  # noqa: PLR0911
             status="failed",
             reason=f"Não foi possível criar o ambiente isolado: {exc.strerror or exc}",
             exit_code=None,
+            ui_test=ui_test,
         )
 
     with temporary_directory as temporary:
@@ -399,6 +487,9 @@ def run_installed_smoke(  # noqa: PLR0911
             profile.mkdir()
             env = _isolated_environment(profile, workspace)
             env["VECTORA_EVAL_RUN_ID"] = run_id
+            cdp_port = _available_loopback_port() if ui_test else None
+            if cdp_port is not None:
+                env["VECTORA_ELECTRON_CDP_PORT"] = str(cdp_port)
         except OSError as exc:
             return _report(
                 run_id=run_id,
@@ -408,18 +499,27 @@ def run_installed_smoke(  # noqa: PLR0911
                 status="failed",
                 reason=f"Não foi possível preparar o ambiente isolado: {exc.strerror or exc}",
                 exit_code=None,
+                ui_test=ui_test,
             )
 
         resource_metrics: list[BenchmarkMetric] = []
         reader: threading.Thread | None = None
         markers = {"window_ready": False, "passed": False}
+        window_ready_event = threading.Event()
         stage_timings_ms: dict[str, float] = {}
+        renderer_status: RunStatus = "not_run"
+        renderer_ready_state: str | None = None
+        renderer_root_children: int | None = None
         backend_stages: dict[str, BackendStageRecord] = {}
         app_metadata: tuple[str, str, str, str | None, bool | None] | None = None
         marker_lock = threading.Lock()
         try:
             process = subprocess.Popen(  # noqa: S603  # nosec B603
-                _build_launch_command(app),
+                (
+                    _build_launch_command(app, ui_test=True)
+                    if ui_test
+                    else _build_launch_command(app)
+                ),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -443,12 +543,13 @@ def run_installed_smoke(  # noqa: PLR0911
                 status="blocked",
                 reason=f"Não foi possível iniciar o app instalado: {exc.strerror or exc}",
                 exit_code=None,
+                ui_test=ui_test,
             )
 
         resource_sampler = ProcessTreeResourceSampler(
             process.pid,
             run_id=run_id,
-            scenario_id="installed-app-startup",
+            scenario_id="installed-app-ui" if ui_test else "installed-app-startup",
         )
         resource_sampler.start()
 
@@ -459,6 +560,8 @@ def run_installed_smoke(  # noqa: PLR0911
             for line in process.stdout:
                 with marker_lock:
                     markers["window_ready"] |= _WINDOW_READY_MARKER in line
+                    if _WINDOW_READY_MARKER in line:
+                        window_ready_event.set()
                     markers["passed"] |= _SMOKE_PASSED_MARKER in line
                     match = _STAGE_MARKER.fullmatch(line.strip())
                     if match:
@@ -491,7 +594,27 @@ def run_installed_smoke(  # noqa: PLR0911
         reader = threading.Thread(target=read_markers, daemon=True)
         reader.start()
         try:
-            exit_code = process.wait(timeout=timeout_seconds)
+            if ui_test:
+                deadline = time.monotonic() + timeout_seconds
+                while not window_ready_event.wait(timeout=0.1):
+                    if process.poll() is not None:
+                        raise RuntimeError(
+                            f"O app encerrou antes da janela ficar pronta ({process.returncode})."
+                        )
+                    if time.monotonic() >= deadline:
+                        raise subprocess.TimeoutExpired(process.args, timeout_seconds)
+                if cdp_port is None:
+                    raise RuntimeError("A porta CDP da avaliação não foi alocada.")
+                renderer_ready_state, renderer_root_children = (
+                    _inspect_installed_renderer(
+                        cdp_port,
+                        max(0.1, deadline - time.monotonic()),
+                    )
+                )
+                renderer_status = "passed"
+                exit_code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
+            else:
+                exit_code = process.wait(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
             _terminate_process_tree(process)
             resource_metrics = resource_sampler.stop()
@@ -504,6 +627,28 @@ def run_installed_smoke(  # noqa: PLR0911
                 reason=f"O app não concluiu o smoke test em {timeout_seconds:g} segundos.",
                 exit_code=process.returncode,
                 resource_metrics=resource_metrics,
+                ui_test=ui_test,
+                renderer_status=renderer_status,
+                renderer_ready_state=renderer_ready_state,
+                renderer_root_children=renderer_root_children,
+            )
+        except Exception as exc:
+            _terminate_process_tree(process)
+            resource_metrics = resource_sampler.stop()
+            return _report(
+                run_id=run_id,
+                app_path=app,
+                started_at=started_at,
+                started_ns=started_ns,
+                status="failed",
+                reason=(
+                    f"A verificação do renderer instalado falhou: "
+                    f"{type(exc).__name__}: {str(exc)[:300]}"
+                ),
+                exit_code=process.returncode,
+                resource_metrics=resource_metrics,
+                ui_test=ui_test,
+                renderer_status="failed" if ui_test else "not_run",
             )
         except KeyboardInterrupt:
             _terminate_process_tree(process)
@@ -517,6 +662,10 @@ def run_installed_smoke(  # noqa: PLR0911
                 reason="Execução cancelada pelo operador; os processos foram encerrados.",
                 exit_code=process.returncode,
                 resource_metrics=resource_metrics,
+                ui_test=ui_test,
+                renderer_status=renderer_status,
+                renderer_ready_state=renderer_ready_state,
+                renderer_root_children=renderer_root_children,
             )
         finally:
             if process.poll() is None:
@@ -528,13 +677,19 @@ def run_installed_smoke(  # noqa: PLR0911
             resource_metrics = resource_sampler.stop()
 
         with marker_lock:
-            startup_validated = markers["window_ready"] and markers["passed"]
+            startup_validated = markers["window_ready"] and (
+                renderer_status == "passed" if ui_test else markers["passed"]
+            )
         if exit_code != 0:
             status: RunStatus = "failed"
             reason = f"O app encerrou com código {exit_code}."
         elif not startup_validated:
             status = "failed"
-            reason = "O app encerrou sem confirmar backend e renderer prontos."
+            reason = (
+                "O app encerrou sem confirmar backend e renderer prontos."
+                if not ui_test
+                else "O app encerrou sem concluir a verificação do renderer."
+            )
         else:
             status = "passed"
             reason = None
@@ -550,4 +705,8 @@ def run_installed_smoke(  # noqa: PLR0911
             backend_stages=backend_stages,
             app_metadata=app_metadata,
             resource_metrics=resource_metrics,
+            ui_test=ui_test,
+            renderer_status=renderer_status,
+            renderer_ready_state=renderer_ready_state,
+            renderer_root_children=renderer_root_children,
         )

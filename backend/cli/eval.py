@@ -130,10 +130,11 @@ def _handle_run(args: argparse.Namespace) -> int:
 
 
 def _handle_smoke(args: argparse.Namespace) -> int:
-    """Abre a instalação real com perfil descartável e reporta o diagnóstico."""
+    """Abre a instalação real e reporta startup ou verificação do renderer."""
     report = run_installed_smoke(
         args.app,
         timeout_seconds=args.timeout_seconds,
+        ui_test=getattr(args, "action", "smoke") == "ui-smoke",
     )
     report_json = report.model_dump_json(indent=2)
     report_path = getattr(args, "report", None)
@@ -149,6 +150,13 @@ def _handle_smoke(args: argparse.Namespace) -> int:
 
     if getattr(args, "output", "human") == "json":
         print(report_json)
+    elif getattr(args, "action", "smoke") == "ui-smoke":
+        print(
+            f"Evaluation Lab UI: {report.status} "
+            f"(renderer={report.renderer_status}, run_id={report.run_id})"
+        )
+        if report.reason:
+            print(report.reason, file=sys.stderr)
     else:
         print(f"Evaluation Lab: {report.status} (run_id={report.run_id})")
         if report.reason:
@@ -371,6 +379,9 @@ def handle_eval(args: argparse.Namespace) -> int:  # noqa: PLR0911
         return _handle_run(args)
 
     if action == "smoke":
+        return _handle_smoke(args)
+
+    if action == "ui-smoke":
         return _handle_smoke(args)
 
     if action == "scenarios":

@@ -232,6 +232,10 @@ export function isInstalledSmokeTestMode(argv: string[]): boolean {
   return argv.includes("--smoke-test");
 }
 
+export function isInstalledUiSmokeTestMode(argv: string[]): boolean {
+  return argv.includes("--ui-smoke-test");
+}
+
 export function spawnBackendProcess(
   exePath: string,
   args: string[],

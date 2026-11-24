@@ -66,6 +66,7 @@ import {
   backendTransportOptions,
   isInstalledTestsMode,
   isInstalledSmokeTestMode,
+  isInstalledUiSmokeTestMode,
   ignoreBrokenPipe,
   natsBinaryPath,
   spawnBackendProcess,
@@ -161,10 +162,13 @@ process.env.VECTORA_ELECTRON_CDP_PROXY_PORT = electronCdpProxyPort;
 process.env.VECTORA_ELECTRON_CDP_AUTH_TOKEN = electronCdpAuthToken;
 const installedTestsMode = isInstalledTestsMode(process.argv);
 const installedSmokeTestMode = isInstalledSmokeTestMode(process.argv);
-const installedAutomationMode = installedTestsMode || installedSmokeTestMode;
+const installedUiSmokeTestMode = isInstalledUiSmokeTestMode(process.argv);
+const installedEvaluationMode =
+  installedSmokeTestMode || installedUiSmokeTestMode;
+const installedAutomationMode = installedTestsMode || installedEvaluationMode;
 const smokeProcessStartedAt = process.hrtime.bigint();
 function emitSmokeStage(stage: string): void {
-  if (!installedSmokeTestMode) return;
+  if (!installedEvaluationMode) return;
   const elapsedMs =
     Number(process.hrtime.bigint() - smokeProcessStartedAt) / 1e6;
   console.log(`VECTORA_EVAL_STAGE:${stage}:${elapsedMs.toFixed(3)}`);
@@ -175,7 +179,7 @@ if (graphicsCli.disableGpu) {
   app.commandLine.appendSwitch("disable-gpu");
   console.info("[graphics] GPU desabilitada por --disable-gpu");
 }
-if (!installedAutomationMode) {
+if (!installedAutomationMode || installedUiSmokeTestMode) {
   app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
   app.commandLine.appendSwitch("remote-debugging-port", electronCdpPort);
 }
@@ -363,9 +367,9 @@ let backendPipePath: string | null = null; // Windows named pipe path (\\.\pipe\
 let backendReady = false;
 let mainWindow: BrowserWindow | null = null;
 let windowReadyMarkerEmitted = false;
-let smokeTestWatchdog: NodeJS.Timeout | null = installedSmokeTestMode
+let smokeTestWatchdog: NodeJS.Timeout | null = installedEvaluationMode
   ? setTimeout(() => {
-      console.error("Vectora startup smoke test exceeded 90 seconds.");
+      console.error("Vectora evaluation smoke test exceeded 90 seconds.");
       app.quit();
       setTimeout(() => app.exit(124), 15_000);
     }, 90_000)
@@ -1061,13 +1065,16 @@ function activateMainWindow(reason: string, visible: boolean): void {
     focused: window.isFocused(),
     bounds: window.getBounds(),
   });
-  if (installedSmokeTestMode && reason !== "did-finish-load") return;
+  if (installedEvaluationMode && reason !== "did-finish-load") return;
   // Lido por backend/services/electron_sidecar.py (WINDOW_READY_MARKER).
   // A emissão é idempotente porque vários eventos podem ativar a mesma janela.
   if (!windowReadyMarkerEmitted) {
     windowReadyMarkerEmitted = true;
     console.log("VECTORA_ELECTRON_WINDOW_READY");
     emitSmokeStage("window_ready");
+    if (installedUiSmokeTestMode) {
+      app.once("will-quit", () => emitSmokeStage("shutdown_complete"));
+    }
     if (installedSmokeTestMode) {
       if (smokeTestWatchdog) clearTimeout(smokeTestWatchdog);
       console.log("Vectora startup smoke test passed; closing the app.");
@@ -1936,7 +1943,7 @@ app.on("open-url", (event, url) => {
 app.whenReady().then(async () => {
   if (!gotLock) return;
   emitSmokeStage("electron_ready");
-  if (installedSmokeTestMode) {
+  if (installedEvaluationMode) {
     console.log(
       `VECTORA_EVAL_APP:${app.getVersion()}:${process.versions.electron}:${process.versions.chrome}:${vectoraBuildInfo.sourceRevision ?? "unknown"}:${vectoraBuildInfo.sourceDirty === null ? "unknown" : vectoraBuildInfo.sourceDirty ? "dirty" : "clean"}`,
     );

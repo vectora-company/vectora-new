@@ -676,6 +676,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Comandos do Evaluation Lab:\n"
             "  smoke --app EXECUTABLE [--timeout-seconds N]\n"
+            "  ui-smoke --app EXECUTABLE [--timeout-seconds N]\n"
             "  scenarios [--output human|json]\n"
             "  scenario --scenario-id ID --runner EXECUTABLE --report-dir DIR\n"
             "  suite --runner EXECUTABLE --report-dir DIR [--timeout-seconds N]\n"
@@ -720,6 +721,28 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Salva o relatório estruturado neste caminho",
     )
     eval_smoke.add_argument("--output", choices=("human", "json"), default="human")
+
+    eval_ui_smoke = eval_sub.add_parser(
+        "ui-smoke",
+        help="Valida a montagem do renderer React numa instalação isolada",
+    )
+    eval_ui_smoke.add_argument(
+        "--app",
+        required=True,
+        help="Caminho para o executável instalado do Vectora",
+    )
+    eval_ui_smoke.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=120,
+        help="Limite para iniciar, inspecionar e encerrar o app (padrão: 120)",
+    )
+    eval_ui_smoke.add_argument(
+        "--report",
+        default=None,
+        help="Salva o relatório estruturado neste caminho",
+    )
+    eval_ui_smoke.add_argument("--output", choices=("human", "json"), default="human")
 
     eval_scenarios = eval_sub.add_parser(
         "scenarios",
