@@ -31,12 +31,12 @@ class StudyEvidence(BaseModel):
     @model_validator(mode="after")
     def validate_run_evidence_level(self) -> StudyEvidence:
         if self.kind == "reproduced_experiment":
-            if not self.source.startswith("run://"):
-                raise ValueError("experimento reproduzido deve apontar para run://")
-            if self.evidence_level is None:
+            if self.source.startswith("run://") and self.evidence_level is None:
                 raise ValueError(
                     "experimento reproduzido deve declarar seu nível de evidência"
                 )
+            if self.evidence_level is not None and not self.source.startswith("run://"):
+                raise ValueError("evidence_level exige uma referência run://")
         elif self.evidence_level is not None:
             raise ValueError("evidence_level só se aplica a experimento reproduzido")
         return self
