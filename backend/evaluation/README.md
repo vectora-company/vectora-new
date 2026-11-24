@@ -96,6 +96,16 @@ se havia alterações na árvore quando o Electron foi compilado. Builds sem Git
 ou metadados válidos deixam SHA/estado ausentes; o smoke não os infere da
 máquina de avaliação.
 
+Durante o smoke do app instalado, o avaliador amostra tempo de CPU e memória
+residente da árvore de processos do Electron, incluindo filhos. Percentuais de
+CPU são relativos a um núcleo lógico; RSS é a soma amostrada dos valores RSS dos
+processos e pode contar páginas compartilhadas mais de uma vez. O pico de
+processos e a quantidade de CPUs lógicas e memória total do host são registrados
+separadamente. A amostragem é intervalar, então pode perder picos curtos. Memória
+GPU por processo fica `unavailable` com motivo; utilização global da GPU não é
+atribuída ao app. Amostras CPU/RSS ausentes também ficam `unavailable`, nunca
+zero.
+
 Com `evaluation_recording_enabled` e `run_id`, chamadas do provider registram
 tokens de entrada/saída, TTFT e `output_tokens_per_second`. A taxa usa apenas
 tokens de saída informados pelo provider e a janela entre o primeiro texto e o

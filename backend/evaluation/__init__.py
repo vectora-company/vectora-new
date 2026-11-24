@@ -31,6 +31,7 @@ from backend.evaluation.reports import (
     export_csv,
     export_json,
 )
+from backend.evaluation.resources import ProcessTreeResourceSampler
 from backend.evaluation.runner import EvalMetric, EvalReport, compare_cassettes
 from backend.evaluation.scenario_runner import (
     ScenarioAssertion,
@@ -66,6 +67,7 @@ __all__ = [
     "EvaluationRecorder",
     "InstalledSmokeReport",
     "MetricDistribution",
+    "ProcessTreeResourceSampler",
     "ReplayChatClient",
     "RunProvenance",
     "ScenarioAssertion",

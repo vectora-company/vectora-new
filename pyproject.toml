@@ -109,6 +109,7 @@ dependencies = [
     "faster-whisper>=1.2.1 ; (sys_platform != 'darwin' or platform_machine != 'x86_64') and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "pypdfium2>=5.15.2",
     "zstandard>=0.25.0",
+    "psutil>=7.1.0",
 ]
 
 [project.scripts]

@@ -18,9 +18,11 @@ from pathlib import Path
 from typing import Literal, cast
 from uuid import uuid4
 
+import psutil
 from pydantic import BaseModel, Field
 
 from backend.evaluation.metrics import BenchmarkMetric, RunProvenance
+from backend.evaluation.resources import ProcessTreeResourceSampler
 
 RunStatus = Literal["passed", "failed", "blocked", "skipped", "not_run"]
 _SENSITIVE_ENV = re.compile(
@@ -207,6 +209,7 @@ def _report(
     stage_timings_ms: dict[str, float] | None = None,
     backend_stages: dict[str, BackendStageRecord] | None = None,
     app_metadata: tuple[str, str, str, str | None, bool | None] | None = None,
+    resource_metrics: list[BenchmarkMetric] | None = None,
 ) -> InstalledSmokeReport:
     """Create a terminal report without copying application logs or user data."""
     finished_ns = time.monotonic_ns()
@@ -271,6 +274,19 @@ def _report(
         source_revision,
         source_dirty,
     ) = app_metadata or (None, None, None, None, None)
+    host = {
+        "system": platform.system(),
+        "release": platform.release(),
+        "machine": platform.machine() or "unknown",
+        "processor": platform.processor() or "unknown",
+        "logical_cpus": str(psutil.cpu_count(logical=True) or "unknown"),
+    }
+    try:
+        host["memory_total_mib"] = str(
+            round(psutil.virtual_memory().total / (1024 * 1024))
+        )
+    except psutil.Error:
+        host["memory_total_mib"] = "unknown"
     return InstalledSmokeReport(
         run_id=run_id,
         status=status,
@@ -280,11 +296,7 @@ def _report(
         finished_at=finished_at.isoformat(),
         duration_ms=duration_ms,
         exit_code=exit_code,
-        host={
-            "system": platform.system(),
-            "release": platform.release(),
-            "machine": platform.machine() or "unknown",
-        },
+        host=host,
         app_version=app_version,
         electron_version=electron_version,
         chromium_version=chromium_version,
@@ -314,6 +326,7 @@ def _report(
             ),
             *stage_metrics,
             *backend_stage_metrics,
+            *(resource_metrics or []),
         ],
         diagnostics=[
             EvaluationDiagnostic(
@@ -395,7 +408,8 @@ def run_installed_smoke(  # noqa: PLR0911
                 reason=f"Não foi possível preparar o ambiente isolado: {exc.strerror or exc}",
                 exit_code=None,
             )
-        process: subprocess.Popen[str] | None = None
+
+        resource_metrics: list[BenchmarkMetric] = []
         reader: threading.Thread | None = None
         markers = {"window_ready": False, "passed": False}
         stage_timings_ms: dict[str, float] = {}
@@ -429,6 +443,13 @@ def run_installed_smoke(  # noqa: PLR0911
                 reason=f"Não foi possível iniciar o app instalado: {exc.strerror or exc}",
                 exit_code=None,
             )
+
+        resource_sampler = ProcessTreeResourceSampler(
+            process.pid,
+            run_id=run_id,
+            scenario_id="installed-app-startup",
+        )
+        resource_sampler.start()
 
         def read_markers() -> None:
             nonlocal app_metadata
@@ -472,6 +493,7 @@ def run_installed_smoke(  # noqa: PLR0911
             exit_code = process.wait(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
             _terminate_process_tree(process)
+            resource_metrics = resource_sampler.stop()
             return _report(
                 run_id=run_id,
                 app_path=app,
@@ -480,9 +502,11 @@ def run_installed_smoke(  # noqa: PLR0911
                 status="failed",
                 reason=f"O app não concluiu o smoke test em {timeout_seconds:g} segundos.",
                 exit_code=process.returncode,
+                resource_metrics=resource_metrics,
             )
         except KeyboardInterrupt:
             _terminate_process_tree(process)
+            resource_metrics = resource_sampler.stop()
             return _report(
                 run_id=run_id,
                 app_path=app,
@@ -491,6 +515,7 @@ def run_installed_smoke(  # noqa: PLR0911
                 status="failed",
                 reason="Execução cancelada pelo operador; os processos foram encerrados.",
                 exit_code=process.returncode,
+                resource_metrics=resource_metrics,
             )
         finally:
             if process.poll() is None:
@@ -499,6 +524,7 @@ def run_installed_smoke(  # noqa: PLR0911
                 reader.join(timeout=2)
             if process.stdout is not None:
                 process.stdout.close()
+            resource_metrics = resource_sampler.stop()
 
         with marker_lock:
             startup_validated = markers["window_ready"] and markers["passed"]
@@ -522,4 +548,5 @@ def run_installed_smoke(  # noqa: PLR0911
             stage_timings_ms=stage_timings_ms,
             backend_stages=backend_stages,
             app_metadata=app_metadata,
+            resource_metrics=resource_metrics,
         )

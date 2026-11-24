@@ -74,6 +74,8 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
     assert report.source_dirty is True
     assert report.provenance.source_revision == "a" * 40
     assert "release" in report.host
+    assert "logical_cpus" in report.host
+    assert "memory_total_mib" in report.host
     assert report.diagnostics[0].status == "passed"
     assert report.stage_timings_ms["backend_ready"] == 12.5
     assert report.stage_timings_ms["shutdown_complete"] == 50
@@ -81,6 +83,13 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
     assert report.backend_stages["embedding_worker"].elapsed_ms == 35.25
     assert report.backend_stages["nats_sidecar"].status == "skipped"
     assert "fake" not in report.backend_stages
+    gpu_memory = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "process_tree_gpu_memory_peak"
+    )
+    assert gpu_memory.status == "unavailable"
+    assert gpu_memory.value is None
     assert {
         metric.name for metric in report.metrics if metric.stage == "electron_startup"
     } == {
