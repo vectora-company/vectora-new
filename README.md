@@ -156,6 +156,16 @@ Os guardas de avaliação vinculam cada sessão ao workspace inicial, consultam
 policy no dispatch e impedem reexecutar efeitos cujo desfecho ficou incerto após
 cancelamento. Falhas de sidecar ficam registradas como `blocked` com diagnóstico.
 
+Arquivos de execução podem ser agregados por perfil frio/quente e exportados
+como JSON ou CSV. Comparações recusam amostras com fixture, policy, host,
+provider/modelo, configuração ou avaliador incompatíveis; exportação pública
+exige confirmação explícita de revisão:
+
+```bash
+uv run vectora eval report --runs run-1.json run-2.json --report report.json
+uv run vectora eval compare-runs --baseline base.json --candidate candidate.json --report comparison.json
+```
+
 ---
 
 ## Build (SCons)

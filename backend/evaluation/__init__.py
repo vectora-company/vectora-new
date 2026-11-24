@@ -21,6 +21,16 @@ from backend.evaluation.metrics import (
     RunProvenance,
 )
 from backend.evaluation.replay_client import ReplayChatClient
+from backend.evaluation.reports import (
+    BenchmarkComparison,
+    BenchmarkReport,
+    BenchmarkRun,
+    MetricDistribution,
+    aggregate_runs,
+    compare_runs,
+    export_csv,
+    export_json,
+)
 from backend.evaluation.runner import EvalMetric, EvalReport, compare_cassettes
 from backend.evaluation.scenarios import (
     BenchmarkScenario,
@@ -30,7 +40,10 @@ from backend.evaluation.scenarios import (
 )
 
 __all__ = [
+    "BenchmarkComparison",
     "BenchmarkMetric",
+    "BenchmarkReport",
+    "BenchmarkRun",
     "BenchmarkScenario",
     "Cassette",
     "CassetteInteraction",
@@ -40,15 +53,20 @@ __all__ = [
     "EvaluationDiagnostic",
     "EvaluationRecorder",
     "InstalledSmokeReport",
+    "MetricDistribution",
     "ReplayChatClient",
     "RunProvenance",
     "ScenarioIsolationGuard",
     "ScenarioPolicy",
     "ScenarioReadiness",
     "ScenarioTerminalResult",
+    "aggregate_runs",
     "assess_scenario_readiness",
     "cancel_guarded_run",
     "compare_cassettes",
+    "compare_runs",
+    "export_csv",
+    "export_json",
     "load_scenarios",
     "run_guarded_effect",
     "run_installed_smoke",

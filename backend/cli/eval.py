@@ -13,6 +13,13 @@ from pydantic import TypeAdapter
 from backend.evaluation.cassette import Cassette
 from backend.evaluation.installed import run_installed_smoke
 from backend.evaluation.replay_client import ReplayChatClient
+from backend.evaluation.reports import (
+    BenchmarkRun,
+    aggregate_runs,
+    compare_runs,
+    export_csv,
+    export_json,
+)
 from backend.evaluation.runner import compare_cassettes
 from backend.evaluation.scenarios import assess_scenario_readiness, load_scenarios
 from backend.vtypes import JsonObject
@@ -196,6 +203,52 @@ def _handle_scenarios(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_report(args: argparse.Namespace) -> int:
+    """Agrega arquivos de execução e exporta JSON ou CSV."""
+    try:
+        runs = [
+            BenchmarkRun.model_validate_json(
+                Path(path).expanduser().read_text(encoding="utf-8")
+            )
+            for path in args.runs
+        ]
+        report = aggregate_runs(runs, command=args.command or [])
+        content = (
+            export_csv(report, public=args.public, reviewed=args.reviewed)
+            if args.format == "csv"
+            else export_json(report, public=args.public, reviewed=args.reviewed)
+        )
+        Path(args.report).expanduser().write_text(
+            content + ("" if args.format == "csv" else "\n"), encoding="utf-8"
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Não foi possível gerar o relatório: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _handle_compare_runs(args: argparse.Namespace) -> int:
+    """Compara grupos de execuções sob condições compatíveis."""
+    try:
+        baseline = [
+            BenchmarkRun.model_validate_json(Path(path).read_text(encoding="utf-8"))
+            for path in args.baseline
+        ]
+        candidate = [
+            BenchmarkRun.model_validate_json(Path(path).read_text(encoding="utf-8"))
+            for path in args.candidate
+        ]
+        comparison = compare_runs(baseline, candidate)
+        Path(args.report).expanduser().write_text(
+            export_json(comparison) + "\n", encoding="utf-8"
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Não foi possível comparar as execuções: {exc}", file=sys.stderr)
+        return 1
+    print("compatível" if comparison.compatible else "incompatível")
+    return 0
+
+
 def handle_eval(args: argparse.Namespace) -> int:  # noqa: PLR0911
     """Roteia as ações de eval."""
     action = getattr(args, "action", None)
@@ -225,6 +278,12 @@ def handle_eval(args: argparse.Namespace) -> int:  # noqa: PLR0911
 
     if action == "scenarios":
         return _handle_scenarios(args)
+
+    if action == "report":
+        return _handle_report(args)
+
+    if action == "compare-runs":
+        return _handle_compare_runs(args)
 
     print(
         "Subcomando eval desconhecido. Use 'vectora eval run' ou 'vectora eval compare'.",

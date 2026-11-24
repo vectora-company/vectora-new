@@ -677,6 +677,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Comandos do Evaluation Lab:\n"
             "  smoke --app EXECUTABLE [--timeout-seconds N]\n"
             "  scenarios [--output human|json]\n"
+            "  report --runs FILE... --report FILE [--format json|csv]\n"
+            "  compare-runs --baseline FILE... --candidate FILE... --report FILE\n"
             "  run --suite FILE\n"
             "  compare BASELINE CANDIDATE"
         ),
@@ -737,6 +739,30 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Opt-in explícito para enviar dados sintéticos ao provider remoto",
     )
     eval_scenarios.add_argument("--output", choices=("human", "json"), default="human")
+
+    eval_report = eval_sub.add_parser(
+        "report", help="Agrega execuções e exporta JSON ou CSV"
+    )
+    eval_report.add_argument("--runs", nargs="+", required=True)
+    eval_report.add_argument("--report", required=True, help="Arquivo de saída")
+    eval_report.add_argument("--command", nargs="*", default=[])
+    eval_report.add_argument("--format", choices=("json", "csv"), default="json")
+    eval_report.add_argument("--public", action="store_true")
+    eval_report.add_argument(
+        "--reviewed",
+        action="store_true",
+        help="Confirma revisão de privacidade antes da publicação",
+    )
+
+    eval_compare_runs = eval_sub.add_parser(
+        "compare-runs",
+        help="Compara execuções e verifica a compatibilidade das condições",
+    )
+    eval_compare_runs.add_argument("--baseline", nargs="+", required=True)
+    eval_compare_runs.add_argument("--candidate", nargs="+", required=True)
+    eval_compare_runs.add_argument(
+        "--report", required=True, help="Arquivo JSON de saída"
+    )
 
     eval_compare = eval_sub.add_parser(
         "compare", help="Compara duas cassetes (baseline vs candidate)"
