@@ -682,6 +682,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "  suite --runner EXECUTABLE --report-dir DIR [--timeout-seconds N]\n"
             "  report --runs FILE... --report FILE [--format json|csv]\n"
             "  compare-runs --baseline FILE... --candidate FILE... --report FILE\n"
+            "  compare-installed --baseline FILE --candidate FILE --report FILE\n"
             "  study-validate --study FILE [--output human|json]\n"
             "  run --suite FILE [--report-dir DIR]\n"
             "  compare BASELINE CANDIDATE"
@@ -855,6 +856,16 @@ def _build_parser() -> argparse.ArgumentParser:
     eval_compare_runs.add_argument("--baseline", nargs="+", required=True)
     eval_compare_runs.add_argument("--candidate", nargs="+", required=True)
     eval_compare_runs.add_argument(
+        "--report", required=True, help="Arquivo JSON de saída"
+    )
+
+    eval_compare_installed = eval_sub.add_parser(
+        "compare-installed",
+        help="Compara séries do app instalado sob condições compatíveis",
+    )
+    eval_compare_installed.add_argument("--baseline", required=True)
+    eval_compare_installed.add_argument("--candidate", required=True)
+    eval_compare_installed.add_argument(
         "--report", required=True, help="Arquivo JSON de saída"
     )
 

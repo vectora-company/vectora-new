@@ -107,6 +107,22 @@ normal aproximado quando há pelo menos duas observações. O perfil é novo em 
 amostra, mas o cache do sistema operacional não é controlado; a série não
 representa uma execução fria de hardware.
 
+Compare duas séries instaladas com:
+
+```bash
+vectora eval compare-installed \
+  --baseline baseline-ui.json --candidate candidate-ui.json \
+  --report comparison.json
+```
+
+O comando exige o mesmo cenário, host estável, Electron/Chromium iguais, SHA
+único do avaliador, SHA único por série e builds limpos. As revisões do app
+podem diferir entre baseline e candidata; o relatório registra ambas. Em um
+build empacotado sem metadados Git, informe o SHA do código do avaliador por
+`VECTORA_EVALUATOR_REVISION`; sem ele, a comparação será incompatível. Métricas
+sem duas amostras válidas ficam `insufficient_samples`, e condições
+incompatíveis impedem deltas.
+
 O backend recebe o mesmo `run_id` e pode registrar etapas estruturadas para
 migrations SQLite, tabela de sessões, storage configurado, worker de embeddings,
 scheduler e restauração de llama.cpp. O NATS reporta `ready`, `failed` ou

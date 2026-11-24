@@ -21,7 +21,7 @@ from typing import Literal, cast
 from uuid import uuid4
 
 import psutil
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.evaluation.metrics import BenchmarkMetric, RunProvenance
 from backend.evaluation.resources import ProcessTreeResourceSampler
@@ -99,6 +99,7 @@ class InstalledSmokeReport(BaseModel):
     renderer_reload_duration_ms: float | None = Field(default=None, ge=0)
     host: dict[str, str] = Field(default_factory=dict)
     app_version: str | None = None
+    evaluator_revision: str | None = None
     electron_version: str | None = None
     chromium_version: str | None = None
     source_revision: str | None = None
@@ -140,12 +141,67 @@ class InstalledSmokeSeriesReport(BaseModel):
     finished_at: str
     repeat_count: int = Field(ge=2, le=100)
     profile: Literal["fresh_profile"] = "fresh_profile"
-    samples: list[InstalledSmokeReport]
+    samples: list[InstalledSmokeReport] = Field(min_length=2, max_length=100)
     distributions: list[InstalledSmokeDistribution]
     limitations: list[str] = Field(
         default_factory=lambda: [
             "Cada repetição usa perfil e workspace novos; o cache do sistema operacional não é controlado.",
             "Distribuições incluem apenas medições válidas de amostras com status passed.",
+        ]
+    )
+
+    @model_validator(mode="after")
+    def validate_series(self) -> InstalledSmokeSeriesReport:
+        if self.repeat_count != len(self.samples):
+            raise ValueError("repeat_count precisa corresponder ao número de amostras")
+        if any(sample.scenario_id != self.scenario_id for sample in self.samples):
+            raise ValueError("todas as amostras precisam avaliar o mesmo cenário")
+        if any(
+            distribution.sample_count != len(distribution.values)
+            or distribution.attempted_count != self.repeat_count
+            for distribution in self.distributions
+        ):
+            raise ValueError("distribuição não corresponde às amostras da série")
+        return self
+
+
+class InstalledMetricComparison(BaseModel):
+    """Comparação de uma métrica entre duas séries instaladas."""
+
+    stage: str
+    name: str
+    dimension: str
+    unit: str
+    status: Literal["compared", "insufficient_samples", "incompatible"]
+    baseline_sample_count: int = Field(ge=0)
+    candidate_sample_count: int = Field(ge=0)
+    baseline_mean: float | None = None
+    candidate_mean: float | None = None
+    delta: float | None = None
+    delta_percent: float | None = None
+    delta_confidence_95_low: float | None = None
+    delta_confidence_95_high: float | None = None
+
+
+class InstalledSeriesComparisonReport(BaseModel):
+    """Compara séries somente depois de conferir build e ambiente compatíveis."""
+
+    schema_version: Literal[1] = 1
+    compatible: bool
+    baseline_run_id: str
+    candidate_run_id: str
+    baseline_revision: str | None = None
+    candidate_revision: str | None = None
+    baseline_evaluator_revision: str | None = None
+    candidate_evaluator_revision: str | None = None
+    baseline_app_version: str | None = None
+    candidate_app_version: str | None = None
+    reasons: list[str] = Field(default_factory=list)
+    metric_comparisons: list[InstalledMetricComparison] = Field(default_factory=list)
+    limitations: list[str] = Field(
+        default_factory=lambda: [
+            "O intervalo normal é descritivo e não constitui teste de significância.",
+            "A comparação cobre somente métricas presentes nas duas séries.",
         ]
     )
 
@@ -160,6 +216,33 @@ def _available_loopback_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
         return int(listener.getsockname()[1])
+
+
+def _current_evaluator_revision() -> str | None:
+    """Identify the evaluator source when running from a checkout or CI build."""
+    configured = os.environ.get("VECTORA_EVALUATOR_REVISION", "").strip()
+    if re.fullmatch(r"[0-9a-f]{7,64}", configured):
+        return configured
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        return None
+    repository_root = Path(__file__).resolve().parents[2]
+    try:
+        result = subprocess.run(  # noqa: S603  # nosec B603
+            [git_executable, "-C", str(repository_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=2,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    revision = result.stdout.strip()
+    return (
+        revision
+        if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", revision)
+        else None
+    )
 
 
 def _inspect_installed_renderer(
@@ -445,6 +528,7 @@ def _report(
         host=host,
         scenario_id=scenario_id,
         app_version=app_version,
+        evaluator_revision=_current_evaluator_revision(),
         electron_version=electron_version,
         chromium_version=chromium_version,
         source_revision=source_revision,
@@ -951,4 +1035,198 @@ def run_installed_smoke_series(
         repeat_count=repeat_count,
         samples=samples,
         distributions=distributions,
+    )
+
+
+def _host_signatures(
+    series: InstalledSmokeSeriesReport,
+) -> set[tuple[str, ...]]:
+    keys = (
+        "system",
+        "release",
+        "machine",
+        "processor",
+        "logical_cpus",
+        "memory_total_mib",
+    )
+    return {
+        tuple(sample.host.get(key, "unknown") for key in keys)
+        for sample in series.samples
+    }
+
+
+def compare_installed_series(
+    baseline: InstalledSmokeSeriesReport,
+    candidate: InstalledSmokeSeriesReport,
+) -> InstalledSeriesComparisonReport:
+    """Compare installed-app metrics only when runner and host conditions match."""
+    reasons: list[str] = []
+    if baseline.scenario_id != candidate.scenario_id:
+        reasons.append("os cenários avaliados são diferentes")
+    if baseline.profile != candidate.profile:
+        reasons.append("os perfis de execução são diferentes")
+    if baseline.status != "passed" or candidate.status != "passed":
+        reasons.append("as duas séries precisam terminar com status passed")
+    if baseline.repeat_count < 2 or candidate.repeat_count < 2:
+        reasons.append("cada série precisa ter pelo menos duas repetições")
+
+    baseline_hosts = _host_signatures(baseline)
+    candidate_hosts = _host_signatures(candidate)
+    if len(baseline_hosts) != 1 or len(candidate_hosts) != 1:
+        reasons.append("o host mudou dentro de uma das séries")
+    elif baseline_hosts != candidate_hosts:
+        reasons.append("sistema, arquitetura ou recursos do host diferem")
+    if any("unknown" in signature for signature in baseline_hosts | candidate_hosts):
+        reasons.append("metadados necessários do host estão indisponíveis")
+
+    baseline_revisions = {sample.source_revision for sample in baseline.samples}
+    candidate_revisions = {sample.source_revision for sample in candidate.samples}
+    if None in baseline_revisions or len(baseline_revisions) != 1:
+        reasons.append("a série baseline não tem um SHA único e conhecido")
+    if None in candidate_revisions or len(candidate_revisions) != 1:
+        reasons.append("a série candidata não tem um SHA único e conhecido")
+    if any(sample.source_dirty is not False for sample in baseline.samples):
+        reasons.append("a série baseline contém build sujo ou sem estado conhecido")
+    if any(sample.source_dirty is not False for sample in candidate.samples):
+        reasons.append("a série candidata contém build sujo ou sem estado conhecido")
+
+    baseline_evaluator_revisions = {
+        sample.evaluator_revision for sample in baseline.samples
+    }
+    candidate_evaluator_revisions = {
+        sample.evaluator_revision for sample in candidate.samples
+    }
+    if None in baseline_evaluator_revisions or len(baseline_evaluator_revisions) != 1:
+        reasons.append("a série baseline não registra um SHA único do avaliador")
+    if None in candidate_evaluator_revisions or len(candidate_evaluator_revisions) != 1:
+        reasons.append("a série candidata não registra um SHA único do avaliador")
+    if baseline_evaluator_revisions != candidate_evaluator_revisions:
+        reasons.append("o SHA do avaliador difere entre as séries")
+
+    for label, series in (("baseline", baseline), ("candidata", candidate)):
+        app_versions = {sample.app_version for sample in series.samples}
+        if None in app_versions or len(app_versions) != 1:
+            reasons.append(f"a versão do app não é única e conhecida na série {label}")
+
+    electron_versions = {
+        sample.electron_version for sample in baseline.samples + candidate.samples
+    }
+    chromium_versions = {
+        sample.chromium_version for sample in baseline.samples + candidate.samples
+    }
+    if None in electron_versions or len(electron_versions) != 1:
+        reasons.append("as versões do Electron são desconhecidas ou diferentes")
+    if None in chromium_versions or len(chromium_versions) != 1:
+        reasons.append("as versões do Chromium são desconhecidas ou diferentes")
+
+    baseline_metrics = {
+        (item.stage, item.name, item.dimension, item.unit): item
+        for item in baseline.distributions
+    }
+    candidate_metrics = {
+        (item.stage, item.name, item.dimension, item.unit): item
+        for item in candidate.distributions
+    }
+    common_keys = sorted(set(baseline_metrics) & set(candidate_metrics))
+    comparisons: list[InstalledMetricComparison] = []
+    compared_count = 0
+    conditions_compatible = not reasons
+    for key in common_keys:
+        left = baseline_metrics[key]
+        right = candidate_metrics[key]
+        if not conditions_compatible:
+            comparisons.append(
+                InstalledMetricComparison(
+                    stage=key[0],
+                    name=key[1],
+                    dimension=key[2],
+                    unit=key[3],
+                    status="incompatible",
+                    baseline_sample_count=left.sample_count,
+                    candidate_sample_count=right.sample_count,
+                )
+            )
+            continue
+        if left.sample_count < 2 or right.sample_count < 2:
+            comparisons.append(
+                InstalledMetricComparison(
+                    stage=key[0],
+                    name=key[1],
+                    dimension=key[2],
+                    unit=key[3],
+                    status="insufficient_samples",
+                    baseline_sample_count=left.sample_count,
+                    candidate_sample_count=right.sample_count,
+                )
+            )
+            continue
+        if left.mean is None or right.mean is None:
+            continue
+        delta = right.mean - left.mean
+        baseline_sd = left.standard_deviation or 0.0
+        candidate_sd = right.standard_deviation or 0.0
+        margin = (
+            1.96
+            * (
+                baseline_sd**2 / left.sample_count
+                + candidate_sd**2 / right.sample_count
+            )
+            ** 0.5
+        )
+        comparisons.append(
+            InstalledMetricComparison(
+                stage=key[0],
+                name=key[1],
+                dimension=key[2],
+                unit=key[3],
+                status="compared",
+                baseline_sample_count=left.sample_count,
+                candidate_sample_count=right.sample_count,
+                baseline_mean=left.mean,
+                candidate_mean=right.mean,
+                delta=delta,
+                delta_percent=(delta / left.mean * 100) if left.mean else None,
+                delta_confidence_95_low=delta - margin,
+                delta_confidence_95_high=delta + margin,
+            )
+        )
+        compared_count += 1
+
+    if not common_keys:
+        reasons.append("as séries não compartilham métricas comparáveis")
+    elif compared_count == 0:
+        reasons.append("nenhuma métrica compartilhada tem duas amostras válidas")
+    compatible = not reasons
+    return InstalledSeriesComparisonReport(
+        compatible=compatible,
+        baseline_run_id=baseline.run_id,
+        candidate_run_id=candidate.run_id,
+        baseline_revision=next(iter(baseline_revisions))
+        if len(baseline_revisions) == 1
+        else None,
+        candidate_revision=next(iter(candidate_revisions))
+        if len(candidate_revisions) == 1
+        else None,
+        baseline_evaluator_revision=(
+            next(iter(baseline_evaluator_revisions))
+            if len(baseline_evaluator_revisions) == 1
+            else None
+        ),
+        candidate_evaluator_revision=(
+            next(iter(candidate_evaluator_revisions))
+            if len(candidate_evaluator_revisions) == 1
+            else None
+        ),
+        baseline_app_version=(
+            next(iter({sample.app_version for sample in baseline.samples}))
+            if len({sample.app_version for sample in baseline.samples}) == 1
+            else None
+        ),
+        candidate_app_version=(
+            next(iter({sample.app_version for sample in candidate.samples}))
+            if len({sample.app_version for sample in candidate.samples}) == 1
+            else None
+        ),
+        reasons=reasons,
+        metric_comparisons=comparisons,
     )

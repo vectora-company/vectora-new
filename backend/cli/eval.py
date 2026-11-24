@@ -11,6 +11,7 @@ from pathlib import Path
 from backend.evaluation.cassette import Cassette
 from backend.evaluation.installed import (
     InstalledSmokeSeriesReport,
+    compare_installed_series,
     run_installed_smoke,
     run_installed_smoke_series,
 )
@@ -365,6 +366,27 @@ def _handle_compare_runs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_compare_installed(args: argparse.Namespace) -> int:
+    """Compara séries do app instalado com compatibilidade explícita."""
+    try:
+        baseline = InstalledSmokeSeriesReport.model_validate_json(
+            Path(args.baseline).expanduser().read_text(encoding="utf-8")
+        )
+        candidate = InstalledSmokeSeriesReport.model_validate_json(
+            Path(args.candidate).expanduser().read_text(encoding="utf-8")
+        )
+        comparison = compare_installed_series(baseline, candidate)
+        Path(args.report).expanduser().write_text(
+            comparison.model_dump_json(indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Não foi possível comparar as séries instaladas: {exc}", file=sys.stderr)
+        return 1
+    print("compatível" if comparison.compatible else "incompatível")
+    return 0 if comparison.compatible else 2
+
+
 def _handle_study_validate(args: argparse.Namespace) -> int:
     """Valida um estudo técnico sem executá-lo nem promover a evidência."""
     try:
@@ -447,6 +469,9 @@ def handle_eval(args: argparse.Namespace) -> int:  # noqa: PLR0911
 
     if action == "compare-runs":
         return _handle_compare_runs(args)
+
+    if action == "compare-installed":
+        return _handle_compare_installed(args)
 
     if action == "study-validate":
         return _handle_study_validate(args)
