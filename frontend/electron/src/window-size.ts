@@ -10,16 +10,35 @@ export interface WindowSize {
   height: number;
 }
 
+const MIN_WINDOW_SIZE: WindowSize = { width: 640, height: 480 };
+
 /**
- * ~62% da área útil da tela, capado entre 960x600 (mínimo usável) e
- * 1280x720 (não cresce além disso só porque a tela é grande — o objetivo
- * aqui é a janela nascer visivelmente menor que a tela em telas 1080p+,
- * não preencher o espaço disponível).
+ * ~62% da área útil da tela, com limites padrão de 960x600 e 1280x720.
+ * O tamanho final nunca excede a área disponível, inclusive em monitores
+ * menores do que o mínimo padrão.
  */
 export function computeDefaultWindowSize(screenSize: WindowSize): WindowSize {
   return {
-    width: Math.round(Math.min(Math.max(screenSize.width * 0.62, 960), 1280)),
-    height: Math.round(Math.min(Math.max(screenSize.height * 0.62, 600), 720)),
+    width: Math.round(
+      Math.min(
+        screenSize.width,
+        Math.min(Math.max(screenSize.width * 0.62, 960), 1280),
+      ),
+    ),
+    height: Math.round(
+      Math.min(
+        screenSize.height,
+        Math.min(Math.max(screenSize.height * 0.62, 600), 720),
+      ),
+    ),
+  };
+}
+
+/** Minimum native bounds stay usable while allowing narrow compositor tiles. */
+export function computeMinimumWindowSize(screenSize: WindowSize): WindowSize {
+  return {
+    width: Math.min(MIN_WINDOW_SIZE.width, screenSize.width),
+    height: Math.min(MIN_WINDOW_SIZE.height, screenSize.height),
   };
 }
 

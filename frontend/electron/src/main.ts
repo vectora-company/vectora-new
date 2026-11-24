@@ -118,6 +118,7 @@ function isTrustedBrowserSender(event: unknown): boolean {
 
 import {
   computeDefaultWindowSize,
+  computeMinimumWindowSize,
   fitBoundsToWorkArea,
 } from "./window-size.js";
 import {
@@ -1102,16 +1103,16 @@ function createWindow(options: { visible?: boolean } = {}): void {
   // Janela nasce proporcional à tela detectada, não num tamanho fixo — numa
   // tela 1080p+ um default fixo como 1400x900 já nasce quase em tela cheia,
   // prejudicando o modo janela (ver computeDefaultWindowSize).
-  const { width, height } = computeDefaultWindowSize(
-    screen.getPrimaryDisplay().workAreaSize,
-  );
+  const workAreaSize = screen.getPrimaryDisplay().workAreaSize;
+  const { width, height } = computeDefaultWindowSize(workAreaSize);
+  const minimumSize = computeMinimumWindowSize(workAreaSize);
   const visible = shouldShow;
   windowReadyMarkerEmitted = false;
   mainWindow = new BrowserWindow({
     width,
     height,
-    minWidth: 800,
-    minHeight: 600,
+    minWidth: minimumSize.width,
+    minHeight: minimumSize.height,
     // O modo desktop deve aparecer assim que o BrowserWindow é criado. Usar
     // show:false deixava a janela presa atrás de ready-to-show quando o GPU
     // process do Chromium atrasava ou falhava no Linux.
