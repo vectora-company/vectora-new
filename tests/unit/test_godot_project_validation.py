@@ -71,7 +71,7 @@ async def test_run_engine_caps_output_and_returns_exit_status(
     )
 
     exit_code, output, timed_out = await godot._run_engine(
-        "godot", ["--version"], tmp_path, timeout=1
+        "godot", ["--version"], tmp_path, timeout_seconds=1
     )
 
     assert exit_code == 0
@@ -90,7 +90,7 @@ async def test_run_engine_kills_process_group_on_timeout(
     monkeypatch.setattr(godot.os, "killpg", kill_group, raising=False)
 
     exit_code, output, timed_out = await godot._run_engine(
-        "godot", ["--headless"], tmp_path, timeout=0.01
+        "godot", ["--headless"], tmp_path, timeout_seconds=0.01
     )
 
     assert timed_out is True

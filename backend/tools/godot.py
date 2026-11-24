@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import re
@@ -43,7 +44,10 @@ def _project_version(project_file: Path) -> str | None:
 
 
 async def _run_engine(
-    executable: str, arguments: list[str], project_dir: Path, timeout: float
+    executable: str,
+    arguments: list[str],
+    project_dir: Path,
+    timeout_seconds: float,
 ) -> tuple[int | None, str, bool]:
     try:
         if os.name != "nt":
@@ -78,43 +82,35 @@ async def _run_engine(
 
     reader = asyncio.create_task(drain_output())
     try:
-        await asyncio.wait_for(process.wait(), timeout=timeout)
+        await asyncio.wait_for(process.wait(), timeout=timeout_seconds)
     except TimeoutError:
         if os.name != "nt":
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
         else:
             process.kill()
-        try:
+        with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(process.wait(), timeout=5)
-        except TimeoutError:
-            pass
         reader.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await reader
-        except asyncio.CancelledError:
-            pass
         output = output_tail.decode("utf-8", errors="replace")
         return (
             process.returncode,
-            (f"Godot excedeu o limite de {timeout}s.\n{output}")[-_MAX_OUTPUT_CHARS:],
+            (f"Godot excedeu o limite de {timeout_seconds}s.\n{output}")[
+                -_MAX_OUTPUT_CHARS:
+            ],
             True,
         )
     except asyncio.CancelledError:
         if os.name != "nt":
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
         else:
             process.kill()
         reader.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await reader
-        except asyncio.CancelledError:
-            pass
         raise
     await reader
     text = output_tail.decode("utf-8", errors="replace")
