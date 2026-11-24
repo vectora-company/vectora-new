@@ -6,6 +6,7 @@ import difflib
 import os
 import tempfile
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, TypedDict, cast
@@ -68,6 +69,14 @@ class RepositorySnapshot:
     scope_root: Path
     initial: dict[str, bytes | None]
     initial_head: str | None = None
+
+
+class ToolFileState(dict[str, bytes | None]):
+    """Per-call snapshot with optional explicit file targets."""
+
+    def __init__(self, explicit_paths: set[str]) -> None:
+        super().__init__()
+        self.explicit_paths = frozenset(explicit_paths)
 
 
 @dataclass(frozen=True, slots=True)
@@ -397,13 +406,49 @@ def _workspace_path(repository: RepositorySnapshot, repo_path: str) -> str | Non
         return None
 
 
-def capture_tool_state(run_id: str) -> dict[str, bytes | None]:
-    """Snapshot changed workspace files immediately before a mutating tool."""
+def _explicit_tool_paths(
+    snapshot: TurnWorkspaceSnapshot, tool_name: str, arguments: Mapping[str, object]
+) -> set[str]:
+    """Resolve explicit file arguments from first-party file mutation tools."""
+    path_arguments: tuple[str, ...]
+    if tool_name in {"file_write", "file_edit"}:
+        path_arguments = ("file_path",)
+    elif tool_name == "file_delete":
+        path_arguments = ("path",)
+    elif tool_name == "file_move":
+        path_arguments = ("from_path", "to_path")
+    else:
+        return set()
+
+    paths: set[str] = set()
+    for key in path_arguments:
+        value = arguments.get(key)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        candidate = Path(value)
+        if not candidate.is_absolute():
+            candidate = snapshot.scope_root / candidate
+        try:
+            workspace_path = candidate.resolve().relative_to(snapshot.scope_root)
+        except (OSError, ValueError):
+            continue
+        if workspace_path.parts:
+            paths.add(workspace_path.as_posix())
+    return paths
+
+
+def capture_tool_state(
+    run_id: str,
+    tool_name: str = "",
+    arguments: Mapping[str, object] | None = None,
+) -> ToolFileState:
+    """Snapshot files before a tool, including its explicit file targets."""
     snapshot = _active.get(run_id)
     if snapshot is None:
-        return {}
+        return ToolFileState(set())
+    explicit_paths = _explicit_tool_paths(snapshot, tool_name, arguments or {})
     try:
-        states: dict[str, bytes | None] = {}
+        states = ToolFileState(explicit_paths)
         for repository in snapshot.repositories or (
             RepositorySnapshot(
                 snapshot.repo_root,
@@ -433,9 +478,21 @@ def capture_tool_state(run_id: str) -> dict[str, bytes | None]:
                     states[workspace_path] = _read(
                         repository.repo_root, repository.scope_root, path
                     )
-        return dict(sorted(states.items())[:MAX_TRACKED_FILES])
+        for workspace_path in explicit_paths:
+            located = _repository_for_path(snapshot, workspace_path)
+            if located is None:
+                continue
+            repository, repo_path = located
+            candidate = (repository.repo_root / repo_path).resolve()
+            if candidate.is_file():
+                states[workspace_path] = _read(
+                    repository.repo_root, repository.scope_root, repo_path
+                )
+        bounded = ToolFileState(explicit_paths)
+        bounded.update(sorted(states.items())[:MAX_TRACKED_FILES])
+        return bounded
     except Exception:
-        return {}
+        return ToolFileState(explicit_paths)
 
 
 def record_tool_effect(run_id: str, before: dict[str, bytes | None]) -> None:
@@ -449,6 +506,9 @@ def record_tool_effect(run_id: str, before: dict[str, bytes | None]) -> None:
         for path in before.keys() | after.keys()
         if (path in before) != (path in after) or before.get(path) != after.get(path)
     }
+    explicit_paths = getattr(before, "explicit_paths", frozenset())
+    if explicit_paths:
+        changed_paths.intersection_update(explicit_paths)
     baselines = _tool_baselines.setdefault(run_id, {})
     for path in changed_paths:
         if path in baselines:

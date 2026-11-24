@@ -381,7 +381,7 @@ async def _run_one(
             from backend.api.turn_files import capture_tool_state
 
             before_workspace_effects = await asyncio.to_thread(
-                capture_tool_state, ctx.run_id
+                capture_tool_state, ctx.run_id, tool_call.name, tool_call.args
             )
         try:
             texto = await spec.ainvoke(

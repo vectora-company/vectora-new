@@ -77,6 +77,34 @@ def test_capture_tracks_multiple_repositories_inside_one_workspace(
     ]
 
 
+def test_explicit_file_tool_does_not_attribute_unrelated_concurrent_edit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path)
+    target = tmp_path / "README.md"
+    unrelated = tmp_path / "notes.txt"
+    monkeypatch.setattr(
+        turn_files,
+        "_repo_and_scope",
+        lambda _workspace_id: (repo, tmp_path, tmp_path),
+    )
+
+    snapshot = turn_files.capture("ws", "thread", "run-explicit-target")
+    assert snapshot is not None
+    before = turn_files.capture_tool_state(
+        snapshot.run_id,
+        "file_write",
+        {"file_path": "README.md", "content": "agent"},
+    )
+    target.write_text("agent edit\n", encoding="utf-8")
+    unrelated.write_text("user edit\n", encoding="utf-8")
+    turn_files.record_tool_effect(snapshot.run_id, before)
+
+    changes = turn_files.finalize(snapshot)
+
+    assert [change.path for change in changes] == ["README.md"]
+
+
 def test_compute_excludes_tracked_files_matched_by_gitignore(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
