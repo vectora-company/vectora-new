@@ -88,6 +88,14 @@ function fileSlug(path: string): string {
   return last.replace(/\.md$/i, "");
 }
 
+export function shouldShowPlanLoadSpinner(
+  fetchedAt: number,
+  loading: boolean,
+  hasContent: boolean,
+): boolean {
+  return loading && (fetchedAt === 0 || !hasContent);
+}
+
 // Ícone + cor por artifact_type — mesmo padrão de `components/icons/`.
 // Tipo desconhecido/ausente (artifact legado sem sidecar) cai no fallback.
 const TYPE_ICON: Record<string, { icon: LucideIcon; className: string }> = {
@@ -284,7 +292,8 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   const [planLoadState, setPlanLoadState] = useState<{
     threadId: string;
     error: string | null;
-  }>({ threadId, error: null });
+    loading: boolean;
+  }>({ threadId, error: null, loading: true });
   // A chave inclui a thread e o contador nunca é resetado. Reiniciar o mapa
   // ao trocar de thread permitia que uma resposta antiga e uma nova usassem
   // o mesmo epoch para o mesmo slug.
@@ -299,6 +308,8 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   const fetchedAt = useWorkbenchStore((s) => s.getPlan(threadId).fetchedAt);
   const planLoadError =
     planLoadState.threadId === threadId ? planLoadState.error : null;
+  const planLoadPending =
+    planLoadState.threadId === threadId ? planLoadState.loading : true;
   const openSlugs = useWorkbenchStore((s) => s.getPlan(threadId).openSlugs);
   const contentsBySlug = useWorkbenchStore(
     (s) => s.getPlan(threadId).contentsBySlug,
@@ -361,14 +372,22 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   useWorkbenchSWR({
     key: `plan:${threadId}:${planLoadAttempt}`,
     hasCache: fetchedAt > 0,
-    isStale: () => isPlanStale() || planLoadError !== null,
+    isStale: isPlanStale,
     revalidate: async () => {
-      setPlanLoadState({ threadId, error: null });
+      setPlanLoadState({ threadId, error: null, loading: true });
       try {
         const list = await fetchArtifacts(threadId);
         setPlanItems(threadId, list);
+        setPlanLoadState({ threadId, error: null, loading: false });
       } catch {
-        setPlanLoadState({ threadId, error: m.workbench_plan_load_failed() });
+        // Marca a tentativa como concluída sem apagar artifacts já cacheados.
+        // Assim o SWR não fica repetindo a mesma falha por fetchedAt===0.
+        setPlanItems(threadId, items);
+        setPlanLoadState({
+          threadId,
+          error: m.workbench_plan_load_failed(),
+          loading: false,
+        });
       }
     },
   });
@@ -505,7 +524,12 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   }, [entries, handleAccordionChange, openSlugs, planAutoExpand, threadId]);
 
   // Estado de loading inicial: ainda não fetchamos uma única vez.
-  const initialLoading = fetchedAt === 0;
+  const hasPlanContent = items.length > 0 || todos.length > 0 || Boolean(dag);
+  const initialLoading = shouldShowPlanLoadSpinner(
+    fetchedAt,
+    planLoadPending,
+    hasPlanContent,
+  );
 
   if (initialLoading) {
     return (

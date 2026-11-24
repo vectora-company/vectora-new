@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchArtifacts } from "../plan-tab";
+import { fetchArtifacts, shouldShowPlanLoadSpinner } from "../plan-tab";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -34,5 +34,16 @@ describe("fetchArtifacts", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
       "session_id=thread-1",
     );
+  });
+});
+
+describe("Plan workbench loading state", () => {
+  it("ends the initial spinner after a failed request", () => {
+    expect(shouldShowPlanLoadSpinner(0, false, false)).toBe(false);
+  });
+
+  it("shows a spinner for a retry without hiding cached plan content", () => {
+    expect(shouldShowPlanLoadSpinner(0, true, false)).toBe(true);
+    expect(shouldShowPlanLoadSpinner(Date.now(), true, true)).toBe(false);
   });
 });
