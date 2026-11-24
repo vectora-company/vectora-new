@@ -67,7 +67,8 @@ def test_completed_study_requires_observed_results_and_direct_evidence() -> None
         {
             "evidence_id": "run-1",
             "kind": "reproduced_experiment",
-            "source": "run_id=eval-2026-11-24-001",
+            "source": "run://reports/eval.json#eval-2026-11-24-001",
+            "evidence_level": "fixture_runner",
             "observation": "30 pares válidos; p50 caiu 12%.",
             "limitations": ["Um host e um modelo."],
         }
