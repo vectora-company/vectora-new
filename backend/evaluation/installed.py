@@ -31,6 +31,16 @@ _SENSITIVE_ENV = re.compile(
 )
 _WINDOW_READY_MARKER = "VECTORA_ELECTRON_WINDOW_READY"
 _SMOKE_PASSED_MARKER = "Vectora startup smoke test passed; closing the app."
+_STAGE_MARKER = re.compile(r"^VECTORA_EVAL_STAGE:([a-z_]+):([0-9]+(?:\.[0-9]+)?)$")
+_EXPECTED_STAGES = (
+    "electron_ready",
+    "backend_started",
+    "backend_ready",
+    "renderer_dom_ready",
+    "renderer_loaded",
+    "window_ready",
+    "shutdown_complete",
+)
 
 
 class EvaluationDiagnostic(BaseModel):
@@ -61,6 +71,7 @@ class InstalledSmokeReport(BaseModel):
     real_provider_tested: Literal[False] = False
     scenario_task_executed: Literal[False] = False
     host: dict[str, str] = Field(default_factory=dict)
+    stage_timings_ms: dict[str, float] = Field(default_factory=dict)
     provenance: RunProvenance
     metrics: list[BenchmarkMetric] = Field(default_factory=list)
     diagnostics: list[EvaluationDiagnostic] = Field(default_factory=list)
@@ -172,11 +183,39 @@ def _report(
     status: RunStatus,
     reason: str | None,
     exit_code: int | None,
+    stage_timings_ms: dict[str, float] | None = None,
 ) -> InstalledSmokeReport:
     """Create a terminal report without copying application logs or user data."""
     finished_ns = time.monotonic_ns()
     duration_ms = max(0, (finished_ns - started_ns) // 1_000_000)
     finished_at = datetime.now(UTC)
+    timings = stage_timings_ms or {}
+    stage_metrics = [
+        BenchmarkMetric(
+            run_id=run_id,
+            scenario_id="installed-app-startup",
+            stage="electron_startup",
+            name=f"{stage}_elapsed",
+            value=elapsed_ms,
+            unit="ms",
+            dimension="performance",
+            source="electron.process.hrtime.bigint",
+        )
+        for stage, elapsed_ms in sorted(timings.items())
+    ]
+    stage_diagnostics = [
+        EvaluationDiagnostic(
+            stage=f"electron_{stage}",
+            status="passed" if stage in timings else "skipped",
+            duration_ms=round(timings.get(stage, 0)),
+            detail=(
+                "tempo desde o início do processo Electron"
+                if stage in timings
+                else "marcador indisponível nesta versão instalada"
+            ),
+        )
+        for stage in _EXPECTED_STAGES
+    ]
     return InstalledSmokeReport(
         run_id=run_id,
         status=status,
@@ -187,6 +226,7 @@ def _report(
         duration_ms=duration_ms,
         exit_code=exit_code,
         host={"system": platform.system(), "machine": platform.machine() or "unknown"},
+        stage_timings_ms=timings,
         provenance=RunProvenance(
             run_id=run_id,
             scenario_id="installed-app-startup",
@@ -204,7 +244,8 @@ def _report(
                 unit="ms",
                 dimension="performance",
                 source="python.monotonic_ns",
-            )
+            ),
+            *stage_metrics,
         ],
         diagnostics=[
             EvaluationDiagnostic(
@@ -212,7 +253,8 @@ def _report(
                 status=status,
                 duration_ms=duration_ms,
                 detail=reason,
-            )
+            ),
+            *stage_diagnostics,
         ],
     )
 
@@ -286,6 +328,7 @@ def run_installed_smoke(  # noqa: PLR0911
         process: subprocess.Popen[str] | None = None
         reader: threading.Thread | None = None
         markers = {"window_ready": False, "passed": False}
+        stage_timings_ms: dict[str, float] = {}
         marker_lock = threading.Lock()
         try:
             process = subprocess.Popen(  # noqa: S603  # nosec B603
@@ -322,6 +365,9 @@ def run_installed_smoke(  # noqa: PLR0911
                 with marker_lock:
                     markers["window_ready"] |= _WINDOW_READY_MARKER in line
                     markers["passed"] |= _SMOKE_PASSED_MARKER in line
+                    match = _STAGE_MARKER.fullmatch(line.strip())
+                    if match:
+                        stage_timings_ms[match.group(1)] = float(match.group(2))
 
         reader = threading.Thread(target=read_markers, daemon=True)
         reader.start()
@@ -376,4 +422,5 @@ def run_installed_smoke(  # noqa: PLR0911
             status=status,
             reason=reason,
             exit_code=exit_code,
+            stage_timings_ms=stage_timings_ms,
         )

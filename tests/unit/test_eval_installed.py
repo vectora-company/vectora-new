@@ -37,6 +37,13 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
         "assert 'OPENAI_API_KEY' not in os.environ\n"
         "assert 'GPG_PASSPHRASE' not in os.environ\n"
         "assert 'VECTORA_LICENSE_BYPASS' not in os.environ\n"
+        "print('VECTORA_EVAL_STAGE:electron_ready:1.000')\n"
+        "print('VECTORA_EVAL_STAGE:backend_started:5.000')\n"
+        "print('VECTORA_EVAL_STAGE:backend_ready:12.500')\n"
+        "print('VECTORA_EVAL_STAGE:renderer_dom_ready:30.250')\n"
+        "print('VECTORA_EVAL_STAGE:renderer_loaded:40.500')\n"
+        "print('VECTORA_EVAL_STAGE:window_ready:41.000')\n"
+        "print('VECTORA_EVAL_STAGE:shutdown_complete:50.000')\n"
         "print('VECTORA_ELECTRON_WINDOW_READY')\n"
         "print('Vectora startup smoke test passed; closing the app.')\n",
         encoding="utf-8",
@@ -55,6 +62,19 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
     assert report.scenario_task_executed is False
     assert report.run_id
     assert report.diagnostics[0].status == "passed"
+    assert report.stage_timings_ms["backend_ready"] == 12.5
+    assert report.stage_timings_ms["shutdown_complete"] == 50
+    assert {
+        metric.name for metric in report.metrics if metric.stage == "electron_startup"
+    } == {
+        "electron_ready_elapsed",
+        "backend_started_elapsed",
+        "backend_ready_elapsed",
+        "renderer_dom_ready_elapsed",
+        "renderer_loaded_elapsed",
+        "window_ready_elapsed",
+        "shutdown_complete_elapsed",
+    }
     profile_raw, workspace_raw, current_directory = capture.read_text(
         encoding="utf-8"
     ).splitlines()
@@ -149,6 +169,11 @@ def test_zero_exit_without_startup_markers_is_not_a_pass(
 
     assert report.status == "failed"
     assert "sem confirmar backend e renderer" in (report.reason or "")
+    assert all(
+        item.status == "skipped"
+        for item in report.diagnostics
+        if item.stage.startswith("electron_")
+    )
 
 
 def test_timeout_terminates_child_processes_and_cleans_profile(

@@ -161,6 +161,14 @@ process.env.VECTORA_ELECTRON_CDP_AUTH_TOKEN = electronCdpAuthToken;
 const installedTestsMode = isInstalledTestsMode(process.argv);
 const installedSmokeTestMode = isInstalledSmokeTestMode(process.argv);
 const installedAutomationMode = installedTestsMode || installedSmokeTestMode;
+const smokeProcessStartedAt = process.hrtime.bigint();
+function emitSmokeStage(stage: string): void {
+  if (!installedSmokeTestMode) return;
+  const elapsedMs =
+    Number(process.hrtime.bigint() - smokeProcessStartedAt) / 1e6;
+  console.log(`VECTORA_EVAL_STAGE:${stage}:${elapsedMs.toFixed(3)}`);
+}
+
 const graphicsCli = parseGraphicsCliOverrides(process.argv);
 if (graphicsCli.disableGpu) {
   app.commandLine.appendSwitch("disable-gpu");
@@ -800,6 +808,7 @@ async function startBackend(): Promise<void> {
   if (external) {
     backendPort = external.port;
     backendPipePath = external.pipePath;
+    emitSmokeStage("backend_started");
     return;
   }
   backendPort = await getFreePort();
@@ -834,6 +843,7 @@ async function startBackend(): Promise<void> {
     env,
     launch.cwd,
   );
+  emitSmokeStage("backend_started");
   if (backend.pid) {
     const backendPid = backend.pid;
     const pidFileWrite = fs.promises
@@ -1049,6 +1059,7 @@ function activateMainWindow(reason: string, visible: boolean): void {
   if (!windowReadyMarkerEmitted) {
     windowReadyMarkerEmitted = true;
     console.log("VECTORA_ELECTRON_WINDOW_READY");
+    emitSmokeStage("window_ready");
     if (installedSmokeTestMode) {
       if (smokeTestWatchdog) clearTimeout(smokeTestWatchdog);
       console.log("Vectora startup smoke test passed; closing the app.");
@@ -1059,6 +1070,7 @@ function activateMainWindow(reason: string, visible: boolean): void {
         app.exit(1);
       }, 15_000);
       app.once("will-quit", () => clearTimeout(shutdownWatchdog));
+      app.once("will-quit", () => emitSmokeStage("shutdown_complete"));
       app.quit();
     }
   }
@@ -1155,12 +1167,14 @@ function createWindow(options: { visible?: boolean } = {}): void {
   // Em Linux, falhas/atrasos do GPU process podem impedir ready-to-show mesmo
   // com o renderer carregando normalmente. Esses eventos são um fallback
   // seguro: a janela só aparece depois que a página começou/terminou de carregar.
-  mainWindow.webContents.once("dom-ready", () =>
-    activateAfterLoad("dom-ready"),
-  );
-  mainWindow.webContents.once("did-finish-load", () =>
-    activateAfterLoad("did-finish-load"),
-  );
+  mainWindow.webContents.once("dom-ready", () => {
+    emitSmokeStage("renderer_dom_ready");
+    activateAfterLoad("dom-ready");
+  });
+  mainWindow.webContents.once("did-finish-load", () => {
+    emitSmokeStage("renderer_loaded");
+    activateAfterLoad("did-finish-load");
+  });
   const visibilityFallback = setTimeout(
     () => activateAfterLoad("visibility-timeout"),
     2_000,
@@ -1913,6 +1927,7 @@ app.on("open-url", (event, url) => {
 
 app.whenReady().then(async () => {
   if (!gotLock) return;
+  emitSmokeStage("electron_ready");
   void logActualGraphicsInfo("app-ready");
   if (installedTestsMode) {
     const executable = backendPath(
@@ -1954,6 +1969,7 @@ app.whenReady().then(async () => {
     await startBackend();
     await waitForBackend();
     backendReady = true;
+    emitSmokeStage("backend_ready");
     await clearPendingUpdate();
     const webMode = process.env.VECTORA_WEB_MODE === "1";
     // In `vectora web`, keep a hidden renderer alive so BrowserViews/CDP use

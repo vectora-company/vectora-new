@@ -74,3 +74,10 @@ não é capturada nesse modo. O sistema operacional também não isola a rede do
 subprocesso, então use um runner offline e fixtures sintéticas. Para verificar
 inicialização de uma instalação, use `vectora eval smoke`; para replay de
 interações registradas, use `vectora eval run --suite FILE`.
+
+O `vectora eval smoke` inicia uma instalação com perfil e workspace isolados e
+registra tempos monotônicos para Electron pronto, backend iniciado/pronto,
+renderer carregado, janela pronta e encerramento. Esses tempos medem etapas do
+processo Electron; não atribuem duração individual a cada sidecar. Versões sem
+os marcadores estruturados continuam sendo avaliadas pelo resultado de startup,
+com as etapas ausentes marcadas como `skipped`.
