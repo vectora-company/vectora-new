@@ -25,7 +25,7 @@ class CassetteInteraction(BaseModel):
     response_text: str = ""
     tool_calls: list[JsonObject] = Field(default_factory=list)
     duration_ms: int = 0
-    usage: dict[str, int] = Field(default_factory=dict)
+    usage: dict[str, int | float] = Field(default_factory=dict)
     systemone_decision: str | None = None
     # Structured, redacted provenance for new recordings. Keep the legacy
     # string field above so existing cassettes remain readable.

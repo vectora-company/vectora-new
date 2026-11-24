@@ -152,6 +152,24 @@ class _ScriptedChatClient:
         raise NotImplementedError(msg)
 
 
+@pytest.mark.parametrize(
+    ("usage", "expected_value", "expected_reason"),
+    [
+        ({"cost_usd": 0.0}, 0.0, None),
+        (None, None, "provider não informou custo em USD"),
+        ({"cost_usd": -0.1}, None, "provider informou custo USD inválido"),
+        ({"cost_usd": float("nan")}, None, "provider informou custo USD inválido"),
+        ({"cost_usd": True}, None, "provider informou custo USD inválido"),
+    ],
+)
+def test_reported_cost_requires_finite_nonnegative_usd(
+    usage, expected_value: float | None, expected_reason: str | None
+) -> None:
+    from backend.engine.conversation_loop import _reported_cost_usd
+
+    assert _reported_cost_usd(usage) == (expected_value, expected_reason)
+
+
 @pytest.fixture
 async def session_store(tmp_path):
     """Executa a operação session store."""
@@ -451,7 +469,10 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
                             args='{"value":"expected","server_name":"fixture-server"}',
                         )
                     ],
-                    [_text_chunk("done")],
+                    [
+                        _text_chunk("done"),
+                        VMessageChunk(usage={"cost_usd": 0.0012}),
+                    ],
                 ]
             ),
             tool_registry=registry,
@@ -489,9 +510,9 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
             for item in metrics
         )
         assert any(
-            item.get("name") == "cost"
-            and item.get("status") == "unavailable"
-            and item.get("value") is None
+            item.get("name") == "provider_reported_cost"
+            and item.get("status") == "measured"
+            and item.get("value") == 0.0012
             for item in metrics
         )
         provenance = next(

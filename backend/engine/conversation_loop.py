@@ -599,9 +599,9 @@ class LoopResult:
     stopped_reason: str
     """`"stop"` | `"max_iterations"` | `"interrupted"` | `"loop_cap_exceeded"`."""
     final_message: VMessage | None = None
-    usage: dict[str, int] | None = None
+    usage: dict[str, int | float] | None = None
     usage_models: tuple[str, ...] = ()
-    usage_records: tuple[tuple[str | None, dict[str, int]], ...] = ()
+    usage_records: tuple[tuple[str | None, dict[str, int | float]], ...] = ()
     tool_names: tuple[str, ...] = ()
 
 
@@ -733,7 +733,7 @@ def _safe_evaluation_label(value: object) -> str | None:
 
 
 def _output_tokens_per_second(
-    usage: dict[str, int] | None,
+    usage: dict[str, int | float] | None,
     *,
     first_text_ms: float | None,
     provider_duration_ms: float,
@@ -757,6 +757,23 @@ def _output_tokens_per_second(
     if generation_ms <= 0:
         return None, "janela de geração insuficiente para calcular taxa"
     return output_tokens / (generation_ms / 1000), None
+
+
+def _reported_cost_usd(
+    usage: dict[str, int | float] | None,
+) -> tuple[float | None, str | None]:
+    """Keep provider-reported USD cost; never estimate from token counts."""
+    if usage is None or "cost_usd" not in usage:
+        return None, "provider não informou custo em USD"
+    value = usage["cost_usd"]
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        return None, "provider informou custo USD inválido"
+    return float(value), None
 
 
 async def _record_evaluation_provenance(
@@ -1273,9 +1290,9 @@ async def run_conversation(  # noqa: PLR0911
     assinaturas_anteriores: tuple[tuple[str, str], ...] | None = None
     repeticoes_seguidas = 0
     turn_budget = TurnBudget(config=config.loop_caps)
-    last_usage: dict[str, int] | None = None
+    last_usage: dict[str, int | float] | None = None
     usage_models: set[str] = set()
-    usage_records: list[tuple[str | None, dict[str, int]]] = []
+    usage_records: list[tuple[str | None, dict[str, int | float]]] = []
     observed_tools: set[str] = set()
     files_touched: list[str] = []
     executed_step_gates: set[tuple[str, str]] = set()
@@ -1501,7 +1518,7 @@ async def run_conversation(  # noqa: PLR0911
             },
         )
 
-        stream_usage: dict[str, int] | None = None
+        stream_usage: dict[str, int | float] | None = None
         provider_started_at = time.monotonic()
         first_token_duration_ms: float | None = None
         async for chunk in chat_client.astream(
@@ -1514,7 +1531,7 @@ async def run_conversation(  # noqa: PLR0911
             if chunk.finish_reason:
                 finish_reasons.append(str(chunk.finish_reason))
             if chunk.usage:
-                stream_usage = cast("dict[str, int]", dict(chunk.usage))
+                stream_usage = cast("dict[str, int | float]", dict(chunk.usage))
             if chunk.delta_text:
                 if first_token_duration_ms is None:
                     first_token_duration_ms = (
@@ -1564,7 +1581,11 @@ async def run_conversation(  # noqa: PLR0911
                     str(ctx.model) if ctx.model else None,
                     historico,
                     tools,
-                    stream_usage,
+                    {
+                        key: value
+                        for key, value in stream_usage.items()
+                        if isinstance(value, int) and not isinstance(value, bool)
+                    },
                 )
             if last_usage is None:
                 last_usage = {}
@@ -1729,20 +1750,21 @@ async def run_conversation(  # noqa: PLR0911
                 reason=token_rate_reason,
                 identity=f"{metric_identity}:output-tokens-per-second",
             )
+            provider_cost, provider_cost_reason = _reported_cost_usd(stream_usage)
             await _record_evaluation_metric(
                 session_store,
                 run_id=config.run_id,
                 scenario_id=scenario_id,
                 stage="provider_request",
                 capability="chat.generate",
-                name="cost",
-                value=None,
+                name="provider_reported_cost",
+                value=provider_cost,
                 unit="USD",
                 dimension="cost",
-                source="provider.usage",
+                source="provider.usage.cost_usd",
                 provider=provider_label,
                 model=model_label,
-                reason="provider não informou custo verificável",
+                reason=provider_cost_reason,
                 identity=f"{metric_identity}:cost",
             )
 

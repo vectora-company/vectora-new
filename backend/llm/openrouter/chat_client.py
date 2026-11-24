@@ -7,11 +7,8 @@ Peculiaridades que o parser preserva:
 - `reasoning` nunca entra no texto da mensagem — canal próprio
   (`ContentBlock(kind="reasoning")`/`VMessageChunk.delta_reasoning`),
   concatenar mistura raciocínio e resposta na tela.
-- `usage.cost` (campo próprio do OpenRouter, ausente na API da OpenAI) seria
-  descartado por um cliente OpenAI-compat — aqui seria perdido também, já
-  que `VMessage`/`VMessageChunk` não têm campo `cost`; mantido só como
-  observação, não é o objetivo deste chat client feature-paridade total com
-  o adapter antigo em campos que os tipos nativos não modelam ainda.
+- `usage.cost` (campo próprio do OpenRouter, ausente na API da OpenAI) é
+  preservado como `cost_usd` para medição sem estimar preço.
 - `tool_calls` fragmentado no streaming por `index` — acumulado pelo caller
   via `ToolCallChunk`, mesmo padrão que os demais 4 clients.
 - `arguments` inválido (JSON malformado) não derruba a resposta — vira
@@ -22,6 +19,7 @@ Peculiaridades que o parser preserva:
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -58,6 +56,7 @@ class _UsagePayload(TypedDict, total=False):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    cost: float
     prompt_tokens_details: dict[str, Any]
 
 
@@ -274,6 +273,14 @@ def _usage_metadata(usage: _UsagePayload | None) -> UsageSnapshot | None:
     )
     if written:
         snapshot["cache_write_tokens"] = written
+    raw_cost = usage.get("cost")
+    if (
+        isinstance(raw_cost, (int, float))
+        and not isinstance(raw_cost, bool)
+        and math.isfinite(raw_cost)
+        and raw_cost >= 0
+    ):
+        snapshot["cost_usd"] = float(raw_cost)
     return snapshot
 
 

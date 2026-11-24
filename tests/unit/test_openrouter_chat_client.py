@@ -698,6 +698,7 @@ class TestRouterSessionAndUsage:
             {
                 "prompt_tokens": 1000,
                 "completion_tokens": 10,
+                "cost": 0.0042,
                 "prompt_tokens_details": {
                     "cached_tokens": 800,
                     "cache_write_tokens": 50,
@@ -718,4 +719,5 @@ class TestRouterSessionAndUsage:
         assert openrouter is not None and omniroute_usage is not None
         assert openrouter["cached_input_tokens"] == 800
         assert openrouter["cache_write_tokens"] == 50
+        assert openrouter["cost_usd"] == 0.0042
         assert omniroute_usage["cache_write_tokens"] == 70

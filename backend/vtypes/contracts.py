@@ -28,6 +28,7 @@ class UsageSnapshot(TypedDict, total=False):
     total_tokens: int
     cached_input_tokens: int
     cache_write_tokens: int
+    cost_usd: float
 
 
 class ChangedFile(TypedDict, total=False):

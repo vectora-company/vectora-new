@@ -22,7 +22,7 @@ async def record_interaction(
     messages: list[VMessage],
     response: str,
     tool_calls: list[ToolCall],
-    usage: dict[str, int] | None,
+    usage: dict[str, int | float] | None,
     model: str,
     duration_ms: int,
     policy_digest: str,

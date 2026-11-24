@@ -116,6 +116,10 @@ Com `evaluation_recording_enabled` e `run_id`, chamadas do provider registram
 tokens de entrada/saída, TTFT e `output_tokens_per_second`. A taxa usa apenas
 tokens de saída informados pelo provider e a janela entre o primeiro texto e o
 fim do stream; sem ambos, o relatório guarda `unavailable` com motivo.
+O adaptador OpenRouter preserva `usage.cost` como `cost_usd`; o Evaluation Lab
+registra custo medido somente quando o provider envia valor finito e não negativo.
+Ele não estima custo usando tabelas de preços. Sem valor explícito, a métrica fica
+`unavailable`.
 
 `vectora eval compare-runs` inclui tamanho da amostra, média, desvio-padrão,
 p50/p95 de cada grupo e intervalo normal aproximado para o delta quando ambos
