@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import shutil
@@ -27,10 +28,8 @@ def _godot_executable() -> str | None:
 
 def _terminate_tree(process: subprocess.Popen[str]) -> None:
     if os.name != "nt":
-        try:
+        with contextlib.suppress(ProcessLookupError):
             os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
     else:
         process.kill()
 
