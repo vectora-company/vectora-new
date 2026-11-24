@@ -64,6 +64,26 @@ def test_metric_rejects_missing_measured_value_and_fake_zero() -> None:
         )
 
 
+def test_metric_keeps_usage_in_resource_dimension_and_provider_labels() -> None:
+    metric = BenchmarkMetric(
+        run_id="run-4",
+        scenario_id="scenario",
+        stage="provider_request",
+        capability="chat.generate",
+        name="input_tokens",
+        value=42,
+        unit="tokens",
+        dimension="resources",
+        source="provider.usage",
+        provider="local",
+        model="test-model",
+    )
+
+    assert metric.dimension == "resources"
+    assert metric.provider == "local"
+    assert metric.model == "test-model"
+
+
 def test_provenance_hashes_safe_configuration_without_storing_values() -> None:
     provenance = RunProvenance.from_configuration(
         "scenario",

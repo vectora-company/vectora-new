@@ -33,9 +33,11 @@ import hashlib
 import json
 import logging
 import math
+import os
+import re
 import time
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import uuid4
 
 from backend.engine.guardrails import LoopCapConfig, TurnBudget
@@ -663,6 +665,107 @@ async def _safe_record_run_evidence(
         logger.exception(
             "conversation_loop: falha ao persistir evidência do run %s", run_id
         )
+
+
+async def _record_evaluation_metric(
+    session_store: Any,
+    *,
+    run_id: str | None,
+    scenario_id: str,
+    stage: str,
+    capability: str | None,
+    name: str,
+    value: float | None,
+    unit: str,
+    dimension: Literal[
+        "quality", "performance", "cost", "security", "resources", "reliability"
+    ],
+    source: str,
+    provider: str | None = None,
+    model: str | None = None,
+    reason: str | None = None,
+    identity: str = "",
+) -> None:
+    """Grava uma métrica opt-in sem incluir conteúdo do prompt ou credenciais."""
+    if not run_id:
+        return
+    from backend.evaluation.metrics import BenchmarkMetric
+
+    if value is None and not reason:
+        reason = "origem não disponibilizou essa medição"
+
+    metric = BenchmarkMetric(
+        run_id=run_id,
+        scenario_id=scenario_id,
+        stage=stage,
+        capability=capability,
+        name=name,
+        value=value,
+        unit=unit,
+        dimension=dimension,
+        source=source,
+        provider=provider,
+        model=model,
+        status="measured" if value is not None else "unavailable",
+        reason=reason,
+    )
+    identity_digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
+    await _safe_record_run_evidence(
+        session_store,
+        run_id,
+        evidence={
+            "type": "evaluation_metric",
+            "evidence_id": f"evaluation-metric:{run_id}:{identity_digest}",
+            **metric.model_dump(mode="json"),
+        },
+    )
+
+
+def _safe_evaluation_label(value: object) -> str | None:
+    """Aceita apenas rótulos curtos de provider/model sem payload ou credencial."""
+    if not isinstance(value, str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}", value
+    ):
+        return None
+    if re.search(r"(?i)(token|secret|password|api[_-]?key|bearer)", value):
+        return None
+    return value
+
+
+async def _record_evaluation_provenance(
+    session_store: Any,
+    *,
+    run_id: str,
+    scenario_id: str,
+    provider: str | None,
+    model: str | None,
+    identity: str,
+    configuration: dict[str, object],
+    runtime_version: str,
+) -> None:
+    """Persiste somente metadados e o digest da configuração permitida."""
+    from backend.evaluation.metrics import RunProvenance
+
+    source_revision = os.environ.get("VECTORA_SOURCE_REVISION")
+    if not source_revision or not re.fullmatch(r"[0-9a-f]{7,64}", source_revision):
+        source_revision = None
+    provenance = RunProvenance.from_configuration(
+        scenario_id,
+        configuration,
+        runtime_version=runtime_version,
+        source_revision=source_revision,
+        provider=provider,
+        model=model,
+    ).model_copy(update={"run_id": run_id, "opt_ins": ["evaluation_recording"]})
+    await _safe_record_run_evidence(
+        session_store,
+        run_id,
+        evidence={
+            "type": "evaluation_provenance",
+            "evidence_id": f"evaluation-provenance:{run_id}:{identity}",
+            **provenance.model_dump(mode="json"),
+        },
+    )
 
 
 _ARGS_PREVIEW_MAX_CHARS = 80
@@ -1366,6 +1469,7 @@ async def run_conversation(  # noqa: PLR0911
 
         stream_usage: dict[str, int] | None = None
         provider_started_at = time.monotonic()
+        first_token_duration_ms: float | None = None
         async for chunk in chat_client.astream(
             historico,
             tools=tools,
@@ -1378,6 +1482,10 @@ async def run_conversation(  # noqa: PLR0911
             if chunk.usage:
                 stream_usage = cast("dict[str, int]", dict(chunk.usage))
             if chunk.delta_text:
+                if first_token_duration_ms is None:
+                    first_token_duration_ms = (
+                        time.monotonic() - provider_started_at
+                    ) * 1000
                 text_chunk_count += 1
                 partes_texto.append(chunk.delta_text)
                 await emit(MessageChunk(content=chunk.delta_text))
@@ -1458,6 +1566,129 @@ async def run_conversation(  # noqa: PLR0911
         ]
         observed_tools.update(tc.name for tc in tool_calls if tc.name)
         from backend.settings import settings
+
+        if settings.evaluation_recording_enabled and config.run_id:
+            provider_raw, _, configured_model = str(ctx.model or "").partition(":")
+            provider_label = _safe_evaluation_label(
+                getattr(chat_client, "last_provider_id", None) or provider_raw
+            )
+            model_label = _safe_evaluation_label(model_id or configured_model)
+            scenario_value = (
+                ctx._extra.get("evaluation_scenario_id")
+                if isinstance(ctx._extra, dict)
+                else None
+            )
+            scenario_id = (
+                _safe_evaluation_label(scenario_value) or "interactive-agent-run"
+            )
+            await _record_evaluation_provenance(
+                session_store,
+                run_id=config.run_id,
+                scenario_id=scenario_id,
+                provider=provider_label,
+                model=model_label,
+                identity=f"iteration:{_iteracao}",
+                configuration={
+                    "model": model_label,
+                    "provider": provider_label,
+                    "temperature": config.temperature,
+                    "max_tokens": config.max_tokens,
+                    "reasoning_effort": config.reasoning_effort,
+                    "permission_mode": ctx.permission_mode,
+                    "policy_version": policy_snapshot.version,
+                },
+                runtime_version=str(settings.version),
+            )
+            metric_identity = f"provider:{_iteracao}"
+            await _record_evaluation_metric(
+                session_store,
+                run_id=config.run_id,
+                scenario_id=scenario_id,
+                stage="provider_request",
+                capability="chat.generate",
+                name="duration",
+                value=(time.monotonic() - provider_started_at) * 1000,
+                unit="ms",
+                dimension="performance",
+                source="conversation_loop.chat_client.astream",
+                provider=provider_label,
+                model=model_label,
+                identity=f"{metric_identity}:duration",
+            )
+            await _record_evaluation_metric(
+                session_store,
+                run_id=config.run_id,
+                scenario_id=scenario_id,
+                stage="provider_request",
+                capability="chat.generate",
+                name="time_to_first_token",
+                value=first_token_duration_ms,
+                unit="ms",
+                dimension="performance",
+                source="conversation_loop.chat_client.astream",
+                provider=provider_label,
+                model=model_label,
+                reason="provider terminou sem emitir texto",
+                identity=f"{metric_identity}:time-to-first-chunk",
+            )
+            usage_aliases = {
+                "input_tokens": ("input_tokens", "prompt_tokens", "input", "prompt"),
+                "output_tokens": (
+                    "output_tokens",
+                    "completion_tokens",
+                    "output",
+                    "completion",
+                ),
+                "total_tokens": ("total_tokens", "total"),
+                "cached_input_tokens": ("cached_input_tokens", "cache_read_tokens"),
+                "cache_write_tokens": ("cache_write_tokens", "cached_write_tokens"),
+            }
+            for metric_name, aliases in usage_aliases.items():
+                raw_value = next(
+                    (
+                        stream_usage[key]
+                        for key in aliases
+                        if stream_usage is not None and key in stream_usage
+                    ),
+                    None,
+                )
+                valid_value = (
+                    float(raw_value)
+                    if isinstance(raw_value, int) and raw_value >= 0
+                    else None
+                )
+                await _record_evaluation_metric(
+                    session_store,
+                    run_id=config.run_id,
+                    scenario_id=scenario_id,
+                    stage="provider_request",
+                    capability="chat.generate",
+                    name=metric_name,
+                    value=valid_value,
+                    unit="tokens",
+                    dimension="resources",
+                    source="provider.usage",
+                    provider=provider_label,
+                    model=model_label,
+                    reason="provider não informou esse contador de tokens",
+                    identity=f"{metric_identity}:{metric_name}",
+                )
+            await _record_evaluation_metric(
+                session_store,
+                run_id=config.run_id,
+                scenario_id=scenario_id,
+                stage="provider_request",
+                capability="chat.generate",
+                name="cost",
+                value=None,
+                unit="USD",
+                dimension="cost",
+                source="provider.usage",
+                provider=provider_label,
+                model=model_label,
+                reason="provider não informou custo verificável",
+                identity=f"{metric_identity}:cost",
+            )
 
         if settings.evaluation_recording_enabled and config.run_id:
             from backend.evaluation.recording import record_interaction
@@ -2290,6 +2521,30 @@ async def run_conversation(  # noqa: PLR0911
                 if started_at is not None
                 else 0
             )
+            if (
+                settings.evaluation_recording_enabled
+                and config.run_id
+                and started_at is not None
+            ):
+                scenario_value = (
+                    ctx._extra.get("evaluation_scenario_id")
+                    if isinstance(ctx._extra, dict)
+                    else None
+                )
+                await _record_evaluation_metric(
+                    session_store,
+                    run_id=config.run_id,
+                    scenario_id=_safe_evaluation_label(scenario_value)
+                    or "interactive-agent-run",
+                    stage="tool_execution",
+                    capability=_safe_evaluation_label(resultado.name),
+                    name="duration",
+                    value=float(elapsed_ms),
+                    unit="ms",
+                    dimension="performance",
+                    source="conversation_loop.execute_tool_batch",
+                    identity=f"tool:{config.run_id}:{call_id}:duration",
+                )
             await emit(
                 ToolActivity(
                     tool_name=resultado.name or "",

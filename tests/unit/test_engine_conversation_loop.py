@@ -461,6 +461,31 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
         assert effects == [("expected", ctx.run_id)]
         run = await session_store.get_agent_run(ctx.run_id)
         assert run is not None
+        metrics = [
+            item for item in run.evidence if item.get("type") == "evaluation_metric"
+        ]
+        assert any(
+            item.get("stage") == "provider_request"
+            and item.get("name") == "duration"
+            and item.get("status") == "measured"
+            for item in metrics
+        )
+        assert any(
+            item.get("stage") == "provider_request"
+            and item.get("name") == "time_to_first_token"
+            for item in metrics
+        )
+        assert any(
+            item.get("stage") == "tool_execution" and item.get("name") == "duration"
+            for item in metrics
+        )
+        assert any(
+            item.get("name") == "cost"
+            and item.get("status") == "unavailable"
+            and item.get("value") is None
+            for item in metrics
+        )
+        assert any(item.get("type") == "evaluation_provenance" for item in run.evidence)
         assert any(
             item.get("reason") == "decision_model_surface_disabled"
             for item in run.evidence

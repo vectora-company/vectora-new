@@ -25,8 +25,12 @@ class BenchmarkMetric(BaseModel):
     name: str
     value: float | None = None
     unit: str
-    dimension: Literal["quality", "performance", "cost", "security", "reliability"]
+    dimension: Literal[
+        "quality", "performance", "cost", "security", "resources", "reliability"
+    ]
     source: str
+    provider: str | None = None
+    model: str | None = None
     status: MetricStatus = "measured"
     reason: str | None = None
 
@@ -105,7 +109,12 @@ class EvaluationRecorder:
         capability: str | None = None,
         name: str = "duration",
         dimension: Literal[
-            "quality", "performance", "cost", "security", "reliability"
+            "quality",
+            "performance",
+            "cost",
+            "security",
+            "resources",
+            "reliability",
         ] = "performance",
     ) -> BenchmarkMetric:
         """Fecha uma etapa como duração medida em milissegundos."""
@@ -134,7 +143,9 @@ class EvaluationRecorder:
         stage: str,
         name: str,
         unit: str,
-        dimension: Literal["quality", "performance", "cost", "security", "reliability"],
+        dimension: Literal[
+            "quality", "performance", "cost", "security", "resources", "reliability"
+        ],
         reason: str,
         capability: str | None = None,
         status: Literal["unavailable", "blocked", "skipped", "not_run"] = "unavailable",
