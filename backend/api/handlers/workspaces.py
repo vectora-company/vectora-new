@@ -1000,7 +1000,7 @@ async def validate_workspace_godot_project(
             detail="A tool de validação Godot está desabilitada pela política atual.",
         )
 
-    import backend.tools.godot  # noqa: F401  # registra a tool de validação
+    import backend.tools.godot  # registra a tool de validação
 
     spec = TOOL_REGISTRY.get("validate_godot_project")
     if spec is None:

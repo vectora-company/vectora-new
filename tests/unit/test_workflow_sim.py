@@ -212,6 +212,66 @@ def test_step_condition_false_skips_the_step(tmp_path: Path) -> None:
     assert results[1].exit_code == 0
 
 
+def test_step_outcome_is_available_to_later_conditions(tmp_path: Path) -> None:
+    box = Sandbox(tmp_path / "box", tools=("go", "gitleaks"))
+    box.set_rules("go", [Rule(["install"], exit=1)])
+    box.set_rules("gitleaks", [Rule(["dir", "*"])])
+    wf = _workflow(
+        tmp_path,
+        "      - id: install\n"
+        "        continue-on-error: true\n"
+        "        run: go install gitleaks\n"
+        "      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}\n"
+        "        run: gitleaks dir .\n",
+    )
+
+    results = sim.run_job(wf, "job", sandbox=box, context={}, workdir=tmp_path)
+
+    assert results[0].exit_code == 1
+    assert results[1].skipped == "condição falsa"
+    assert box.calls("gitleaks") == []
+
+
+def test_pr_gate_retries_gitleaks_install_and_stops_after_three_failures(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    workflow = repo_root / ".github" / "workflows" / "pr-gate.yml"
+    workdir = tmp_path / "work"
+    (workdir / "frontend").mkdir(parents=True)
+    box = Sandbox(tmp_path / "box", tools=("go", "pnpm"))
+    box.set_rules("go", [Rule(["install"], stderr="proxy error", exit=1)])
+    box.set_rules("pnpm", [Rule(["install"])])
+    context = {
+        "github": {
+            "event_name": "pull_request",
+            "token": "token-falso",
+            "event": {
+                "action": "synchronize",
+                "pull_request": {
+                    "base": {"ref": "master"},
+                    "head": {
+                        "ref": "feat/exemplo",
+                        "repo": {"full_name": "vectora-company/vectora-new"},
+                    },
+                    "milestone": {"title": "0.1.x"},
+                    "body": "",
+                },
+            },
+        },
+        "secrets": {},
+    }
+
+    results = sim.run_job(
+        workflow, "code", sandbox=box, context=context, workdir=workdir
+    )
+
+    install = next(result for result in results if result.name == "Install gitleaks")
+    assert install.exit_code == 1
+    assert "três tentativas" in install.output
+    assert len(box.calls("go")) == 3
+
+
 def test_simultaneous_calls_are_all_recorded_without_corrupting_the_log(
     tmp_path: Path,
 ) -> None:

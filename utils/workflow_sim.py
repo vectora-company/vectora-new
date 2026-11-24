@@ -455,13 +455,18 @@ def run_job(
     try:
         for step in job["steps"]:
             name = step.get("name")
+            step_id = step.get("id")
             if "if" in step and not evaluate_condition(_stringify(step["if"]), ctx):
                 results.append(StepResult(name, 0, "", "condição falsa"))
+                if step_id:
+                    ctx["steps"][step_id] = {"outcome": "skipped"}
                 continue
             if "uses" in step:
                 results.append(
                     StepResult(name, 0, "", f"ação {step['uses']} (não simulada)")
                 )
+                if step_id:
+                    ctx["steps"][step_id] = {"outcome": "success"}
                 continue
             ctx["env"] = {
                 **context_env,
@@ -521,8 +526,11 @@ def run_job(
                 errors="replace",
                 check=False,
             )
-            if step.get("id"):
-                ctx["steps"][step["id"]] = {"outputs": _parse_outputs(output_file)}
+            if step_id:
+                ctx["steps"][step_id] = {
+                    "outcome": "success" if process.returncode == 0 else "failure",
+                    "outputs": _parse_outputs(output_file),
+                }
             results.append(
                 StepResult(name, process.returncode, process.stdout + process.stderr)
             )

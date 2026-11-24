@@ -395,8 +395,19 @@ jobs:
         with:
           go-version: stable
           cache: false
-      - name: Install gitleaks
-        run: go install github.com/zricethezav/gitleaks/v8@${{ env.GITLEAKS_VERSION }}
+      - id: install-gitleaks
+        name: Install gitleaks
+        run: |
+          for attempt in 1 2 3; do
+            if go install github.com/zricethezav/gitleaks/v8@${{ env.GITLEAKS_VERSION }}; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep "$attempt"
+            fi
+          done
+          echo "::error::Não foi possível instalar o Gitleaks após três tentativas." >&2
+          exit 1
       # Roda os mesmos hooks do commit local, só nos arquivos que o PR altera.
       - name: Executa o pre-commit
         env:
@@ -419,10 +430,10 @@ jobs:
         run: >-
           uv run pytest -q utils/test_release.py utils/test_checks.py utils/test_release_assets.py utils/test_release_notes.py
       - name: Scan the working tree
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.install-gitleaks.outcome == 'success' }}
         run: gitleaks dir . --redact --no-banner --verbose
       - name: Scan the commits of the pull request
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.install-gitleaks.outcome == 'success' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
