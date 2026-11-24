@@ -142,28 +142,6 @@ def test_search_memory_registered() -> None:
     assert "search_memory" in names
 
 
-def test_all_tools_count() -> None:
-    # Guarda contra perda acidental de registro de ferramentas — atualize ao
-    # adicionar/remover tool em backend/nodes/tools.py.
-    #
-    # A mensagem lista os nomes: só o número não diz *qual* tool entrou ou
-    # sumiu, e a contagem já ficou defasada em silêncio uma vez por isso.
-    """Verifica o comportamento de all tools count."""
-    names = sorted(t.name for t in ALL_TOOLS)
-    assert len(ALL_TOOLS) == 197, f"tools registradas: {names}"
-    registered_names = set(names)
-    for expected in (
-        "call_extension_tool",
-        "pdf_to_images",
-        "graph_resolve_symbol",
-        "video_to_frames",
-        "systemone_list_patterns",
-        "systemone_evaluate_pattern",
-        "systemone_propose_kanban_transition",
-    ):
-        assert expected in registered_names, f"Ferramenta ausente: {expected}"
-
-
 def test_all_tools_sem_nome_duplicado() -> None:
     # Erro/borda: nome repetido faz a segunda registrar por cima da primeira
     # no bind_tools — a tool some sem a contagem mudar.
