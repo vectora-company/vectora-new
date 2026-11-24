@@ -173,7 +173,8 @@ def _handle_smoke(args: argparse.Namespace) -> int:
     elif isinstance(report, InstalledSmokeSeriesReport):
         print(
             f"Evaluation Lab: {report.status} "
-            f"({report.repeat_count} repetições, run_id={report.run_id})"
+            f"({report.repeat_count} de {report.requested_count or report.repeat_count} "
+            f"repetições, run_id={report.run_id})"
         )
         for distribution in report.distributions:
             print(
@@ -193,7 +194,11 @@ def _handle_smoke(args: argparse.Namespace) -> int:
         print(f"Evaluation Lab: {report.status} (run_id={report.run_id})")
         if report.reason:
             print(report.reason, file=sys.stderr)
-    return 0 if report.status == "passed" else 2 if report.status == "blocked" else 1
+    if report.status == "passed":
+        return 0
+    if report.status == "cancelled":
+        return 130
+    return 2 if report.status == "blocked" else 1
 
 
 def _handle_scenarios(args: argparse.Namespace) -> int:

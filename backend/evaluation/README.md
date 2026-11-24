@@ -102,6 +102,10 @@ mantém o resultado separado de execução de tarefa, teste de qualidade ou
 evidência de provider. O app e os processos filhos são encerrados ao terminar a
 verificação; o limite total inclui inicialização, interação e encerramento. O
 endpoint não é habilitado no smoke comum nem em uso normal.
+Se o operador interromper a execução, o relatório usa estado `cancelled`, os
+processos são encerrados e o CLI retorna código 130. Em séries, o cancelamento
+encerra as repetições restantes; o relatório separa tentativas realizadas de
+repetições solicitadas e não agrega a amostra cancelada como sucesso.
 
 Para coletar uma distribuição, acrescente `--repeat N` (de 2 a 100). Cada
 amostra inicia outro processo com perfil e workspace novos; o timeout vale para

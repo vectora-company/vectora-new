@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, model_validator
 from backend.evaluation.metrics import BenchmarkMetric, RunProvenance
 from backend.evaluation.resources import ProcessTreeResourceSampler
 
-RunStatus = Literal["passed", "failed", "blocked", "skipped", "not_run"]
+RunStatus = Literal["passed", "failed", "blocked", "skipped", "not_run", "cancelled"]
 _SENSITIVE_ENV = re.compile(
     r"(?:API[_-]?KEY|ACCESS[_-]?KEY|(?:^|_)KEY(?:_|$)|AUTH|"
     r"CLIENT[_-]?SECRET|CREDENTIAL|COOKIE|LICENSE[_-]?BYPASS|"
@@ -139,9 +139,10 @@ class InstalledSmokeSeriesReport(BaseModel):
     status: RunStatus
     started_at: str
     finished_at: str
-    repeat_count: int = Field(ge=2, le=100)
+    repeat_count: int = Field(ge=1, le=100)
+    requested_count: int | None = Field(default=None, ge=2, le=100)
     profile: Literal["fresh_profile"] = "fresh_profile"
-    samples: list[InstalledSmokeReport] = Field(min_length=2, max_length=100)
+    samples: list[InstalledSmokeReport] = Field(min_length=1, max_length=100)
     distributions: list[InstalledSmokeDistribution]
     limitations: list[str] = Field(
         default_factory=lambda: [
@@ -153,7 +154,12 @@ class InstalledSmokeSeriesReport(BaseModel):
     @model_validator(mode="after")
     def validate_series(self) -> InstalledSmokeSeriesReport:
         if self.repeat_count != len(self.samples):
-            raise ValueError("repeat_count precisa corresponder ao número de amostras")
+            raise ValueError("repeat_count precisa corresponder às amostras executadas")
+        if (
+            self.requested_count is not None
+            and self.requested_count < self.repeat_count
+        ):
+            raise ValueError("requested_count não pode ser menor que as amostras")
         if any(sample.scenario_id != self.scenario_id for sample in self.samples):
             raise ValueError("todas as amostras precisam avaliar o mesmo cenário")
         if any(
@@ -882,7 +888,7 @@ def run_installed_smoke(  # noqa: PLR0911
                 app_path=app,
                 started_at=started_at,
                 started_ns=started_ns,
-                status="failed",
+                status="cancelled",
                 reason="Execução cancelada pelo operador; os processos foram encerrados.",
                 exit_code=process.returncode,
                 resource_metrics=resource_metrics,
@@ -966,19 +972,23 @@ def run_installed_smoke_series(
     if not 2 <= repeat_count <= 100:
         raise ValueError("repeat_count precisa estar entre 2 e 100")
     started_at = datetime.now(UTC)
-    samples = [
-        run_installed_smoke(
+    samples: list[InstalledSmokeReport] = []
+    for _ in range(repeat_count):
+        sample = run_installed_smoke(
             app_path,
             timeout_seconds=timeout_seconds,
             ui_test=ui_test,
         )
-        for _ in range(repeat_count)
-    ]
+        samples.append(sample)
+        if sample.status == "cancelled":
+            break
     finished_at = datetime.now(UTC)
     scenario_id = "installed-app-ui" if ui_test else "installed-app-startup"
     statuses = [sample.status for sample in samples]
     if all(status == "passed" for status in statuses):
         status: RunStatus = "passed"
+    elif "cancelled" in statuses:
+        status = "cancelled"
     elif "failed" in statuses:
         status = "failed"
     elif "blocked" in statuses:
@@ -1016,7 +1026,7 @@ def run_installed_smoke_series(
                 unit=unit,
                 values=values,
                 sample_count=count,
-                attempted_count=repeat_count,
+                attempted_count=len(samples),
                 mean=mean,
                 standard_deviation=standard_deviation,
                 p50=_percentile(values, 0.5),
@@ -1032,7 +1042,8 @@ def run_installed_smoke_series(
         status=status,
         started_at=started_at.isoformat(),
         finished_at=finished_at.isoformat(),
-        repeat_count=repeat_count,
+        repeat_count=len(samples),
+        requested_count=repeat_count,
         samples=samples,
         distributions=distributions,
     )
