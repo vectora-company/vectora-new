@@ -65,6 +65,7 @@ class RunProvenance(BaseModel):
     started_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     runtime_version: str | None = None
     source_revision: str | None = None
+    source_dirty: bool | None = None
     host_system: str = Field(default_factory=platform.system)
     host_machine: str = Field(default_factory=lambda: platform.machine() or "unknown")
     host_release: str = Field(default_factory=platform.release)
@@ -89,6 +90,7 @@ class RunProvenance(BaseModel):
         *,
         runtime_version: str | None = None,
         source_revision: str | None = None,
+        source_dirty: bool | None = None,
         provider: str | None = None,
         model: str | None = None,
     ) -> RunProvenance:
@@ -100,6 +102,7 @@ class RunProvenance(BaseModel):
             configuration_digest=digest,
             runtime_version=runtime_version,
             source_revision=source_revision,
+            source_dirty=source_dirty,
             provider=provider,
             model=model,
         )

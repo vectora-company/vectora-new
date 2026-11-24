@@ -823,6 +823,13 @@ async function startBackend(): Promise<void> {
   );
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    VECTORA_SOURCE_REVISION: vectoraBuildInfo.sourceRevision ?? "",
+    VECTORA_SOURCE_DIRTY:
+      vectoraBuildInfo.sourceDirty === null
+        ? ""
+        : vectoraBuildInfo.sourceDirty
+          ? "1"
+          : "0",
     VECTORA_RUNTIME_PROFILE: safeRuntimeProfile,
     VECTORA_HOME: runtimeHome,
     VECTORA_PORT: String(backendPort),

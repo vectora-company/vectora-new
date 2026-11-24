@@ -363,6 +363,8 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
 
     preferences = RuntimeSettings(tmp_path / "surface-preferences.db")
     monkeypatch.setattr(settings, "evaluation_recording_enabled", True)
+    monkeypatch.setenv("VECTORA_SOURCE_REVISION", "a" * 40)
+    monkeypatch.setenv("VECTORA_SOURCE_DIRTY", "1")
     monkeypatch.setattr(
         "backend.workspace.runtime_settings.runtime_settings", preferences
     )
@@ -492,7 +494,11 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
             and item.get("value") is None
             for item in metrics
         )
-        assert any(item.get("type") == "evaluation_provenance" for item in run.evidence)
+        provenance = next(
+            item for item in run.evidence if item.get("type") == "evaluation_provenance"
+        )
+        assert provenance["source_revision"] == "a" * 40
+        assert provenance["source_dirty"] is True
         assert any(
             item.get("reason") == "decision_model_surface_disabled"
             for item in run.evidence

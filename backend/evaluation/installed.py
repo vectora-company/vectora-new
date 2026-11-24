@@ -310,6 +310,7 @@ def _report(
             started_at=started_at.isoformat(),
             runtime_version=app_version,
             source_revision=source_revision,
+            source_dirty=source_dirty,
             host_system=platform.system(),
             host_machine=platform.machine() or "unknown",
         ),

@@ -145,8 +145,11 @@ def aggregate_runs(runs: list[BenchmarkRun], *, command: list[str]) -> Benchmark
     evidence_levels = {run.evidence_level for run in runs}
     if len(evidence_levels) != 1:
         raise ValueError("um relatório não pode misturar níveis de evidência")
+    if any(run.provenance.source_dirty is None for run in runs):
+        raise ValueError("agregação exige estado limpo/sujo do build conhecido")
     condition_getters = (
         ("revisão", lambda run: run.provenance.source_revision),
+        ("estado dirty do build", lambda run: run.provenance.source_dirty),
         ("fixture", lambda run: run.fixture_digest),
         ("policy", lambda run: run.policy_digest),
         ("avaliador", lambda run: run.evaluator_version),
@@ -236,6 +239,7 @@ def compare_runs(
         ("configuration_digest", lambda run: run.provenance.configuration_digest),
         ("policy_digest", lambda run: run.policy_digest),
         ("evaluator_version", lambda run: run.evaluator_version),
+        ("source_dirty", lambda run: run.provenance.source_dirty),
         ("cold_warm_profile", lambda run: run.profile),
     )
     for name, getter in checks:
@@ -385,6 +389,7 @@ def export_csv(
             "profile",
             "command",
             "source_revision",
+            "source_dirty",
             "runtime_version",
             "host_system",
             "host_release",
@@ -424,6 +429,7 @@ def export_csv(
                 "profile": run.profile,
                 "command": json.dumps(run.command, ensure_ascii=False),
                 "source_revision": run.provenance.source_revision,
+                "source_dirty": run.provenance.source_dirty,
                 "runtime_version": run.provenance.runtime_version,
                 "host_system": run.provenance.host_system,
                 "host_release": run.provenance.host_release,

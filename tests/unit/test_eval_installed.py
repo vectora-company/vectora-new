@@ -73,6 +73,7 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
     assert report.source_revision == "a" * 40
     assert report.source_dirty is True
     assert report.provenance.source_revision == "a" * 40
+    assert report.provenance.source_dirty is True
     assert "release" in report.host
     assert "logical_cpus" in report.host
     assert "memory_total_mib" in report.host

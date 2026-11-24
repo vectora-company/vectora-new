@@ -776,11 +776,18 @@ async def _record_evaluation_provenance(
     source_revision = os.environ.get("VECTORA_SOURCE_REVISION")
     if not source_revision or not re.fullmatch(r"[0-9a-f]{7,64}", source_revision):
         source_revision = None
+    source_dirty_raw = os.environ.get("VECTORA_SOURCE_DIRTY")
+    source_dirty = (
+        {"1": True, "0": False}.get(source_dirty_raw)
+        if source_dirty_raw in {"0", "1"}
+        else None
+    )
     provenance = RunProvenance.from_configuration(
         scenario_id,
         configuration,
         runtime_version=runtime_version,
         source_revision=source_revision,
+        source_dirty=source_dirty,
         provider=provider,
         model=model,
     ).model_copy(update={"run_id": run_id, "opt_ins": ["evaluation_recording"]})

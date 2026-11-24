@@ -37,6 +37,7 @@ def _run(
             run_id=run_id,
             scenario_id=scenario_id,
             source_revision=revision,
+            source_dirty=False,
             host_system="Linux",
             host_machine="x86_64",
             provider="local",
@@ -200,6 +201,25 @@ def test_comparison_rejects_multiple_revisions_inside_a_group() -> None:
     assert any(
         "varia ou está ausente em baseline" in item for item in comparison.differences
     )
+
+
+def test_comparison_rejects_builds_with_different_dirty_state() -> None:
+    dirty = _run("candidate", 9)
+    dirty.provenance.source_dirty = True
+
+    comparison = compare_runs([_run("baseline", 10)], [dirty])
+
+    assert not comparison.compatible
+    assert comparison.metrics == []
+    assert "source_dirty: baseline e candidato diferem" in comparison.differences
+
+
+def test_aggregation_requires_known_build_dirty_state() -> None:
+    run = _run("unknown-dirty", 10)
+    run.provenance.source_dirty = None
+
+    with pytest.raises(ValueError, match="estado limpo/sujo do build conhecido"):
+        aggregate_runs([run], command=["vectora", "eval"])
 
 
 def test_json_csv_exports_preserve_schema_status_and_provenance() -> None:
