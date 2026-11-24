@@ -40,6 +40,7 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import uuid4
 
+from backend.engine.delegation_policy import user_disabled_subagent_delegation
 from backend.engine.guardrails import LoopCapConfig, TurnBudget
 from backend.engine.hooks import MAX_RESPONSE_REVISIONS, response_denial_feedback
 from backend.engine.steering import drain_steers, has_pending_steers
@@ -1255,7 +1256,6 @@ async def run_conversation(  # noqa: PLR0911
             # visible to the next delegated call.
             sub_deps.policy_snapshot = policy_snapshot
     emit = on_event or _noop_event
-    tools = tool_registry.all()
     parent_id = await session_store.get_branch_head_id(thread_id)
     # Uma identidade por invocação mantém retries correlacionados sem
     # reutilizar IDs quando o runner não fornece run_id.
@@ -1396,8 +1396,16 @@ async def run_conversation(  # noqa: PLR0911
             )
             await emit(SteerApplied(content=steer_text))
         # Toolsets ativados na chamada anterior entram no schema desta.
-        tools = tool_registry.all()
         raw_history = _drop_terminal_notices(await session_store.get_history(thread_id))
+        delegation_disabled = user_disabled_subagent_delegation(raw_history)
+        if not isinstance(ctx._extra, dict):
+            ctx._extra = {}
+        ctx._extra["subagent_delegation_disabled"] = delegation_disabled
+        tools = [
+            spec
+            for spec in tool_registry.all()
+            if not (delegation_disabled and spec.name == "delegate_to_subagent")
+        ]
         if ctx.permission_mode == "plan":
             await _hydrate_plan_approvals(
                 session_store, ctx, config.run_id, raw_history
@@ -2157,6 +2165,9 @@ async def run_conversation(  # noqa: PLR0911
             decision_candidates = [
                 (candidate, decision_model_surfaces_for_tool(ctx, candidate.name))
                 for candidate in tool_calls
+                if not (
+                    delegation_disabled and candidate.name == "delegate_to_subagent"
+                )
                 if call_requires_separate_approval(candidate.name, candidate.args)
             ]
             if decision_candidates:
@@ -2254,6 +2265,8 @@ async def run_conversation(  # noqa: PLR0911
         if should_require_approval is not None:
             pendente = None
             for candidate in tool_calls:
+                if delegation_disabled and candidate.name == "delegate_to_subagent":
+                    continue
                 if not should_require_approval(
                     candidate.name, ctx, candidate.args, raw_history
                 ):
@@ -2950,6 +2963,26 @@ async def _execute_single_call(
     ``TurnBudget`` (o teto de volume é do turno que gerou o lote original,
     já contabilizado ou não antes da pausa — reaplicá-lo no resume duplicaria
     ou perderia contagem)."""
+    if (
+        tool_call.name == "delegate_to_subagent"
+        and isinstance(ctx._extra, dict)
+        and ctx._extra.get("subagent_delegation_disabled") is True
+    ):
+        return VMessage(
+            role=MessageRole.TOOL,
+            content=[
+                ContentBlock(
+                    kind="text",
+                    text=(
+                        "Error: delegação bloqueada por instrução explícita do usuário. "
+                        "Continue o trabalho diretamente."
+                    ),
+                )
+            ],
+            tool_call_id=tool_call.id,
+            name=tool_call.name,
+            is_error=True,
+        )
     allowed, deny_reason = await asyncio.to_thread(
         _apply_pre_execute, tool_call, ctx, policy_snapshot
     )
@@ -3059,6 +3092,12 @@ async def resume_conversation(
     from backend.services.policy_compiler import compile_policy_snapshot
 
     await apply_media_billing_source(ctx)
+    history = _drop_terminal_notices(await session_store.get_history(thread_id))
+    if not isinstance(ctx._extra, dict):
+        ctx._extra = {}
+    ctx._extra["subagent_delegation_disabled"] = user_disabled_subagent_delegation(
+        history
+    )
     is_untrusted_thread = False
     if hasattr(session_store, "get_session"):
         session_meta = await session_store.get_session(thread_id)
@@ -3198,7 +3237,7 @@ async def resume_conversation(
         return result
 
     flagged_id = pending["tool_call_id"]
-    historico = await session_store.get_history(thread_id)
+    historico = history
     ultimo_assistant = next(
         (
             m

@@ -58,9 +58,11 @@ def test_identity_mentions_cohere():
 
 
 def test_identity_describes_agents():
-    assert "Orchestrator" in VECTORA_IDENTITY
-    assert "SOUL" in VECTORA_IDENTITY
-    assert "task()" in VECTORA_IDENTITY
+    lowered = VECTORA_IDENTITY.lower()
+    assert "directly by default" in lowered
+    assert "optional" in lowered
+    assert "not to use subagents" in lowered
+    assert "accountable primary agent" in lowered
 
     # Erro/borda: a identidade não pode voltar a afirmar que tool restriction
     # é só sugestão de prompt — isso já foi falso uma vez nesta mesma seção
