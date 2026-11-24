@@ -174,6 +174,65 @@ def test_guarded_effect_rechecks_policy_and_deduplicates_dispatch(
     assert len(dispatched) == 1
 
 
+def test_policy_revocation_waits_for_authorized_dispatch_and_blocks_next_effect(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    policy = ScenarioPolicy({"filesystem.write"})
+    guard = ScenarioIsolationGuard("run", workspace, policy)
+    journal = EffectJournal()
+    dispatch_started = threading.Event()
+    release_dispatch = threading.Event()
+    revoke_started = threading.Event()
+    revoke_finished = threading.Event()
+
+    def dispatch(_target: Path) -> None:
+        dispatch_started.set()
+        assert release_dispatch.wait(timeout=2)
+
+    effect_thread = threading.Thread(
+        target=run_guarded_effect,
+        kwargs={
+            "guard": guard,
+            "journal": journal,
+            "effect_id": "authorized-before-revoke",
+            "capability": "filesystem.write",
+            "relative_path": "result.txt",
+            "dispatch": dispatch,
+        },
+    )
+    effect_thread.start()
+    assert dispatch_started.wait(timeout=2)
+
+    def revoke() -> None:
+        revoke_started.set()
+        policy.revoke("filesystem.write")
+        revoke_finished.set()
+
+    revoke_thread = threading.Thread(target=revoke)
+    revoke_thread.start()
+    assert revoke_started.wait(timeout=2)
+    assert not revoke_finished.wait(timeout=0.05)
+
+    release_dispatch.set()
+    effect_thread.join(timeout=2)
+    revoke_thread.join(timeout=2)
+
+    assert not effect_thread.is_alive()
+    assert not revoke_thread.is_alive()
+    assert revoke_finished.is_set()
+    with pytest.raises(PermissionError, match="não autoriza"):
+        run_guarded_effect(
+            guard,
+            journal,
+            effect_id="after-revoke",
+            capability="filesystem.write",
+            relative_path="result.txt",
+            dispatch=dispatch,
+        )
+
+
 def test_sidecar_failure_is_blocked_and_terminal_result_is_persisted(
     tmp_path: Path,
 ) -> None:

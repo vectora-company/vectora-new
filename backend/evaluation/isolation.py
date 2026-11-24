@@ -35,6 +35,20 @@ class ScenarioPolicy:
             self.revoked.add(capability)
             self.revision += 1
 
+    def run_if_authorized(
+        self, capability: str, action: Callable[[], bool]
+    ) -> tuple[bool, bool]:
+        """Serializa uma ação já preparada com revogações concorrentes.
+
+        O lock permanece adquirido durante a reserva e o dispatch: quando
+        ``revoke`` retorna, nenhum dispatch autorizado por uma revisão anterior
+        ainda está em andamento.
+        """
+        with self._lock:
+            if capability not in self.grants or capability in self.revoked:
+                return False, False
+            return True, action()
+
 
 class ScenarioIsolationGuard:
     """Vincula uma sessão ao workspace que existia no início da execução."""
@@ -198,19 +212,28 @@ def run_guarded_effect(
     dispatch: Callable[[Path], None],
 ) -> bool:
     """Despacha uma única ação após validar isolamento, policy e idempotência."""
-    target = guard.authorize_effect(capability, relative_path)
-    if not journal.prepare(guard.run_id, effect_id):
-        return False
-    try:
-        dispatch(target)
-    except KeyboardInterrupt:
-        journal.mark_uncertain(guard.run_id, effect_id)
-        raise
-    except Exception:
-        journal.finish(guard.run_id, effect_id, applied=False)
-        raise
-    journal.finish(guard.run_id, effect_id, applied=True)
-    return True
+
+    def dispatch_authorized_effect() -> bool:
+        target = guard.authorize_effect(capability, relative_path)
+        if not journal.prepare(guard.run_id, effect_id):
+            return False
+        try:
+            dispatch(target)
+        except KeyboardInterrupt:
+            journal.mark_uncertain(guard.run_id, effect_id)
+            raise
+        except Exception:
+            journal.finish(guard.run_id, effect_id, applied=False)
+            raise
+        journal.finish(guard.run_id, effect_id, applied=True)
+        return True
+
+    authorized, dispatched = guard.policy.run_if_authorized(
+        capability, dispatch_authorized_effect
+    )
+    if not authorized:
+        raise PermissionError(f"policy não autoriza {capability}")
+    return dispatched
 
 
 def cancel_guarded_run(journal: EffectJournal, run_id: str) -> ScenarioTerminalResult:
