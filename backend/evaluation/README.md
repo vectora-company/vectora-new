@@ -100,7 +100,6 @@ sistema operacional e SHA embutido no build. O indicador `source_dirty` mostra
 se havia alterações na árvore quando o Electron foi compilado. Builds sem Git
 ou metadados válidos deixam SHA/estado ausentes; o smoke não os infere da
 máquina de avaliação.
-
 Durante o smoke do app instalado, o avaliador amostra tempo de CPU e memória
 residente da árvore de processos do Electron, incluindo filhos. Percentuais de
 CPU são relativos a um núcleo lógico; RSS é a soma amostrada dos valores RSS dos
