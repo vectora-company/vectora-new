@@ -239,6 +239,45 @@ ${result.stderr}`).not.toContain("old.tsx");
         await rm(root, { recursive: true, force: true });
       }
     });
+
+    it("falls back to the base branch when valid PR SHAs are not fetched", async () => {
+      const { root, frontend, base, head } = await repoWithHead(
+        "novo.tsx",
+        "<button>{m.save()}</button>",
+      );
+      try {
+        await git(root, "update-ref", "refs/remotes/origin/stale", base);
+        const result = await runChanged(frontend, {
+          PR_BASE_SHA: "a".repeat(40),
+          PR_HEAD_SHA: head,
+        });
+        expect(`${result.stdout}\n${result.stderr}`).not.toContain("old.tsx");
+        expect(result.stdout).toContain("usando a branch base");
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it("scans the full frontend if neither PR nor base refs exist", async () => {
+      const { root, frontend, head } = await repoWithHead(
+        "novo.tsx",
+        "<button>{m.save()}</button>",
+      );
+      try {
+        await expect(
+          runChanged(frontend, {
+            GITHUB_BASE_REF: "",
+            PR_BASE_SHA: "a".repeat(40),
+            PR_HEAD_SHA: head,
+          }),
+        ).rejects.toMatchObject({
+          code: 1,
+          stderr: expect.stringContaining("old.tsx"),
+        });
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
   });
 
   it("applies exclusions to every path mode", () => {

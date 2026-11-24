@@ -219,7 +219,6 @@ export async function runCli(args = process.argv.slice(2)): Promise<number> {
   let paths: string[];
   let changedLines: ChangedLines | undefined;
   if (args.includes("--changed")) {
-    let stdout: string;
     const baseRef = process.env.GITHUB_BASE_REF;
     const baseSha = process.env.PR_BASE_SHA;
     const headSha = process.env.PR_HEAD_SHA;
@@ -237,26 +236,57 @@ export async function runCli(args = process.argv.slice(2)): Promise<number> {
     // depois: restringir o pathspec esconderia a origem de um arquivo movido
     // para dentro do frontend, e ele apareceria como novo.
     const diffFlags = ["--diff-filter=AMR", "--find-renames"];
-    ({ stdout } = await execFileAsync(
-      "git",
-      ["diff", "--name-only", ...diffFlags, diffRef],
-      { cwd: repoRoot, maxBuffer },
-    ));
-    const diff = await execFileAsync(
-      "git",
-      ["diff", "--unified=0", ...diffFlags, diffRef],
-      { cwd: repoRoot, maxBuffer },
-    );
-    changedLines = changedLinesFromDiff(diff.stdout);
-    paths = stdout
-      .split(/\r?\n/)
-      .filter(
-        (path) =>
-          path.startsWith("frontend/") &&
-          /\.(ts|tsx)$/.test(path) &&
-          !isIgnoredPath(path),
-      )
-      .map((path) => resolve(repoRoot, path));
+    const diffRefs = [diffRef];
+    if (diffRef !== "HEAD" && baseRef && /^[A-Za-z0-9._/-]+$/.test(baseRef)) {
+      const baseBranchDiff = `origin/${baseRef}...HEAD`;
+      if (!diffRefs.includes(baseBranchDiff)) diffRefs.push(baseBranchDiff);
+    }
+
+    let diffResolved = false;
+    let resolvedDiffRef: string | undefined;
+    for (const candidate of diffRefs) {
+      try {
+        const { stdout } = await execFileAsync(
+          "git",
+          ["diff", "--name-only", ...diffFlags, candidate],
+          { cwd: repoRoot, maxBuffer },
+        );
+        const diff = await execFileAsync(
+          "git",
+          ["diff", "--unified=0", ...diffFlags, candidate],
+          { cwd: repoRoot, maxBuffer },
+        );
+        changedLines = changedLinesFromDiff(diff.stdout);
+        paths = stdout
+          .split(/\r?\n/)
+          .filter(
+            (path) =>
+              path.startsWith("frontend/") &&
+              /\.(ts|tsx)$/.test(path) &&
+              !isIgnoredPath(path),
+          )
+          .map((path) => resolve(repoRoot, path));
+        diffResolved = true;
+        resolvedDiffRef = candidate;
+        break;
+      } catch {
+        // Tenta a branch base e, por último, a verificação completa.
+      }
+    }
+
+    if (!diffResolved) {
+      console.info(
+        "As referências da PR não estão disponíveis no checkout; " +
+          "o lint de i18n verificará todo o frontend.",
+      );
+      changedLines = undefined;
+      paths = await filesUnder(root);
+    } else if (resolvedDiffRef !== diffRef) {
+      console.info(
+        "Os SHAs da PR não estão disponíveis; usando a branch base para " +
+          "selecionar os arquivos do lint de i18n.",
+      );
+    }
   } else {
     const fileArgs = args.filter((arg) => arg !== "--changed" && arg !== "--");
     paths =
