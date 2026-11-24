@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from backend.evaluation.cassette import Cassette
+from backend.evaluation.cassette import Cassette, CassetteInteraction
 from backend.evaluation.replay_client import ReplayChatClient
 from backend.persistence.native.agent_run import redact_sensitive_data
 from backend.vtypes.message import VMessage
@@ -98,6 +98,43 @@ def _to_vmessage(raw: Mapping[str, object]) -> VMessage:
     return TypeAdapter(VMessage).validate_python(payload)
 
 
+def _approval_evidence_error(interaction: CassetteInteraction) -> str | None:
+    """Reject replay as evidence when a recorded human gate lacks its audit trail."""
+    evidence = interaction.systemone_decision_evidence
+    if not isinstance(evidence, dict):
+        return None
+    decisions = evidence.get("decisions")
+    approval_events = evidence.get("approval_events")
+    if not isinstance(decisions, list):
+        return None
+    events = approval_events if isinstance(approval_events, list) else []
+    for decision in decisions:
+        if (
+            not isinstance(decision, dict)
+            or decision.get("decision") != "requires_human"
+        ):
+            continue
+        tool_call_id = decision.get("tool_call_id")
+        matching = [
+            event
+            for event in events
+            if isinstance(event, dict) and event.get("tool_call_id") == tool_call_id
+        ]
+        request = next((event for event in matching if "source" not in event), None)
+        if request is None:
+            return "decisão exige aprovação humana, mas não há pedido registrado"
+        resolved = any(
+            event.get("source") == "human"
+            and isinstance(event.get("decision"), str)
+            and event["decision"] in {"approve", "edit", "option"}
+            and event.get("interrupt_id") == request.get("interrupt_id")
+            for event in matching
+        )
+        if not resolved:
+            return "pedido de aprovação humana não tem decisão final registrada"
+    return None
+
+
 async def replay_cassette(
     cassette: Cassette, *, command: list[str]
 ) -> FixtureReplayReport:
@@ -105,6 +142,19 @@ async def replay_cassette(
     cases: list[ReplayCaseResult] = []
     for interaction in cassette.interactions:
         started_ns = time.monotonic_ns()
+        approval_error = _approval_evidence_error(interaction)
+        if approval_error:
+            cases.append(
+                ReplayCaseResult(
+                    interaction_id=interaction.interaction_id,
+                    status="unsupported",
+                    replay_duration_ms=0,
+                    recorded_duration_ms=interaction.duration_ms,
+                    recorded_tool_call_count=len(interaction.tool_calls),
+                    reason=approval_error,
+                )
+            )
+            continue
         if not interaction.messages:
             cases.append(
                 ReplayCaseResult(

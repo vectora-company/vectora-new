@@ -91,6 +91,9 @@ def cassette_from_run(run: AgentRun) -> Cassette:
             if item.get("type") == "tool_result"
             and item.get("tool_call_id") in call_ids
         ]
+        approval_events = [
+            item for item in run.approvals if item.get("tool_call_id") in call_ids
+        ]
         snapshot = next(
             (
                 item
@@ -105,6 +108,7 @@ def cassette_from_run(run: AgentRun) -> Cassette:
                     "snapshot": snapshot,
                     "decisions": decisions,
                     "tool_results": results,
+                    "approval_events": approval_events,
                     "outcomes_complete": call_ids
                     == {item.get("tool_call_id") for item in results},
                 }

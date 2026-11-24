@@ -726,6 +726,119 @@ def test_fixture_replay_reports_failed_case_and_continues_later_cases() -> None:
     assert report.real_provider_tested is False
 
 
+@pytest.mark.parametrize(
+    ("approval_events", "expected_status", "expected_reason"),
+    [
+        (
+            [],
+            "unsupported",
+            "decisão exige aprovação humana, mas não há pedido registrado",
+        ),
+        (
+            [
+                {
+                    "interrupt_id": "interrupt-1",
+                    "tool_call_id": "call-1",
+                    "tool_name": "file_write",
+                }
+            ],
+            "unsupported",
+            "pedido de aprovação humana não tem decisão final registrada",
+        ),
+        (
+            [
+                {
+                    "interrupt_id": "interrupt-1",
+                    "tool_call_id": "call-1",
+                    "tool_name": "file_write",
+                },
+                {
+                    "source": "human",
+                    "decision": "approve",
+                    "interrupt_id": "interrupt-1",
+                    "tool_call_id": "call-1",
+                    "tool_name": "file_write",
+                },
+            ],
+            "replayed",
+            None,
+        ),
+    ],
+)
+def test_fixture_replay_requires_a_complete_human_approval_audit(
+    approval_events, expected_status: str, expected_reason: str | None
+) -> None:
+    from backend.evaluation.verification import replay_cassette
+
+    cassette = Cassette(
+        cassette_id="human-approval",
+        interactions=[
+            CassetteInteraction(
+                interaction_id="protected-tool",
+                messages=[{"role": "user", "content": "write the fixture"}],
+                response_text="recorded tool request",
+                tool_calls=[{"id": "call-1", "name": "file_write", "args": {}}],
+                systemone_decision_evidence={
+                    "decisions": [
+                        {
+                            "tool_call_id": "call-1",
+                            "decision": "requires_human",
+                        }
+                    ],
+                    "approval_events": approval_events,
+                },
+            )
+        ],
+    )
+
+    report = asyncio.run(replay_cassette(cassette, command=["vectora", "eval", "run"]))
+
+    assert report.cases[0].status == expected_status
+    assert report.cases[0].reason == expected_reason
+
+
+def test_cassette_export_keeps_approval_evidence_for_related_tool_calls() -> None:
+    from backend.evaluation.recording import cassette_from_run
+    from backend.persistence.native.agent_run import AgentRun
+
+    approval = {
+        "source": "human",
+        "decision": "approve",
+        "interrupt_id": "interrupt-1",
+        "tool_call_id": "call-1",
+        "tool_name": "file_write",
+    }
+    run = AgentRun(
+        run_id="run-approval",
+        thread_id="thread-approval",
+        approvals=[approval, {"tool_call_id": "unrelated-call"}],
+        evidence=[
+            {
+                "type": "evaluation_interaction",
+                "model": "fixture-model",
+                "interaction": {
+                    "interaction_id": "protected-tool",
+                    "run_id": "run-approval",
+                    "messages": [{"role": "user", "content": "write the fixture"}],
+                    "tool_calls": [{"id": "call-1", "name": "file_write", "args": {}}],
+                },
+            },
+            {
+                "type": "decision_model_decision",
+                "tool_call_id": "call-1",
+                "decision": "requires_human",
+            },
+        ],
+    )
+
+    cassette = cassette_from_run(run)
+
+    assert cassette.interactions[0].systemone_decision_evidence is not None
+    assert cassette.interactions[0].systemone_decision_evidence["approval_events"] == [
+        approval
+    ]
+
+
 def test_fixture_replay_does_not_create_temporary_execution_directories(
     tmp_path: Path,
 ) -> None:
@@ -756,6 +869,55 @@ def test_fixture_replay_does_not_create_temporary_execution_directories(
     )
 
     assert set(Path(tempfile.gettempdir()).glob("vectora-eval-*")) == before
+
+
+def test_fixture_report_directory_is_removed_when_markdown_write_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from backend.evaluation.verification import (
+        FixtureReplayReport,
+        ReplayCaseResult,
+        write_replay_report,
+    )
+
+    report = FixtureReplayReport(
+        status="replayed",
+        report_id="report-1",
+        cassette_id="fixture-1",
+        command=["vectora", "eval", "run"],
+        summary={"replayed": 1, "failed": 0, "unsupported": 0},
+        cases=[
+            ReplayCaseResult(
+                interaction_id="interaction-1",
+                status="replayed",
+                replay_duration_ms=0,
+                recorded_duration_ms=0,
+                recorded_tool_call_count=0,
+            )
+        ],
+    )
+    report_dir = tmp_path / "partial-report"
+    original_write_text = Path.write_text
+
+    def fail_markdown_write(
+        path: Path,
+        data: str,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> int:
+        if path.name == "report.md":
+            raise OSError("simulated markdown write failure")
+        return original_write_text(
+            path, data, encoding=encoding, errors=errors, newline=newline
+        )
+
+    monkeypatch.setattr(Path, "write_text", fail_markdown_write)
+
+    with pytest.raises(OSError, match="simulated markdown write failure"):
+        write_replay_report(report, str(report_dir))
+
+    assert not report_dir.exists()
 
 
 def test_cli_eval_corrupted_file(
