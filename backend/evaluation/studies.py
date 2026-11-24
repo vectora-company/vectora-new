@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 EvidenceKind = Literal[
-    "external_claim", "source_code", "reproduced_experiment", "inference"
+    "external_claim", "source_code", "dataset", "reproduced_experiment", "inference"
 ]
 StudyState = Literal["planned", "completed"]
 StudyConclusion = Literal["not_run", "supported", "refuted", "inconclusive"]

@@ -848,9 +848,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
     eval_study = eval_sub.add_parser(
         "study-validate",
-        help="Valida hipótese, método e evidências de um estudo técnico",
+        help="Valida método e confere referências locais de um estudo técnico",
     )
     eval_study.add_argument("--study", required=True, help="Arquivo JSON do estudo")
+    eval_study.add_argument(
+        "--repo-root",
+        default=".",
+        help="Clone Git para verificar referências repo:// (padrão: diretório atual)",
+    )
+    eval_study.add_argument(
+        "--evidence-root",
+        default=".",
+        help="Diretório de relatórios e datasets locais (padrão: diretório atual)",
+    )
     eval_study.add_argument("--output", choices=("human", "json"), default="human")
 
     eval_compare = eval_sub.add_parser(

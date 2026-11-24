@@ -149,18 +149,23 @@ Use `backend/evaluation/studies/v1/template.json` como ponto de partida e
 valide o arquivo antes de compartilhar ou revisar:
 
 ```bash
-vectora eval study-validate --study estudo.json
+vectora eval study-validate --study estudo.json \
+  --repo-root . --evidence-root ./artifacts
 ```
 
-O formato separa alegações externas, inspeção de código, experimentos
+O formato separa alegações externas, inspeção de código, datasets, experimentos
 reproduzidos e inferências. Todo estudo registra uma hipótese, um critério que
 poderia refutá-la, método, amostra, ambiente, variável, controles, regra de
 decisão e limitações. Um estudo planejado fica como `not_run`; marcá-lo concluído
 exige resultados observados e referência a código ou experimento. Alegação
 externa ou inferência sozinha não sustenta conclusão `supported`/`refuted`.
 
-A validação verifica a estrutura e a força declarada da evidência; não executa
-experimentos, autentica a origem das referências nem confirma a conclusão. As
-referências devem identificar URLs, caminhos fixados por revisão ou `run_id` que
-um revisor consiga consultar. Resultados publicados ainda precisam relatar
-amostra e limitações, sem extrapolar o ambiente medido.
+A validação verifica a estrutura e confere referências locais: código usa
+`repo://<sha40>/<arquivo>#L<início>-L<fim>`, dataset usa
+`data://<arquivo>#sha256=<digest>` e experimento reproduzido usa
+`run://<relatório.json>#<run_id>`. SHA, arquivo, linhas, digest, `run_id` e
+status terminal do relatório são verificados no clone e no diretório informados.
+A validação não executa experimentos, não busca alegações externas, não
+autentica a origem fora do clone local e não confirma a conclusão. Resultados
+publicados ainda precisam relatar amostra e limitações, sem extrapolar o
+ambiente medido.

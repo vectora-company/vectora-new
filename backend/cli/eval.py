@@ -26,6 +26,7 @@ from backend.evaluation.scenario_runner import (
 )
 from backend.evaluation.scenarios import assess_scenario_readiness, load_scenarios
 from backend.evaluation.studies import TechnicalStudy
+from backend.evaluation.study_evidence import verify_study_evidence
 from backend.evaluation.verification import replay_cassette, write_replay_report
 
 
@@ -340,17 +341,35 @@ def _handle_study_validate(args: argparse.Namespace) -> int:
         study = TechnicalStudy.model_validate_json(
             Path(args.study).expanduser().read_text(encoding="utf-8")
         )
+        verified_references = verify_study_evidence(
+            study,
+            repo_root=getattr(args, "repo_root", "."),
+            evidence_root=getattr(args, "evidence_root", "."),
+        )
     except (OSError, ValueError) as exc:
         print(f"Estudo inválido: {exc}", file=sys.stderr)
         return 1
     if args.output == "json":
-        print(study.model_dump_json(indent=2))
+        print(
+            json.dumps(
+                {
+                    "study": study.model_dump(mode="json"),
+                    "verified_local_references": verified_references,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
     else:
         print(
             f"Estudo válido: {study.study_id} "
             f"(estado={study.state}, conclusão={study.conclusion})"
         )
-        print("Validação estrutural não executa o experimento nem confirma a hipótese.")
+        print(f"Referências locais verificadas: {len(verified_references)}.")
+        print(
+            "A validação não executa o experimento, não busca alegações externas "
+            "e não confirma a hipótese."
+        )
     return 0
 
 
