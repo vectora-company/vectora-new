@@ -60,10 +60,12 @@ import {
 import { m } from "@/lib/paraglide/messages";
 import { useSettingsStore } from "@/lib/stores/settings-store";
 
-async function fetchArtifacts(threadId: string): Promise<PlanItem[]> {
+export async function fetchArtifacts(threadId: string): Promise<PlanItem[]> {
   const qs = new URLSearchParams({ session_id: threadId });
-  const res = await fetch(`/artifacts/?${qs}`);
-  if (!res.ok) return [];
+  const res = await fetch(`/artifacts/?${qs}`, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`Artifact request failed (${res.status})`);
   const data = await res.json();
   return data.artifacts ?? [];
 }
@@ -73,8 +75,10 @@ async function fetchArtifactContent(
   slug: string,
 ): Promise<string | null> {
   const qs = new URLSearchParams({ session_id: threadId });
-  const res = await fetch(`/artifacts/${encodeURIComponent(slug)}?${qs}`);
-  if (!res.ok) return null;
+  const res = await fetch(`/artifacts/${encodeURIComponent(slug)}?${qs}`, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`Artifact request failed (${res.status})`);
   const data = await res.json();
   return data.content ?? null;
 }
@@ -276,6 +280,11 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   const queryClient = useQueryClient();
   const [dagBusy, setDagBusy] = useState(false);
   const [dagError, setDagError] = useState<string | null>(null);
+  const [planLoadAttempt, setPlanLoadAttempt] = useState(0);
+  const [planLoadState, setPlanLoadState] = useState<{
+    threadId: string;
+    error: string | null;
+  }>({ threadId, error: null });
   // A chave inclui a thread e o contador nunca é resetado. Reiniciar o mapa
   // ao trocar de thread permitia que uma resposta antiga e uma nova usassem
   // o mesmo epoch para o mesmo slug.
@@ -288,6 +297,8 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   const items = useWorkbenchStore((s) => s.getPlan(threadId).items);
   const todos = useWorkbenchStore((s) => s.getTodos(threadId));
   const fetchedAt = useWorkbenchStore((s) => s.getPlan(threadId).fetchedAt);
+  const planLoadError =
+    planLoadState.threadId === threadId ? planLoadState.error : null;
   const openSlugs = useWorkbenchStore((s) => s.getPlan(threadId).openSlugs);
   const contentsBySlug = useWorkbenchStore(
     (s) => s.getPlan(threadId).contentsBySlug,
@@ -348,12 +359,17 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   );
 
   useWorkbenchSWR({
-    key: `plan:${threadId}`,
+    key: `plan:${threadId}:${planLoadAttempt}`,
     hasCache: fetchedAt > 0,
-    isStale: isPlanStale,
+    isStale: () => isPlanStale() || planLoadError !== null,
     revalidate: async () => {
-      const list = await fetchArtifacts(threadId);
-      setPlanItems(threadId, list);
+      setPlanLoadState({ threadId, error: null });
+      try {
+        const list = await fetchArtifacts(threadId);
+        setPlanItems(threadId, list);
+      } catch {
+        setPlanLoadState({ threadId, error: m.workbench_plan_load_failed() });
+      }
     },
   });
 
@@ -503,6 +519,23 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   // Plan Mode gera o plano via write_todos (todos), sem create_artifact — olhar
   // só `items` (artifacts) escondia o plano inteiro atrás do empty-state.
   if (items.length === 0 && todos.length === 0 && !dag) {
+    if (planLoadError) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+          <p role="alert" className="text-xs text-destructive">
+            {planLoadError}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setPlanLoadAttempt((attempt) => attempt + 1)}
+          >
+            {m.workbench_plan_load_retry()}
+          </Button>
+        </div>
+      );
+    }
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
         <FileText className="w-6 h-6 text-muted-foreground/40" />
@@ -528,6 +561,18 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
 
   return (
     <div className="h-full flex flex-col">
+      {planLoadError && (
+        <p role="alert" className="px-2 py-1 text-[11px] text-destructive">
+          {planLoadError}
+          <button
+            type="button"
+            className="ml-2 underline underline-offset-2"
+            onClick={() => setPlanLoadAttempt((attempt) => attempt + 1)}
+          >
+            {m.workbench_plan_load_retry()}
+          </button>
+        </p>
+      )}
       {dag && (
         <DAGPlanCard
           plan={dag}

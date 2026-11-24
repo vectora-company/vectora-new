@@ -2229,6 +2229,8 @@
   "workbench_plan_auto_expand_label": "Expandir novos itens do plano",
   "workbench_plan_empty": "Sem planos — peça um ao Vectora.",
   "workbench_plan_files_touched": "Arquivos tocados",
+  "workbench_plan_load_failed": "Não foi possível carregar o plano desta conversa.",
+  "workbench_plan_load_retry": "Tentar novamente",
   "workbench_plan_sort_created": "Mais novos primeiro",
   "workbench_plan_sort_label": "Ordem dos itens do plano",
   "workbench_plan_sort_title": "Título",

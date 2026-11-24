@@ -2229,6 +2229,8 @@
   "workbench_plan_auto_expand_label": "Expand new plan items",
   "workbench_plan_empty": "No plans yet — ask Vectora to draft one.",
   "workbench_plan_files_touched": "Files touched",
+  "workbench_plan_load_failed": "Could not load this conversation's plan.",
+  "workbench_plan_load_retry": "Retry",
   "workbench_plan_sort_created": "Newest first",
   "workbench_plan_sort_label": "Plan item order",
   "workbench_plan_sort_title": "Title",
