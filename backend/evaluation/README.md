@@ -100,3 +100,25 @@ Com `evaluation_recording_enabled` e `run_id`, chamadas do provider registram
 tokens de entrada/saída, TTFT e `output_tokens_per_second`. A taxa usa apenas
 tokens de saída informados pelo provider e a janela entre o primeiro texto e o
 fim do stream; sem ambos, o relatório guarda `unavailable` com motivo.
+
+## Estudos técnicos verificáveis
+
+Use `backend/evaluation/studies/v1/template.json` como ponto de partida e
+valide o arquivo antes de compartilhar ou revisar:
+
+```bash
+vectora eval study-validate --study estudo.json
+```
+
+O formato separa alegações externas, inspeção de código, experimentos
+reproduzidos e inferências. Todo estudo registra uma hipótese, um critério que
+poderia refutá-la, método, amostra, ambiente, variável, controles, regra de
+decisão e limitações. Um estudo planejado fica como `not_run`; marcá-lo concluído
+exige resultados observados e referência a código ou experimento. Alegação
+externa ou inferência sozinha não sustenta conclusão `supported`/`refuted`.
+
+A validação verifica a estrutura e a força declarada da evidência; não executa
+experimentos, autentica a origem das referências nem confirma a conclusão. As
+referências devem identificar URLs, caminhos fixados por revisão ou `run_id` que
+um revisor consiga consultar. Resultados publicados ainda precisam relatar
+amostra e limitações, sem extrapolar o ambiente medido.

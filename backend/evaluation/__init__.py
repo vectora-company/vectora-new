@@ -49,6 +49,7 @@ from backend.evaluation.scenarios import (
     assess_scenario_readiness,
     load_scenarios,
 )
+from backend.evaluation.studies import StudyEvidence, TechnicalStudy
 
 __all__ = [
     "BenchmarkComparison",
@@ -76,6 +77,8 @@ __all__ = [
     "ScenarioRunnerReport",
     "ScenarioSuiteReport",
     "ScenarioTerminalResult",
+    "StudyEvidence",
+    "TechnicalStudy",
     "aggregate_runs",
     "assess_scenario_readiness",
     "cancel_guarded_run",

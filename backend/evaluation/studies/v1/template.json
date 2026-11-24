@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "replace-with-study-id",
+  "title": "Replace with the question being studied",
+  "state": "planned",
+  "claim_under_test": "State the claim and identify whether it is external or internal.",
+  "hypothesis": "State an observable prediction.",
+  "falsification_criterion": "State the observation that would refute the prediction.",
+  "method": "Describe the steps and measurement procedure.",
+  "sample": "Describe the workload, number of observations, and selection method.",
+  "environment": {
+    "os": "record the operating system and version",
+    "hardware": "record relevant hardware",
+    "software_revision": "record the tested SHA"
+  },
+  "independent_variable": "Name the variable being changed.",
+  "controls": ["Describe a control condition and how it is held constant."],
+  "decision_rule": "Define how observations map to supported, refuted, or inconclusive.",
+  "conclusion": "not_run",
+  "evidence": [
+    {
+      "evidence_id": "source-1",
+      "kind": "external_claim",
+      "source": "URL, repository path at a pinned revision, or run_id",
+      "observation": "Summarize what this source establishes.",
+      "limitations": ["Describe what this source does not establish."]
+    }
+  ],
+  "observed_results": [],
+  "limitations": [
+    "Record sample, hardware, provider, and measurement limitations."
+  ],
+  "related_code": []
+}

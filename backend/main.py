@@ -681,6 +681,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "  suite --runner EXECUTABLE --report-dir DIR [--timeout-seconds N]\n"
             "  report --runs FILE... --report FILE [--format json|csv]\n"
             "  compare-runs --baseline FILE... --candidate FILE... --report FILE\n"
+            "  study-validate --study FILE [--output human|json]\n"
             "  run --suite FILE [--report-dir DIR]\n"
             "  compare BASELINE CANDIDATE"
         ),
@@ -821,6 +822,13 @@ def _build_parser() -> argparse.ArgumentParser:
     eval_compare_runs.add_argument(
         "--report", required=True, help="Arquivo JSON de saída"
     )
+
+    eval_study = eval_sub.add_parser(
+        "study-validate",
+        help="Valida hipótese, método e evidências de um estudo técnico",
+    )
+    eval_study.add_argument("--study", required=True, help="Arquivo JSON do estudo")
+    eval_study.add_argument("--output", choices=("human", "json"), default="human")
 
     eval_compare = eval_sub.add_parser(
         "compare", help="Compara duas cassetes (baseline vs candidate)"

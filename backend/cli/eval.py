@@ -25,6 +25,7 @@ from backend.evaluation.scenario_runner import (
     write_suite_report,
 )
 from backend.evaluation.scenarios import assess_scenario_readiness, load_scenarios
+from backend.evaluation.studies import TechnicalStudy
 from backend.evaluation.verification import replay_cassette, write_replay_report
 
 
@@ -322,6 +323,26 @@ def _handle_compare_runs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_study_validate(args: argparse.Namespace) -> int:
+    """Valida um estudo técnico sem executá-lo nem promover a evidência."""
+    try:
+        study = TechnicalStudy.model_validate_json(
+            Path(args.study).expanduser().read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Estudo inválido: {exc}", file=sys.stderr)
+        return 1
+    if args.output == "json":
+        print(study.model_dump_json(indent=2))
+    else:
+        print(
+            f"Estudo válido: {study.study_id} "
+            f"(estado={study.state}, conclusão={study.conclusion})"
+        )
+        print("Validação estrutural não executa o experimento nem confirma a hipótese.")
+    return 0
+
+
 def handle_eval(args: argparse.Namespace) -> int:  # noqa: PLR0911
     """Roteia as ações de eval."""
     action = getattr(args, "action", None)
@@ -363,6 +384,9 @@ def handle_eval(args: argparse.Namespace) -> int:  # noqa: PLR0911
 
     if action == "compare-runs":
         return _handle_compare_runs(args)
+
+    if action == "study-validate":
+        return _handle_study_validate(args)
 
     print(
         "Subcomando eval desconhecido. Use 'vectora eval run' ou 'vectora eval compare'.",
