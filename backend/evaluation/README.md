@@ -42,7 +42,9 @@ o runner deve gravar em `VECTORA_EVAL_RESULT_PATH` um JSON neste formato:
 
 Estados válidos para cada critério: `passed`, `failed`, `blocked`, `skipped` e
 `unsupported`. Uma lista vazia de critérios, JSON ausente/inválido, cenário
-divergente, saída não zero ou timeout nunca produz `passed`. O runner recebe um
+divergente, critério omitido/duplicado, nome fora do catálogo, saída não zero ou
+timeout nunca produz `passed`. Cada nome de assertion precisa corresponder
+exatamente a um critério versionado daquele cenário. O runner recebe um
 ambiente doméstico e workspace temporários; variáveis de ambiente que parecem
 credenciais são removidas. O subprocesso é encerrado junto com seus filhos ao
 atingir o limite ou ao cancelar.

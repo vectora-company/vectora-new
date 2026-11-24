@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.evaluation.scenarios import _CATALOG, BenchmarkScenario, load_scenarios
 
@@ -58,6 +58,14 @@ class ScenarioRunnerPayload(BaseModel):
     scenario_id: str
     assertions: list[ScenarioAssertion]
     metrics: list[ScenarioRunnerMetric] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_unique_assertions(self) -> ScenarioRunnerPayload:
+        """Reject duplicate assertion names before evaluating catalog coverage."""
+        names = [assertion.name for assertion in self.assertions]
+        if len(names) != len(set(names)):
+            raise ValueError("resultado contém critérios duplicados")
+        return self
 
 
 class ScenarioRunnerReport(BaseModel):
@@ -307,6 +315,15 @@ def run_fixture_scenario(
                         else:
                             if payload.scenario_id != scenario.scenario_id:
                                 reason = "resultado do runner pertence a outro cenário"
+                            elif {item.name for item in payload.assertions} != set(
+                                scenario.success_criteria
+                            ):
+                                assertions = payload.assertions
+                                report_status = "failed"
+                                reason = (
+                                    "resultado não corresponde exatamente aos critérios "
+                                    "versionados do cenário"
+                                )
                             else:
                                 assertions = payload.assertions
                                 metrics = payload.metrics

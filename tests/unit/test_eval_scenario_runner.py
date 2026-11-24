@@ -19,7 +19,9 @@ from backend.evaluation.scenario_runner import (
 from backend.evaluation.scenarios import _CATALOG
 
 
-def _write_runner(path: Path, assertion_status: str = "passed") -> None:
+def _write_runner(
+    path: Path, assertion_status: str = "passed", *, omit_criterion: bool = False
+) -> None:
     path.write_text(
         "import json, os\n"
         "from pathlib import Path\n"
@@ -29,13 +31,15 @@ def _write_runner(path: Path, assertion_status: str = "passed") -> None:
         "assert 'OPENAI_API_KEY' not in os.environ\n"
         "scenario = json.loads(Path(os.environ['VECTORA_EVAL_SCENARIO_PATH']).read_text())\n"
         "fixture = json.loads(Path(os.environ['VECTORA_EVAL_FIXTURE_PATH']).read_text())\n"
+        "criteria = scenario['success_criteria']\n"
+        f"criteria = criteria[:-1] if {omit_criterion!r} else criteria\n"
         "assert scenario['scenario_id'] == 'workspace-project-open-v1'\n"
         "assert fixture['expected_paths'] == ['README.md']\n"
         "Path(os.environ['VECTORA_EVAL_RESULT_PATH']).write_text(json.dumps({"
         "'schema_version': 1, 'scenario_id': scenario['scenario_id'], "
-        "'assertions': [{'name': 'fixture is readable', 'status': "
+        "'assertions': [{'name': name, 'status': "
         f"{assertion_status!r}, 'reason': 'approval trace missing'"
-        "}]}))\n",
+        "} for name in criteria]}))\n",
         encoding="utf-8",
     )
 
@@ -58,6 +62,7 @@ def test_fixture_runner_reports_json_markdown_and_cleans_workspace(
     assert report.status == "passed"
     assert report.evidence_level == "fixture_runner"
     assert report.provider_evidence == "not_captured"
+    assert len(report.assertions) == 2
     assert report.assertions[0].status == "passed"
     workspace = Path(capture.read_text(encoding="utf-8"))
     assert not workspace.exists()
@@ -115,6 +120,24 @@ def test_eval_scenario_cli_keeps_unsupported_separate_from_success(
     assert payload["evidence_level"] == "fixture_runner"
     assert Path(payload["report_paths"]["json"]).is_file()
     assert Path(payload["report_paths"]["markdown"]).is_file()
+
+
+def test_fixture_runner_rejects_success_without_all_versioned_criteria(
+    tmp_path: Path,
+) -> None:
+    script = tmp_path / "runner.py"
+    _write_runner(script, omit_criterion=True)
+
+    report = run_fixture_scenario(
+        "workspace-project-open-v1",
+        [sys.executable, str(script)],
+        catalog_path=_CATALOG,
+    )
+
+    assert report.status == "failed"
+    assert report.reason == (
+        "resultado não corresponde exatamente aos critérios versionados do cenário"
+    )
 
 
 def test_fixture_runner_times_out_and_cleans_temporary_workspace(
