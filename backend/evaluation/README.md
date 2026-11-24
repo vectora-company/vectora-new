@@ -191,6 +191,11 @@ A validação verifica a estrutura e confere referências locais: código usa
 `data://<arquivo>#sha256=<digest>` e experimento reproduzido usa
 `run://<relatório.json>#<run_id>`. SHA, arquivo, linhas, digest, `run_id` e
 status terminal do relatório são verificados no clone e no diretório informados.
+Cada experimento reproduzido também declara o `evidence_level` esperado
+(`fixture_replay`, `fixture_runner`, `installed_app`, `live_provider` ou
+`contract`); a validação compara esse nível com o relatório e falha se forem
+diferentes. Assim, um replay de fixture não pode ser apresentado como evidência
+de interface instalada ou provider real sem alterar e invalidar a referência.
 A validação não executa experimentos, não busca alegações externas, não
 autentica a origem fora do clone local e não confirma a conclusão. Resultados
 publicados ainda precisam relatar amostra e limitações, sem extrapolar o

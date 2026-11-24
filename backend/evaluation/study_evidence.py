@@ -148,6 +148,11 @@ def _run_source(root: Path, evidence: StudyEvidence) -> str:
         and raw_evidence_level in allowed_evidence_levels
         else "unspecified"
     )
+    if evidence.evidence_level != evidence_level:
+        raise ValueError(
+            f"{evidence.evidence_id}: nível esperado "
+            f"{evidence.evidence_level!r}, relatório informa {evidence_level!r}"
+        )
     return (
         f"{evidence.evidence_id}: run_id {expected_run_id} confirmado "
         f"(status={status}, evidence_level={evidence_level})"

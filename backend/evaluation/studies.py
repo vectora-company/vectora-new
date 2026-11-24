@@ -11,6 +11,9 @@ EvidenceKind = Literal[
 ]
 StudyState = Literal["planned", "completed"]
 StudyConclusion = Literal["not_run", "supported", "refuted", "inconclusive"]
+EvidenceLevel = Literal[
+    "contract", "fixture_replay", "fixture_runner", "installed_app", "live_provider"
+]
 
 
 class StudyEvidence(BaseModel):
@@ -21,8 +24,22 @@ class StudyEvidence(BaseModel):
     evidence_id: str = Field(min_length=1)
     kind: EvidenceKind
     source: str = Field(min_length=1)
+    evidence_level: EvidenceLevel | None = None
     observation: str = Field(min_length=1)
     limitations: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_run_evidence_level(self) -> StudyEvidence:
+        if self.kind == "reproduced_experiment":
+            if not self.source.startswith("run://"):
+                raise ValueError("experimento reproduzido deve apontar para run://")
+            if self.evidence_level is None:
+                raise ValueError(
+                    "experimento reproduzido deve declarar seu nível de evidência"
+                )
+        elif self.evidence_level is not None:
+            raise ValueError("evidence_level só se aplica a experimento reproduzido")
+        return self
 
 
 class TechnicalStudy(BaseModel):
