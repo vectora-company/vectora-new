@@ -209,6 +209,13 @@ def _handle_scenarios(args: argparse.Namespace) -> int:
         print(f"Erro ao carregar catálogo de cenários: {exc}", file=sys.stderr)
         return 1
 
+    selected_id = getattr(args, "scenario_id", None)
+    if selected_id:
+        scenarios = [item for item in scenarios if item.scenario_id == selected_id]
+        if not scenarios:
+            print(f"Cenário não encontrado: {selected_id}", file=sys.stderr)
+            return 1
+
     capabilities = set(getattr(args, "available_capability", []) or [])
     results = [
         {

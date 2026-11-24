@@ -768,6 +768,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Capability disponível no executor local; pode ser repetido",
     )
     eval_scenarios.add_argument(
+        "--scenario-id",
+        default=None,
+        help="Planeja somente um cenário para comparar sua prontidão com a execução",
+    )
+    eval_scenarios.add_argument(
         "--provider-configured",
         action="store_true",
         help="Indica que há provider configurado para cenários que o exigem",

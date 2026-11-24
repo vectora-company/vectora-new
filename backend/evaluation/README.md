@@ -7,8 +7,17 @@ vale como evidência de outra.
 ## Runner de cenário por subprocesso
 
 `vectora eval scenarios` só lê o catálogo e informa prontidão. Ele não inicia
-runner nem escreve relatório. Para executar um runner contra a fixture
-versionada de um cenário:
+runner nem escreve relatório. Use `--scenario-id` para planejar um item do
+catálogo e, em seguida, executar o mesmo identificador contra a fixture. O
+plano sempre retorna `not_run` global, `executable_started=false` e
+`report_written=false`; uma execução com fixture usa outro comando e marca
+`evidence_level=fixture_runner` no relatório:
+
+```bash
+vectora eval scenarios --scenario-id filesystem-edit-v1 --output json
+```
+
+Para executar um runner contra a fixture versionada desse cenário:
 
 ```bash
 vectora eval scenario \
