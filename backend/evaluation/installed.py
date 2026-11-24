@@ -32,6 +32,7 @@ _SENSITIVE_ENV = re.compile(
 _WINDOW_READY_MARKER = "VECTORA_ELECTRON_WINDOW_READY"
 _SMOKE_PASSED_MARKER = "Vectora startup smoke test passed; closing the app."
 _STAGE_MARKER = re.compile(r"^VECTORA_EVAL_STAGE:([a-z_]+):([0-9]+(?:\.[0-9]+)?)$")
+_APP_METADATA_MARKER = re.compile(r"^VECTORA_EVAL_APP:([^:\s]+):([^:\s]+):([^:\s]+)$")
 _BACKEND_STAGE_MARKER = re.compile(
     r"VECTORA_EVAL_BACKEND_STAGE:([0-9a-f]{32}):([a-z_]+):"
     r"([0-9]+(?:\.[0-9]+)?):(ready|failed|skipped)"
@@ -82,6 +83,9 @@ class InstalledSmokeReport(BaseModel):
     real_provider_tested: Literal[False] = False
     scenario_task_executed: Literal[False] = False
     host: dict[str, str] = Field(default_factory=dict)
+    app_version: str | None = None
+    electron_version: str | None = None
+    chromium_version: str | None = None
     stage_timings_ms: dict[str, float] = Field(default_factory=dict)
     backend_stages: dict[str, BackendStageRecord] = Field(default_factory=dict)
     provenance: RunProvenance
@@ -197,6 +201,7 @@ def _report(
     exit_code: int | None,
     stage_timings_ms: dict[str, float] | None = None,
     backend_stages: dict[str, BackendStageRecord] | None = None,
+    app_metadata: tuple[str, str, str] | None = None,
 ) -> InstalledSmokeReport:
     """Create a terminal report without copying application logs or user data."""
     finished_ns = time.monotonic_ns()
@@ -254,6 +259,7 @@ def _report(
         )
         for stage, record in sorted(backend_stage_records.items())
     ]
+    app_version, electron_version, chromium_version = app_metadata or (None, None, None)
     return InstalledSmokeReport(
         run_id=run_id,
         status=status,
@@ -263,13 +269,21 @@ def _report(
         finished_at=finished_at.isoformat(),
         duration_ms=duration_ms,
         exit_code=exit_code,
-        host={"system": platform.system(), "machine": platform.machine() or "unknown"},
+        host={
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine() or "unknown",
+        },
+        app_version=app_version,
+        electron_version=electron_version,
+        chromium_version=chromium_version,
         stage_timings_ms=timings,
         backend_stages=backend_stage_records,
         provenance=RunProvenance(
             run_id=run_id,
             scenario_id="installed-app-startup",
             started_at=started_at.isoformat(),
+            runtime_version=app_version,
             host_system=platform.system(),
             host_machine=platform.machine() or "unknown",
         ),
@@ -372,6 +386,7 @@ def run_installed_smoke(  # noqa: PLR0911
         markers = {"window_ready": False, "passed": False}
         stage_timings_ms: dict[str, float] = {}
         backend_stages: dict[str, BackendStageRecord] = {}
+        app_metadata: tuple[str, str, str] | None = None
         marker_lock = threading.Lock()
         try:
             process = subprocess.Popen(  # noqa: S603  # nosec B603
@@ -402,6 +417,7 @@ def run_installed_smoke(  # noqa: PLR0911
             )
 
         def read_markers() -> None:
+            nonlocal app_metadata
             if process is None or process.stdout is None:
                 return
             for line in process.stdout:
@@ -411,6 +427,13 @@ def run_installed_smoke(  # noqa: PLR0911
                     match = _STAGE_MARKER.fullmatch(line.strip())
                     if match:
                         stage_timings_ms[match.group(1)] = float(match.group(2))
+                    metadata_match = _APP_METADATA_MARKER.fullmatch(line.strip())
+                    if metadata_match:
+                        app_metadata = (
+                            metadata_match.group(1),
+                            metadata_match.group(2),
+                            metadata_match.group(3),
+                        )
                     backend_match = _BACKEND_STAGE_MARKER.search(line)
                     if backend_match and backend_match.group(1) == run_id:
                         backend_stages[backend_match.group(2)] = BackendStageRecord(
@@ -476,4 +499,5 @@ def run_installed_smoke(  # noqa: PLR0911
             exit_code=exit_code,
             stage_timings_ms=stage_timings_ms,
             backend_stages=backend_stages,
+            app_metadata=app_metadata,
         )

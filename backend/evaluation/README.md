@@ -89,3 +89,7 @@ scheduler e restauração de llama.cpp. O NATS reporta `ready`, `failed` ou
 são colapsados no resultado geral do smoke; assim um app que abriu pode mostrar
 separadamente uma dependência opcional ausente ou com falha. O marcador não
 inclui valores de configuração nem credenciais.
+
+O relatório também captura versão do Vectora, Electron, Chromium e release do
+sistema operacional a partir da execução instalada. Isso identifica a pilha
+testada; não infere o SHA do código-fonte quando o artefato não o informa.

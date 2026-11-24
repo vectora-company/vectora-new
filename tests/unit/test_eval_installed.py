@@ -38,6 +38,7 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
         "assert 'GPG_PASSPHRASE' not in os.environ\n"
         "assert 'VECTORA_LICENSE_BYPASS' not in os.environ\n"
         "run_id = os.environ['VECTORA_EVAL_RUN_ID']\n"
+        "print('VECTORA_EVAL_APP:0.1.26:45.3.3:144.0.7559.60')\n"
         "print(f'VECTORA_EVAL_BACKEND_STAGE:{run_id}:embedding_worker:35.250:ready')\n"
         "print(f'VECTORA_EVAL_BACKEND_STAGE:{run_id}:nats_sidecar:45.500:skipped')\n"
         "print('VECTORA_EVAL_BACKEND_STAGE:' + '0' * 32 + ':fake:1.000:failed')\n"
@@ -65,6 +66,11 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
     assert report.real_provider_tested is False
     assert report.scenario_task_executed is False
     assert report.run_id
+    assert report.app_version == "0.1.26"
+    assert report.electron_version == "45.3.3"
+    assert report.chromium_version == "144.0.7559.60"
+    assert report.provenance.runtime_version == "0.1.26"
+    assert "release" in report.host
     assert report.diagnostics[0].status == "passed"
     assert report.stage_timings_ms["backend_ready"] == 12.5
     assert report.stage_timings_ms["shutdown_complete"] == 50

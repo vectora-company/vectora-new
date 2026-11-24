@@ -1928,6 +1928,11 @@ app.on("open-url", (event, url) => {
 app.whenReady().then(async () => {
   if (!gotLock) return;
   emitSmokeStage("electron_ready");
+  if (installedSmokeTestMode) {
+    console.log(
+      `VECTORA_EVAL_APP:${app.getVersion()}:${process.versions.electron}:${process.versions.chrome}`,
+    );
+  }
   void logActualGraphicsInfo("app-ready");
   if (installedTestsMode) {
     const executable = backendPath(
