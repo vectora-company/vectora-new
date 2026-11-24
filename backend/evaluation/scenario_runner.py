@@ -88,6 +88,28 @@ class ScenarioRunnerReport(BaseModel):
     )
 
 
+class ScenarioSuiteReport(BaseModel):
+    """Execução versionada dos cenários, sem misturar níveis de evidência."""
+
+    schema_version: Literal[1] = 1
+    evidence_level: Literal["fixture_runner"] = "fixture_runner"
+    run_id: str
+    suite_id: str
+    status: ScenarioStatus
+    started_at: str
+    finished_at: str
+    duration_ms: int = Field(ge=0)
+    status_counts: dict[str, int]
+    scenarios: list[ScenarioRunnerReport]
+    limitations: list[str] = Field(
+        default_factory=lambda: [
+            "Resultados medem somente os runners de fixture; não provam o app instalado.",
+            "A rede dos subprocessos não é isolada pelo sistema operacional.",
+            "Cada cenário tem seu próprio timeout; a suite não tem timeout global.",
+        ]
+    )
+
+
 def _scenario_and_fixture(
     scenario_id: str, catalog_path: Path | str | None
 ) -> tuple[BenchmarkScenario, Path]:
@@ -316,6 +338,64 @@ def run_fixture_scenario(
     )
 
 
+def run_fixture_suite(
+    command: list[str],
+    *,
+    timeout_seconds: float = 120,
+    catalog_path: Path | str | None = None,
+    scenario_ids: list[str] | None = None,
+) -> ScenarioSuiteReport:
+    """Roda cenários selecionados em subprocessos independentes e isolados."""
+    catalog = Path(catalog_path or _CATALOG).resolve()
+    scenarios = load_scenarios(catalog)
+    if scenario_ids:
+        requested = set(scenario_ids)
+        available = {scenario.scenario_id for scenario in scenarios}
+        missing = sorted(requested - available)
+        if missing:
+            raise ValueError(f"cenários não encontrados: {', '.join(missing)}")
+        scenarios = [item for item in scenarios if item.scenario_id in requested]
+    if not scenarios:
+        raise ValueError("a suite precisa conter ao menos um cenário")
+
+    started = datetime.now(UTC)
+    started_ns = time.monotonic_ns()
+    run_id = uuid4().hex
+    reports = [
+        run_fixture_scenario(
+            scenario.scenario_id,
+            command,
+            timeout_seconds=timeout_seconds,
+            catalog_path=catalog,
+        )
+        for scenario in scenarios
+    ]
+    counts: dict[str, int] = {}
+    for report in reports:
+        counts[report.status] = counts.get(report.status, 0) + 1
+    statuses = {report.status for report in reports}
+    if "failed" in statuses:
+        status: ScenarioStatus = "failed"
+    elif "blocked" in statuses:
+        status = "blocked"
+    elif "unsupported" in statuses:
+        status = "unsupported"
+    elif "skipped" in statuses:
+        status = "skipped"
+    else:
+        status = "passed"
+    return ScenarioSuiteReport(
+        run_id=run_id,
+        suite_id=json.loads(catalog.read_text(encoding="utf-8"))["suite_id"],
+        status=status,
+        started_at=started.isoformat(),
+        finished_at=datetime.now(UTC).isoformat(),
+        duration_ms=max(0, (time.monotonic_ns() - started_ns) // 1_000_000),
+        status_counts=counts,
+        scenarios=reports,
+    )
+
+
 def _make_report(
     *,
     run_id: str,
@@ -389,6 +469,47 @@ def write_scenario_report(
                 *[f"- {limitation}" for limitation in report.limitations],
             ]
         )
+        markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError:
+        shutil.rmtree(target, ignore_errors=True)
+        raise
+    return json_path, markdown_path
+
+
+def write_suite_report(
+    report: ScenarioSuiteReport, report_dir: Path | str
+) -> tuple[Path, Path]:
+    """Grava o relatório da suite e os relatórios individuais de cada cenário."""
+    target = Path(report_dir).expanduser()
+    target.mkdir(parents=True, exist_ok=False)
+    try:
+        scenario_root = target / "scenarios"
+        scenario_root.mkdir()
+        for index, scenario_report in enumerate(report.scenarios, start=1):
+            write_scenario_report(
+                scenario_report, scenario_root / f"scenario-{index:02d}"
+            )
+        json_path = target / "report.json"
+        markdown_path = target / "report.md"
+        json_path.write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        lines = [
+            f"# Suite {report.suite_id}",
+            "",
+            f"- Status: `{report.status}`",
+            f"- Nível de evidência: `{report.evidence_level}`",
+            f"- Run ID: `{report.run_id}`",
+            f"- Cenários: {len(report.scenarios)}",
+            "",
+            "## Resultados",
+            "",
+        ]
+        lines.extend(
+            f"- `{item.status}` — {item.scenario_id} "
+            + (f"({item.reason})" if item.reason else "")
+            for item in report.scenarios
+        )
+        lines.extend(["", "## Limites", ""])
+        lines.extend(f"- {limitation}" for limitation in report.limitations)
         markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     except OSError:
         shutil.rmtree(target, ignore_errors=True)

@@ -37,8 +37,11 @@ from backend.evaluation.scenario_runner import (
     ScenarioRunnerMetric,
     ScenarioRunnerPayload,
     ScenarioRunnerReport,
+    ScenarioSuiteReport,
     run_fixture_scenario,
+    run_fixture_suite,
     write_scenario_report,
+    write_suite_report,
 )
 from backend.evaluation.scenarios import (
     BenchmarkScenario,
@@ -71,6 +74,7 @@ __all__ = [
     "ScenarioRunnerMetric",
     "ScenarioRunnerPayload",
     "ScenarioRunnerReport",
+    "ScenarioSuiteReport",
     "ScenarioTerminalResult",
     "aggregate_runs",
     "assess_scenario_readiness",
@@ -81,8 +85,10 @@ __all__ = [
     "export_json",
     "load_scenarios",
     "run_fixture_scenario",
+    "run_fixture_suite",
     "run_guarded_effect",
     "run_installed_smoke",
     "sidecar_failure_result",
     "write_scenario_report",
+    "write_suite_report",
 ]

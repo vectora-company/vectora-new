@@ -47,6 +47,25 @@ ambiente doméstico e workspace temporários; variáveis de ambiente que parecem
 credenciais são removidas. O subprocesso é encerrado junto com seus filhos ao
 atingir o limite ou ao cancelar.
 
+Para executar todos os cenários do catálogo, use `vectora eval suite` com o
+mesmo contrato de runner. Cada cenário inicia um subprocesso e workspace novos;
+`--timeout-seconds` vale individualmente para cada processo e não limita a
+duração total da suite. Também é possível repetir `--scenario-id` para selecionar
+cenários. A suite grava um relatório agregado e um par JSON/Markdown para cada
+cenário. `passed`, `unsupported`, `blocked` e os demais estados continuam
+visíveis por cenário e no resumo; um cenário não suportado não vira aprovação.
+
+```bash
+vectora eval suite \
+  --runner python \
+  --runner-arg /caminho/absoluto/para/runner.py \
+  --timeout-seconds 120 \
+  --report-dir ./artifacts/vectora-core-flows
+```
+
+`vectora eval scenarios` continua sendo apenas planejamento: não inicia o
+executável e não grava relatório.
+
 O relatório JSON e Markdown marca `fixture_runner`, separado do `fixture_replay`
 de cassetes, e inclui o hash da fixture,
 digest do comando, `run_id`, status por critério e duração. Ele não comprova que

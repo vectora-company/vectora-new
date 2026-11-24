@@ -12,7 +12,9 @@ from backend.cli import eval as eval_cli
 from backend.evaluation.scenario_runner import (
     ScenarioRunnerReport,
     run_fixture_scenario,
+    run_fixture_suite,
     write_scenario_report,
+    write_suite_report,
 )
 from backend.evaluation.scenarios import _CATALOG
 
@@ -187,3 +189,62 @@ def test_scenario_report_directory_is_removed_when_markdown_write_fails(
         write_scenario_report(report, report_dir)
 
     assert not report_dir.exists()
+
+
+def test_fixture_suite_runs_each_catalog_scenario_and_keeps_unsupported_distinct(
+    tmp_path: Path,
+) -> None:
+    script = tmp_path / "suite-runner.py"
+    script.write_text(
+        "import json, os\n"
+        "from pathlib import Path\n"
+        "scenario = json.loads(Path(os.environ['VECTORA_EVAL_SCENARIO_PATH']).read_text())\n"
+        "fixture = json.loads(Path(os.environ['VECTORA_EVAL_FIXTURE_PATH']).read_text())\n"
+        "assert isinstance(fixture, dict)\n"
+        "status = 'unsupported' if scenario['scenario_id'] == 'memory-recall-v1' else 'passed'\n"
+        "Path(os.environ['VECTORA_EVAL_RESULT_PATH']).write_text(json.dumps({"
+        "'schema_version': 1, 'scenario_id': scenario['scenario_id'], "
+        "'assertions': [{'name': 'fixture contract loaded', 'status': status, "
+        "'reason': 'provider approval evidence unavailable' if status == 'unsupported' else None}]}))\n",
+        encoding="utf-8",
+    )
+
+    report = run_fixture_suite(
+        [sys.executable, str(script)], catalog_path=_CATALOG, timeout_seconds=5
+    )
+
+    assert report.status == "unsupported"
+    assert report.evidence_level == "fixture_runner"
+    assert report.status_counts == {"passed": 6, "unsupported": 1}
+    assert len(report.scenarios) == 7
+    assert report.scenarios[-1].scenario_id == "memory-recall-v1"
+    assert report.scenarios[-1].assertions[0].status == "unsupported"
+    assert all(item.temporary_workspace_removed for item in report.scenarios)
+
+    json_path, markdown_path = write_suite_report(report, tmp_path / "suite-report")
+    saved = json.loads(json_path.read_text(encoding="utf-8"))
+    assert saved["status_counts"] == {"passed": 6, "unsupported": 1}
+    assert (
+        len(list((tmp_path / "suite-report" / "scenarios").glob("*/report.json"))) == 7
+    )
+    assert "não tem timeout global" in markdown_path.read_text(encoding="utf-8")
+
+
+def test_fixture_suite_rejects_unknown_selection_before_starting_runner(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "runner-started"
+    script = tmp_path / "runner.py"
+    script.write_text(
+        f"from pathlib import Path; Path({str(marker)!r}).touch()\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="cenários não encontrados"):
+        run_fixture_suite(
+            [sys.executable, str(script)],
+            catalog_path=_CATALOG,
+            scenario_ids=["unknown-scenario"],
+        )
+
+    assert not marker.exists()

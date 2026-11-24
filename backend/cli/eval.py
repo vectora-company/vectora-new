@@ -20,7 +20,9 @@ from backend.evaluation.reports import (
 from backend.evaluation.runner import compare_cassettes
 from backend.evaluation.scenario_runner import (
     run_fixture_scenario,
+    run_fixture_suite,
     write_scenario_report,
+    write_suite_report,
 )
 from backend.evaluation.scenarios import assess_scenario_readiness, load_scenarios
 from backend.evaluation.verification import replay_cassette, write_replay_report
@@ -239,6 +241,41 @@ def _handle_scenario(args: argparse.Namespace) -> int:
     return 0 if report.status == "passed" else 2 if report.status != "failed" else 1
 
 
+def _handle_suite(args: argparse.Namespace) -> int:
+    """Executa cenários do catálogo sem impor prazo à suite inteira."""
+    command = [args.runner, *(args.runner_arg or [])]
+    try:
+        report = run_fixture_suite(
+            command,
+            timeout_seconds=args.timeout_seconds,
+            catalog_path=args.catalog,
+            scenario_ids=args.scenario_id,
+        )
+        report_paths = write_suite_report(report, args.report_dir)
+    except (OSError, ValueError) as exc:
+        print(f"Não foi possível executar a suite: {exc}", file=sys.stderr)
+        return 1
+
+    if args.output == "json":
+        payload = report.model_dump(mode="json")
+        payload["report_paths"] = {
+            "json": str(report_paths[0]),
+            "markdown": str(report_paths[1]),
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"Suite {report.suite_id}: {report.status} "
+            f"({len(report.scenarios)} cenários, run_id={report.run_id})"
+        )
+        print(
+            "Esta suite mede somente runners de fixture; não valida o app instalado "
+            "nem registra evidência de provider real."
+        )
+        print(f"Relatórios: {report_paths[0]} e {report_paths[1]}")
+    return 0 if report.status == "passed" else 2 if report.status != "failed" else 1
+
+
 def _handle_report(args: argparse.Namespace) -> int:
     """Agrega arquivos de execução e exporta JSON ou CSV."""
     try:
@@ -317,6 +354,9 @@ def handle_eval(args: argparse.Namespace) -> int:  # noqa: PLR0911
 
     if action == "scenario":
         return _handle_scenario(args)
+
+    if action == "suite":
+        return _handle_suite(args)
 
     if action == "report":
         return _handle_report(args)
