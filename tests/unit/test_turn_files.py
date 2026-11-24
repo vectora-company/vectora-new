@@ -40,6 +40,49 @@ def test_compute_reports_text_changes_and_hunks(
     assert changes[0].hunks[0]["header"].startswith("@@")
 
 
+def test_compute_excludes_tracked_files_matched_by_gitignore(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path)
+    (tmp_path / ".gitignore").write_text(".godot/\n", encoding="utf-8")
+    generated = tmp_path / ".godot" / "editor" / "layout.cfg"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("before\n", encoding="utf-8")
+    repo.index.add([".gitignore", ".godot/editor/layout.cfg"])
+    repo.index.commit("track editor state")
+    monkeypatch.setattr(
+        turn_files,
+        "_repo_and_scope",
+        lambda _workspace_id: (repo, tmp_path, tmp_path),
+    )
+
+    snapshot = turn_files.capture("ws", "thread", "run-ignored")
+    assert snapshot is not None
+    (tmp_path / "README.md").write_text("user code\n", encoding="utf-8")
+    generated.write_text("editor state changed\n", encoding="utf-8")
+
+    changes = turn_files.finalize(snapshot)
+
+    assert [change.path for change in changes] == ["README.md"]
+
+
+def test_compute_does_not_attribute_preexisting_user_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path)
+    (tmp_path / "README.md").write_text("user's unsaved change\n", encoding="utf-8")
+    monkeypatch.setattr(
+        turn_files,
+        "_repo_and_scope",
+        lambda _workspace_id: (repo, tmp_path, tmp_path),
+    )
+
+    snapshot = turn_files.capture("ws", "thread", "run-user-change")
+    assert snapshot is not None
+
+    assert turn_files.finalize(snapshot) == []
+
+
 def test_overlapping_runs_keep_independent_snapshots(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

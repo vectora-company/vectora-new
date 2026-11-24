@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +34,10 @@ class GitCommands(Protocol):
 
     def cat_file(self, *args: str, **kwargs: object) -> str | bytes:
         """Check whether an object exists in a revision."""
+        ...
+
+    def execute(self, command: list[str], **kwargs: object) -> object:
+        """Execute a Git command with optional stdin."""
         ...
 
 
@@ -112,7 +117,37 @@ def _status_paths(repo: RepoLike, scope_root: Path, repo_root: Path) -> list[str
         except ValueError:
             continue
         paths.add(path)
-    return sorted(paths)[:MAX_TRACKED_FILES]
+    return _filter_ignored_paths(repo, sorted(paths)[:MAX_TRACKED_FILES])
+
+
+def _filter_ignored_paths(repo: RepoLike, paths: list[str]) -> list[str]:
+    """Exclude files matched by Git ignore rules, including tracked cache files."""
+    bounded_paths = paths[:MAX_TRACKED_FILES]
+    if not bounded_paths:
+        return []
+    try:
+        with tempfile.TemporaryFile() as input_stream:
+            input_stream.write(("\0".join(bounded_paths) + "\0").encode())
+            input_stream.seek(0)
+            result = repo.git.execute(
+                ["git", "check-ignore", "--no-index", "-z", "--stdin"],
+                istream=input_stream,
+                with_extended_output=True,
+                with_exceptions=False,
+                stdout_as_string=False,
+            )
+        output = result[1] if isinstance(result, tuple) else result
+        ignored = (
+            output.decode("utf-8", errors="surrogateescape")
+            if isinstance(output, bytes)
+            else str(output or "")
+        )
+        ignored_paths = set(ignored.split("\0"))
+        return [path for path in bounded_paths if path not in ignored_paths]
+    except Exception:
+        # Failure to inspect ignore rules must not hide otherwise verifiable
+        # changes from the turn summary.
+        return bounded_paths
 
 
 def _revision_paths(
@@ -146,7 +181,7 @@ def _revision_paths(
         except ValueError:
             continue
         paths.add(path)
-    return sorted(paths)[:MAX_TRACKED_FILES]
+    return _filter_ignored_paths(repo, sorted(paths)[:MAX_TRACKED_FILES])
 
 
 def _read(repo_root: Path, scope_root: Path, path: str) -> bytes | None:
