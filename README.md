@@ -152,6 +152,10 @@ O catálogo `vectora eval scenarios` lista os cenários sintéticos versionados 
 avalia pré-condições; ele não executa fluxos do agente nem marca cenários como
 aprovados.
 
+Os guardas de avaliação vinculam cada sessão ao workspace inicial, consultam
+policy no dispatch e impedem reexecutar efeitos cujo desfecho ficou incerto após
+cancelamento. Falhas de sidecar ficam registradas como `blocked` com diagnóstico.
+
 ---
 
 ## Build (SCons)

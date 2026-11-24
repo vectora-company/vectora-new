@@ -6,6 +6,15 @@ from backend.evaluation.installed import (
     InstalledSmokeReport,
     run_installed_smoke,
 )
+from backend.evaluation.isolation import (
+    EffectJournal,
+    ScenarioIsolationGuard,
+    ScenarioPolicy,
+    ScenarioTerminalResult,
+    cancel_guarded_run,
+    run_guarded_effect,
+    sidecar_failure_result,
+)
 from backend.evaluation.metrics import (
     BenchmarkMetric,
     EvaluationRecorder,
@@ -25,6 +34,7 @@ __all__ = [
     "BenchmarkScenario",
     "Cassette",
     "CassetteInteraction",
+    "EffectJournal",
     "EvalMetric",
     "EvalReport",
     "EvaluationDiagnostic",
@@ -32,9 +42,15 @@ __all__ = [
     "InstalledSmokeReport",
     "ReplayChatClient",
     "RunProvenance",
+    "ScenarioIsolationGuard",
+    "ScenarioPolicy",
     "ScenarioReadiness",
+    "ScenarioTerminalResult",
     "assess_scenario_readiness",
+    "cancel_guarded_run",
     "compare_cassettes",
     "load_scenarios",
+    "run_guarded_effect",
     "run_installed_smoke",
+    "sidecar_failure_result",
 ]

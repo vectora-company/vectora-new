@@ -6,8 +6,6 @@
   "backend/api/handlers/usage.py::function::clear_usage_cache",
   "backend/api/handlers/workspaces.py::function::_wait_port_open",
   "backend/api/handlers/workspaces.py::method::on_any_event",
-  "backend/api/middleware/auth.py::method::dispatch",
-  "backend/api/middleware/correlation.py::method::dispatch",
   "backend/api/middleware/rate_limit.py::function::_get_client_ip",
   "backend/api/node_labels.py::function::get_routing_label",
   "backend/auth.py::function::_get_server_url",
