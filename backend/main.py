@@ -677,6 +677,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Comandos do Evaluation Lab:\n"
             "  smoke --app EXECUTABLE [--timeout-seconds N]\n"
             "  scenarios [--output human|json]\n"
+            "  scenario --scenario-id ID --runner EXECUTABLE --report-dir DIR\n"
             "  report --runs FILE... --report FILE [--format json|csv]\n"
             "  compare-runs --baseline FILE... --candidate FILE... --report FILE\n"
             "  run --suite FILE [--report-dir DIR]\n"
@@ -744,6 +745,29 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Opt-in explícito para enviar dados sintéticos ao provider remoto",
     )
     eval_scenarios.add_argument("--output", choices=("human", "json"), default="human")
+
+    eval_scenario = eval_sub.add_parser(
+        "scenario",
+        help="Executa um runner filho com fixture e workspace temporários",
+    )
+    eval_scenario.add_argument("--scenario-id", required=True)
+    eval_scenario.add_argument(
+        "--runner", required=True, help="Executável do runner de cenário"
+    )
+    eval_scenario.add_argument(
+        "--runner-arg",
+        action="append",
+        default=[],
+        help="Argumento do runner; pode ser repetido",
+    )
+    eval_scenario.add_argument(
+        "--catalog",
+        default=None,
+        help="Catálogo versionado (padrão: catálogo v1 do Vectora)",
+    )
+    eval_scenario.add_argument("--timeout-seconds", type=float, default=120)
+    eval_scenario.add_argument("--report-dir", required=True)
+    eval_scenario.add_argument("--output", choices=("human", "json"), default="human")
 
     eval_report = eval_sub.add_parser(
         "report", help="Agrega execuções e exporta JSON ou CSV"

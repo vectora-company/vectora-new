@@ -19,7 +19,9 @@ from backend.persistence.native.agent_run import redact_sensitive_data
 
 RunStatus = Literal["passed", "failed", "blocked", "skipped", "not_run", "cancelled"]
 Profile = Literal["cold", "warm"]
-EvidenceLevel = Literal["contract", "fixture_replay", "installed_app", "live_provider"]
+EvidenceLevel = Literal[
+    "contract", "fixture_replay", "fixture_runner", "installed_app", "live_provider"
+]
 
 
 class BenchmarkRun(BaseModel):

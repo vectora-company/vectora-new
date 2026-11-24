@@ -1,0 +1,57 @@
+# Evaluation Lab
+
+O Evaluation Lab separa planejamento, replay de cassete, execução de runner de
+fixture e inicialização de um app instalado. Um resultado de uma modalidade não
+vale como evidência de outra.
+
+## Runner de cenário por subprocesso
+
+`vectora eval scenarios` só lê o catálogo e informa prontidão. Ele não inicia
+runner nem escreve relatório. Para executar um runner contra a fixture
+versionada de um cenário:
+
+```bash
+vectora eval scenario \
+  --scenario-id workspace-project-open-v1 \
+  --runner python \
+  --runner-arg /caminho/absoluto/para/runner.py \
+  --report-dir ./artifacts/workspace-project-open
+```
+
+O diretório de relatório precisa ser novo. O processo recebe caminhos temporários
+pelas variáveis `VECTORA_EVAL_SCENARIO_PATH`, `VECTORA_EVAL_FIXTURE_PATH`,
+`VECTORA_EVAL_RESULT_PATH`, `VECTORA_EVAL_RUN_ID` e
+`VECTORA_EVALUATION_WORKSPACE`. A fixture é copiada para o diretório temporário;
+o runner deve gravar em `VECTORA_EVAL_RESULT_PATH` um JSON neste formato:
+
+```json
+{
+  "schema_version": 1,
+  "scenario_id": "workspace-project-open-v1",
+  "assertions": [
+    { "name": "README disponível", "status": "passed" },
+    {
+      "name": "aprovação humana auditável",
+      "status": "unsupported",
+      "reason": "o fixture não contém trilha de aprovação"
+    }
+  ],
+  "metrics": []
+}
+```
+
+Estados válidos para cada critério: `passed`, `failed`, `blocked`, `skipped` e
+`unsupported`. Uma lista vazia de critérios, JSON ausente/inválido, cenário
+divergente, saída não zero ou timeout nunca produz `passed`. O runner recebe um
+ambiente doméstico e workspace temporários; variáveis de ambiente que parecem
+credenciais são removidas. O subprocesso é encerrado junto com seus filhos ao
+atingir o limite ou ao cancelar.
+
+O relatório JSON e Markdown marca `fixture_runner`, separado do `fixture_replay`
+de cassetes, e inclui o hash da fixture,
+digest do comando, `run_id`, status por critério e duração. Ele não comprova que
+o app instalado, a interface ou um provider foram exercitados; essa evidência
+não é capturada nesse modo. O sistema operacional também não isola a rede do
+subprocesso, então use um runner offline e fixtures sintéticas. Para verificar
+inicialização de uma instalação, use `vectora eval smoke`; para replay de
+interações registradas, use `vectora eval run --suite FILE`.

@@ -89,6 +89,16 @@ def test_aggregation_rejects_mixing_replay_and_live_evidence() -> None:
         aggregate_runs([_run("live", 10), replay], command=["vectora", "eval"])
 
 
+def test_aggregation_rejects_mixing_fixture_runner_and_cassette_replay() -> None:
+    fixture_runner = _run("runner", 10)
+    fixture_runner.evidence_level = "fixture_runner"
+    cassette_replay = _run("replay", 10)
+    cassette_replay.evidence_level = "fixture_replay"
+
+    with pytest.raises(ValueError, match="não pode misturar níveis de evidência"):
+        aggregate_runs([fixture_runner, cassette_replay], command=["vectora", "eval"])
+
+
 def test_comparison_records_target_revisions_and_ignores_expected_sha_change() -> None:
     report = compare_runs(
         [_run("base-1", 20, revision="sha-base")],

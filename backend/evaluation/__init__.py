@@ -32,6 +32,14 @@ from backend.evaluation.reports import (
     export_json,
 )
 from backend.evaluation.runner import EvalMetric, EvalReport, compare_cassettes
+from backend.evaluation.scenario_runner import (
+    ScenarioAssertion,
+    ScenarioRunnerMetric,
+    ScenarioRunnerPayload,
+    ScenarioRunnerReport,
+    run_fixture_scenario,
+    write_scenario_report,
+)
 from backend.evaluation.scenarios import (
     BenchmarkScenario,
     ScenarioReadiness,
@@ -56,9 +64,13 @@ __all__ = [
     "MetricDistribution",
     "ReplayChatClient",
     "RunProvenance",
+    "ScenarioAssertion",
     "ScenarioIsolationGuard",
     "ScenarioPolicy",
     "ScenarioReadiness",
+    "ScenarioRunnerMetric",
+    "ScenarioRunnerPayload",
+    "ScenarioRunnerReport",
     "ScenarioTerminalResult",
     "aggregate_runs",
     "assess_scenario_readiness",
@@ -68,7 +80,9 @@ __all__ = [
     "export_csv",
     "export_json",
     "load_scenarios",
+    "run_fixture_scenario",
     "run_guarded_effect",
     "run_installed_smoke",
     "sidecar_failure_result",
+    "write_scenario_report",
 ]

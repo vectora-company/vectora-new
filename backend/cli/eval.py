@@ -18,6 +18,10 @@ from backend.evaluation.reports import (
     export_json,
 )
 from backend.evaluation.runner import compare_cassettes
+from backend.evaluation.scenario_runner import (
+    run_fixture_scenario,
+    write_scenario_report,
+)
 from backend.evaluation.scenarios import assess_scenario_readiness, load_scenarios
 from backend.evaluation.verification import replay_cassette, write_replay_report
 
@@ -198,6 +202,43 @@ def _handle_scenarios(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_scenario(args: argparse.Namespace) -> int:
+    """Executa um runner filho contra uma fixture isolada."""
+    command = [args.runner, *(args.runner_arg or [])]
+    try:
+        report = run_fixture_scenario(
+            args.scenario_id,
+            command,
+            timeout_seconds=args.timeout_seconds,
+            catalog_path=args.catalog,
+        )
+        report_paths = write_scenario_report(report, args.report_dir)
+    except (OSError, ValueError) as exc:
+        print(f"Não foi possível executar o cenário: {exc}", file=sys.stderr)
+        return 1
+
+    if args.output == "json":
+        payload = report.model_dump(mode="json")
+        payload["report_paths"] = {
+            "json": str(report_paths[0]),
+            "markdown": str(report_paths[1]),
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"Cenário {report.scenario_id}: {report.status} "
+            f"(evidência={report.evidence_level}, run_id={report.run_id})"
+        )
+        if report.reason:
+            print(report.reason, file=sys.stderr)
+        print(
+            "Este modo executa somente o runner de fixture; não valida o app "
+            "instalado nem registra evidência de provider."
+        )
+        print(f"Relatórios: {report_paths[0]} e {report_paths[1]}")
+    return 0 if report.status == "passed" else 2 if report.status != "failed" else 1
+
+
 def _handle_report(args: argparse.Namespace) -> int:
     """Agrega arquivos de execução e exporta JSON ou CSV."""
     try:
@@ -273,6 +314,9 @@ def handle_eval(args: argparse.Namespace) -> int:  # noqa: PLR0911
 
     if action == "scenarios":
         return _handle_scenarios(args)
+
+    if action == "scenario":
+        return _handle_scenario(args)
 
     if action == "report":
         return _handle_report(args)
