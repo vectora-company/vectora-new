@@ -35,6 +35,15 @@ def test_integration_tools_estao_em_all_tools():
     assert not faltando, f"tools de integração não registradas: {sorted(faltando)}"
 
 
+def test_godot_validation_is_available_only_in_workspace_toolset():
+    all_specs = {tool.name: tool for tool in ALL_TOOLS}
+    chat_names = {tool.name for tool in CHAT_TOOLS}
+
+    assert "validate_godot_project" in all_specs
+    assert all_specs["validate_godot_project"].extras.destructive is True
+    assert "validate_godot_project" not in chat_names
+
+
 def test_chat_tools_exclui_dev_e_inclui_conversacional():
     """CHAT_TOOLS (modo Chat) é conversacional puro: web/RAG/memória/integrações,
     SEM filesystem/git/terminal/workspace. Erro/borda no mesmo teste: nenhuma tool

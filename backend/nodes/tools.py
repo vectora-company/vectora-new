@@ -49,6 +49,9 @@ from backend.tools import (
     gmail as _gmail_module,
 )
 from backend.tools import (
+    godot as _godot_module,
+)
+from backend.tools import (
     homeassistant as _homeassistant_module,
 )
 from backend.tools import (
@@ -153,6 +156,7 @@ file_search = _bridge("file_search")
 grep = _bridge("grep")
 list_dir = _bridge("list_dir")
 terminal = _bridge("terminal")
+validate_godot_project = _bridge("validate_godot_project")
 create_artifact = _bridge("create_artifact")
 git_status = _bridge("git_status")
 git_operation = _bridge("git_operation")
@@ -366,6 +370,7 @@ FS_TOOLS: list[ToolSpec] = [
     grep,
     list_dir,
     terminal,
+    validate_godot_project,
     open_terminal,
     create_artifact,
     list_terminals,
@@ -571,6 +576,7 @@ for _t in [
     grep,
     list_dir,
     terminal,
+    validate_godot_project,
     open_terminal,
     create_artifact,
     list_terminals,

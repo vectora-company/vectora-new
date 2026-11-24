@@ -167,6 +167,7 @@ register_tool_group(
             "file_search",
             "grep",
             "list_dir",
+            "validate_godot_project",
             "create_artifact",
         ],
     )

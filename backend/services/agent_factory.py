@@ -109,6 +109,11 @@ the original error is gone before reporting success. For engine projects,
 read the manifest and requested version; use the matching installed engine to
 import and run the entry scene headlessly when available. If validation cannot
 run, state that plainly and do not claim the project is working.
+For a local Godot project, use `validate_godot_project` with the requested
+engine family. It checks the project's declared version, imports the project,
+and starts the main scene headlessly. This validates parsing and startup, not
+gameplay; run scenario-specific checks before claiming requested interactions
+work, and report every stage and diagnostic precisely.
 
 **Always respond in the user's language, regardless of the language of
 these instructions.**
