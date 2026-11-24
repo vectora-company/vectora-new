@@ -107,10 +107,12 @@ residente da árvore de processos do Electron, incluindo filhos. Percentuais de
 CPU são relativos a um núcleo lógico; RSS é a soma amostrada dos valores RSS dos
 processos e pode contar páginas compartilhadas mais de uma vez. O pico de
 processos e a quantidade de CPUs lógicas e memória total do host são registrados
-separadamente. A amostragem é intervalar, então pode perder picos curtos. Memória
-GPU por processo fica `unavailable` com motivo; utilização global da GPU não é
-atribuída ao app. Amostras CPU/RSS ausentes também ficam `unavailable`, nunca
-zero.
+separadamente. A amostragem é intervalar, então pode perder picos curtos. Em
+GPUs NVIDIA com NVML e contabilização por processo disponível, o relatório mede
+pico de memória GPU dos processos do app. Em outros dispositivos/drivers — e no
+Windows WDDM, que não expõe esse valor por processo — a métrica fica
+`unavailable` com motivo; utilização global da GPU não é atribuída ao app.
+Amostras CPU/RSS ausentes também ficam `unavailable`, nunca zero.
 
 Com `evaluation_recording_enabled` e `run_id`, chamadas do provider registram
 tokens de entrada/saída, TTFT e `output_tokens_per_second`. A taxa usa apenas

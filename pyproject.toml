@@ -110,6 +110,8 @@ dependencies = [
     "pypdfium2>=5.15.2",
     "zstandard>=0.25.0",
     "psutil>=7.1.0",
+    # Métrica NVIDIA por processo do Evaluation Lab; NVML indisponível é reportado como tal.
+    "nvidia-ml-py>=12.535.133",
 ]
 
 [project.scripts]

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import threading
 import time
+from contextlib import suppress
+from types import ModuleType
 
 import psutil
 
@@ -36,11 +38,16 @@ class ProcessTreeResourceSampler:
         self._cpu_percentages: list[float] = []
         self._peak_rss_bytes = 0
         self._peak_process_count = 0
+        self._nvml: ModuleType | None = None
+        self._nvml_device_count = 0
+        self._gpu_unavailable_reason = "NVML ainda não foi consultado."
+        self._gpu_memory_samples: list[int] = []
 
     def start(self) -> None:
         """Inicia amostragem em thread daemon para não prender o encerramento."""
         if self._thread is not None:
             raise RuntimeError("amostrador já iniciado")
+        self._initialize_nvml()
         self._sample()
         self._thread = threading.Thread(
             target=self._run,
@@ -61,7 +68,9 @@ class ProcessTreeResourceSampler:
         cpu_seconds = 0.0
         rss_bytes = 0
         live_count = 0
-        for process in self._process_tree():
+        processes = self._process_tree()
+        process_ids = {process.pid for process in processes}
+        for process in processes:
             try:
                 cpu = process.cpu_times()
                 memory = process.memory_info()
@@ -81,6 +90,75 @@ class ProcessTreeResourceSampler:
                     cpu_percent = max(0.0, (cpu_seconds - previous_cpu) / elapsed * 100)
                     self._cpu_percentages.append(cpu_percent)
             self._previous = (now, cpu_seconds)
+        self._sample_gpu_memory(process_ids)
+
+    def _initialize_nvml(self) -> None:
+        """Open NVML when an NVIDIA driver and process accounting are available."""
+        try:
+            import pynvml
+
+            pynvml.nvmlInit()
+            self._nvml = pynvml
+            self._nvml_device_count = int(pynvml.nvmlDeviceGetCount())
+        except Exception as exc:
+            self._nvml = None
+            self._gpu_unavailable_reason = f"NVML indisponível ({type(exc).__name__})."
+            return
+        if self._nvml_device_count == 0:
+            self._gpu_unavailable_reason = (
+                "Nenhuma GPU NVIDIA compatível foi encontrada."
+            )
+        else:
+            self._gpu_unavailable_reason = (
+                "NVML não mostrou processos da árvore do app durante a amostragem."
+            )
+
+    def _sample_gpu_memory(self, process_ids: set[int]) -> None:
+        """Sample process-attributed compute/graphics GPU memory via NVML."""
+        if self._nvml is None or self._nvml_device_count == 0 or not process_ids:
+            return
+        total_bytes = 0
+        found_process = False
+        incomplete = False
+        for index in range(self._nvml_device_count):
+            handle: object | None = None
+            with suppress(Exception):
+                handle = self._nvml.nvmlDeviceGetHandleByIndex(index)
+            if handle is None:
+                continue
+            device_memory: dict[int, int] = {}
+            for query_name in (
+                "nvmlDeviceGetComputeRunningProcesses",
+                "nvmlDeviceGetGraphicsRunningProcesses",
+            ):
+                query = getattr(self._nvml, query_name, None)
+                if not callable(query):
+                    continue
+                running = None
+                with suppress(Exception):
+                    running = query(handle)
+                if running is None:
+                    continue
+                for entry in running:
+                    if entry.pid not in process_ids:
+                        continue
+                    found_process = True
+                    memory_bytes = entry.usedGpuMemory
+                    if memory_bytes is None or not isinstance(memory_bytes, int):
+                        incomplete = True
+                        continue
+                    device_memory[entry.pid] = max(
+                        device_memory.get(entry.pid, 0), memory_bytes
+                    )
+            total_bytes += sum(device_memory.values())
+        if found_process and not incomplete:
+            self._gpu_memory_samples.append(total_bytes)
+            self._gpu_unavailable_reason = ""
+        elif found_process:
+            self._gpu_unavailable_reason = (
+                "O driver não disponibilizou memória por processo "
+                "(por exemplo, WDDM no Windows)."
+            )
 
     def _run(self) -> None:
         while not self._stop.wait(self.interval_seconds):
@@ -100,6 +178,9 @@ class ProcessTreeResourceSampler:
             cpu_values = list(self._cpu_percentages)
             peak_rss_bytes = self._peak_rss_bytes
             peak_process_count = self._peak_process_count
+        if self._nvml is not None:
+            with suppress(Exception):
+                self._nvml.nvmlShutdown()
 
         metrics: list[BenchmarkMetric] = []
         if cpu_values:
@@ -154,13 +235,23 @@ class ProcessTreeResourceSampler:
                 )
             )
 
-        metrics.append(
-            self._unavailable(
-                "process_tree_gpu_memory_peak",
-                "MiB",
-                "Não há sensor portátil de memória GPU por processo configurado.",
+        if self._gpu_memory_samples:
+            metrics.append(
+                self._metric(
+                    name="process_tree_gpu_memory_peak",
+                    value=max(self._gpu_memory_samples) / (1024 * 1024),
+                    unit="MiB",
+                    source="pynvml.process_tree.usedGpuMemory",
+                )
             )
-        )
+        else:
+            metrics.append(
+                self._unavailable(
+                    "process_tree_gpu_memory_peak",
+                    "MiB",
+                    self._gpu_unavailable_reason,
+                )
+            )
         with self._lock:
             self._metrics = metrics
         return list(metrics)

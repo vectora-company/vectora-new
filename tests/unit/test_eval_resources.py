@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
+from types import ModuleType, SimpleNamespace
+
+import pytest
 
 from backend.evaluation.resources import ProcessTreeResourceSampler
 
 
-def test_sampler_correlates_process_metrics_and_marks_gpu_unavailable() -> None:
+def test_sampler_correlates_process_metrics_without_inventing_gpu_values() -> None:
     sampler = ProcessTreeResourceSampler(
         os.getpid(),
         run_id="resource-run",
@@ -37,7 +41,45 @@ def test_sampler_correlates_process_metrics_and_marks_gpu_unavailable() -> None:
     gpu = next(
         metric for metric in metrics if metric.name == "process_tree_gpu_memory_peak"
     )
-    assert gpu.status == "unavailable"
-    assert gpu.value is None
-    assert gpu.reason
+    if gpu.status == "unavailable":
+        assert gpu.value is None
+        assert gpu.reason
+    else:
+        assert gpu.status == "measured"
+        assert gpu.value is not None and gpu.value >= 0
     assert sampler.stop() == metrics
+
+
+def test_sampler_measures_nvidia_memory_for_matching_process_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nvml = ModuleType("pynvml")
+    nvml.__dict__.update(
+        {
+            "nvmlInit": lambda: None,
+            "nvmlShutdown": lambda: None,
+            "nvmlDeviceGetCount": lambda: 1,
+            "nvmlDeviceGetHandleByIndex": lambda _index: "gpu-0",
+            "nvmlDeviceGetComputeRunningProcesses": lambda _handle: [
+                SimpleNamespace(pid=os.getpid(), usedGpuMemory=64 * 1024 * 1024)
+            ],
+            "nvmlDeviceGetGraphicsRunningProcesses": lambda _handle: [],
+        }
+    )
+    monkeypatch.setitem(sys.modules, "pynvml", nvml)
+
+    sampler = ProcessTreeResourceSampler(
+        os.getpid(),
+        run_id="nvidia-run",
+        scenario_id="installed-app-startup",
+    )
+    sampler.start()
+    gpu = next(
+        metric
+        for metric in sampler.stop()
+        if metric.name == "process_tree_gpu_memory_peak"
+    )
+
+    assert gpu.status == "measured"
+    assert gpu.value == pytest.approx(64)
+    assert gpu.source == "pynvml.process_tree.usedGpuMemory"
