@@ -30,7 +30,9 @@ def test_compute_reports_text_changes_and_hunks(
 
     snapshot = turn_files.capture("ws", "thread", "run-1")
     assert snapshot is not None
+    before = turn_files.capture_tool_state(snapshot.run_id)
     (tmp_path / "README.md").write_text("antes\ndepois\n", encoding="utf-8")
+    turn_files.record_tool_effect(snapshot.run_id, before)
 
     changes = turn_files.finalize(snapshot)
 
@@ -58,8 +60,10 @@ def test_compute_excludes_tracked_files_matched_by_gitignore(
 
     snapshot = turn_files.capture("ws", "thread", "run-ignored")
     assert snapshot is not None
+    before = turn_files.capture_tool_state(snapshot.run_id)
     (tmp_path / "README.md").write_text("user code\n", encoding="utf-8")
     generated.write_text("editor state changed\n", encoding="utf-8")
+    turn_files.record_tool_effect(snapshot.run_id, before)
 
     changes = turn_files.finalize(snapshot)
 
@@ -130,9 +134,11 @@ def test_compute_includes_files_committed_during_run(
 
     snapshot = turn_files.capture("ws", "thread", "run-commit")
     assert snapshot is not None
+    before = turn_files.capture_tool_state(snapshot.run_id)
     (tmp_path / "README.md").write_text("antes\ndepois\n", encoding="utf-8")
     repo.index.add(["README.md"])
     repo.index.commit("edit during run")
+    turn_files.record_tool_effect(snapshot.run_id, before)
 
     changes = turn_files.finalize(snapshot)
 
@@ -191,7 +197,9 @@ def test_capture_tracks_changes_before_first_commit(
 
     snapshot = turn_files.capture("ws", "thread", "run-unborn")
     assert snapshot is not None
+    before = turn_files.capture_tool_state(snapshot.run_id)
     (tmp_path / "new.py").write_text("print('ok')\n", encoding="utf-8")
+    turn_files.record_tool_effect(snapshot.run_id, before)
 
     changes = turn_files.finalize(snapshot)
 
@@ -215,8 +223,52 @@ def test_oversized_committed_file_is_not_reported_as_deleted(
 
     snapshot = turn_files.capture("ws", "thread", "run-large")
     assert snapshot is not None
+    before = turn_files.capture_tool_state(snapshot.run_id)
     (tmp_path / "large.txt").write_text(large + "y", encoding="utf-8")
     repo.index.add(["large.txt"])
     repo.index.commit("edit large file")
+    turn_files.record_tool_effect(snapshot.run_id, before)
 
     assert turn_files.finalize(snapshot) == []
+
+
+def test_unobserved_workspace_changes_are_not_attributed_to_the_agent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(
+        turn_files,
+        "_repo_and_scope",
+        lambda _workspace_id: (repo, tmp_path, tmp_path),
+    )
+
+    snapshot = turn_files.capture("ws", "thread", "run-concurrent-user-edit")
+    assert snapshot is not None
+    (tmp_path / "README.md").write_text("alterado fora de uma tool\n", encoding="utf-8")
+
+    assert turn_files.finalize(snapshot) == []
+
+
+def test_tool_summary_uses_file_content_at_first_tool_effect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(
+        turn_files,
+        "_repo_and_scope",
+        lambda _workspace_id: (repo, tmp_path, tmp_path),
+    )
+
+    snapshot = turn_files.capture("ws", "thread", "run-concurrent-edit")
+    assert snapshot is not None
+    (tmp_path / "README.md").write_text("alteração do usuário\n", encoding="utf-8")
+    before_tool = turn_files.capture_tool_state(snapshot.run_id)
+    (tmp_path / "README.md").write_text("alteração do agente\n", encoding="utf-8")
+    turn_files.record_tool_effect(snapshot.run_id, before_tool)
+
+    changes = turn_files.finalize(snapshot)
+
+    assert [change.path for change in changes] == ["README.md"]
+    assert changes[0].additions == changes[0].deletions == 1
+    assert "antes" not in str(changes[0].hunks)
+    assert "alteração do agente" in str(changes[0].hunks)

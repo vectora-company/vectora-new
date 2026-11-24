@@ -376,16 +376,31 @@ async def _run_one(
                 name=tool_call.name,
                 is_error=True,
             )
-        texto = await spec.ainvoke(
-            tool_call.args,
-            call_context,
-        )
-        texto = _apply_post_execute(texto)
-        is_error = _is_tool_error(
-            texto,
-            structured=_has_structured_result(spec),
-        )
-        texto, is_error = await _post_tool_hooks(tool_call, ctx, texto, is_error)
+        before_workspace_effects: dict[str, bytes | None] | None = None
+        if ctx.run_id and set(spec.extras.invalidates).intersection({"files", "git"}):
+            from backend.api.turn_files import capture_tool_state
+
+            before_workspace_effects = await asyncio.to_thread(
+                capture_tool_state, ctx.run_id
+            )
+        try:
+            texto = await spec.ainvoke(
+                tool_call.args,
+                call_context,
+            )
+            texto = _apply_post_execute(texto)
+            is_error = _is_tool_error(
+                texto,
+                structured=_has_structured_result(spec),
+            )
+            texto, is_error = await _post_tool_hooks(tool_call, ctx, texto, is_error)
+        finally:
+            if before_workspace_effects is not None:
+                from backend.api.turn_files import record_tool_effect
+
+                await asyncio.to_thread(
+                    record_tool_effect, ctx.run_id, before_workspace_effects
+                )
         from backend.services.tool_usage import record_tool_usage
 
         await record_tool_usage(

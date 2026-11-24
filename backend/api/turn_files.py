@@ -80,6 +80,8 @@ _active_by_context: dict[tuple[str, str], str] = {}
 _latest: dict[tuple[str, str], str] = {}
 _results: dict[str, list[TurnFileChange]] = {}
 _result_context: dict[str, tuple[str, str]] = {}
+_tool_observed_paths: dict[str, set[str]] = {}
+_tool_baselines: dict[str, dict[str, tuple[bytes | None, bool]]] = {}
 
 
 def _status_paths(repo: RepoLike, scope_root: Path, repo_root: Path) -> list[str]:
@@ -236,6 +238,71 @@ def _repo_and_scope(workspace_id: str) -> tuple[RepoLike, Path, Path] | None:
     return cast("RepoLike", repo), repo_root, scope_root
 
 
+def capture_tool_state(run_id: str) -> dict[str, bytes | None]:
+    """Snapshot changed workspace files immediately before a mutating tool."""
+    snapshot = _active.get(run_id)
+    if snapshot is None:
+        return {}
+    try:
+        from git import Repo  # type: ignore[import-not-found]
+
+        repo = cast(
+            "RepoLike", Repo(str(snapshot.repo_root), search_parent_directories=True)
+        )
+        paths = set(_status_paths(repo, snapshot.scope_root, snapshot.repo_root))
+        if snapshot.initial_head:
+            paths.update(
+                _revision_paths(
+                    repo,
+                    f"{snapshot.initial_head}..HEAD",
+                    snapshot.scope_root,
+                    snapshot.repo_root,
+                )
+            )
+        return {
+            path: _read(snapshot.repo_root, snapshot.scope_root, path)
+            for path in sorted(paths)[:MAX_TRACKED_FILES]
+        }
+    except Exception:
+        return {}
+
+
+def record_tool_effect(run_id: str, before: dict[str, bytes | None]) -> None:
+    """Record file paths whose contents changed during one workspace tool call."""
+    snapshot = _active.get(run_id)
+    if snapshot is None:
+        return
+    after = capture_tool_state(run_id)
+    changed_paths = {
+        path
+        for path in before.keys() | after.keys()
+        if (path in before) != (path in after) or before.get(path) != after.get(path)
+    }
+    try:
+        from git import Repo  # type: ignore[import-not-found]
+
+        repo = cast(
+            "RepoLike", Repo(str(snapshot.repo_root), search_parent_directories=True)
+        )
+    except Exception:
+        repo = None
+    baselines = _tool_baselines.setdefault(run_id, {})
+    for path in changed_paths:
+        if path in baselines:
+            continue
+        if path in before:
+            baselines[path] = (before[path], True)
+        elif repo is not None and snapshot.initial_head is not None:
+            exists = _head_exists(repo, path, snapshot.initial_head)
+            baselines[path] = (
+                _head_read(repo, path, snapshot.initial_head) if exists else None,
+                exists,
+            )
+        else:
+            baselines[path] = (None, False)
+    _tool_observed_paths.setdefault(run_id, set()).update(changed_paths)
+
+
 def capture(
     workspace_id: str | None, thread_id: str, run_id: str | None = None
 ) -> TurnWorkspaceSnapshot | None:
@@ -273,6 +340,8 @@ def capture(
         initial_head=initial_head,
     )
     _active[snapshot.run_id] = snapshot
+    _tool_observed_paths[snapshot.run_id] = set()
+    _tool_baselines[snapshot.run_id] = {}
     _active_by_context[(thread_id, workspace_id)] = snapshot.run_id
     return snapshot
 
@@ -308,20 +377,33 @@ def compute(snapshot: TurnWorkspaceSnapshot) -> list[TurnFileChange]:
         if snapshot.initial_head
         else []
     )
-    paths = sorted(set(snapshot.initial) | set(current_paths) | set(committed_paths))[
-        :MAX_TRACKED_FILES
-    ]
+    paths = sorted(
+        (set(snapshot.initial) | set(current_paths) | set(committed_paths))
+        & _tool_observed_paths.get(snapshot.run_id, set())
+    )[:MAX_TRACKED_FILES]
     changes: list[TurnFileChange] = []
+    tool_baselines = _tool_baselines.get(snapshot.run_id, {})
     for path in paths:
+        tool_baseline = tool_baselines.get(path)
         before = (
-            snapshot.initial[path]
-            if path in snapshot.initial
-            else _head_read(repo, path, snapshot.initial_head or "HEAD")
+            tool_baseline[0]
+            if tool_baseline is not None
+            else (
+                snapshot.initial[path]
+                if path in snapshot.initial
+                else _head_read(repo, path, snapshot.initial_head or "HEAD")
+            )
         )
         after = _read(snapshot.repo_root, snapshot.scope_root, path)
         before_ref = snapshot.initial_head or "HEAD"
-        before_exists = path in snapshot.initial or (
-            snapshot.initial_head is not None and _head_exists(repo, path, before_ref)
+        before_exists = (
+            tool_baseline[1]
+            if tool_baseline is not None
+            else path in snapshot.initial
+            or (
+                snapshot.initial_head is not None
+                and _head_exists(repo, path, before_ref)
+            )
         )
         after_candidate = (snapshot.repo_root / path).resolve()
         try:
@@ -392,6 +474,8 @@ def finalize(snapshot: TurnWorkspaceSnapshot | None) -> list[TurnFileChange]:
     _results[snapshot.run_id] = changes
     _result_context[snapshot.run_id] = (snapshot.thread_id, snapshot.workspace_id)
     _active.pop(snapshot.run_id, None)
+    _tool_observed_paths.pop(snapshot.run_id, None)
+    _tool_baselines.pop(snapshot.run_id, None)
     context = (snapshot.thread_id, snapshot.workspace_id)
     if _active_by_context.get(context) == snapshot.run_id:
         _active_by_context.pop(context, None)
@@ -400,6 +484,8 @@ def finalize(snapshot: TurnWorkspaceSnapshot | None) -> list[TurnFileChange]:
         for old_run_id in list(_results)[:-MAX_RETAINED_RUNS]:
             _results.pop(old_run_id, None)
             _result_context.pop(old_run_id, None)
+            _tool_observed_paths.pop(old_run_id, None)
+            _tool_baselines.pop(old_run_id, None)
             for context, latest_run_id in list(_latest.items()):
                 if latest_run_id == old_run_id:
                     _latest.pop(context, None)

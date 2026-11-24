@@ -11,13 +11,17 @@ from __future__ import annotations
 
 import asyncio
 import socket
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock
 
+import git
 import pytest
 from pydantic import create_model
 
+from backend.api import turn_files
+from backend.engine import tool_batch
 from backend.engine.guardrails import LoopCapConfig, TurnBudget
 from backend.engine.tool_batch import _redact_secrets, execute_tool_batch
 from backend.llm.systemone.harness import SystemOneHarness
@@ -64,6 +68,79 @@ def ctx() -> ToolContext:
 
 
 class TestDespachoParaleloSequencial:
+    @pytest.mark.parametrize(
+        ("tool_result", "expected_error"),
+        [("ok", False), ("Error: hook failed after write", True)],
+    )
+    async def test_workspace_effects_are_attributed_only_during_mutating_tool(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        tool_result: str,
+        expected_error: bool,
+    ) -> None:
+        repo = git.Repo.init(tmp_path)
+        readme = tmp_path / "README.md"
+        readme.write_text("antes\n", encoding="utf-8")
+        repo.index.add(["README.md"])
+        repo.index.commit("initial")
+        monkeypatch.setattr(
+            turn_files,
+            "_repo_and_scope",
+            lambda _workspace_id: (repo, tmp_path, tmp_path),
+        )
+        monkeypatch.setattr(
+            tool_batch,
+            "_authorize_call",
+            AsyncMock(return_value=(True, "")),
+        )
+        monkeypatch.setattr(
+            "backend.services.tool_usage.record_tool_usage", AsyncMock()
+        )
+        snapshot = turn_files.capture("workspace", "thread", "run-tool-effects")
+        assert snapshot is not None
+
+        async def edit_file(file_path: str, ctx: ToolContext) -> str:
+            assert ctx.workspace_id == "workspace"
+            Path(file_path).write_text("alterado pela tool\n", encoding="utf-8")
+            return tool_result
+
+        registry = ToolRegistry()
+        registry.register(
+            ToolSpec(
+                name="file_write",
+                description="write a file",
+                args_model=create_model("ObservedFileWriteArgs", file_path=(str, ...)),
+                handler=edit_file,
+                extras=ToolExtras(invalidates=["files"]),
+                needs_ctx=True,
+            )
+        )
+        context = ToolContext(
+            user_id="u1",
+            thread_id="thread",
+            workspace_id="workspace",
+            run_id="run-tool-effects",
+        )
+
+        results = await execute_tool_batch(
+            [
+                ToolCall(
+                    id="write-1",
+                    name="file_write",
+                    args={"file_path": str(readme)},
+                )
+            ],
+            tool_registry=registry,
+            ctx=context,
+            policy_snapshot=PolicySnapshot(workspace_id="workspace"),
+        )
+
+        assert results[0].is_error is expected_error
+        changes = turn_files.finalize(snapshot)
+        assert [change.path for change in changes] == ["README.md"]
+        assert changes[0].additions == 1
+
     async def test_unavailable_shared_policy_prevents_tool_effect(
         self, ctx, monkeypatch
     ):
