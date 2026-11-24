@@ -873,15 +873,14 @@ def test_release_please_le_epoch_de_tag_anotada(tmp_path: Path) -> None:
 def test_pr_gate_is_one_queue_that_does_not_cancel_code_checks_on_metadata_events() -> (
     None
 ):
-    """Os workflows de PR viraram uma fila só: os checks de código esperam os de
-    metadado e só rodam ao abrir, sincronizar ou reabrir; eventos de label,
-    milestone e descrição têm grupo de concorrência próprio e nunca cancelam o
-    código em andamento."""
+    """A fila de código aguarda metadados e classificação de atualizações."""
     gate = (WORKFLOW.parent / "pr-gate.yml").read_text(encoding="utf-8")
     code = gate.split("\n  code:\n", 1)[1].split("\n  secrets-push:\n", 1)[0]
     concurrency = gate.split("\nconcurrency:\n", 1)[1].split("\npermissions:", 1)[0]
 
-    assert "needs: [metadata, pr-adjustments]" in code
+    assert "needs: [metadata, pr-adjustments, pr_maintenance]" in code
+    assert "always()" in code
+    assert "needs.pr_maintenance.outputs.run_checks != 'false'" in code
     for action in ("opened", "synchronize", "reopened"):
         assert f"github.event.action == '{action}'" in code
     assert "'metadata' || 'code'" in concurrency
