@@ -133,6 +133,20 @@ uv run vectora start --headless    # backend sem Electron (modo servidor)
 uv run vectora web                  # HTTP + Electron/Chromium, sem bandeja Python
 ```
 
+### Evaluation Lab
+
+O smoke test opt-in abre o executável instalado com um perfil e um workspace
+temporários, verifica a prontidão do backend e do renderer e encerra o app. Ele
+não usa providers nem encaminha credenciais do shell:
+
+```bash
+uv run vectora eval smoke --app /caminho/para/Vectora --report evaluation.json
+```
+
+O comando emite um `run_id` e um estado estruturado. Se o app não puder iniciar,
+falhar na prontidão ou exceder o limite, o resultado não é marcado como
+`passed`.
+
 ---
 
 ## Build (SCons)

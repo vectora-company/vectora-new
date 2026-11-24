@@ -673,7 +673,12 @@ def _build_parser() -> argparse.ArgumentParser:
     eval_p = sub.add_parser(
         "eval",
         help="Evaluation Lab para benchmark e replay de decisões",
-        description="Comandos do Evaluation Lab:\n  run [--suite FILE]\n  compare BASELINE CANDIDATE",
+        description=(
+            "Comandos do Evaluation Lab:\n"
+            "  smoke --app EXECUTABLE [--timeout-seconds N]\n"
+            "  run --suite FILE\n"
+            "  compare BASELINE CANDIDATE"
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     eval_sub = eval_p.add_subparsers(dest="action", required=True)
@@ -682,6 +687,28 @@ def _build_parser() -> argparse.ArgumentParser:
         "--suite", default=None, help="Caminho para arquivo de cassete/suite"
     )
     eval_run.add_argument("--output", choices=("human", "json"), default="human")
+
+    eval_smoke = eval_sub.add_parser(
+        "smoke",
+        help="Valida a inicialização de uma instalação em perfil temporário",
+    )
+    eval_smoke.add_argument(
+        "--app",
+        required=True,
+        help="Caminho para o executável instalado do Vectora",
+    )
+    eval_smoke.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=120,
+        help="Limite para a inicialização e o encerramento do app (padrão: 120)",
+    )
+    eval_smoke.add_argument(
+        "--report",
+        default=None,
+        help="Salva o relatório estruturado neste caminho",
+    )
+    eval_smoke.add_argument("--output", choices=("human", "json"), default="human")
 
     eval_compare = eval_sub.add_parser(
         "compare", help="Compara duas cassetes (baseline vs candidate)"

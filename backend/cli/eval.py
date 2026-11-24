@@ -11,6 +11,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 from backend.evaluation.cassette import Cassette
+from backend.evaluation.installed import run_installed_smoke
 from backend.evaluation.replay_client import ReplayChatClient
 from backend.evaluation.runner import compare_cassettes
 from backend.vtypes import JsonObject
@@ -131,6 +132,33 @@ def _handle_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_smoke(args: argparse.Namespace) -> int:
+    """Abre a instalação real com perfil descartável e reporta o diagnóstico."""
+    report = run_installed_smoke(
+        args.app,
+        timeout_seconds=args.timeout_seconds,
+    )
+    report_json = report.model_dump_json(indent=2)
+    report_path = getattr(args, "report", None)
+    if report_path:
+        try:
+            Path(report_path).expanduser().write_text(
+                report_json + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(f"Não foi possível salvar o relatório: {exc}", file=sys.stderr)
+            return 1
+
+    if getattr(args, "output", "human") == "json":
+        print(report_json)
+    else:
+        print(f"Evaluation Lab: {report.status} (run_id={report.run_id})")
+        if report.reason:
+            print(report.reason, file=sys.stderr)
+    return 0 if report.status == "passed" else 2 if report.status == "blocked" else 1
+
+
 def handle_eval(args: argparse.Namespace) -> int:
     """Roteia as ações de eval."""
     action = getattr(args, "action", None)
@@ -154,6 +182,9 @@ def handle_eval(args: argparse.Namespace) -> int:
 
     if action == "run":
         return _handle_run(args)
+
+    if action == "smoke":
+        return _handle_smoke(args)
 
     print(
         "Subcomando eval desconhecido. Use 'vectora eval run' ou 'vectora eval compare'.",
