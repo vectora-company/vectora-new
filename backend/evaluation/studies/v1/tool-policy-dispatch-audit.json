@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "study_id": "tool-policy-dispatch-audit",
+  "title": "Rastrear policy nos caminhos reais de dispatch de ferramentas",
+  "state": "planned",
+  "claim_under_test": "Os caminhos de execução de ferramentas revalidam a autorização efetiva imediatamente antes de efeitos protegidos, inclusive depois de esperas assíncronas.",
+  "hypothesis": "A auditoria dos caminhos de dispatch do agente encontrará uma checagem de policy coerente entre a autorização inicial e o handler, sem caminhos produtivos que executem efeitos protegidos fora dessa fronteira.",
+  "falsification_criterion": "A hipótese será refutada por qualquer caminho de dispatch alcançável que execute um efeito protegido sem revalidar identidade, workspace e policy após uma espera ou mutação concorrente; rotas não exercitadas serão reportadas como sem evidência.",
+  "method": "Partir das referências de código fixadas, enumerar todos os pontos de entrada e chamadas de ferramentas no runtime, seguir chamadas assíncronas até o primeiro efeito protegido, e confrontar o rastreamento estático com cenários controlados de revogação de policy antes e depois das esperas. Registrar cobertura de caminhos e separar observação de código de comportamento executado.",
+  "sample": "Todos os pontos de dispatch de tools registrados no SHA estudado, com ao menos um caminho positivo, uma negação, uma revogação entre preflight e dispatch e um consumidor direto de ferramenta identificado.",
+  "environment": {
+    "os": "registrar sistema e versão para os cenários de execução",
+    "software_revision": "78e1343b521b065849d9ccd471f98eaeb9a1d570",
+    "workspace": "repositórios Git descartáveis e dados sintéticos",
+    "provider": "nenhum provider necessário para a auditoria de dispatch"
+  },
+  "independent_variable": "Momento da autorização: antes da preparação, após esperas assíncronas e imediatamente antes do dispatch.",
+  "controls": [
+    "Manter usuário, workspace e chamada de ferramenta iguais enquanto varia somente o momento da revogação.",
+    "Usar barreiras determinísticas para ordenar revogação, espera e tentativa de efeito.",
+    "Registrar separadamente caminho exercitado, caminho inspecionado apenas no código e caminho sem evidência."
+  ],
+  "decision_rule": "A conclusão só pode cobrir caminhos identificados e exercitados. Um caminho de código não rastreado ou sem cenário de revogação deixa a hipótese inconclusiva; o estudo não generaliza para capabilities ou consumidores fora do SHA e da amostra.",
+  "conclusion": "not_run",
+  "evidence": [
+    {
+      "evidence_id": "tool-batch-preexecute-policy",
+      "kind": "source_code",
+      "source": "repo://78e1343b521b065849d9ccd471f98eaeb9a1d570/backend/engine/tool_batch.py#L117-L176",
+      "observation": "O código executa callbacks pre-execute e termina com validação síncrona do snapshot de policy.",
+      "limitations": [
+        "A referência descreve um trecho de um caminho; não prova que todos os consumidores passam por ele.",
+        "A auditoria ainda precisa rastrear chamadas diretas e efeitos dos handlers."
+      ]
+    },
+    {
+      "evidence_id": "tool-batch-dispatch-revalidation",
+      "kind": "source_code",
+      "source": "repo://78e1343b521b065849d9ccd471f98eaeb9a1d570/backend/engine/tool_batch.py#L252-L358",
+      "observation": "O caminho _run_one revalida autorização após operações assíncronas e antes de chamar o handler da ferramenta.",
+      "limitations": [
+        "Inspeção estática não valida revogação concorrente em runtime nem cobre outros dispatchers.",
+        "O estudo permanece planejado até executar cenários controlados."
+      ]
+    }
+  ],
+  "observed_results": [],
+  "limitations": [
+    "Estudo planejado: não foram executados cenários de concorrência ou revogação.",
+    "A evidência de código é limitada ao SHA e às linhas indicadas.",
+    "A validação de referência não equivale a prova formal nem a teste de segurança."
+  ],
+  "related_code": [
+    "backend/engine/tool_batch.py",
+    "backend/services/policy_compiler.py",
+    "backend/tools/"
+  ]
+}
