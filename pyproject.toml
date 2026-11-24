@@ -484,6 +484,7 @@ filterwarnings = [
 markers = [
     "e2e: testes end-to-end com APIs reais (requer env vars e gemini CLI)",
     "integration: testes de integração com APIs reais (requer GOOGLE_API_KEY + COHERE_API_KEY)",
+    "godot: regressões de projeto/gameplay Godot 4.6 — requer engine instalado",
     "lifecycle: testes de ciclo de vida sequenciais na session 1212",
     "stress: testes de carga e concorrência — sem APIs externas, apenas infra local",
     "storage: testes de integração de storage — Postgres, Redis, Qdrant, SQLite, LanceDB (sobe docker automaticamente)",

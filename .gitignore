@@ -335,6 +335,8 @@ htmlcov/
 .coverage
 dist/
 build/
+# Godot editor imports, layout and local cache
+.godot/
 /.tests
 /chat/.turbo
 
