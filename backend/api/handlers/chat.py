@@ -82,6 +82,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _usage_token_count(usage: dict[str, int | float], key: str) -> int | None:
+    """Return an integer token count, excluding cost and malformed values."""
+    value = usage.get(key)
+    return value if type(value) is int else None
+
+
 class SteerRunRequest(BaseModel):
     thread_id: str
     text: str
@@ -1179,9 +1185,9 @@ async def stream_chat(
                         user_id=user_id,
                         event_id=f"{_thread_usage_event_ids[thread_id]}:call:{index}",
                         model=model_id,
-                        input_tokens=usage.get("input_tokens"),
-                        output_tokens=usage.get("output_tokens"),
-                        total_tokens=usage.get("total_tokens"),
+                        input_tokens=_usage_token_count(usage, "input_tokens"),
+                        output_tokens=_usage_token_count(usage, "output_tokens"),
+                        total_tokens=_usage_token_count(usage, "total_tokens"),
                         estimated_cost_cents=(
                             estimate_cost_cents(model_id, usage)
                             if model_id is not None
@@ -1527,9 +1533,9 @@ async def resume_chat(
                         user_id=resume_user_id,
                         event_id=f"{model_base}:call:{index}",
                         model=model_id,
-                        input_tokens=usage.get("input_tokens"),
-                        output_tokens=usage.get("output_tokens"),
-                        total_tokens=usage.get("total_tokens"),
+                        input_tokens=_usage_token_count(usage, "input_tokens"),
+                        output_tokens=_usage_token_count(usage, "output_tokens"),
+                        total_tokens=_usage_token_count(usage, "total_tokens"),
                         estimated_cost_cents=(
                             estimate_cost_cents(model_id, usage)
                             if model_id is not None

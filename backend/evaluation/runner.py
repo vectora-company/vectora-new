@@ -36,18 +36,24 @@ class EvalReport(BaseModel):
     details: list[JsonObject] = Field(default_factory=list)
 
 
-def _total_tokens(usage: dict[str, int]) -> int:
+def _total_tokens(usage: dict[str, int | float]) -> int:
     """Calcula o total de tokens preferindo chaves consolidadas ou somando input/output."""
     if not usage:
         return 0
-    if "total" in usage:
-        return int(usage["total"])
-    if "total_tokens" in usage:
-        return int(usage["total_tokens"])
-    inp = int(usage.get("input", usage.get("prompt", usage.get("input_tokens", 0))))
-    out = int(
-        usage.get("output", usage.get("completion", usage.get("output_tokens", 0)))
-    )
+    for key in ("total", "total_tokens"):
+        value = usage.get(key)
+        if type(value) is int:
+            return value
+
+    def token_count(*keys: str) -> int:
+        for key in keys:
+            value = usage.get(key)
+            if type(value) is int:
+                return value
+        return 0
+
+    inp = token_count("input", "prompt", "input_tokens")
+    out = token_count("output", "completion", "output_tokens")
     return inp + out
 
 

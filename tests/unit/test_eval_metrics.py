@@ -108,7 +108,7 @@ def test_metric_keeps_usage_in_resource_dimension_and_provider_labels() -> None:
     ],
 )
 def test_output_token_rate_requires_provider_usage_and_elapsed_generation_window(
-    usage: dict[str, int] | None,
+    usage: dict[str, int | float] | None,
     first_text_ms: float | None,
     provider_duration_ms: float,
     expected: float | None,

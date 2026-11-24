@@ -570,6 +570,7 @@ def test_total_tokens_helper():
     assert _total_tokens({"total": 120}) == 120
     assert _total_tokens({"total_tokens": 150}) == 150
     assert _total_tokens({"input": 40, "output": 60}) == 100
+    assert _total_tokens({"input": 40, "output": 60, "cost_usd": 0.25}) == 100
 
 
 def test_cli_eval_compare(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

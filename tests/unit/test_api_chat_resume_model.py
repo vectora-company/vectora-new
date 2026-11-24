@@ -24,6 +24,14 @@ from backend.services.agent_factory import NativeAgent
 from backend.tools.registry import ToolRegistry
 
 
+def test_usage_token_count_excludes_non_integer_values() -> None:
+    from backend.api.handlers.chat import _usage_token_count
+
+    assert _usage_token_count({"input_tokens": 12}, "input_tokens") == 12
+    assert _usage_token_count({"cost_usd": 0.25}, "cost_usd") is None
+    assert _usage_token_count({"input_tokens": True}, "input_tokens") is None
+
+
 def _mock_registry(ws_id: str) -> MagicMock:
     ws = MagicMock()
     ws.id = ws_id
