@@ -9,7 +9,11 @@ import sys
 from pathlib import Path
 
 from backend.evaluation.cassette import Cassette
-from backend.evaluation.installed import run_installed_smoke
+from backend.evaluation.installed import (
+    InstalledSmokeSeriesReport,
+    run_installed_smoke,
+    run_installed_smoke_series,
+)
 from backend.evaluation.reports import (
     BenchmarkRun,
     aggregate_runs,
@@ -132,11 +136,25 @@ def _handle_run(args: argparse.Namespace) -> int:
 
 def _handle_smoke(args: argparse.Namespace) -> int:
     """Abre a instalação real e reporta startup ou verificação do renderer."""
-    report = run_installed_smoke(
-        args.app,
-        timeout_seconds=args.timeout_seconds,
-        ui_test=getattr(args, "action", "smoke") == "ui-smoke",
-    )
+    repeat_count = getattr(args, "repeat", 1)
+    ui_test = getattr(args, "action", "smoke") == "ui-smoke"
+    try:
+        if repeat_count == 1:
+            report = run_installed_smoke(
+                args.app,
+                timeout_seconds=args.timeout_seconds,
+                ui_test=ui_test,
+            )
+        else:
+            report = run_installed_smoke_series(
+                args.app,
+                repeat_count=repeat_count,
+                timeout_seconds=args.timeout_seconds,
+                ui_test=ui_test,
+            )
+    except ValueError as exc:
+        print(f"Repetição inválida: {exc}", file=sys.stderr)
+        return 1
     report_json = report.model_dump_json(indent=2)
     report_path = getattr(args, "report", None)
     if report_path:
@@ -151,6 +169,18 @@ def _handle_smoke(args: argparse.Namespace) -> int:
 
     if getattr(args, "output", "human") == "json":
         print(report_json)
+    elif isinstance(report, InstalledSmokeSeriesReport):
+        print(
+            f"Evaluation Lab: {report.status} "
+            f"({report.repeat_count} repetições, run_id={report.run_id})"
+        )
+        for distribution in report.distributions:
+            print(
+                f"{distribution.stage}/{distribution.name}: "
+                f"n={distribution.sample_count}/{distribution.attempted_count}, "
+                f"média={distribution.mean}, p50={distribution.p50}, "
+                f"p95={distribution.p95} {distribution.unit}"
+            )
     elif getattr(args, "action", "smoke") == "ui-smoke":
         print(
             f"Evaluation Lab UI: {report.status} "

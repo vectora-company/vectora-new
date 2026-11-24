@@ -716,6 +716,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Limite para a inicialização e o encerramento do app (padrão: 120)",
     )
     eval_smoke.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Número de perfis novos a iniciar (2 a 100 gera distribuições)",
+    )
+    eval_smoke.add_argument(
         "--report",
         default=None,
         help="Salva o relatório estruturado neste caminho",
@@ -736,6 +742,12 @@ def _build_parser() -> argparse.ArgumentParser:
         type=float,
         default=120,
         help="Limite para iniciar, inspecionar e encerrar o app (padrão: 120)",
+    )
+    eval_ui_smoke.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Número de perfis novos a iniciar (2 a 100 gera distribuições)",
     )
     eval_ui_smoke.add_argument(
         "--report",

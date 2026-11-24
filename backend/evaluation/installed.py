@@ -9,6 +9,7 @@ import re
 import shutil
 import signal
 import socket
+import statistics
 import subprocess  # nosec B404
 import tempfile
 import threading
@@ -107,6 +108,46 @@ class InstalledSmokeReport(BaseModel):
     provenance: RunProvenance
     metrics: list[BenchmarkMetric] = Field(default_factory=list)
     diagnostics: list[EvaluationDiagnostic] = Field(default_factory=list)
+
+
+class InstalledSmokeDistribution(BaseModel):
+    """Distribuição de medições válidas em uma série do app instalado."""
+
+    stage: str
+    name: str
+    dimension: str
+    unit: str
+    values: list[float]
+    sample_count: int = Field(ge=0)
+    attempted_count: int = Field(ge=1)
+    mean: float | None = None
+    standard_deviation: float | None = None
+    p50: float | None = None
+    p95: float | None = None
+    confidence_95_low: float | None = None
+    confidence_95_high: float | None = None
+
+
+class InstalledSmokeSeriesReport(BaseModel):
+    """Repetições mantêm cada resultado e resumem somente medições válidas."""
+
+    schema_version: Literal[1] = 1
+    evidence_level: Literal["installed_app"] = "installed_app"
+    run_id: str
+    scenario_id: str
+    status: RunStatus
+    started_at: str
+    finished_at: str
+    repeat_count: int = Field(ge=2, le=100)
+    profile: Literal["fresh_profile"] = "fresh_profile"
+    samples: list[InstalledSmokeReport]
+    distributions: list[InstalledSmokeDistribution]
+    limitations: list[str] = Field(
+        default_factory=lambda: [
+            "Cada repetição usa perfil e workspace novos; o cache do sistema operacional não é controlado.",
+            "Distribuições incluem apenas medições válidas de amostras com status passed.",
+        ]
+    )
 
 
 def _build_launch_command(app_path: Path, *, ui_test: bool = False) -> list[str]:
@@ -817,3 +858,97 @@ def run_installed_smoke(  # noqa: PLR0911
             renderer_reload_status=renderer_reload_status,
             renderer_reload_duration_ms=renderer_reload_duration_ms,
         )
+
+
+def _percentile(values: list[float], percentile: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * percentile
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
+
+
+def run_installed_smoke_series(
+    app_path: str | Path,
+    *,
+    repeat_count: int,
+    timeout_seconds: float = 120,
+    ui_test: bool = False,
+) -> InstalledSmokeSeriesReport:
+    """Run a finite number of isolated app samples with a timeout per sample."""
+    if not 2 <= repeat_count <= 100:
+        raise ValueError("repeat_count precisa estar entre 2 e 100")
+    started_at = datetime.now(UTC)
+    samples = [
+        run_installed_smoke(
+            app_path,
+            timeout_seconds=timeout_seconds,
+            ui_test=ui_test,
+        )
+        for _ in range(repeat_count)
+    ]
+    finished_at = datetime.now(UTC)
+    scenario_id = "installed-app-ui" if ui_test else "installed-app-startup"
+    statuses = [sample.status for sample in samples]
+    if all(status == "passed" for status in statuses):
+        status: RunStatus = "passed"
+    elif "failed" in statuses:
+        status = "failed"
+    elif "blocked" in statuses:
+        status = "blocked"
+    elif "skipped" in statuses:
+        status = "skipped"
+    else:
+        status = "not_run"
+
+    grouped: dict[tuple[str, str, str, str], list[float]] = {}
+    for sample in samples:
+        if sample.status != "passed":
+            continue
+        for metric in sample.metrics:
+            if metric.status != "measured" or metric.value is None:
+                continue
+            key = (metric.stage, metric.name, metric.dimension, metric.unit)
+            grouped.setdefault(key, []).append(metric.value)
+
+    distributions: list[InstalledSmokeDistribution] = []
+    for (stage, name, dimension, unit), values in sorted(grouped.items()):
+        count = len(values)
+        standard_deviation = statistics.stdev(values) if count > 1 else None
+        margin = (
+            1.96 * standard_deviation / (count**0.5)
+            if standard_deviation is not None
+            else None
+        )
+        mean = statistics.fmean(values)
+        distributions.append(
+            InstalledSmokeDistribution(
+                stage=stage,
+                name=name,
+                dimension=dimension,
+                unit=unit,
+                values=values,
+                sample_count=count,
+                attempted_count=repeat_count,
+                mean=mean,
+                standard_deviation=standard_deviation,
+                p50=_percentile(values, 0.5),
+                p95=_percentile(values, 0.95),
+                confidence_95_low=mean - margin if margin is not None else None,
+                confidence_95_high=mean + margin if margin is not None else None,
+            )
+        )
+
+    return InstalledSmokeSeriesReport(
+        run_id=uuid4().hex,
+        scenario_id=scenario_id,
+        status=status,
+        started_at=started_at.isoformat(),
+        finished_at=finished_at.isoformat(),
+        repeat_count=repeat_count,
+        samples=samples,
+        distributions=distributions,
+    )

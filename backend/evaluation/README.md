@@ -99,6 +99,14 @@ evidência de provider. O app e os processos filhos são encerrados ao terminar 
 verificação; o limite total inclui inicialização, interação e encerramento. O
 endpoint não é habilitado no smoke comum nem em uso normal.
 
+Para coletar uma distribuição, acrescente `--repeat N` (de 2 a 100). Cada
+amostra inicia outro processo com perfil e workspace novos; o timeout vale para
+cada execução. A série preserva relatórios e status individuais e agrega somente
+métricas válidas de amostras aprovadas, com média, desvio, p50/p95 e intervalo
+normal aproximado quando há pelo menos duas observações. O perfil é novo em cada
+amostra, mas o cache do sistema operacional não é controlado; a série não
+representa uma execução fria de hardware.
+
 O backend recebe o mesmo `run_id` e pode registrar etapas estruturadas para
 migrations SQLite, tabela de sessões, storage configurado, worker de embeddings,
 scheduler e restauração de llama.cpp. O NATS reporta `ready`, `failed` ou
