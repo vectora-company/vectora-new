@@ -200,7 +200,9 @@ def _handle_scenarios(args: argparse.Namespace) -> int:
         for result in results:
             readiness = result["readiness"]
             print(
-                f"{readiness['status']}: {readiness['scenario_id']} — {readiness['reason']}"
+                f"{readiness['status']}: {readiness['scenario_id']} "
+                f"(maturidade={readiness['capability_maturity']}) — "
+                f"{readiness['reason']}"
             )
     return 0
 
@@ -230,7 +232,8 @@ def _handle_scenario(args: argparse.Namespace) -> int:
     else:
         print(
             f"Cenário {report.scenario_id}: {report.status} "
-            f"(evidência={report.evidence_level}, run_id={report.run_id})"
+            f"(maturidade={report.capability_maturity}, "
+            f"evidência={report.evidence_level}, run_id={report.run_id})"
         )
         if report.reason:
             print(report.reason, file=sys.stderr)

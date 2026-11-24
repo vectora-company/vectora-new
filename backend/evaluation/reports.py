@@ -22,6 +22,7 @@ Profile = Literal["cold", "warm"]
 EvidenceLevel = Literal[
     "contract", "fixture_replay", "fixture_runner", "installed_app", "live_provider"
 ]
+CapabilityMaturity = Literal["unassessed", "experimental", "beta", "stable"]
 
 
 class BenchmarkRun(BaseModel):
@@ -29,6 +30,7 @@ class BenchmarkRun(BaseModel):
 
     run_id: str
     scenario_id: str
+    capability_maturity: CapabilityMaturity = "unassessed"
     status: RunStatus
     evidence_level: EvidenceLevel
     profile: Profile
@@ -216,6 +218,7 @@ def compare_runs(
     checks = (
         ("evidence_level", lambda run: run.evidence_level),
         ("scenario_id", lambda run: run.scenario_id),
+        ("capability_maturity", lambda run: run.capability_maturity),
         ("fixture_digest", lambda run: run.fixture_digest),
         (
             "host",
@@ -376,6 +379,7 @@ def export_csv(
             "report_command",
             "run_id",
             "scenario_id",
+            "capability_maturity",
             "status",
             "evidence_level",
             "profile",
@@ -414,6 +418,7 @@ def export_csv(
                 "report_command": json.dumps(report.command, ensure_ascii=False),
                 "run_id": run.run_id,
                 "scenario_id": run.scenario_id,
+                "capability_maturity": run.capability_maturity,
                 "status": run.status,
                 "evidence_level": run.evidence_level,
                 "profile": run.profile,

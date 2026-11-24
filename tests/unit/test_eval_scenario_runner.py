@@ -61,6 +61,7 @@ def test_fixture_runner_reports_json_markdown_and_cleans_workspace(
 
     assert report.status == "passed"
     assert report.evidence_level == "fixture_runner"
+    assert report.capability_maturity == "unassessed"
     assert report.provider_evidence == "not_captured"
     assert len(report.assertions) == 2
     assert report.assertions[0].status == "passed"
@@ -71,7 +72,9 @@ def test_fixture_runner_reports_json_markdown_and_cleans_workspace(
     saved = json.loads(json_path.read_text(encoding="utf-8"))
     assert saved["status"] == "passed"
     assert saved["evidence_level"] == "fixture_runner"
-    assert "não prova o app instalado" in markdown_path.read_text(encoding="utf-8")
+    markdown = markdown_path.read_text(encoding="utf-8")
+    assert "Maturidade da capability: `unassessed`" in markdown
+    assert "não prova o app instalado" in markdown
 
 
 @pytest.mark.parametrize(

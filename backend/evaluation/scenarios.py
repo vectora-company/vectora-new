@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 ScenarioStatus = Literal["passed", "failed", "blocked", "skipped", "not_run"]
+CapabilityMaturity = Literal["unassessed", "experimental", "beta", "stable"]
 _CATALOG = Path(__file__).parent / "scenarios" / "v1" / "catalog.json"
 
 
@@ -20,6 +21,7 @@ class BenchmarkScenario(BaseModel):
     scenario_id: str
     category: str
     capability: str
+    capability_maturity: CapabilityMaturity = "unassessed"
     task: str
     fixture: str
     fixture_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -38,6 +40,7 @@ class ScenarioReadiness(BaseModel):
     """Resultado de prontidão sem alegar que o cenário foi executado."""
 
     scenario_id: str
+    capability_maturity: CapabilityMaturity = "unassessed"
     status: ScenarioStatus
     reason: str | None = None
 
@@ -82,12 +85,14 @@ def assess_scenario_readiness(
     if missing:
         return ScenarioReadiness(
             scenario_id=scenario.scenario_id,
+            capability_maturity=scenario.capability_maturity,
             status="blocked",
             reason=f"capabilities ausentes: {', '.join(missing)}",
         )
     if scenario.requires_provider and not provider_configured:
         return ScenarioReadiness(
             scenario_id=scenario.scenario_id,
+            capability_maturity=scenario.capability_maturity,
             status="blocked",
             reason="provider necessário não está configurado",
         )
@@ -98,17 +103,20 @@ def assess_scenario_readiness(
     ):
         return ScenarioReadiness(
             scenario_id=scenario.scenario_id,
+            capability_maturity=scenario.capability_maturity,
             status="blocked",
             reason="a política do cenário não permite provider remoto",
         )
     if scenario.requires_provider and provider_is_remote and not remote_provider_opt_in:
         return ScenarioReadiness(
             scenario_id=scenario.scenario_id,
+            capability_maturity=scenario.capability_maturity,
             status="skipped",
             reason="opt-in para provider remoto não foi concedido",
         )
     return ScenarioReadiness(
         scenario_id=scenario.scenario_id,
+        capability_maturity=scenario.capability_maturity,
         status="not_run",
         reason="pré-condições disponíveis; executor do fluxo ainda não foi iniciado",
     )

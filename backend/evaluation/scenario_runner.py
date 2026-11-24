@@ -19,7 +19,12 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, model_validator
 
-from backend.evaluation.scenarios import _CATALOG, BenchmarkScenario, load_scenarios
+from backend.evaluation.scenarios import (
+    _CATALOG,
+    BenchmarkScenario,
+    CapabilityMaturity,
+    load_scenarios,
+)
 
 AssertionStatus = Literal["passed", "failed", "blocked", "skipped", "unsupported"]
 ScenarioStatus = Literal["passed", "failed", "blocked", "skipped", "unsupported"]
@@ -75,6 +80,7 @@ class ScenarioRunnerReport(BaseModel):
     evidence_level: Literal["fixture_runner"] = "fixture_runner"
     run_id: str
     scenario_id: str
+    capability_maturity: CapabilityMaturity = "unassessed"
     status: ScenarioStatus
     reason: str | None = None
     started_at: str
@@ -432,6 +438,7 @@ def _make_report(
     return ScenarioRunnerReport(
         run_id=run_id,
         scenario_id=scenario.scenario_id,
+        capability_maturity=scenario.capability_maturity,
         status=status,
         reason=reason,
         started_at=started.isoformat(),
@@ -460,6 +467,7 @@ def write_scenario_report(
             f"# Cenário {report.scenario_id}",
             "",
             f"- Status: `{report.status}`",
+            f"- Maturidade da capability: `{report.capability_maturity}`",
             f"- Nível de evidência: `{report.evidence_level}`",
             f"- Run ID: `{report.run_id}`",
             f"- Fixture SHA-256: `{report.fixture_sha256}`",

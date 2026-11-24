@@ -211,7 +211,7 @@ def test_json_csv_exports_preserve_schema_status_and_provenance() -> None:
     assert json_data["runs"][0]["provenance"]["source_revision"] == "sha-a"
     assert json_data["runs"][0]["metrics"][0]["unit"] == "ms"
     assert (
-        "report_id,report_command,run_id,scenario_id,status,evidence_level,profile"
+        "report_id,report_command,run_id,scenario_id,capability_maturity,status"
         in csv_data
     )
     assert "run-1" in csv_data

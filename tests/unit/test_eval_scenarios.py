@@ -26,6 +26,7 @@ def test_versioned_catalog_covers_requested_core_flow_groups() -> None:
         "memory",
     }
     assert all(scenario.fixture_sha256 for scenario in scenarios)
+    assert {scenario.capability_maturity for scenario in scenarios} == {"unassessed"}
     assert all(scenario.setup and scenario.teardown for scenario in scenarios)
     assert all(scenario.success_criteria for scenario in scenarios)
 
@@ -58,6 +59,7 @@ def test_readiness_blocks_missing_provider_without_fake_pass() -> None:
     )
 
     assert result.status == "blocked"
+    assert result.capability_maturity == "unassessed"
     assert "provider" in (result.reason or "")
 
 
@@ -86,6 +88,7 @@ def test_ready_catalog_item_is_not_reported_as_executed() -> None:
     )
 
     assert result.status == "not_run"
+    assert result.capability_maturity == "unassessed"
 
 
 def test_eval_scenarios_cli_lists_without_running(
@@ -114,3 +117,7 @@ def test_scenario_plan_json_is_not_execution_evidence(
     assert plan["executable_started"] is False
     assert plan["report_written"] is False
     assert len(plan["scenarios"]) == 7
+    assert all(
+        item["readiness"]["capability_maturity"] == "unassessed"
+        for item in plan["scenarios"]
+    )

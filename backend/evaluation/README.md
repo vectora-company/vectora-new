@@ -70,7 +70,10 @@ executável e não grava relatório.
 
 O relatório JSON e Markdown marca `fixture_runner`, separado do `fixture_replay`
 de cassetes, e inclui o hash da fixture,
-digest do comando, `run_id`, status por critério e duração. Ele não comprova que
+digest do comando, `run_id`, maturidade da capability, status por critério e
+duração. Maturidade (`unassessed`, `experimental`, `beta` ou `stable`) é
+independente do resultado da execução; o catálogo mantém capabilities sem
+validação real como `unassessed`. O runner não comprova que
 o app instalado, a interface ou um provider foram exercitados; essa evidência
 não é capturada nesse modo. O sistema operacional também não isola a rede do
 subprocesso, então use um runner offline e fixtures sintéticas. Para verificar
