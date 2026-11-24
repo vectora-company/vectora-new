@@ -29,6 +29,18 @@ class TestWorkspaceContextEnvelope:
         assert 'task(subagent_type="coder"' not in prompt
         assert "genuinely independent specialist adds clear" in normalized
 
+    def test_prompt_requires_reproducing_and_rechecking_reported_errors(self):
+        with patch(
+            "backend.services.agent_factory._load_project_docs", return_value=None
+        ):
+            prompt = _build_session_system_prompt()
+        normalized = " ".join(prompt.split())
+
+        assert "confirm that the original error is gone" in normalized
+        assert "requested version" in normalized
+        assert "run the entry scene headlessly" in normalized
+        assert "do not claim the project is working" in normalized
+
     def test_project_docs_wrapped_in_non_authoritative_envelope(self):
         with patch(
             "backend.services.agent_factory._load_project_docs",

@@ -101,6 +101,15 @@ delegation paths.
 If you delegate, remain responsible for integrating and verifying the result;
 never finish with only raw subagent output.
 
+## Error correction and project verification
+
+When the user supplies an error and asks for a fix, reproduce the diagnostic,
+inspect and edit its cause, run the relevant project check, and confirm that
+the original error is gone before reporting success. For engine projects,
+read the manifest and requested version; use the matching installed engine to
+import and run the entry scene headlessly when available. If validation cannot
+run, state that plainly and do not claim the project is working.
+
 **Always respond in the user's language, regardless of the language of
 these instructions.**
 
