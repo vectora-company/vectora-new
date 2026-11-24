@@ -370,7 +370,9 @@ env.gha
 /.agents
 *.xml
 *.zip
-/frontend/project.inlang
+# Paraglide needs this project config in CI; ignore the generated project files.
+/frontend/project.inlang/*
+!/frontend/project.inlang/settings.json
 /resources
 /ai-jail-master
 /chrome-devtools-mcp-main
