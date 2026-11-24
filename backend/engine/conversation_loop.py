@@ -732,6 +732,33 @@ def _safe_evaluation_label(value: object) -> str | None:
     return value
 
 
+def _output_tokens_per_second(
+    usage: dict[str, int] | None,
+    *,
+    first_text_ms: float | None,
+    provider_duration_ms: float,
+) -> tuple[float | None, str | None]:
+    """Measure generated-token rate only when usage and stream timing exist."""
+    output_tokens = next(
+        (
+            usage[key]
+            for key in ("output_tokens", "completion_tokens", "output", "completion")
+            if usage is not None and key in usage
+        ),
+        None,
+    )
+    if not isinstance(output_tokens, int) or isinstance(output_tokens, bool):
+        return None, "provider não informou tokens de saída"
+    if output_tokens < 0:
+        return None, "provider informou contador de tokens inválido"
+    if first_text_ms is None:
+        return None, "stream terminou sem emitir texto"
+    generation_ms = provider_duration_ms - first_text_ms
+    if generation_ms <= 0:
+        return None, "janela de geração insuficiente para calcular taxa"
+    return output_tokens / (generation_ms / 1000), None
+
+
 async def _record_evaluation_provenance(
     session_store: Any,
     *,
@@ -1600,6 +1627,7 @@ async def run_conversation(  # noqa: PLR0911
                 runtime_version=str(settings.version),
             )
             metric_identity = f"provider:{_iteracao}"
+            provider_duration_ms = (time.monotonic() - provider_started_at) * 1000
             await _record_evaluation_metric(
                 session_store,
                 run_id=config.run_id,
@@ -1607,7 +1635,7 @@ async def run_conversation(  # noqa: PLR0911
                 stage="provider_request",
                 capability="chat.generate",
                 name="duration",
-                value=(time.monotonic() - provider_started_at) * 1000,
+                value=provider_duration_ms,
                 unit="ms",
                 dimension="performance",
                 source="conversation_loop.chat_client.astream",
@@ -1673,6 +1701,27 @@ async def run_conversation(  # noqa: PLR0911
                     reason="provider não informou esse contador de tokens",
                     identity=f"{metric_identity}:{metric_name}",
                 )
+            token_rate, token_rate_reason = _output_tokens_per_second(
+                stream_usage,
+                first_text_ms=first_token_duration_ms,
+                provider_duration_ms=provider_duration_ms,
+            )
+            await _record_evaluation_metric(
+                session_store,
+                run_id=config.run_id,
+                scenario_id=scenario_id,
+                stage="provider_request",
+                capability="chat.generate",
+                name="output_tokens_per_second",
+                value=token_rate,
+                unit="tokens/s",
+                dimension="performance",
+                source="provider.usage+conversation_loop.chat_client.astream",
+                provider=provider_label,
+                model=model_label,
+                reason=token_rate_reason,
+                identity=f"{metric_identity}:output-tokens-per-second",
+            )
             await _record_evaluation_metric(
                 session_store,
                 run_id=config.run_id,

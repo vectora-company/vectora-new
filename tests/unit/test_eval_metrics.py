@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from backend.engine.conversation_loop import _output_tokens_per_second
 from backend.evaluation.metrics import (
     BenchmarkMetric,
     EvaluationRecorder,
@@ -82,6 +83,48 @@ def test_metric_keeps_usage_in_resource_dimension_and_provider_labels() -> None:
     assert metric.dimension == "resources"
     assert metric.provider == "local"
     assert metric.model == "test-model"
+
+
+@pytest.mark.parametrize(
+    ("usage", "first_text_ms", "provider_duration_ms", "expected", "reason"),
+    [
+        ({"output_tokens": 30}, 100.0, 1100.0, 30.0, None),
+        (None, 100.0, 1100.0, None, "não informou tokens de saída"),
+        ({"output_tokens": 30}, None, 1100.0, None, "sem emitir texto"),
+        (
+            {"output_tokens": 30},
+            1100.0,
+            1100.0,
+            None,
+            "janela de geração insuficiente",
+        ),
+        (
+            {"output_tokens": -1},
+            100.0,
+            1100.0,
+            None,
+            "contador de tokens inválido",
+        ),
+    ],
+)
+def test_output_token_rate_requires_provider_usage_and_elapsed_generation_window(
+    usage: dict[str, int] | None,
+    first_text_ms: float | None,
+    provider_duration_ms: float,
+    expected: float | None,
+    reason: str | None,
+) -> None:
+    value, actual_reason = _output_tokens_per_second(
+        usage,
+        first_text_ms=first_text_ms,
+        provider_duration_ms=provider_duration_ms,
+    )
+
+    assert value == expected
+    if reason:
+        assert reason in (actual_reason or "")
+    else:
+        assert actual_reason is None
 
 
 def test_provenance_hashes_safe_configuration_without_storing_values() -> None:

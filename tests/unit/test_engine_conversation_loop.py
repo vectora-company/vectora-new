@@ -476,6 +476,13 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
             for item in metrics
         )
         assert any(
+            item.get("stage") == "provider_request"
+            and item.get("name") == "output_tokens_per_second"
+            and item.get("status") == "unavailable"
+            and item.get("value") is None
+            for item in metrics
+        )
+        assert any(
             item.get("stage") == "tool_execution" and item.get("name") == "duration"
             for item in metrics
         )

@@ -93,3 +93,8 @@ inclui valores de configuração nem credenciais.
 O relatório também captura versão do Vectora, Electron, Chromium e release do
 sistema operacional a partir da execução instalada. Isso identifica a pilha
 testada; não infere o SHA do código-fonte quando o artefato não o informa.
+
+Com `evaluation_recording_enabled` e `run_id`, chamadas do provider registram
+tokens de entrada/saída, TTFT e `output_tokens_per_second`. A taxa usa apenas
+tokens de saída informados pelo provider e a janela entre o primeiro texto e o
+fim do stream; sem ambos, o relatório guarda `unavailable` com motivo.
