@@ -119,4 +119,34 @@ describe("Render Hints — registry dispatch", () => {
     render(<ToolCallRenderer tool={tool} isStreaming={false} />);
     expect(screen.getByText(/Ver output/i)).toBeDefined();
   });
+
+  it("collapses long outputs by default and keeps a copy action available", () => {
+    const tool = makeTool({
+      renderHint: "terminal_output",
+      output: "linha de saída longa ".repeat(80),
+    });
+    const { container } = render(
+      <ToolCallRenderer tool={tool} isStreaming={false} />,
+    );
+
+    const summary = screen.getByText(/show full output/i);
+    expect(summary.closest("details")?.open).toBe(false);
+    expect(screen.getByRole("button", { name: /copy output/i })).toBeDefined();
+  });
+
+  it("keeps error output expanded even when it is long", () => {
+    const tool = makeTool({
+      renderHint: "terminal_output",
+      isError: true,
+      output: "erro ".repeat(80),
+    });
+    const { container } = render(
+      <ToolCallRenderer tool={tool} isStreaming={false} />,
+    );
+
+    expect(container.querySelectorAll("details")).toHaveLength(1);
+    expect(container.querySelector(".border-zinc-800")?.textContent).toContain(
+      "erro",
+    );
+  });
 });

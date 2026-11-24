@@ -12,8 +12,8 @@
 
 "use client";
 
-import { memo } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { memo, useState } from "react";
+import { Check, Copy, Download, Loader2 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { m } from "@/lib/paraglide/messages";
@@ -609,8 +609,23 @@ export const ToolCallRenderer = memo(function ToolCallRenderer({
   tool,
   isStreaming,
 }: ToolCallRendererProps) {
+  const [outputCopied, setOutputCopied] = useState(false);
   const hint: RenderHint = tool.renderHint ?? "json";
   const renderer = RENDERERS[hint] ?? RENDERERS.json;
+  const outputText =
+    typeof tool.output === "string"
+      ? tool.output
+      : (JSON.stringify(tool.output, null, 2) ?? String(tool.output));
+  const outputIsLong =
+    tool.output != null &&
+    !tool.isError &&
+    (outputText.length > 1200 || outputText.split("\n").length > 18);
+
+  async function copyOutput() {
+    await navigator.clipboard.writeText(outputText);
+    setOutputCopied(true);
+    window.setTimeout(() => setOutputCopied(false), 1500);
+  }
 
   return (
     <div
@@ -678,7 +693,39 @@ export const ToolCallRenderer = memo(function ToolCallRenderer({
       {/* Output — renderizado pelo renderer do hint */}
       {tool.output != null && (
         <div className="mt-1.5 border-t border-border/40 pt-1.5">
-          {renderer(tool.output, tool.name)}
+          {outputIsLong ? (
+            <div className="flex items-start gap-2">
+              <details className="min-w-0 flex-1">
+                <summary className="cursor-pointer text-[11px] text-muted-foreground hover:opacity-80">
+                  {m.tool_output_expand()}
+                  <span className="ml-2 inline-block max-w-[min(48vw,32rem)] truncate align-bottom font-mono opacity-70">
+                    {outputText.slice(0, 120)}
+                  </span>
+                </summary>
+                <div className="mt-1">{renderer(tool.output, tool.name)}</div>
+              </details>
+              <button
+                type="button"
+                onClick={() => void copyOutput()}
+                className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={
+                  outputCopied ? m.tool_output_copied() : m.tool_output_copy()
+                }
+                title={
+                  outputCopied ? m.tool_output_copied() : m.tool_output_copy()
+                }
+              >
+                {outputCopied ? (
+                  <Check className="h-3 w-3" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+                {outputCopied ? m.tool_output_copied() : m.tool_output_copy()}
+              </button>
+            </div>
+          ) : (
+            renderer(tool.output, tool.name)
+          )}
         </div>
       )}
     </div>
