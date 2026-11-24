@@ -48,6 +48,7 @@ import * as os from "os";
 import * as path from "path";
 import { randomInt, randomUUID } from "crypto";
 import { Readable } from "stream";
+import { vectoraBuildInfo } from "./build-info.generated.js";
 // tree-kill ships its own types — no @types/tree-kill needed.
 import treeKill = require("tree-kill");
 import { parseSetCookieHeader, buildCookieHeader } from "./cookie-utils.js";
@@ -1930,7 +1931,7 @@ app.whenReady().then(async () => {
   emitSmokeStage("electron_ready");
   if (installedSmokeTestMode) {
     console.log(
-      `VECTORA_EVAL_APP:${app.getVersion()}:${process.versions.electron}:${process.versions.chrome}`,
+      `VECTORA_EVAL_APP:${app.getVersion()}:${process.versions.electron}:${process.versions.chrome}:${vectoraBuildInfo.sourceRevision ?? "unknown"}:${vectoraBuildInfo.sourceDirty === null ? "unknown" : vectoraBuildInfo.sourceDirty ? "dirty" : "clean"}`,
     );
   }
   void logActualGraphicsInfo("app-ready");

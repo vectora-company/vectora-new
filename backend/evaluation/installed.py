@@ -32,7 +32,10 @@ _SENSITIVE_ENV = re.compile(
 _WINDOW_READY_MARKER = "VECTORA_ELECTRON_WINDOW_READY"
 _SMOKE_PASSED_MARKER = "Vectora startup smoke test passed; closing the app."
 _STAGE_MARKER = re.compile(r"^VECTORA_EVAL_STAGE:([a-z_]+):([0-9]+(?:\.[0-9]+)?)$")
-_APP_METADATA_MARKER = re.compile(r"^VECTORA_EVAL_APP:([^:\s]+):([^:\s]+):([^:\s]+)$")
+_APP_METADATA_MARKER = re.compile(
+    r"^VECTORA_EVAL_APP:([^:\s]+):([^:\s]+):([^:\s]+)"
+    r"(?::([0-9a-f]{7,64}|unknown):(clean|dirty|unknown))?$"
+)
 _BACKEND_STAGE_MARKER = re.compile(
     r"VECTORA_EVAL_BACKEND_STAGE:([0-9a-f]{32}):([a-z_]+):"
     r"([0-9]+(?:\.[0-9]+)?):(ready|failed|skipped)"
@@ -86,6 +89,8 @@ class InstalledSmokeReport(BaseModel):
     app_version: str | None = None
     electron_version: str | None = None
     chromium_version: str | None = None
+    source_revision: str | None = None
+    source_dirty: bool | None = None
     stage_timings_ms: dict[str, float] = Field(default_factory=dict)
     backend_stages: dict[str, BackendStageRecord] = Field(default_factory=dict)
     provenance: RunProvenance
@@ -201,7 +206,7 @@ def _report(
     exit_code: int | None,
     stage_timings_ms: dict[str, float] | None = None,
     backend_stages: dict[str, BackendStageRecord] | None = None,
-    app_metadata: tuple[str, str, str] | None = None,
+    app_metadata: tuple[str, str, str, str | None, bool | None] | None = None,
 ) -> InstalledSmokeReport:
     """Create a terminal report without copying application logs or user data."""
     finished_ns = time.monotonic_ns()
@@ -259,7 +264,13 @@ def _report(
         )
         for stage, record in sorted(backend_stage_records.items())
     ]
-    app_version, electron_version, chromium_version = app_metadata or (None, None, None)
+    (
+        app_version,
+        electron_version,
+        chromium_version,
+        source_revision,
+        source_dirty,
+    ) = app_metadata or (None, None, None, None, None)
     return InstalledSmokeReport(
         run_id=run_id,
         status=status,
@@ -277,6 +288,8 @@ def _report(
         app_version=app_version,
         electron_version=electron_version,
         chromium_version=chromium_version,
+        source_revision=source_revision,
+        source_dirty=source_dirty,
         stage_timings_ms=timings,
         backend_stages=backend_stage_records,
         provenance=RunProvenance(
@@ -284,6 +297,7 @@ def _report(
             scenario_id="installed-app-startup",
             started_at=started_at.isoformat(),
             runtime_version=app_version,
+            source_revision=source_revision,
             host_system=platform.system(),
             host_machine=platform.machine() or "unknown",
         ),
@@ -386,7 +400,7 @@ def run_installed_smoke(  # noqa: PLR0911
         markers = {"window_ready": False, "passed": False}
         stage_timings_ms: dict[str, float] = {}
         backend_stages: dict[str, BackendStageRecord] = {}
-        app_metadata: tuple[str, str, str] | None = None
+        app_metadata: tuple[str, str, str, str | None, bool | None] | None = None
         marker_lock = threading.Lock()
         try:
             process = subprocess.Popen(  # noqa: S603  # nosec B603
@@ -433,6 +447,14 @@ def run_installed_smoke(  # noqa: PLR0911
                             metadata_match.group(1),
                             metadata_match.group(2),
                             metadata_match.group(3),
+                            None
+                            if metadata_match.group(4) in (None, "unknown")
+                            else metadata_match.group(4),
+                            {
+                                "clean": False,
+                                "dirty": True,
+                                "unknown": None,
+                            }.get(metadata_match.group(5)),
                         )
                     backend_match = _BACKEND_STAGE_MARKER.search(line)
                     if backend_match and backend_match.group(1) == run_id:

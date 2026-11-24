@@ -352,6 +352,7 @@ AbilitySystem_repo/
 /desktop/dist-electron
 /desktop/build-resources
 /frontend/dist-electron/
+/frontend/electron/src/build-info.generated.ts
 /frontend/electron/build-resources/dev-cert.pfx
 **/vectora-release-key/
 **/cert_privado.pfx

@@ -38,7 +38,7 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
         "assert 'GPG_PASSPHRASE' not in os.environ\n"
         "assert 'VECTORA_LICENSE_BYPASS' not in os.environ\n"
         "run_id = os.environ['VECTORA_EVAL_RUN_ID']\n"
-        "print('VECTORA_EVAL_APP:0.1.26:45.3.3:144.0.7559.60')\n"
+        "print('VECTORA_EVAL_APP:0.1.26:45.3.3:144.0.7559.60:' + 'a' * 40 + ':dirty')\n"
         "print(f'VECTORA_EVAL_BACKEND_STAGE:{run_id}:embedding_worker:35.250:ready')\n"
         "print(f'VECTORA_EVAL_BACKEND_STAGE:{run_id}:nats_sidecar:45.500:skipped')\n"
         "print('VECTORA_EVAL_BACKEND_STAGE:' + '0' * 32 + ':fake:1.000:failed')\n"
@@ -70,6 +70,9 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
     assert report.electron_version == "45.3.3"
     assert report.chromium_version == "144.0.7559.60"
     assert report.provenance.runtime_version == "0.1.26"
+    assert report.source_revision == "a" * 40
+    assert report.source_dirty is True
+    assert report.provenance.source_revision == "a" * 40
     assert "release" in report.host
     assert report.diagnostics[0].status == "passed"
     assert report.stage_timings_ms["backend_ready"] == 12.5
@@ -105,6 +108,30 @@ def test_missing_installed_app_is_blocked(tmp_path: Path) -> None:
 
     assert report.status == "blocked"
     assert "não existe" in (report.reason or "")
+
+
+def test_legacy_app_metadata_keeps_versions_when_build_sha_is_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = tmp_path / "vectora-app"
+    app.touch()
+    script = tmp_path / "legacy-metadata.py"
+    script.write_text(
+        "print('VECTORA_EVAL_APP:0.1.25:45.3.2:143.0.7499.40')\n"
+        "print('VECTORA_ELECTRON_WINDOW_READY')\n"
+        "print('Vectora startup smoke test passed; closing the app.')\n",
+        encoding="utf-8",
+    )
+    _python_app(monkeypatch, script)
+
+    report = installed.run_installed_smoke(app, timeout_seconds=5)
+
+    assert report.status == "passed"
+    assert report.app_version == "0.1.25"
+    assert report.electron_version == "45.3.2"
+    assert report.chromium_version == "143.0.7499.40"
+    assert report.source_revision is None
+    assert report.source_dirty is None
 
 
 def test_macos_app_bundle_resolves_its_installed_executable(tmp_path: Path) -> None:
