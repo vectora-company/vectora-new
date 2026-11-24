@@ -50,6 +50,9 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
     report = installed.run_installed_smoke(app, timeout_seconds=5)
 
     assert report.status == "passed"
+    assert report.evidence_level == "installed_app"
+    assert report.real_provider_tested is False
+    assert report.scenario_task_executed is False
     assert report.run_id
     assert report.diagnostics[0].status == "passed"
     profile_raw, workspace_raw, current_directory = capture.read_text(

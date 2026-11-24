@@ -97,5 +97,20 @@ def test_eval_scenarios_cli_lists_without_running(
 
     assert result == 0
     output = capsys.readouterr().out
-    assert "7 (catálogo; nenhuma execução iniciada)" in output
+    assert "Plano: 7 cenários versionados" in output
+    assert "nenhum relatório foi gravado" in output
     assert "blocked: workspace-project-open-v1" in output
+
+
+def test_scenario_plan_json_is_not_execution_evidence(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = eval_cli.handle_eval(argparse.Namespace(action="scenarios", output="json"))
+
+    assert result == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["mode"] == "plan"
+    assert plan["status"] == "not_run"
+    assert plan["executable_started"] is False
+    assert plan["report_written"] is False
+    assert len(plan["scenarios"]) == 7

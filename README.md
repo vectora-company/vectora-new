@@ -149,17 +149,31 @@ falhar na prontidão ou exceder o limite, o resultado não é marcado como
 
 O catálogo `vectora eval scenarios` lista os cenários sintéticos versionados em
 `backend/evaluation/scenarios/v1/` e valida os hashes das fixtures. Esse comando
-avalia pré-condições; ele não executa fluxos do agente nem marca cenários como
-aprovados.
+mostra um plano com estado `not_run`; não inicia executáveis, não cria diretório
+temporário e não grava relatório.
+
+`vectora eval run --suite` faz somente replay determinístico de uma cassete local.
+Com `--report-dir`, grava JSON e Markdown sem copiar prompts ou respostas. O
+relatório marca `evidence_level: fixture_replay` e declara que não testou o
+app instalado, provider real ou efeitos externos. Esse resultado não é
+comparado como evidência de execução live:
+
+```bash
+uv run vectora eval run --suite replay.json --report-dir reports/replay-01
+```
+
+`vectora eval smoke --app` é outro nível de evidência: testa a inicialização do
+app instalado, mas não executa tarefas de cenário nem chama provider. Seu estado
+`passed` significa somente que o startup smoke test passou.
 
 Os guardas de avaliação vinculam cada sessão ao workspace inicial, consultam
 policy no dispatch e impedem reexecutar efeitos cujo desfecho ficou incerto após
 cancelamento. Falhas de sidecar ficam registradas como `blocked` com diagnóstico.
 
 Arquivos de execução podem ser agregados por perfil frio/quente e exportados
-como JSON ou CSV. Comparações recusam amostras com fixture, policy, host,
-provider/modelo, configuração ou avaliador incompatíveis; exportação pública
-exige confirmação explícita de revisão:
+como JSON ou CSV. Comparações recusam amostras com nível de evidência, fixture,
+policy, host, provider/modelo, configuração ou avaliador incompatíveis;
+exportação pública exige confirmação explícita de revisão:
 
 ```bash
 uv run vectora eval report --runs run-1.json run-2.json --report report.json

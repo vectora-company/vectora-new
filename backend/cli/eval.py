@@ -8,11 +8,8 @@ import json
 import sys
 from pathlib import Path
 
-from pydantic import TypeAdapter
-
 from backend.evaluation.cassette import Cassette
 from backend.evaluation.installed import run_installed_smoke
-from backend.evaluation.replay_client import ReplayChatClient
 from backend.evaluation.reports import (
     BenchmarkRun,
     aggregate_runs,
@@ -22,37 +19,7 @@ from backend.evaluation.reports import (
 )
 from backend.evaluation.runner import compare_cassettes
 from backend.evaluation.scenarios import assess_scenario_readiness, load_scenarios
-from backend.vtypes import JsonObject
-from backend.vtypes.message import VMessage
-
-
-async def _replay_suite(cassette: Cassette) -> list[JsonObject]:
-    """Executa a operação replay suite."""
-    client = ReplayChatClient(cassette)
-    results: list[JsonObject] = []
-    for idx, interaction in enumerate(cassette.interactions):
-        msgs: list[VMessage] = []
-        for m in interaction.messages:
-            payload = dict(m)
-            payload.setdefault("role", "user")
-            content = payload.get("content", "")
-            if isinstance(content, str):
-                payload["content"] = [{"kind": "text", "text": content}]
-            msgs.append(TypeAdapter(VMessage).validate_python(payload))
-        res = await client.agenerate(msgs)
-        results.append(
-            {
-                "index": idx,
-                "interaction_id": interaction.interaction_id,
-                "role": res.role.value,
-                "response_text": res.text(),
-                "tool_calls": [
-                    {"id": tc.id, "name": tc.name, "args": tc.args}
-                    for tc in res.tool_calls
-                ],
-            }
-        )
-    return results
+from backend.evaluation.verification import replay_cassette, write_replay_report
 
 
 def _handle_compare(args: argparse.Namespace) -> int:
@@ -117,27 +84,42 @@ def _handle_run(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        replayed = asyncio.run(_replay_suite(cassette))
+        report = asyncio.run(
+            replay_cassette(cassette, command=["vectora", "eval", "run", str(p)])
+        )
+        report_dir = getattr(args, "report_dir", None)
+        report_paths = write_replay_report(report, report_dir) if report_dir else None
     except Exception as exc:
         print(
-            f"Erro durante o replay da suite '{cassette.cassette_id}': {exc}",
+            f"Erro durante o replay da cassete '{cassette.cassette_id}': {exc}",
             file=sys.stderr,
         )
         return 1
 
     if getattr(args, "output", "human") == "json":
-        output_data = {
-            "suite_id": cassette.cassette_id,
-            "total_interactions": len(cassette.interactions),
-            "replayed_interactions": len(replayed),
-            "results": replayed,
-        }
+        output_data = report.model_dump(mode="json")
+        output_data["report_paths"] = (
+            {"json": report_paths[0], "markdown": report_paths[1]}
+            if report_paths
+            else None
+        )
         print(json.dumps(output_data, indent=2, ensure_ascii=False))
     else:
+        print(f"Replay da cassete '{cassette.cassette_id}': {report.status}")
         print(
-            f"Suite '{cassette.cassette_id}' executada com sucesso ({len(replayed)} interações reproduzidas)."
+            f"Interações reproduzidas: {report.summary['replayed']}; "
+            f"falhas: {report.summary['failed']}; "
+            f"não suportadas: {report.summary['unsupported']}."
         )
-    return 0
+        print(
+            "Replay determinístico apenas: não testa app instalado, interface, "
+            "provider real nem efeitos externos."
+        )
+        if report_paths:
+            print(f"Relatórios: {report_paths[0]} e {report_paths[1]}")
+    return (
+        0 if report.status == "replayed" else 2 if report.status == "unsupported" else 1
+    )
 
 
 def _handle_smoke(args: argparse.Namespace) -> int:
@@ -190,10 +172,23 @@ def _handle_scenarios(args: argparse.Namespace) -> int:
         for scenario in scenarios
     ]
     if getattr(args, "output", "human") == "json":
-        print(json.dumps(results, indent=2, ensure_ascii=False))
+        print(
+            json.dumps(
+                {
+                    "mode": "plan",
+                    "status": "not_run",
+                    "executable_started": False,
+                    "report_written": False,
+                    "scenarios": results,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
     else:
         print(
-            f"Cenários versionados: {len(results)} (catálogo; nenhuma execução iniciada)"
+            f"Plano: {len(results)} cenários versionados; nada foi executado "
+            "e nenhum relatório foi gravado."
         )
         for result in results:
             readiness = result["readiness"]

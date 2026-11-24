@@ -19,6 +19,7 @@ from backend.persistence.native.agent_run import redact_sensitive_data
 
 RunStatus = Literal["passed", "failed", "blocked", "skipped", "not_run", "cancelled"]
 Profile = Literal["cold", "warm"]
+EvidenceLevel = Literal["contract", "fixture_replay", "installed_app", "live_provider"]
 
 
 class BenchmarkRun(BaseModel):
@@ -27,6 +28,7 @@ class BenchmarkRun(BaseModel):
     run_id: str
     scenario_id: str
     status: RunStatus
+    evidence_level: EvidenceLevel
     profile: Profile
     provenance: RunProvenance
     command: list[str]
@@ -78,6 +80,7 @@ class BenchmarkReport(BaseModel):
     schema_version: Literal[1] = 1
     report_id: str = Field(default_factory=lambda: uuid4().hex)
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    evidence_level: EvidenceLevel
     command: list[str]
     runs: list[BenchmarkRun]
     status_counts: dict[str, int]
@@ -123,6 +126,9 @@ def aggregate_runs(runs: list[BenchmarkRun], *, command: list[str]) -> Benchmark
         raise ValueError("ao menos uma execução é necessária")
     if len({run.scenario_id for run in runs}) != 1:
         raise ValueError("agregação exige um único cenário")
+    evidence_levels = {run.evidence_level for run in runs}
+    if len(evidence_levels) != 1:
+        raise ValueError("um relatório não pode misturar níveis de evidência")
     counts: dict[str, int] = defaultdict(int)
     groups: dict[tuple[str, str, str, Profile], list[float]] = defaultdict(list)
     for run in runs:
@@ -157,6 +163,7 @@ def aggregate_runs(runs: list[BenchmarkRun], *, command: list[str]) -> Benchmark
             )
         )
     return BenchmarkReport(
+        evidence_level=next(iter(evidence_levels)),
         command=command,
         runs=runs,
         status_counts=dict(counts),
@@ -175,6 +182,7 @@ def compare_runs(
         raise ValueError("baseline e candidate precisam ter execuções")
     differences: list[str] = []
     checks = (
+        ("evidence_level", lambda run: run.evidence_level),
         ("scenario_id", lambda run: run.scenario_id),
         ("fixture_digest", lambda run: run.fixture_digest),
         ("host", lambda run: (run.provenance.host_system, run.provenance.host_machine)),
@@ -277,6 +285,7 @@ def export_csv(
             "run_id",
             "scenario_id",
             "status",
+            "evidence_level",
             "profile",
             "command",
             "source_revision",
@@ -310,6 +319,7 @@ def export_csv(
                 "run_id": run.run_id,
                 "scenario_id": run.scenario_id,
                 "status": run.status,
+                "evidence_level": run.evidence_level,
                 "profile": run.profile,
                 "command": json.dumps(run.command, ensure_ascii=False),
                 "source_revision": run.provenance.source_revision,

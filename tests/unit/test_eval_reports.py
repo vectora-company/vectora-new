@@ -31,6 +31,7 @@ def _run(
         run_id=run_id,
         scenario_id=scenario_id,
         status=status,
+        evidence_level="live_provider",
         profile=profile,
         provenance=RunProvenance(
             run_id=run_id,
@@ -80,6 +81,14 @@ def test_aggregation_keeps_cold_warm_profiles_and_uncertainty_separate() -> None
     assert warm.confidence_95_low is None
 
 
+def test_aggregation_rejects_mixing_replay_and_live_evidence() -> None:
+    replay = _run("replay", 10)
+    replay.evidence_level = "fixture_replay"
+
+    with pytest.raises(ValueError, match="não pode misturar níveis de evidência"):
+        aggregate_runs([_run("live", 10), replay], command=["vectora", "eval"])
+
+
 def test_comparison_records_target_revisions_and_ignores_expected_sha_change() -> None:
     report = compare_runs(
         [_run("base-1", 20, revision="sha-base")],
@@ -109,6 +118,18 @@ def test_comparison_refuses_different_fixtures_and_failed_runs() -> None:
     assert any("status" in item for item in failed_run.differences)
 
 
+def test_comparison_refuses_mixing_fixture_replay_with_live_provider() -> None:
+    live = _run("live", 10)
+    replay = _run("replay", 10)
+    replay.evidence_level = "fixture_replay"
+
+    comparison = compare_runs([live], [replay])
+
+    assert not comparison.compatible
+    assert comparison.metrics == []
+    assert "evidence_level: baseline e candidato diferem" in comparison.differences
+
+
 def test_json_csv_exports_preserve_schema_status_and_provenance() -> None:
     report = aggregate_runs([_run("run-1", 9)], command=["vectora", "eval"])
     json_data = json.loads(export_json(report))
@@ -117,7 +138,10 @@ def test_json_csv_exports_preserve_schema_status_and_provenance() -> None:
     assert json_data["schema_version"] == 1
     assert json_data["runs"][0]["provenance"]["source_revision"] == "sha-a"
     assert json_data["runs"][0]["metrics"][0]["unit"] == "ms"
-    assert "report_id,report_command,run_id,scenario_id,status,profile" in csv_data
+    assert (
+        "report_id,report_command,run_id,scenario_id,status,evidence_level,profile"
+        in csv_data
+    )
     assert "run-1" in csv_data
     assert "config-v1" in csv_data
     assert "fixture-v1" in csv_data

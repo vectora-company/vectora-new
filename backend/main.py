@@ -679,7 +679,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "  scenarios [--output human|json]\n"
             "  report --runs FILE... --report FILE [--format json|csv]\n"
             "  compare-runs --baseline FILE... --candidate FILE... --report FILE\n"
-            "  run --suite FILE\n"
+            "  run --suite FILE [--report-dir DIR]\n"
             "  compare BASELINE CANDIDATE"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -688,6 +688,11 @@ def _build_parser() -> argparse.ArgumentParser:
     eval_run = eval_sub.add_parser("run", help="Executa benchmark ou suite de cassetes")
     eval_run.add_argument(
         "--suite", default=None, help="Caminho para arquivo de cassete/suite"
+    )
+    eval_run.add_argument(
+        "--report-dir",
+        default=None,
+        help="Diretório novo para gravar report.json e report.md do replay",
     )
     eval_run.add_argument("--output", choices=("human", "json"), default="human")
 

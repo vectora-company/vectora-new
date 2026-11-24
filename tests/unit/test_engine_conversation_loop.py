@@ -354,8 +354,8 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
 ):
     from pydantic import create_model
 
-    from backend.cli.eval import _replay_suite
     from backend.evaluation.recording import cassette_from_run
+    from backend.evaluation.verification import replay_cassette
     from backend.persistence.native.agent_run import AgentRun
     from backend.settings import settings
     from backend.tools.registry import ToolSpec
@@ -509,8 +509,11 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
 
         target = tmp_path / "recorded.json"
         cassette.save(target)
-        replay = await _replay_suite(Cassette.load(target))
-        assert replay[-1]["response_text"] == "done"
+        replay = await replay_cassette(
+            Cassette.load(target), command=["vectora", "eval", "run"]
+        )
+        assert replay.status == "unsupported"
+        assert any(case.status == "unsupported" for case in replay.cases)
         assert effects == [("expected", ctx.run_id)]
     finally:
         preferences._conn.close()

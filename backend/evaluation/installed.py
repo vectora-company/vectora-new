@@ -43,9 +43,10 @@ class EvaluationDiagnostic(BaseModel):
 
 
 class InstalledSmokeReport(BaseModel):
-    """Relatório estruturado de uma inicialização da instalação real."""
+    """Relatório de inicialização live, sem alegar teste de provider ou tarefa."""
 
     schema_version: Literal[1] = 1
+    evidence_level: Literal["installed_app"] = "installed_app"
     run_id: str
     scenario_id: str = "installed-app-startup"
     status: RunStatus
@@ -57,6 +58,8 @@ class InstalledSmokeReport(BaseModel):
     exit_code: int | None = None
     profile_isolated: bool = True
     workspace_isolated: bool = True
+    real_provider_tested: Literal[False] = False
+    scenario_task_executed: Literal[False] = False
     host: dict[str, str] = Field(default_factory=dict)
     provenance: RunProvenance
     metrics: list[BenchmarkMetric] = Field(default_factory=list)

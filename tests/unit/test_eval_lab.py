@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+import json
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -63,8 +66,8 @@ def test_export_run_cli_preserves_provenance_and_rejects_invalid_recording(
 
 
 @pytest.mark.asyncio
-async def test_cli_replay_preserves_tool_history_without_external_calls():
-    from backend.cli.eval import _replay_suite
+async def test_fixture_replay_preserves_tool_history_without_external_calls():
+    from backend.evaluation.verification import replay_cassette
 
     cassette = Cassette(
         cassette_id="tool-history",
@@ -94,11 +97,17 @@ async def test_cli_replay_preserves_tool_history_without_external_calls():
             )
         ],
     )
-    results = await _replay_suite(cassette)
-    assert results[0]["response_text"] == "recorded final response"
+    report = await replay_cassette(cassette, command=["vectora", "eval", "run"])
+    assert report.status == "replayed"
+    assert report.cases[0].recorded_tool_call_count == 0
+    assert report.evidence_level == "fixture_replay"
     cassette.interactions[0].messages[0]["role"] = "invalid-role"
-    with pytest.raises(ValueError):
-        await _replay_suite(cassette)
+    failed = await replay_cassette(cassette, command=["vectora", "eval", "run"])
+    assert failed.status == "failed"
+    assert (
+        failed.cases[0].reason
+        == "mensagem da cassete não corresponde ao schema do runtime"
+    )
 
 
 @pytest.mark.parametrize("missing_side", ["baseline", "candidate"])
@@ -608,7 +617,8 @@ def test_cli_eval_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     code = handle_eval(args)
     assert code == 0
     captured = capsys.readouterr()
-    assert "Suite 'my-suite' executada com sucesso" in captured.out
+    assert "Replay da cassete 'my-suite': replayed" in captured.out
+    assert "não testa app instalado" in captured.out
 
     # Execução em modo json
     args_json = argparse.Namespace(
@@ -619,7 +629,32 @@ def test_cli_eval_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     code_json = handle_eval(args_json)
     assert code_json == 0
     captured_json = capsys.readouterr()
-    assert '"suite_id": "my-suite"' in captured_json.out
+    replay_json = json.loads(captured_json.out)
+    assert replay_json["mode"] == "fixture_replay"
+    assert replay_json["evidence_level"] == "fixture_replay"
+    assert replay_json["status"] == "replayed"
+    assert replay_json["app_installed_tested"] is False
+    assert replay_json["real_provider_tested"] is False
+    assert replay_json["external_effects_executed"] is False
+    assert "olá mundo" not in captured_json.out
+
+    report_dir = tmp_path / "fixture-report"
+    report_args = argparse.Namespace(
+        action="run",
+        suite=str(suite_path),
+        report_dir=str(report_dir),
+        output="human",
+    )
+    assert handle_eval(report_args) == 0
+    assert (report_dir / "report.json").is_file()
+    markdown = (report_dir / "report.md").read_text(encoding="utf-8")
+    assert "Relatório de replay determinístico" in markdown
+    assert "| `int-1` | replayed |" in markdown
+    assert "olá mundo" not in markdown
+
+    # O relatório nunca sobrescreve dados existentes.
+    assert handle_eval(report_args) == 1
+    assert "File exists" in capsys.readouterr().err
 
     # `--suite` aponta para um único cassette; uma lista de cassettes é recusada.
     list_path = tmp_path / "list.json"
@@ -644,6 +679,83 @@ def test_cli_eval_missing_suite(capsys: pytest.CaptureFixture[str]) -> None:
     assert code == 1
     captured = capsys.readouterr()
     assert "obrigatório" in captured.err
+
+
+def test_empty_cassette_is_unsupported_not_success(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    source = tmp_path / "empty-cassette.json"
+    Cassette(
+        cassette_id="empty",
+        interactions=[CassetteInteraction(interaction_id="no-input", messages=[])],
+    ).save(source)
+
+    result = handle_eval(
+        argparse.Namespace(action="run", suite=str(source), output="json")
+    )
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert json.loads(captured.out)["status"] == "unsupported"
+
+
+def test_fixture_replay_reports_failed_case_and_continues_later_cases() -> None:
+    from backend.evaluation.verification import replay_cassette
+
+    cassette = Cassette(
+        cassette_id="partial",
+        interactions=[
+            CassetteInteraction(
+                interaction_id="bad",
+                messages=[{"role": "not-a-role", "content": "fixture"}],
+                response_text="unused",
+            ),
+            CassetteInteraction(
+                interaction_id="good",
+                messages=[{"role": "user", "content": "fixture"}],
+                response_text="recorded answer",
+            ),
+        ],
+    )
+
+    report = asyncio.run(replay_cassette(cassette, command=["vectora", "eval", "run"]))
+
+    assert report.status == "failed"
+    assert [case.status for case in report.cases] == ["failed", "replayed"]
+    assert report.app_installed_tested is False
+    assert report.real_provider_tested is False
+
+
+def test_fixture_replay_does_not_create_temporary_execution_directories(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "cassette.json"
+    Cassette(
+        cassette_id="no-temp",
+        interactions=[
+            CassetteInteraction(
+                interaction_id="one",
+                messages=[{"role": "user", "content": "fixture"}],
+                response_text="safe output",
+            )
+        ],
+    ).save(source)
+    before = set(Path(tempfile.gettempdir()).glob("vectora-eval-*"))
+    report_dir = tmp_path / "report"
+
+    assert (
+        handle_eval(
+            argparse.Namespace(
+                action="run",
+                suite=str(source),
+                report_dir=str(report_dir),
+                output="human",
+            )
+        )
+        == 0
+    )
+
+    assert set(Path(tempfile.gettempdir()).glob("vectora-eval-*")) == before
 
 
 def test_cli_eval_corrupted_file(
@@ -777,10 +889,10 @@ async def test_recorded_run_export_survives_store_restart_and_session_purge(tmp_
         assert run is not None
         cassette = cassette_from_run(run)
         assert cassette.interactions[0].response_text == "recorded"
-        from backend.cli.eval import _replay_suite
+        from backend.evaluation.verification import replay_cassette
 
-        replay = await _replay_suite(cassette)
-        assert replay[0]["response_text"] == "recorded"
+        replay = await replay_cassette(cassette, command=["vectora", "eval", "run"])
+        assert replay.status == "replayed"
         await durable.delete_session("recorded-thread")
         assert await durable.get_agent_run("recorded-run") is None
     finally:
