@@ -102,6 +102,29 @@ async def test_run_engine_kills_process_group_on_timeout(
         assert process.killed
 
 
+async def test_windows_process_cleanup_uses_taskkill_for_descendants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = _Process(hang=True)
+    taskkill = _Process()
+    taskkill.wait = AsyncMock(return_value=0)  # type: ignore[method-assign]
+    create_process = AsyncMock(return_value=taskkill)
+    monkeypatch.setattr(godot.asyncio, "create_subprocess_exec", create_process)
+
+    await godot._terminate_process_tree(process, platform_name="nt")
+
+    create_process.assert_awaited_once_with(
+        "taskkill",
+        "/F",
+        "/T",
+        "/PID",
+        str(process.pid),
+        stdout=godot.asyncio.subprocess.DEVNULL,
+        stderr=godot.asyncio.subprocess.DEVNULL,
+    )
+    assert process.killed
+
+
 async def test_validation_rejects_project_version_different_from_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

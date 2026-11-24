@@ -10,6 +10,7 @@ import re
 import shutil
 import signal
 from pathlib import Path
+from typing import Protocol
 
 from pydantic import Field
 
@@ -21,6 +22,15 @@ _VERSION_RE = re.compile(r"\b(\d+)\.(\d+)(?:\.(\d+))?")
 _FEATURES_RE = re.compile(r"config/features\s*=\s*PackedStringArray\(([^)]*)\)")
 _ERROR_LINE_RE = re.compile(r"(?:^|\s)(?:SCRIPT )?ERROR:", re.IGNORECASE)
 _MAX_OUTPUT_CHARS = 8_000
+
+
+class _ProcessLike(Protocol):
+    pid: int
+
+    @property
+    def returncode(self) -> int | None: ...
+
+    def kill(self) -> None: ...
 
 
 def _version_family(value: str) -> str | None:
@@ -84,11 +94,7 @@ async def _run_engine(
     try:
         await asyncio.wait_for(process.wait(), timeout=timeout_seconds)
     except TimeoutError:
-        if os.name != "nt":
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
-        else:
-            process.kill()
+        await _terminate_process_tree(process)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(process.wait(), timeout=5)
         reader.cancel()
@@ -103,11 +109,9 @@ async def _run_engine(
             True,
         )
     except asyncio.CancelledError:
-        if os.name != "nt":
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
-        else:
-            process.kill()
+        await _terminate_process_tree(process)
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(process.wait(), timeout=5)
         reader.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await reader
@@ -115,6 +119,40 @@ async def _run_engine(
     await reader
     text = output_tail.decode("utf-8", errors="replace")
     return process.returncode, text, False
+
+
+async def _terminate_process_tree(
+    process: _ProcessLike, *, platform_name: str | None = None
+) -> None:
+    """Encerra a árvore inteira e sempre tenta coletar o processo principal."""
+    current_platform = platform_name or os.name
+    if current_platform == "nt":
+        try:
+            killer = await asyncio.create_subprocess_exec(
+                "taskkill",
+                "/F",
+                "/T",
+                "/PID",
+                str(process.pid),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            try:
+                await asyncio.wait_for(killer.wait(), timeout=5)
+            except TimeoutError:
+                killer.kill()
+        except OSError:
+            pass
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    if process.returncode is None:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
 
 
 @vtool(
