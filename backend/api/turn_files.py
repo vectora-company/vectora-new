@@ -286,9 +286,9 @@ def _workspace_scope(workspace_id: str) -> Path | None:
 def _nested_repository_roots(scope_root: Path) -> list[Path]:
     """Discover bounded nested repos without traversing build and cache trees."""
     roots: list[Path] = []
-    visited = 0
-    for current, directories, files in os.walk(scope_root, followlinks=False):
-        visited += 1
+    for visited, (current, directories, files) in enumerate(
+        os.walk(scope_root, followlinks=False), start=1
+    ):
         if visited > MAX_DISCOVERED_DIRECTORIES:
             break
         current_path = Path(current)
@@ -433,7 +433,7 @@ def capture_tool_state(run_id: str) -> dict[str, bytes | None]:
                     states[workspace_path] = _read(
                         repository.repo_root, repository.scope_root, path
                     )
-        return dict(list(sorted(states.items()))[:MAX_TRACKED_FILES])
+        return dict(sorted(states.items())[:MAX_TRACKED_FILES])
     except Exception:
         return {}
 
