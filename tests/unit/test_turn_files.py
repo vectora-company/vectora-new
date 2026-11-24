@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import git
 import pytest
@@ -40,6 +41,40 @@ def test_compute_reports_text_changes_and_hunks(
     assert changes[0].additions == 1
     assert changes[0].deletions == 0
     assert changes[0].hunks[0]["header"].startswith("@@")
+
+
+def test_capture_tracks_multiple_repositories_inside_one_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from backend.workspace import workspace as workspace_module
+
+    workspace_root = tmp_path / "workspace"
+    first_root = workspace_root / "first"
+    second_root = workspace_root / "second"
+    first_root.mkdir(parents=True)
+    second_root.mkdir(parents=True)
+    _repo(first_root)
+    _repo(second_root)
+    monkeypatch.setattr(
+        workspace_module.workspace_registry,
+        "get",
+        lambda _workspace_id: SimpleNamespace(cwd=str(workspace_root)),
+    )
+
+    snapshot = turn_files.capture("ws-multi", "thread", "run-multi")
+    assert snapshot is not None
+    assert len(snapshot.repositories) == 2
+    before = turn_files.capture_tool_state(snapshot.run_id)
+    (first_root / "README.md").write_text("first changed\n", encoding="utf-8")
+    (second_root / "README.md").write_text("second changed\n", encoding="utf-8")
+    turn_files.record_tool_effect(snapshot.run_id, before)
+
+    changes = turn_files.finalize(snapshot)
+
+    assert [change.path for change in changes] == [
+        "first/README.md",
+        "second/README.md",
+    ]
 
 
 def test_compute_excludes_tracked_files_matched_by_gitignore(

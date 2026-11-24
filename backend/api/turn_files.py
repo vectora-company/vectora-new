@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import os
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -60,6 +61,16 @@ class TurnFileChange:
 
 
 @dataclass(frozen=True, slots=True)
+class RepositorySnapshot:
+    """Baseline de um repositório Git contido no workspace."""
+
+    repo_root: Path
+    scope_root: Path
+    initial: dict[str, bytes | None]
+    initial_head: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class TurnWorkspaceSnapshot:
     """Immutable baseline used to calculate one run's file changes."""
 
@@ -70,6 +81,7 @@ class TurnWorkspaceSnapshot:
     scope_root: Path
     initial: dict[str, bytes | None]
     initial_head: str | None = None
+    repositories: tuple[RepositorySnapshot, ...] = ()
 
 
 MAX_TRACKED_FILES: int = 256
@@ -82,6 +94,11 @@ _results: dict[str, list[TurnFileChange]] = {}
 _result_context: dict[str, tuple[str, str]] = {}
 _tool_observed_paths: dict[str, set[str]] = {}
 _tool_baselines: dict[str, dict[str, tuple[bytes | None, bool]]] = {}
+MAX_REPOSITORIES: int = 32
+MAX_DISCOVERED_DIRECTORIES: int = 10_000
+_DISCOVERY_IGNORED_DIRS = frozenset(
+    {".git", ".godot", ".venv", "__pycache__", "node_modules", "dist", "build"}
+)
 
 
 def _status_paths(repo: RepoLike, scope_root: Path, repo_root: Path) -> list[str]:
@@ -220,16 +237,31 @@ def _head_exists(repo: RepoLike, path: str, ref: str) -> bool:
     return True
 
 
+def _open_repo(repo_root: Path) -> RepoLike | None:
+    """Open one repository root and ignore only expected Git errors."""
+    from git import Repo  # type: ignore[import-not-found]
+    from git.exc import InvalidGitRepositoryError, NoSuchPathError
+
+    try:
+        return cast("RepoLike", Repo(str(repo_root), search_parent_directories=False))
+    except (InvalidGitRepositoryError, NoSuchPathError, OSError, ValueError):
+        return None
+
+
 def _repo_and_scope(workspace_id: str) -> tuple[RepoLike, Path, Path] | None:
     from git import Repo  # type: ignore[import-not-found]
+    from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
     from backend.workspace.workspace import workspace_registry
 
     workspace = workspace_registry.get(workspace_id)
     if workspace is None or not workspace.cwd:
         return None
-    scope_root = Path(workspace.cwd).resolve()
-    repo = Repo(str(scope_root), search_parent_directories=True)
+    try:
+        scope_root = Path(workspace.cwd).resolve()
+        repo = Repo(str(scope_root), search_parent_directories=True)
+    except (InvalidGitRepositoryError, NoSuchPathError, OSError, ValueError):
+        return None
     repo_root = Path(repo.working_tree_dir or scope_root).resolve()
     try:
         scope_root.relative_to(repo_root)
@@ -238,31 +270,170 @@ def _repo_and_scope(workspace_id: str) -> tuple[RepoLike, Path, Path] | None:
     return cast("RepoLike", repo), repo_root, scope_root
 
 
+def _workspace_scope(workspace_id: str) -> Path | None:
+    """Resolve the workspace root when it is a container of repositories."""
+    from backend.workspace.workspace import workspace_registry
+
+    workspace = workspace_registry.get(workspace_id)
+    if workspace is None or not workspace.cwd:
+        return None
+    try:
+        return Path(workspace.cwd).resolve()
+    except OSError:
+        return None
+
+
+def _nested_repository_roots(scope_root: Path) -> list[Path]:
+    """Discover bounded nested repos without traversing build and cache trees."""
+    roots: list[Path] = []
+    visited = 0
+    for current, directories, files in os.walk(scope_root, followlinks=False):
+        visited += 1
+        if visited > MAX_DISCOVERED_DIRECTORIES:
+            break
+        current_path = Path(current)
+        if current_path != scope_root and (".git" in directories or ".git" in files):
+            try:
+                resolved = current_path.resolve()
+                resolved.relative_to(scope_root)
+                roots.append(resolved)
+            except (OSError, ValueError):
+                pass
+            if len(roots) >= MAX_REPOSITORIES:
+                break
+        directories[:] = [
+            name
+            for name in directories
+            if name not in _DISCOVERY_IGNORED_DIRS
+            and not (current_path / name).is_symlink()
+        ]
+    return roots
+
+
+def _repository_snapshot(
+    repo: RepoLike, repo_root: Path, scope_root: Path
+) -> RepositorySnapshot:
+    initial_head: str | None = None
+    try:
+        head = getattr(repo, "head", None)
+        commit = getattr(head, "commit", None)
+        commit_sha = getattr(commit, "hexsha", None)
+        initial_head = str(commit_sha) if commit_sha else None
+    except (AttributeError, ValueError):
+        initial_head = None
+    initial = {
+        path: _read(repo_root, scope_root, path)
+        for path in _status_paths(repo, scope_root, repo_root)
+    }
+    return RepositorySnapshot(repo_root, scope_root, initial, initial_head)
+
+
+def _repositories_for_workspace(workspace_id: str) -> tuple[RepositorySnapshot, ...]:
+    """Capture the enclosing repo and bounded independent repos under the root."""
+    primary = _repo_and_scope(workspace_id)
+    scope_root = primary[2] if primary is not None else _workspace_scope(workspace_id)
+    if scope_root is None:
+        return ()
+
+    roots: dict[Path, RepoLike] = {}
+    if primary is not None:
+        _repo, repo_root, _scope = primary
+        roots[repo_root] = _repo
+    for candidate in _nested_repository_roots(scope_root):
+        repo = _open_repo(candidate)
+        if repo is None:
+            continue
+        repo_root = Path(repo.working_tree_dir or candidate).resolve()
+        try:
+            repo_root.relative_to(scope_root)
+        except ValueError:
+            continue
+        roots.setdefault(repo_root, repo)
+        if len(roots) >= MAX_REPOSITORIES:
+            break
+
+    snapshots: list[RepositorySnapshot] = []
+    for repo_root, repo in sorted(roots.items(), key=lambda item: len(item[0].parts)):
+        try:
+            repo_root.relative_to(scope_root)
+        except ValueError:
+            # The primary repository may contain the workspace when the
+            # workspace itself is a subdirectory of that repository.
+            if primary is None or repo_root != primary[1]:
+                continue
+        snapshots.append(_repository_snapshot(repo, repo_root, scope_root))
+    return tuple(snapshots)
+
+
+def _repository_for_path(
+    snapshot: TurnWorkspaceSnapshot, workspace_path: str
+) -> tuple[RepositorySnapshot, str] | None:
+    candidate = (snapshot.scope_root / workspace_path).resolve()
+    matches: list[tuple[RepositorySnapshot, str]] = []
+    for repository in snapshot.repositories or (
+        RepositorySnapshot(
+            snapshot.repo_root,
+            snapshot.scope_root,
+            snapshot.initial,
+            snapshot.initial_head,
+        ),
+    ):
+        try:
+            relative = candidate.relative_to(repository.repo_root)
+            candidate.relative_to(repository.scope_root)
+        except ValueError:
+            continue
+        matches.append((repository, relative.as_posix()))
+    return (
+        max(matches, key=lambda item: len(item[0].repo_root.parts)) if matches else None
+    )
+
+
+def _workspace_path(repository: RepositorySnapshot, repo_path: str) -> str | None:
+    candidate = (repository.repo_root / repo_path).resolve()
+    try:
+        return candidate.relative_to(repository.scope_root).as_posix()
+    except ValueError:
+        return None
+
+
 def capture_tool_state(run_id: str) -> dict[str, bytes | None]:
     """Snapshot changed workspace files immediately before a mutating tool."""
     snapshot = _active.get(run_id)
     if snapshot is None:
         return {}
     try:
-        from git import Repo  # type: ignore[import-not-found]
-
-        repo = cast(
-            "RepoLike", Repo(str(snapshot.repo_root), search_parent_directories=True)
-        )
-        paths = set(_status_paths(repo, snapshot.scope_root, snapshot.repo_root))
-        if snapshot.initial_head:
-            paths.update(
-                _revision_paths(
-                    repo,
-                    f"{snapshot.initial_head}..HEAD",
-                    snapshot.scope_root,
-                    snapshot.repo_root,
-                )
+        states: dict[str, bytes | None] = {}
+        for repository in snapshot.repositories or (
+            RepositorySnapshot(
+                snapshot.repo_root,
+                snapshot.scope_root,
+                snapshot.initial,
+                snapshot.initial_head,
+            ),
+        ):
+            repo = _open_repo(repository.repo_root)
+            if repo is None:
+                continue
+            paths = set(
+                _status_paths(repo, repository.scope_root, repository.repo_root)
             )
-        return {
-            path: _read(snapshot.repo_root, snapshot.scope_root, path)
-            for path in sorted(paths)[:MAX_TRACKED_FILES]
-        }
+            if repository.initial_head:
+                paths.update(
+                    _revision_paths(
+                        repo,
+                        f"{repository.initial_head}..HEAD",
+                        repository.scope_root,
+                        repository.repo_root,
+                    )
+                )
+            for path in sorted(paths)[:MAX_TRACKED_FILES]:
+                workspace_path = _workspace_path(repository, path)
+                if workspace_path is not None:
+                    states[workspace_path] = _read(
+                        repository.repo_root, repository.scope_root, path
+                    )
+        return dict(list(sorted(states.items()))[:MAX_TRACKED_FILES])
     except Exception:
         return {}
 
@@ -278,24 +449,26 @@ def record_tool_effect(run_id: str, before: dict[str, bytes | None]) -> None:
         for path in before.keys() | after.keys()
         if (path in before) != (path in after) or before.get(path) != after.get(path)
     }
-    try:
-        from git import Repo  # type: ignore[import-not-found]
-
-        repo = cast(
-            "RepoLike", Repo(str(snapshot.repo_root), search_parent_directories=True)
-        )
-    except Exception:
-        repo = None
     baselines = _tool_baselines.setdefault(run_id, {})
     for path in changed_paths:
         if path in baselines:
             continue
         if path in before:
             baselines[path] = (before[path], True)
-        elif repo is not None and snapshot.initial_head is not None:
-            exists = _head_exists(repo, path, snapshot.initial_head)
+        elif (located := _repository_for_path(snapshot, path)) is not None:
+            repository, repo_path = located
+            repo = _open_repo(repository.repo_root)
+            if repo is None:
+                baselines[path] = (None, False)
+                continue
+            exists = bool(
+                repository.initial_head
+                and _head_exists(repo, repo_path, repository.initial_head)
+            )
             baselines[path] = (
-                _head_read(repo, path, snapshot.initial_head) if exists else None,
+                _head_read(repo, repo_path, repository.initial_head or "HEAD")
+                if exists
+                else None,
                 exists,
             )
         else:
@@ -310,34 +483,21 @@ def capture(
     if not workspace_id:
         return None
     try:
-        resolved = _repo_and_scope(workspace_id)
-        if resolved is None:
+        repositories = _repositories_for_workspace(workspace_id)
+        if not repositories:
             return None
-        repo, repo_root, scope_root = resolved
-        initial_head: str | None = None
-        try:
-            head = getattr(repo, "head", None)
-            commit = getattr(head, "commit", None)
-            commit_sha = getattr(commit, "hexsha", None)
-            initial_head = str(commit_sha) if commit_sha else None
-        except (AttributeError, ValueError):
-            # A repository without its first commit has an unborn HEAD. The
-            # working tree is still a valid baseline for turn tracking.
-            initial_head = None
-        initial = {
-            path: _read(repo_root, scope_root, path)
-            for path in _status_paths(repo, scope_root, repo_root)
-        }
     except Exception:
         return None
+    primary = repositories[0]
     snapshot = TurnWorkspaceSnapshot(
         run_id=run_id or uuid.uuid4().hex,
         thread_id=thread_id,
         workspace_id=workspace_id,
-        repo_root=repo_root,
-        scope_root=scope_root,
-        initial=initial,
-        initial_head=initial_head,
+        repo_root=primary.repo_root,
+        scope_root=primary.scope_root,
+        initial=primary.initial,
+        initial_head=primary.initial_head,
+        repositories=repositories,
     )
     _active[snapshot.run_id] = snapshot
     _tool_observed_paths[snapshot.run_id] = set()
@@ -357,55 +517,76 @@ def _decode_lines(data: bytes | None) -> list[str] | None:
 
 def compute(snapshot: TurnWorkspaceSnapshot) -> list[TurnFileChange]:
     """Calcula alterações finais, sempre limitadas ao escopo capturado."""
-    try:
-        from git import Repo  # type: ignore[import-not-found]
-
-        repo = cast(
-            "RepoLike", Repo(str(snapshot.repo_root), search_parent_directories=True)
-        )
-    except Exception:
-        return []
-
-    current_paths = _status_paths(repo, snapshot.scope_root, snapshot.repo_root)
-    committed_paths = (
-        _revision_paths(
-            repo,
-            f"{snapshot.initial_head}..HEAD",
-            snapshot.scope_root,
+    repositories = snapshot.repositories or (
+        RepositorySnapshot(
             snapshot.repo_root,
-        )
-        if snapshot.initial_head
-        else []
+            snapshot.scope_root,
+            snapshot.initial,
+            snapshot.initial_head,
+        ),
     )
+    initial_by_workspace: dict[str, tuple[bytes | None, bool]] = {}
+    current_paths: set[str] = set()
+    committed_paths: set[str] = set()
+    for repository in repositories:
+        repo = _open_repo(repository.repo_root)
+        if repo is None:
+            continue
+        for path, content in repository.initial.items():
+            workspace_path = _workspace_path(repository, path)
+            if workspace_path is not None:
+                initial_by_workspace[workspace_path] = (content, True)
+        current_paths.update(
+            workspace_path
+            for path in _status_paths(repo, repository.scope_root, repository.repo_root)
+            if (workspace_path := _workspace_path(repository, path)) is not None
+        )
+        if repository.initial_head:
+            committed_paths.update(
+                workspace_path
+                for path in _revision_paths(
+                    repo,
+                    f"{repository.initial_head}..HEAD",
+                    repository.scope_root,
+                    repository.repo_root,
+                )
+                if (workspace_path := _workspace_path(repository, path)) is not None
+            )
     paths = sorted(
-        (set(snapshot.initial) | set(current_paths) | set(committed_paths))
+        (set(initial_by_workspace) | current_paths | committed_paths)
         & _tool_observed_paths.get(snapshot.run_id, set())
     )[:MAX_TRACKED_FILES]
     changes: list[TurnFileChange] = []
     tool_baselines = _tool_baselines.get(snapshot.run_id, {})
-    for path in paths:
-        tool_baseline = tool_baselines.get(path)
+    for workspace_path in paths:
+        located = _repository_for_path(snapshot, workspace_path)
+        if located is None:
+            continue
+        repository, repo_path = located
+        repo = _open_repo(repository.repo_root)
+        if repo is None:
+            continue
+        tool_baseline = tool_baselines.get(workspace_path)
         before = (
             tool_baseline[0]
             if tool_baseline is not None
             else (
-                snapshot.initial[path]
-                if path in snapshot.initial
-                else _head_read(repo, path, snapshot.initial_head or "HEAD")
+                initial_by_workspace[workspace_path][0]
+                if workspace_path in initial_by_workspace
+                else _head_read(repo, repo_path, repository.initial_head or "HEAD")
             )
         )
-        after = _read(snapshot.repo_root, snapshot.scope_root, path)
-        before_ref = snapshot.initial_head or "HEAD"
+        after = _read(repository.repo_root, repository.scope_root, repo_path)
         before_exists = (
             tool_baseline[1]
             if tool_baseline is not None
-            else path in snapshot.initial
+            else workspace_path in initial_by_workspace
             or (
-                snapshot.initial_head is not None
-                and _head_exists(repo, path, before_ref)
+                repository.initial_head is not None
+                and _head_exists(repo, repo_path, repository.initial_head)
             )
         )
-        after_candidate = (snapshot.repo_root / path).resolve()
+        after_candidate = (snapshot.scope_root / workspace_path).resolve()
         try:
             after_candidate.relative_to(snapshot.scope_root)
             after_exists = after_candidate.is_file()
@@ -428,8 +609,8 @@ def compute(snapshot: TurnWorkspaceSnapshot) -> list[TurnFileChange]:
                 difflib.unified_diff(
                     before_lines,
                     after_lines,
-                    fromfile=f"a/{path}",
-                    tofile=f"b/{path}",
+                    fromfile=f"a/{workspace_path}",
+                    tofile=f"b/{workspace_path}",
                     lineterm="",
                 )
             )
@@ -444,8 +625,8 @@ def compute(snapshot: TurnWorkspaceSnapshot) -> list[TurnFileChange]:
                 elif (
                     line
                     in {
-                        f"--- a/{path}",
-                        f"+++ b/{path}",
+                        f"--- a/{workspace_path}",
+                        f"+++ b/{workspace_path}",
                     }
                     and not header
                 ):
@@ -462,7 +643,9 @@ def compute(snapshot: TurnWorkspaceSnapshot) -> list[TurnFileChange]:
             additions = 1 if after is not None else 0
             deletions = 1 if before is not None else 0
         status = "A" if not before_exists else "D" if not after_exists else "M"
-        changes.append(TurnFileChange(path, status, additions, deletions, hunks))
+        changes.append(
+            TurnFileChange(workspace_path, status, additions, deletions, hunks)
+        )
     return changes
 
 
