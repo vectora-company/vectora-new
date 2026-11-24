@@ -4840,6 +4840,39 @@
         "title": "GitignoreUpdateRequest",
         "type": "object"
       },
+      "GodotValidationRequest": {
+        "description": "Opções limitadas da validação explícita do Godot Workbench.",
+        "properties": {
+          "expected_version": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
+          "project_path": {
+            "default": ".",
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Project Path",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 120,
+            "maximum": 120.0,
+            "minimum": 10.0,
+            "title": "Timeout Seconds",
+            "type": "integer"
+          }
+        },
+        "title": "GodotValidationRequest",
+        "type": "object"
+      },
       "GrantsUpdate": {
         "properties": {
           "allow_hosts": {
@@ -33860,6 +33893,61 @@
           }
         },
         "summary": "Git Unstage",
+        "tags": [
+          "workspaces-view"
+        ]
+      }
+    },
+    "/workspaces/{workspace_id}/godot/validate": {
+      "post": {
+        "description": "Executa a validação headless no projeto raiz de um workspace confiável.",
+        "operationId": "validate_workspace_godot_project_workspaces__workspace_id__godot_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GodotValidationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Validate Workspace Godot Project Workspaces  Workspace Id  Godot Validate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Workspace Godot Project",
         "tags": [
           "workspaces-view"
         ]

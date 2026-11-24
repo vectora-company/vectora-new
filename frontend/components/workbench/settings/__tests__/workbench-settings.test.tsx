@@ -60,7 +60,7 @@ describe("workbench settings contract", () => {
 
   it("keeps settings in the same order as the navigation contract", () => {
     expect(WORKBENCH_SETTINGS.map((item) => item.workbench)).toEqual(
-      WORKBENCH_TABS,
+      WORKBENCH_TABS.filter((tab) => tab !== "godot"),
     );
   });
 

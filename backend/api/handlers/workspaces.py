@@ -132,6 +132,14 @@ class GitInitRequest(BaseModel):
     workspace_id: str
 
 
+class GodotValidationRequest(BaseModel):
+    """Opções limitadas da validação explícita do Godot Workbench."""
+
+    project_path: str = Field(default=".", min_length=1, max_length=4096)
+    expected_version: str | None = Field(default=None, max_length=32)
+    timeout_seconds: int = Field(default=120, ge=10, le=120)
+
+
 class GitMentionUser(BaseModel):
     """Usuário autorizado a ser mencionado no Git Workbench."""
 
@@ -960,6 +968,74 @@ workspace_scoped_router = APIRouter(
     tags=["workspaces-view"],
     dependencies=[Depends(_enforce_workspace_ownership)],
 )
+
+
+@workspace_scoped_router.post("/godot/validate")
+async def validate_workspace_godot_project(
+    workspace_id: str, request: Request, body: GodotValidationRequest
+) -> dict[str, Any]:
+    """Executa a validação headless no projeto raiz de um workspace confiável."""
+    from backend.rbac import tool_policy
+    from backend.tools.context import ToolContext
+    from backend.tools.registry import TOOL_REGISTRY
+
+    workspace = require_workspace_access(workspace_id, request)
+    if workspace is None:
+        raise HTTPException(status_code=404, detail="Workspace não encontrado.")
+    if not bool(getattr(workspace, "trusted", False)):
+        raise HTTPException(
+            status_code=403,
+            detail="Confirme a confiança do workspace antes de executar o Godot.",
+        )
+    if str(getattr(workspace, "transport", "local")) != "local":
+        raise HTTPException(
+            status_code=409,
+            detail="A validação Godot está disponível apenas em workspaces locais.",
+        )
+
+    user_id = _user_id(request)
+    if not tool_policy.is_allowed(user_id, "validate_godot_project"):
+        raise HTTPException(
+            status_code=403,
+            detail="A tool de validação Godot está desabilitada pela política atual.",
+        )
+
+    import backend.tools.godot  # noqa: F401  # registra a tool de validação
+
+    spec = TOOL_REGISTRY.get("validate_godot_project")
+    if spec is None:
+        raise HTTPException(
+            status_code=503, detail="A validação Godot não está disponível."
+        )
+    try:
+        result = await asyncio.wait_for(
+            spec.ainvoke(
+                {
+                    "project_path": body.project_path,
+                    "expected_version": body.expected_version,
+                    "timeout_seconds": body.timeout_seconds,
+                },
+                ToolContext(user_id=user_id, workspace_id=workspace_id),
+            ),
+            timeout=body.timeout_seconds * 3 + 10,
+        )
+    except TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="A validação Godot excedeu o limite total de execução.",
+        ) from None
+    try:
+        payload = json.loads(result)
+    except (TypeError, json.JSONDecodeError):
+        logger.warning("Godot Workbench returned non-JSON validation output")
+        raise HTTPException(
+            status_code=502, detail="A validação Godot retornou uma resposta inválida."
+        ) from None
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=502, detail="A validação Godot retornou uma resposta inválida."
+        )
+    return payload
 
 
 @workspace_scoped_router.get("/git/members", response_model=list[GitMentionUser])

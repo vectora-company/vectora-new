@@ -71,10 +71,11 @@ export type WorkbenchTab =
   | "storage"
   | "tasks"
   | "context_graph"
-  | "library";
+  | "library"
+  | "godot";
 
 // Ordem: file system → git → plan → segundo plano → browser → memory (rag) →
-// context graph → library (MCP/Skills/Memory) → terminal (shell).
+// context graph → Godot → library (MCP/Skills/Memory) → terminal (shell).
 export const WORKBENCH_TABS: WorkbenchTab[] = [
   "files",
   "git",
@@ -83,6 +84,7 @@ export const WORKBENCH_TABS: WorkbenchTab[] = [
   "browser",
   "storage",
   "context_graph",
+  "godot",
   "library",
   "terminal",
 ];

@@ -90,6 +90,9 @@ vi.mock("../tabs/context-graph-tab", () => ({
 vi.mock("../tabs/library-tab", () => ({
   LibraryTab: () => <div>stub-library</div>,
 }));
+vi.mock("../tabs/godot-tab", () => ({
+  GodotTab: () => <div>stub-godot</div>,
+}));
 
 afterEach(() => {
   cleanup();
@@ -139,6 +142,12 @@ describe("WorkbenchContent — switch de renderização por aba", () => {
     renderContent({ threadId: "t1" });
     expect(screen.getByText("stub-library")).toBeInTheDocument();
   });
+
+  it("activeTab='godot' monta GodotTab", () => {
+    setActiveTab("t1", "godot");
+    renderContent({ threadId: "t1" });
+    expect(screen.getByText("stub-godot")).toBeInTheDocument();
+  });
 });
 
 describe("WorkbenchNavBar — ícone do Context Graph não fica mais atrás de flag beta", () => {
@@ -179,6 +188,7 @@ describe("WorkbenchContent — troca de aba nunca trava no conteúdo anterior (r
     "tasks",
     "context_graph",
     "library",
+    "godot",
   ];
   const STUB_TEXT: Record<WorkbenchTab, string> = {
     terminal: "stub-terminal",
@@ -190,6 +200,7 @@ describe("WorkbenchContent — troca de aba nunca trava no conteúdo anterior (r
     tasks: "stub-tasks",
     context_graph: "stub-context-graph",
     library: "stub-library",
+    godot: "stub-godot",
   };
 
   it("percorrendo todas as 9 abas em sequência, o header e o conteúdo montado batem em cada troca", () => {

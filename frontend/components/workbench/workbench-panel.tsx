@@ -33,6 +33,7 @@ import {
   Radar,
   Waypoints,
   Library,
+  Gamepad2,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useWorkspaceWatcher } from "@/lib/hooks/use-workspace-watcher";
@@ -64,6 +65,7 @@ import { MemoryTab } from "./tabs/memory-tab";
 import { TasksTab } from "./tabs/tasks-tab";
 import { ContextGraphTab } from "./tabs/context-graph-tab";
 import { LibraryTab } from "./tabs/library-tab";
+import { GodotTab } from "./tabs/godot-tab";
 import type { GitCommitDetailsState } from "./git/history-view";
 import type { GithubItemRef } from "./git/github-view";
 import type { PlanItem } from "@/lib/stores/workbench-store";
@@ -107,6 +109,7 @@ const TAB_ICON: Record<
   tasks: Radar,
   context_graph: Waypoints,
   library: Library,
+  godot: Gamepad2,
 };
 
 /** Lê o cache do workbench-store e devolve o texto do chip por aba. */
@@ -141,6 +144,7 @@ function useTabBadge(
     case "tasks":
     case "context_graph":
     case "library":
+    case "godot":
       return null;
   }
 }
@@ -468,6 +472,7 @@ export function WorkbenchContent({
               />
             )}
             {activeTab === "library" && <LibraryTab threadId={threadId} />}
+            {activeTab === "godot" && <GodotTab />}
           </motion.div>
         )}
       </div>

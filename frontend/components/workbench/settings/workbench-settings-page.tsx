@@ -48,8 +48,9 @@ export function WorkbenchSettingsPage({
     result.set(descriptor.workbench, group);
     return result;
   }, new Map());
-  const orderedWorkbenches = WORKBENCH_TABS.filter((workbench) =>
-    groups.has(workbench),
+  const orderedWorkbenches = WORKBENCH_TABS.filter(
+    (workbench): workbench is WorkbenchId =>
+      workbench !== "godot" && groups.has(workbench),
   );
 
   return (

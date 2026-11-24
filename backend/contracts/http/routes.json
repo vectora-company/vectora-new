@@ -2781,6 +2781,13 @@
   },
   {
     "methods": [
+      "POST"
+    ],
+    "name": "validate_workspace_godot_project_workspaces__workspace_id__godot_validate_post",
+    "path": "/workspaces/{workspace_id}/godot/validate"
+  },
+  {
+    "methods": [
       "GET"
     ],
     "name": "get_workspace_hooks_workspaces__workspace_id__hooks_get",

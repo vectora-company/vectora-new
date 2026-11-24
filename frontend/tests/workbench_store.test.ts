@@ -49,6 +49,7 @@ describe("WORKBENCH_TABS", () => {
       "browser",
       "storage",
       "context_graph",
+      "godot",
       "library",
       "terminal",
     ]);
