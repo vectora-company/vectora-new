@@ -92,6 +92,8 @@ class InstalledSmokeReport(BaseModel):
     renderer_status: RunStatus = "not_run"
     renderer_ready_state: str | None = None
     renderer_root_children: int | None = Field(default=None, ge=0)
+    renderer_route_mounted: bool | None = None
+    renderer_titlebar_mounted: bool | None = None
     host: dict[str, str] = Field(default_factory=dict)
     app_version: str | None = None
     electron_version: str | None = None
@@ -117,7 +119,9 @@ def _available_loopback_port() -> int:
         return int(listener.getsockname()[1])
 
 
-def _inspect_installed_renderer(port: int, timeout_seconds: float) -> tuple[str, int]:
+def _inspect_installed_renderer(
+    port: int, timeout_seconds: float
+) -> tuple[str, int, bool, bool]:
     """Verify a mounted React root over the temporary, loopback-only CDP endpoint."""
     from playwright.sync_api import sync_playwright
 
@@ -141,7 +145,9 @@ def _inspect_installed_renderer(port: int, timeout_seconds: float) -> tuple[str,
                 """() => {
                   const root = document.querySelector('#root');
                   return document.readyState === 'complete' &&
-                    root instanceof HTMLElement && root.childElementCount > 0;
+                    root instanceof HTMLElement && root.childElementCount > 0 &&
+                    root.querySelector('[data-route]') &&
+                    root.querySelector('[data-titlebar]');
                 }""",
                 timeout=max(1, round(timeout_seconds * 1000)),
             )
@@ -149,13 +155,22 @@ def _inspect_installed_renderer(port: int, timeout_seconds: float) -> tuple[str,
                 """() => ({
                   readyState: document.readyState,
                   rootChildren: document.querySelector('#root')?.childElementCount ?? 0,
+                  routeMounted: Boolean(document.querySelector('#root [data-route]')),
+                  titlebarMounted: Boolean(document.querySelector('#root [data-titlebar]')),
                 })"""
             )
             ready_state = state.get("readyState")
             root_children = state.get("rootChildren")
-            if ready_state != "complete" or not isinstance(root_children, int):
+            route_mounted = state.get("routeMounted")
+            titlebar_mounted = state.get("titlebarMounted")
+            if (
+                ready_state != "complete"
+                or not isinstance(root_children, int)
+                or route_mounted is not True
+                or titlebar_mounted is not True
+            ):
                 raise RuntimeError("O renderer não retornou estado verificável.")
-            return ready_state, root_children
+            return ready_state, root_children, route_mounted, titlebar_mounted
         finally:
             with suppress(Exception):
                 browser.close()
@@ -270,6 +285,8 @@ def _report(
     renderer_status: RunStatus = "not_run",
     renderer_ready_state: str | None = None,
     renderer_root_children: int | None = None,
+    renderer_route_mounted: bool | None = None,
+    renderer_titlebar_mounted: bool | None = None,
 ) -> InstalledSmokeReport:
     """Create a terminal report without copying application logs or user data."""
     finished_ns = time.monotonic_ns()
@@ -368,6 +385,8 @@ def _report(
         renderer_status=renderer_status,
         renderer_ready_state=renderer_ready_state,
         renderer_root_children=renderer_root_children,
+        renderer_route_mounted=renderer_route_mounted,
+        renderer_titlebar_mounted=renderer_titlebar_mounted,
         stage_timings_ms=timings,
         backend_stages=backend_stage_records,
         provenance=RunProvenance(
@@ -412,7 +431,9 @@ def _report(
                         duration_ms=0,
                         detail=(
                             f"document.readyState={renderer_ready_state}; "
-                            f"#root possui {renderer_root_children} elementos filhos"
+                            f"#root possui {renderer_root_children} elementos filhos; "
+                            f"rota={renderer_route_mounted}; "
+                            f"titlebar={renderer_titlebar_mounted}"
                             if renderer_status == "passed"
                             else "o renderer instalado não passou pela verificação CDP"
                         ),
@@ -510,6 +531,8 @@ def run_installed_smoke(  # noqa: PLR0911
         renderer_status: RunStatus = "not_run"
         renderer_ready_state: str | None = None
         renderer_root_children: int | None = None
+        renderer_route_mounted: bool | None = None
+        renderer_titlebar_mounted: bool | None = None
         backend_stages: dict[str, BackendStageRecord] = {}
         app_metadata: tuple[str, str, str, str | None, bool | None] | None = None
         marker_lock = threading.Lock()
@@ -605,11 +628,14 @@ def run_installed_smoke(  # noqa: PLR0911
                         raise subprocess.TimeoutExpired(process.args, timeout_seconds)
                 if cdp_port is None:
                     raise RuntimeError("A porta CDP da avaliação não foi alocada.")
-                renderer_ready_state, renderer_root_children = (
-                    _inspect_installed_renderer(
-                        cdp_port,
-                        max(0.1, deadline - time.monotonic()),
-                    )
+                (
+                    renderer_ready_state,
+                    renderer_root_children,
+                    renderer_route_mounted,
+                    renderer_titlebar_mounted,
+                ) = _inspect_installed_renderer(
+                    cdp_port,
+                    max(0.1, deadline - time.monotonic()),
                 )
                 renderer_status = "passed"
                 exit_code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
@@ -631,6 +657,8 @@ def run_installed_smoke(  # noqa: PLR0911
                 renderer_status=renderer_status,
                 renderer_ready_state=renderer_ready_state,
                 renderer_root_children=renderer_root_children,
+                renderer_route_mounted=renderer_route_mounted,
+                renderer_titlebar_mounted=renderer_titlebar_mounted,
             )
         except Exception as exc:
             _terminate_process_tree(process)
@@ -649,6 +677,8 @@ def run_installed_smoke(  # noqa: PLR0911
                 resource_metrics=resource_metrics,
                 ui_test=ui_test,
                 renderer_status="failed" if ui_test else "not_run",
+                renderer_route_mounted=renderer_route_mounted,
+                renderer_titlebar_mounted=renderer_titlebar_mounted,
             )
         except KeyboardInterrupt:
             _terminate_process_tree(process)
@@ -666,6 +696,8 @@ def run_installed_smoke(  # noqa: PLR0911
                 renderer_status=renderer_status,
                 renderer_ready_state=renderer_ready_state,
                 renderer_root_children=renderer_root_children,
+                renderer_route_mounted=renderer_route_mounted,
+                renderer_titlebar_mounted=renderer_titlebar_mounted,
             )
         finally:
             if process.poll() is None:
@@ -709,4 +741,6 @@ def run_installed_smoke(  # noqa: PLR0911
             renderer_status=renderer_status,
             renderer_ready_state=renderer_ready_state,
             renderer_root_children=renderer_root_children,
+            renderer_route_mounted=renderer_route_mounted,
+            renderer_titlebar_mounted=renderer_titlebar_mounted,
         )
