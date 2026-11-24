@@ -41,7 +41,11 @@ o runner deve gravar em `VECTORA_EVAL_RESULT_PATH` um JSON neste formato:
 ```
 
 Estados válidos para cada critério: `passed`, `failed`, `blocked`, `skipped` e
-`unsupported`. Uma lista vazia de critérios, JSON ausente/inválido, cenário
+`unsupported`. O estado terminal do runner também pode ser `cancelled`; nesse
+caso, o processo e seus filhos são encerrados, o relatório registra a
+interrupção e a CLI retorna código 130. O workspace temporário precisa constar
+removido para que um resultado `passed` seja mantido. Uma lista vazia de
+critérios, JSON ausente/inválido, cenário
 divergente, critério omitido/duplicado, nome fora do catálogo, saída não zero ou
 timeout nunca produz `passed`. Cada nome de assertion precisa corresponder
 exatamente a um critério versionado daquele cenário. O runner recebe um

@@ -282,7 +282,11 @@ def _handle_scenario(args: argparse.Namespace) -> int:
             "instalado nem registra evidência de provider."
         )
         print(f"Relatórios: {report_paths[0]} e {report_paths[1]}")
-    return 0 if report.status == "passed" else 2 if report.status != "failed" else 1
+    if report.status == "passed":
+        return 0
+    if report.status == "cancelled":
+        return 130
+    return 2 if report.status in {"blocked", "skipped", "unsupported"} else 1
 
 
 def _handle_suite(args: argparse.Namespace) -> int:

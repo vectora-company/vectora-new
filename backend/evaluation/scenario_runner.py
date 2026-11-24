@@ -27,7 +27,9 @@ from backend.evaluation.scenarios import (
 )
 
 AssertionStatus = Literal["passed", "failed", "blocked", "skipped", "unsupported"]
-ScenarioStatus = Literal["passed", "failed", "blocked", "skipped", "unsupported"]
+ScenarioStatus = Literal[
+    "passed", "failed", "blocked", "skipped", "unsupported", "cancelled"
+]
 _SENSITIVE_ENV = re.compile(
     r"(?:API[_-]?KEY|ACCESS[_-]?KEY|(?:^|_)KEY(?:_|$)|AUTH|"
     r"CLIENT[_-]?SECRET|CREDENTIAL|COOKIE|PASS(?:WORD|PHRASE)|"
@@ -308,6 +310,7 @@ def run_fixture_scenario(
                 except KeyboardInterrupt:
                     _stop_process_tree(process)
                     reason = "runner cancelado pelo operador"
+                    report_status = "cancelled"
                 if reason is None:
                     if not result_path.is_file():
                         reason = "runner terminou sem gravar o resultado JSON"
@@ -337,14 +340,17 @@ def run_fixture_scenario(
                                 if exit_code != 0:
                                     report_status = "failed"
                                     reason = f"runner encerrou com código {exit_code}"
-                elif reason == "runner cancelado pelo operador":
-                    raise KeyboardInterrupt
         except KeyboardInterrupt:
-            report_status = "failed"
+            report_status = "cancelled"
+            reason = "runner cancelado pelo operador"
         except OSError as exc:
             reason = f"não foi possível iniciar o runner: {exc.strerror or exc}"
             report_status = "blocked"
 
+    workspace_removed = not Path(temporary_path).exists()
+    if report_status == "passed" and not workspace_removed:
+        report_status = "failed"
+        reason = "workspace temporário não foi removido"
     return _make_report(
         run_id=run_id,
         scenario=scenario,
@@ -358,6 +364,7 @@ def run_fixture_scenario(
         exit_code=exit_code,
         assertions=assertions,
         metrics=metrics,
+        temporary_workspace_removed=workspace_removed,
     )
 
 
@@ -433,6 +440,7 @@ def _make_report(
     exit_code: int | None = None,
     assertions: list[ScenarioAssertion] | None = None,
     metrics: list[ScenarioRunnerMetric] | None = None,
+    temporary_workspace_removed: bool = True,
 ) -> ScenarioRunnerReport:
     finished = datetime.now(UTC)
     return ScenarioRunnerReport(
@@ -450,6 +458,7 @@ def _make_report(
         exit_code=exit_code,
         assertions=assertions or [],
         metrics=metrics or [],
+        temporary_workspace_removed=temporary_workspace_removed,
     )
 
 
