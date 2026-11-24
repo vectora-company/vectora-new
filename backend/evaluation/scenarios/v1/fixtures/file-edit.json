@@ -1,0 +1,5 @@
+{
+  "initial": { "notes.txt": "status: draft\n" },
+  "expected": { "notes.txt": "status: reviewed\n" },
+  "expected_diff": "-status: draft\n+status: reviewed\n"
+}

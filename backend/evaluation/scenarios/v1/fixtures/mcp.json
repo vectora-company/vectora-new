@@ -1,0 +1,6 @@
+{
+  "server": "fixture-mcp",
+  "tool": "echo",
+  "input": { "value": "synthetic" },
+  "expected": { "value": "synthetic" }
+}

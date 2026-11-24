@@ -676,6 +676,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Comandos do Evaluation Lab:\n"
             "  smoke --app EXECUTABLE [--timeout-seconds N]\n"
+            "  scenarios [--output human|json]\n"
             "  run --suite FILE\n"
             "  compare BASELINE CANDIDATE"
         ),
@@ -709,6 +710,33 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Salva o relatório estruturado neste caminho",
     )
     eval_smoke.add_argument("--output", choices=("human", "json"), default="human")
+
+    eval_scenarios = eval_sub.add_parser(
+        "scenarios",
+        help="Lista cenários versionados e suas pré-condições sem executá-los",
+    )
+    eval_scenarios.add_argument(
+        "--available-capability",
+        action="append",
+        default=[],
+        help="Capability disponível no executor local; pode ser repetido",
+    )
+    eval_scenarios.add_argument(
+        "--provider-configured",
+        action="store_true",
+        help="Indica que há provider configurado para cenários que o exigem",
+    )
+    eval_scenarios.add_argument(
+        "--provider-remote",
+        action="store_true",
+        help="Indica que o provider configurado é remoto",
+    )
+    eval_scenarios.add_argument(
+        "--allow-remote-provider",
+        action="store_true",
+        help="Opt-in explícito para enviar dados sintéticos ao provider remoto",
+    )
+    eval_scenarios.add_argument("--output", choices=("human", "json"), default="human")
 
     eval_compare = eval_sub.add_parser(
         "compare", help="Compara duas cassetes (baseline vs candidate)"

@@ -13,9 +13,16 @@ from backend.evaluation.metrics import (
 )
 from backend.evaluation.replay_client import ReplayChatClient
 from backend.evaluation.runner import EvalMetric, EvalReport, compare_cassettes
+from backend.evaluation.scenarios import (
+    BenchmarkScenario,
+    ScenarioReadiness,
+    assess_scenario_readiness,
+    load_scenarios,
+)
 
 __all__ = [
     "BenchmarkMetric",
+    "BenchmarkScenario",
     "Cassette",
     "CassetteInteraction",
     "EvalMetric",
@@ -25,6 +32,9 @@ __all__ = [
     "InstalledSmokeReport",
     "ReplayChatClient",
     "RunProvenance",
+    "ScenarioReadiness",
+    "assess_scenario_readiness",
     "compare_cassettes",
+    "load_scenarios",
     "run_installed_smoke",
 ]

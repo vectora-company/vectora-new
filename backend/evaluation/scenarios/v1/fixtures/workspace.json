@@ -1,0 +1,4 @@
+{
+  "files": [{ "path": "README.md", "content": "Demo workspace\n" }],
+  "expected_paths": ["README.md"]
+}

@@ -1,0 +1,10 @@
+{
+  "conversation": [
+    {
+      "role": "user",
+      "content": "For this synthetic project, call the staging environment blue."
+    }
+  ],
+  "expected_memory": { "environment": "staging", "color": "blue" },
+  "privacy": { "external_provider_allowed": false }
+}

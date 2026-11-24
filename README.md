@@ -147,6 +147,11 @@ O comando emite um `run_id` e um estado estruturado. Se o app não puder iniciar
 falhar na prontidão ou exceder o limite, o resultado não é marcado como
 `passed`.
 
+O catálogo `vectora eval scenarios` lista os cenários sintéticos versionados em
+`backend/evaluation/scenarios/v1/` e valida os hashes das fixtures. Esse comando
+avalia pré-condições; ele não executa fluxos do agente nem marca cenários como
+aprovados.
+
 ---
 
 ## Build (SCons)

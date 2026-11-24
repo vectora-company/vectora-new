@@ -14,6 +14,7 @@ from backend.evaluation.cassette import Cassette
 from backend.evaluation.installed import run_installed_smoke
 from backend.evaluation.replay_client import ReplayChatClient
 from backend.evaluation.runner import compare_cassettes
+from backend.evaluation.scenarios import assess_scenario_readiness, load_scenarios
 from backend.vtypes import JsonObject
 from backend.vtypes.message import VMessage
 
@@ -159,7 +160,43 @@ def _handle_smoke(args: argparse.Namespace) -> int:
     return 0 if report.status == "passed" else 2 if report.status == "blocked" else 1
 
 
-def handle_eval(args: argparse.Namespace) -> int:
+def _handle_scenarios(args: argparse.Namespace) -> int:
+    """Lista cenários versionados e seu estado de prontidão sem executá-los."""
+    try:
+        scenarios = load_scenarios()
+    except (OSError, ValueError) as exc:
+        print(f"Erro ao carregar catálogo de cenários: {exc}", file=sys.stderr)
+        return 1
+
+    capabilities = set(getattr(args, "available_capability", []) or [])
+    results = [
+        {
+            "scenario": scenario.model_dump(mode="json"),
+            "readiness": assess_scenario_readiness(
+                scenario,
+                available_capabilities=capabilities,
+                provider_configured=getattr(args, "provider_configured", False),
+                provider_is_remote=getattr(args, "provider_remote", False),
+                remote_provider_opt_in=getattr(args, "allow_remote_provider", False),
+            ).model_dump(mode="json"),
+        }
+        for scenario in scenarios
+    ]
+    if getattr(args, "output", "human") == "json":
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"Cenários versionados: {len(results)} (catálogo; nenhuma execução iniciada)"
+        )
+        for result in results:
+            readiness = result["readiness"]
+            print(
+                f"{readiness['status']}: {readiness['scenario_id']} — {readiness['reason']}"
+            )
+    return 0
+
+
+def handle_eval(args: argparse.Namespace) -> int:  # noqa: PLR0911
     """Roteia as ações de eval."""
     action = getattr(args, "action", None)
 
@@ -185,6 +222,9 @@ def handle_eval(args: argparse.Namespace) -> int:
 
     if action == "smoke":
         return _handle_smoke(args)
+
+    if action == "scenarios":
+        return _handle_scenarios(args)
 
     print(
         "Subcomando eval desconhecido. Use 'vectora eval run' ou 'vectora eval compare'.",
