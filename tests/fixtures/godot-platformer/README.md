@@ -22,3 +22,9 @@ VECTORA_GODOT_EXECUTABLE=/caminho/para/godot uv run --no-sync pytest tests/integ
 O teste cria uma cópia temporária do projeto, troca a cena inicial pelo runner,
 usa um prazo máximo e encerra a árvore de processos se o engine travar. A cópia
 descartável inclui o import/cache do Godot; nada é gravado na fixture original.
+
+Uma regressão adicional quebra deliberadamente o tipo de `player.gd` e remove
+`scenes/bullet.tscn` na cópia temporária. Ela confirma que o Godot aponta os
+arquivos causais, restaura ambos e exige que importação e inicialização passem
+sem os erros originais. O teste é determinístico; não representa uma execução
+do agente ou de um provedor de IA.
