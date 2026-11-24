@@ -138,5 +138,6 @@ def test_provenance_hashes_safe_configuration_without_storing_values() -> None:
     assert len(provenance.configuration_digest or "") == 64
     assert provenance.provider == "local"
     assert provenance.model == "test-model"
-    assert "temperature" not in provenance.model_dump_json()
-    assert "300" not in provenance.model_dump_json()
+    serialized = provenance.model_dump_json()
+    assert "temperature" not in serialized
+    assert "max_tokens" not in serialized
