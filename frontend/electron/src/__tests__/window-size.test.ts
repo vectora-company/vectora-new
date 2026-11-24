@@ -44,6 +44,22 @@ describe("computeMinimumWindowSize", () => {
       height: 180,
     });
   });
+
+  it("converte o mínimo lógico para escalas fracionárias e inteiras", () => {
+    expect(
+      computeMinimumWindowSize({ width: 1920, height: 1080 }, 1.5),
+    ).toEqual({ width: 213, height: 160 });
+    expect(computeMinimumWindowSize({ width: 1920, height: 1080 }, 2)).toEqual({
+      width: 160,
+      height: 120,
+    });
+  });
+
+  it("usa escala padrão quando o fator recebido não é válido", () => {
+    expect(
+      computeMinimumWindowSize({ width: 1920, height: 1080 }, Number.NaN),
+    ).toEqual({ width: 320, height: 240 });
+  });
 });
 
 describe("shouldFitWindowToWorkArea", () => {

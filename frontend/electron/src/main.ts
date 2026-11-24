@@ -1033,11 +1033,24 @@ function attachContextMenu(webContents: WebContents): void {
  * na área útil do monitor onde ela está.
  */
 let fitTimers: NodeJS.Timeout[] = [];
+let displayMetricsListenerAttached = false;
 
 function fitWindowToWorkArea(): void {
-  if (!shouldFitWindowToWorkArea(process.platform, process.env)) return;
   const win = mainWindow;
   if (!win || win.isDestroyed()) return;
+  const display = screen.getDisplayMatching(win.getBounds());
+  const minimumSize = computeMinimumWindowSize(
+    display.workAreaSize,
+    display.scaleFactor,
+  );
+  const currentMinimum = win.getMinimumSize();
+  if (
+    currentMinimum[0] !== minimumSize.width ||
+    currentMinimum[1] !== minimumSize.height
+  ) {
+    win.setMinimumSize(minimumSize.width, minimumSize.height);
+  }
+  if (!shouldFitWindowToWorkArea(process.platform, process.env)) return;
   // O compositor pode entregar os bounds finais depois do evento; confere em
   // vários instantes e cancela a verificação anterior para não acumular.
   fitTimers.forEach(clearTimeout);
@@ -1105,9 +1118,13 @@ function createWindow(options: { visible?: boolean } = {}): void {
   // Janela nasce proporcional à tela detectada, não num tamanho fixo — numa
   // tela 1080p+ um default fixo como 1400x900 já nasce quase em tela cheia,
   // prejudicando o modo janela (ver computeDefaultWindowSize).
-  const workAreaSize = screen.getPrimaryDisplay().workAreaSize;
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const workAreaSize = primaryDisplay.workAreaSize;
   const { width, height } = computeDefaultWindowSize(workAreaSize);
-  const minimumSize = computeMinimumWindowSize(workAreaSize);
+  const minimumSize = computeMinimumWindowSize(
+    workAreaSize,
+    primaryDisplay.scaleFactor,
+  );
   const visible = shouldShow;
   windowReadyMarkerEmitted = false;
   mainWindow = new BrowserWindow({
@@ -1173,6 +1190,10 @@ function createWindow(options: { visible?: boolean } = {}): void {
   mainWindow.on("restore", fitWindowToWorkArea);
   mainWindow.on("leave-full-screen", fitWindowToWorkArea);
   mainWindow.on("moved", fitWindowToWorkArea);
+  if (!displayMetricsListenerAttached) {
+    screen.on("display-metrics-changed", fitWindowToWorkArea);
+    displayMetricsListenerAttached = true;
+  }
 
   // Inject app version no preload sem precisar recompilar.
   process.env.VECTORA_APP_VERSION = app.getVersion();

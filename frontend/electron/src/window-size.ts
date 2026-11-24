@@ -10,8 +10,9 @@ export interface WindowSize {
   height: number;
 }
 
-// A tile no Niri pode ficar bem menor que a janela de desktop tradicional.
-// BrowserWindow e screen usam DIP no Electron; não multiplicar pelo scaleFactor.
+// Mínimo desejado na superfície lógica do compositor. Em Wayland com escala
+// fracionária, o limite nativo do BrowserWindow vira área de superfície vezes
+// o scaleFactor; computeMinimumWindowSize converte o valor para esse espaço.
 const MIN_WINDOW_SIZE: WindowSize = { width: 320, height: 240 };
 
 /**
@@ -37,10 +38,21 @@ export function computeDefaultWindowSize(screenSize: WindowSize): WindowSize {
 }
 
 /** Minimum native bounds stay usable while allowing narrow compositor tiles. */
-export function computeMinimumWindowSize(screenSize: WindowSize): WindowSize {
+export function computeMinimumWindowSize(
+  screenSize: WindowSize,
+  scaleFactor = 1,
+): WindowSize {
+  const safeScaleFactor =
+    Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
   return {
-    width: Math.min(MIN_WINDOW_SIZE.width, screenSize.width),
-    height: Math.min(MIN_WINDOW_SIZE.height, screenSize.height),
+    width: Math.min(
+      Math.floor(MIN_WINDOW_SIZE.width / safeScaleFactor),
+      screenSize.width,
+    ),
+    height: Math.min(
+      Math.floor(MIN_WINDOW_SIZE.height / safeScaleFactor),
+      screenSize.height,
+    ),
   };
 }
 
