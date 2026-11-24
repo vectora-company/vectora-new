@@ -134,6 +134,19 @@ describe("Render Hints — registry dispatch", () => {
     expect(screen.getByRole("button", { name: /copy output/i })).toBeDefined();
   });
 
+  it("collapses long live terminal output while keeping it copyable", () => {
+    const tool = makeTool({
+      renderHint: "terminal_output",
+      liveOutputLines: Array.from({ length: 25 }, (_, i) => `line ${i + 1}`),
+    });
+    const { container } = render(<ToolCallRenderer tool={tool} isStreaming />);
+
+    const summary = screen.getByText(/show full output/i);
+    expect(summary.closest("details")?.open).toBe(false);
+    expect(screen.getByRole("button", { name: /copy output/i })).toBeDefined();
+    expect(container.querySelector("[data-testid='tool-elapsed']")).toBeNull();
+  });
+
   it("keeps error output expanded even when it is long", () => {
     const tool = makeTool({
       renderHint: "terminal_output",

@@ -601,6 +601,30 @@ function formatElapsed(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function CopyOutputButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+  const label = copied ? m.tool_output_copied() : m.tool_output_copy();
+
+  async function copyOutput() {
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copyOutput()}
+      className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+      aria-label={label}
+      title={label}
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {label}
+    </button>
+  );
+}
+
 // ============================================================================
 // Componente principal
 // ============================================================================
@@ -609,7 +633,6 @@ export const ToolCallRenderer = memo(function ToolCallRenderer({
   tool,
   isStreaming,
 }: ToolCallRendererProps) {
-  const [outputCopied, setOutputCopied] = useState(false);
   const hint: RenderHint = tool.renderHint ?? "json";
   const renderer = RENDERERS[hint] ?? RENDERERS.json;
   const outputText =
@@ -620,12 +643,10 @@ export const ToolCallRenderer = memo(function ToolCallRenderer({
     tool.output != null &&
     !tool.isError &&
     (outputText.length > 1200 || outputText.split("\n").length > 18);
-
-  async function copyOutput() {
-    await navigator.clipboard.writeText(outputText);
-    setOutputCopied(true);
-    window.setTimeout(() => setOutputCopied(false), 1500);
-  }
+  const liveOutputText = tool.liveOutputLines?.join("\n") ?? "";
+  const liveOutputIsLong =
+    tool.output == null &&
+    (liveOutputText.length > 1200 || liveOutputText.split("\n").length > 18);
 
   return (
     <div
@@ -675,7 +696,24 @@ export const ToolCallRenderer = memo(function ToolCallRenderer({
       {tool.output == null &&
         tool.renderHint === "terminal_output" &&
         (tool.liveOutputLines?.length ?? 0) > 0 && (
-          <TerminalBlock content={tool.liveOutputLines!.join("\n")} />
+          <div className="mt-1.5 border-t border-border/40 pt-1.5">
+            {liveOutputIsLong ? (
+              <div className="flex items-start gap-2">
+                <details className="min-w-0 flex-1">
+                  <summary className="cursor-pointer text-[11px] text-muted-foreground hover:opacity-80">
+                    {m.tool_output_expand()}
+                    <span className="ml-2 inline-block max-w-[min(48vw,32rem)] truncate align-bottom font-mono opacity-70">
+                      {liveOutputText.slice(0, 120)}
+                    </span>
+                  </summary>
+                  <TerminalBlock content={liveOutputText} />
+                </details>
+                <CopyOutputButton content={liveOutputText} />
+              </div>
+            ) : (
+              <TerminalBlock content={liveOutputText} />
+            )}
+          </div>
         )}
 
       {/* M4 — Tool result pendente: pulse skeleton enquanto aguarda resposta */}
@@ -704,24 +742,7 @@ export const ToolCallRenderer = memo(function ToolCallRenderer({
                 </summary>
                 <div className="mt-1">{renderer(tool.output, tool.name)}</div>
               </details>
-              <button
-                type="button"
-                onClick={() => void copyOutput()}
-                className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label={
-                  outputCopied ? m.tool_output_copied() : m.tool_output_copy()
-                }
-                title={
-                  outputCopied ? m.tool_output_copied() : m.tool_output_copy()
-                }
-              >
-                {outputCopied ? (
-                  <Check className="h-3 w-3" />
-                ) : (
-                  <Copy className="h-3 w-3" />
-                )}
-                {outputCopied ? m.tool_output_copied() : m.tool_output_copy()}
-              </button>
+              <CopyOutputButton content={outputText} />
             </div>
           ) : (
             renderer(tool.output, tool.name)
