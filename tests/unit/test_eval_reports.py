@@ -99,6 +99,21 @@ def test_aggregation_rejects_mixing_fixture_runner_and_cassette_replay() -> None
         aggregate_runs([fixture_runner, cassette_replay], command=["vectora", "eval"])
 
 
+def test_aggregation_rejects_mixed_build_configuration_or_fixture() -> None:
+    different_config = _run("candidate", 10)
+    different_config.provenance.configuration_digest = "config-v2"
+    with pytest.raises(ValueError, match="agregação não pode misturar configuração"):
+        aggregate_runs(
+            [_run("base", 10), different_config], command=["vectora", "eval"]
+        )
+
+    different_revision = _run("other-build", 10, revision="sha-b")
+    with pytest.raises(ValueError, match="agregação não pode misturar revisão"):
+        aggregate_runs(
+            [_run("base", 10), different_revision], command=["vectora", "eval"]
+        )
+
+
 def test_comparison_records_target_revisions_and_ignores_expected_sha_change() -> None:
     report = compare_runs(
         [_run("base-1", 20, revision="sha-base")],
@@ -171,6 +186,22 @@ def test_comparison_refuses_mixing_fixture_replay_with_live_provider() -> None:
     assert "evidence_level: baseline e candidato diferem" in comparison.differences
 
 
+def test_comparison_rejects_multiple_revisions_inside_a_group() -> None:
+    comparison = compare_runs(
+        [
+            _run("base-1", 10, revision="sha-base"),
+            _run("base-2", 12, revision="sha-other"),
+        ],
+        [_run("candidate", 9, revision="sha-candidate")],
+    )
+
+    assert not comparison.compatible
+    assert comparison.metrics == []
+    assert any(
+        "varia ou está ausente em baseline" in item for item in comparison.differences
+    )
+
+
 def test_json_csv_exports_preserve_schema_status_and_provenance() -> None:
     report = aggregate_runs([_run("run-1", 9)], command=["vectora", "eval"])
     json_data = json.loads(export_json(report))
@@ -188,6 +219,8 @@ def test_json_csv_exports_preserve_schema_status_and_provenance() -> None:
     assert "fixture-v1" in csv_data
     assert "policy-v1" in csv_data
     assert "python.monotonic_ns" in csv_data
+    assert "host_release" in csv_data
+    assert "host_memory_total_bytes" in csv_data
 
 
 def test_public_export_requires_review_and_redacts_sensitive_values() -> None:

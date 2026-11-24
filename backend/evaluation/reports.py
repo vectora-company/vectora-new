@@ -143,6 +143,24 @@ def aggregate_runs(runs: list[BenchmarkRun], *, command: list[str]) -> Benchmark
     evidence_levels = {run.evidence_level for run in runs}
     if len(evidence_levels) != 1:
         raise ValueError("um relatório não pode misturar níveis de evidência")
+    condition_getters = (
+        ("revisão", lambda run: run.provenance.source_revision),
+        ("fixture", lambda run: run.fixture_digest),
+        ("policy", lambda run: run.policy_digest),
+        ("avaliador", lambda run: run.evaluator_version),
+        ("sistema", lambda run: run.provenance.host_system),
+        ("release do host", lambda run: run.provenance.host_release),
+        ("arquitetura do host", lambda run: run.provenance.host_machine),
+        ("processador", lambda run: run.provenance.host_processor),
+        ("CPUs lógicas", lambda run: run.provenance.host_logical_cpu_count),
+        ("memória do host", lambda run: run.provenance.host_memory_total_bytes),
+        ("provider", lambda run: run.provenance.provider),
+        ("modelo", lambda run: run.provenance.model),
+        ("configuração", lambda run: run.provenance.configuration_digest),
+    )
+    for name, getter in condition_getters:
+        if len({getter(run) for run in runs}) != 1:
+            raise ValueError(f"agregação não pode misturar {name}")
     counts: dict[str, int] = defaultdict(int)
     groups: dict[tuple[str, str, str, Profile], list[float]] = defaultdict(list)
     for run in runs:
@@ -199,7 +217,17 @@ def compare_runs(
         ("evidence_level", lambda run: run.evidence_level),
         ("scenario_id", lambda run: run.scenario_id),
         ("fixture_digest", lambda run: run.fixture_digest),
-        ("host", lambda run: (run.provenance.host_system, run.provenance.host_machine)),
+        (
+            "host",
+            lambda run: (
+                run.provenance.host_system,
+                run.provenance.host_release,
+                run.provenance.host_machine,
+                run.provenance.host_processor,
+                run.provenance.host_logical_cpu_count,
+                run.provenance.host_memory_total_bytes,
+            ),
+        ),
         ("provider", lambda run: run.provenance.provider),
         ("model", lambda run: run.provenance.model),
         ("configuration_digest", lambda run: run.provenance.configuration_digest),
@@ -216,6 +244,11 @@ def compare_runs(
             differences.append(f"{name}: valores variam dentro do grupo")
         elif baseline_values != candidate_values:
             differences.append(f"{name}: baseline e candidato diferem")
+
+    for name, runs in (("baseline", baseline), ("candidate", candidate)):
+        revisions = {run.provenance.source_revision for run in runs}
+        if None in revisions or len(revisions) != 1:
+            differences.append(f"source_revision: varia ou está ausente em {name}")
     if any(run.status != "passed" for run in baseline + candidate):
         differences.append("status: há execução não aprovada nos grupos")
 
@@ -350,7 +383,11 @@ def export_csv(
             "source_revision",
             "runtime_version",
             "host_system",
+            "host_release",
             "host_machine",
+            "host_processor",
+            "host_logical_cpu_count",
+            "host_memory_total_bytes",
             "provider",
             "model",
             "configuration_digest",
@@ -384,7 +421,11 @@ def export_csv(
                 "source_revision": run.provenance.source_revision,
                 "runtime_version": run.provenance.runtime_version,
                 "host_system": run.provenance.host_system,
+                "host_release": run.provenance.host_release,
                 "host_machine": run.provenance.host_machine,
+                "host_processor": run.provenance.host_processor,
+                "host_logical_cpu_count": run.provenance.host_logical_cpu_count,
+                "host_memory_total_bytes": run.provenance.host_memory_total_bytes,
                 "provider": run.provenance.provider,
                 "model": run.provenance.model,
                 "configuration_digest": run.provenance.configuration_digest,

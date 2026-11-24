@@ -115,7 +115,11 @@ fim do stream; sem ambos, o relatório guarda `unavailable` com motivo.
 p50/p95 de cada grupo e intervalo normal aproximado para o delta quando ambos
 têm ao menos duas observações. O intervalo é descritivo, não um teste de
 significância; com amostras pequenas ou variáveis, a comparação deve ser tratada
-como inconclusiva. As métricas continuam separadas por dimensão e unidade.
+como inconclusiva. Antes da agregação, todas as execuções precisam compartilhar
+build, fixture, policy, avaliador, host, provider, modelo e configuração; perfis
+frio/quente permanecem separados. A comparação também rejeita mais de uma
+revisão por grupo, mantendo a mudança de SHA entre baseline e candidato explícita.
+As métricas continuam separadas por dimensão e unidade.
 
 ## Estudos técnicos verificáveis
 

@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import time
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
+import psutil
 from pydantic import BaseModel, Field, model_validator
 
 MetricStatus = Literal["measured", "unavailable", "blocked", "skipped", "not_run"]
+
+
+def _host_memory_total_bytes() -> int | None:
+    """Return physical memory when the host API can report it."""
+    try:
+        return int(psutil.virtual_memory().total)
+    except psutil.Error:
+        return None
 
 
 class BenchmarkMetric(BaseModel):
@@ -57,6 +67,14 @@ class RunProvenance(BaseModel):
     source_revision: str | None = None
     host_system: str = Field(default_factory=platform.system)
     host_machine: str = Field(default_factory=lambda: platform.machine() or "unknown")
+    host_release: str = Field(default_factory=platform.release)
+    host_processor: str = Field(
+        default_factory=lambda: platform.processor() or "unknown"
+    )
+    host_logical_cpu_count: int | None = Field(default_factory=os.cpu_count)
+    host_memory_total_bytes: int | None = Field(
+        default_factory=_host_memory_total_bytes
+    )
     python_version: str = Field(default_factory=platform.python_version)
     provider: str | None = None
     model: str | None = None
