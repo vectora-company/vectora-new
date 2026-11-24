@@ -111,6 +111,12 @@ tokens de entrada/saída, TTFT e `output_tokens_per_second`. A taxa usa apenas
 tokens de saída informados pelo provider e a janela entre o primeiro texto e o
 fim do stream; sem ambos, o relatório guarda `unavailable` com motivo.
 
+`vectora eval compare-runs` inclui tamanho da amostra, média, desvio-padrão,
+p50/p95 de cada grupo e intervalo normal aproximado para o delta quando ambos
+têm ao menos duas observações. O intervalo é descritivo, não um teste de
+significância; com amostras pequenas ou variáveis, a comparação deve ser tratada
+como inconclusiva. As métricas continuam separadas por dimensão e unidade.
+
 ## Estudos técnicos verificáveis
 
 Use `backend/evaluation/studies/v1/template.json` como ponto de partida e

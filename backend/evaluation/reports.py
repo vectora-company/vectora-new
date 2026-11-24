@@ -91,12 +91,24 @@ class BenchmarkReport(BaseModel):
 
 
 class MetricComparison(BaseModel):
+    """Resumo comparável que preserva amostra, dispersão e incerteza."""
+
     name: str
     dimension: str
     unit: str
+    baseline_sample_count: int
     baseline_mean: float
+    baseline_standard_deviation: float | None
+    baseline_p50: float
+    baseline_p95: float
+    candidate_sample_count: int
     candidate_mean: float
+    candidate_standard_deviation: float | None
+    candidate_p50: float
+    candidate_p95: float
     delta: float
+    delta_confidence_95_low: float | None
+    delta_confidence_95_high: float | None
 
 
 class BenchmarkComparison(BaseModel):
@@ -223,14 +235,44 @@ def compare_runs(
             differences.append("metrics: não há medições numéricas nos grupos")
         for key in sorted(left.keys() & right.keys()):
             name, dimension, unit = key
+            baseline_values = _metric_values(baseline, key)
+            candidate_values = _metric_values(candidate, key)
+            baseline_deviation = (
+                statistics.stdev(baseline_values) if len(baseline_values) > 1 else None
+            )
+            candidate_deviation = (
+                statistics.stdev(candidate_values)
+                if len(candidate_values) > 1
+                else None
+            )
+            delta = right[key] - left[key]
+            delta_low = None
+            delta_high = None
+            if baseline_deviation is not None and candidate_deviation is not None:
+                standard_error = math.sqrt(
+                    baseline_deviation**2 / len(baseline_values)
+                    + candidate_deviation**2 / len(candidate_values)
+                )
+                delta_low = delta - 1.96 * standard_error
+                delta_high = delta + 1.96 * standard_error
             metrics.append(
                 MetricComparison(
                     name=name,
                     dimension=dimension,
                     unit=unit,
+                    baseline_sample_count=len(baseline_values),
                     baseline_mean=left[key],
+                    baseline_standard_deviation=baseline_deviation,
+                    baseline_p50=_percentile(baseline_values, 0.5) or 0.0,
+                    baseline_p95=_percentile(baseline_values, 0.95) or 0.0,
+                    candidate_sample_count=len(candidate_values),
                     candidate_mean=right[key],
-                    delta=right[key] - left[key],
+                    candidate_standard_deviation=candidate_deviation,
+                    candidate_p50=_percentile(candidate_values, 0.5) or 0.0,
+                    candidate_p95=_percentile(candidate_values, 0.95) or 0.0,
+                    delta=delta,
+                    delta_confidence_95_low=delta_low,
+                    delta_confidence_95_high=delta_high,
                 )
             )
         if compatible and left.keys() != right.keys():
@@ -244,7 +286,9 @@ def compare_runs(
         candidate_revisions=candidate_revisions,
         metrics=metrics,
         limitations=[
-            "revisões diferentes são os alvos da comparação e permanecem identificadas"
+            "revisões diferentes são os alvos da comparação e permanecem identificadas",
+            "intervalo do delta usa aproximação normal independente; não é teste de significância",
+            "intervalos do delta ficam ausentes quando um grupo tem menos de duas amostras",
         ],
     )
 
@@ -258,6 +302,19 @@ def _mean_metrics(runs: list[BenchmarkRun]) -> dict[tuple[str, str, str], float]
                     metric.value
                 )
     return {key: statistics.fmean(items) for key, items in values.items()}
+
+
+def _metric_values(runs: list[BenchmarkRun], key: tuple[str, str, str]) -> list[float]:
+    """Coleta valores medidos para uma dimensão/unidade comparável."""
+    name, dimension, unit = key
+    return [
+        metric.value
+        for run in runs
+        for metric in run.metrics
+        if metric.status == "measured"
+        and metric.value is not None
+        and (metric.name, metric.dimension, metric.unit) == (name, dimension, unit)
+    ]
 
 
 def export_json(

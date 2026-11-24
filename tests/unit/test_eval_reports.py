@@ -109,6 +109,37 @@ def test_comparison_records_target_revisions_and_ignores_expected_sha_change() -
     assert report.baseline_revisions == ["sha-base"]
     assert report.candidate_revisions == ["sha-candidate"]
     assert report.metrics[0].delta == -5
+    assert report.metrics[0].baseline_sample_count == 1
+    assert report.metrics[0].delta_confidence_95_low is None
+    assert report.metrics[0].delta_confidence_95_high is None
+
+
+def test_comparison_keeps_distribution_and_delta_uncertainty() -> None:
+    comparison = compare_runs(
+        [_run("base-1", 10), _run("base-2", 12), _run("base-3", 14)],
+        [
+            _run("candidate-1", 20),
+            _run("candidate-2", 24),
+            _run("candidate-3", 28),
+        ],
+    )
+
+    metric = comparison.metrics[0]
+    assert comparison.compatible
+    assert metric.baseline_sample_count == 3
+    assert metric.candidate_sample_count == 3
+    assert metric.baseline_mean == 12
+    assert metric.candidate_mean == 24
+    assert metric.baseline_p50 == 12
+    assert metric.candidate_p95 == pytest.approx(27.6)
+    assert metric.delta == 12
+    assert metric.delta_confidence_95_low is not None
+    assert metric.delta_confidence_95_low < metric.delta
+    assert metric.delta_confidence_95_high is not None
+    assert metric.delta_confidence_95_high > metric.delta
+    assert any(
+        "não é teste de significância" in text for text in comparison.limitations
+    )
 
 
 def test_comparison_refuses_different_fixtures_and_failed_runs() -> None:
