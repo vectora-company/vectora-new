@@ -37,6 +37,10 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
         "assert 'OPENAI_API_KEY' not in os.environ\n"
         "assert 'GPG_PASSPHRASE' not in os.environ\n"
         "assert 'VECTORA_LICENSE_BYPASS' not in os.environ\n"
+        "run_id = os.environ['VECTORA_EVAL_RUN_ID']\n"
+        "print(f'VECTORA_EVAL_BACKEND_STAGE:{run_id}:embedding_worker:35.250:ready')\n"
+        "print(f'VECTORA_EVAL_BACKEND_STAGE:{run_id}:nats_sidecar:45.500:skipped')\n"
+        "print('VECTORA_EVAL_BACKEND_STAGE:' + '0' * 32 + ':fake:1.000:failed')\n"
         "print('VECTORA_EVAL_STAGE:electron_ready:1.000')\n"
         "print('VECTORA_EVAL_STAGE:backend_started:5.000')\n"
         "print('VECTORA_EVAL_STAGE:backend_ready:12.500')\n"
@@ -64,6 +68,10 @@ def test_installed_smoke_reports_pass_and_removes_isolated_profile(
     assert report.diagnostics[0].status == "passed"
     assert report.stage_timings_ms["backend_ready"] == 12.5
     assert report.stage_timings_ms["shutdown_complete"] == 50
+    assert report.backend_stages["embedding_worker"].status == "ready"
+    assert report.backend_stages["embedding_worker"].elapsed_ms == 35.25
+    assert report.backend_stages["nats_sidecar"].status == "skipped"
+    assert "fake" not in report.backend_stages
     assert {
         metric.name for metric in report.metrics if metric.stage == "electron_startup"
     } == {

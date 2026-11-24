@@ -15,7 +15,7 @@ import time
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -32,6 +32,10 @@ _SENSITIVE_ENV = re.compile(
 _WINDOW_READY_MARKER = "VECTORA_ELECTRON_WINDOW_READY"
 _SMOKE_PASSED_MARKER = "Vectora startup smoke test passed; closing the app."
 _STAGE_MARKER = re.compile(r"^VECTORA_EVAL_STAGE:([a-z_]+):([0-9]+(?:\.[0-9]+)?)$")
+_BACKEND_STAGE_MARKER = re.compile(
+    r"VECTORA_EVAL_BACKEND_STAGE:([0-9a-f]{32}):([a-z_]+):"
+    r"([0-9]+(?:\.[0-9]+)?):(ready|failed|skipped)"
+)
 _EXPECTED_STAGES = (
     "electron_ready",
     "backend_started",
@@ -50,6 +54,13 @@ class EvaluationDiagnostic(BaseModel):
     status: RunStatus
     duration_ms: int = Field(ge=0)
     detail: str | None = None
+
+
+class BackendStageRecord(BaseModel):
+    """Estado e tempo monotônico reportados por uma etapa do backend."""
+
+    status: Literal["ready", "failed", "skipped"]
+    elapsed_ms: float = Field(ge=0)
 
 
 class InstalledSmokeReport(BaseModel):
@@ -72,6 +83,7 @@ class InstalledSmokeReport(BaseModel):
     scenario_task_executed: Literal[False] = False
     host: dict[str, str] = Field(default_factory=dict)
     stage_timings_ms: dict[str, float] = Field(default_factory=dict)
+    backend_stages: dict[str, BackendStageRecord] = Field(default_factory=dict)
     provenance: RunProvenance
     metrics: list[BenchmarkMetric] = Field(default_factory=list)
     diagnostics: list[EvaluationDiagnostic] = Field(default_factory=list)
@@ -184,6 +196,7 @@ def _report(
     reason: str | None,
     exit_code: int | None,
     stage_timings_ms: dict[str, float] | None = None,
+    backend_stages: dict[str, BackendStageRecord] | None = None,
 ) -> InstalledSmokeReport:
     """Create a terminal report without copying application logs or user data."""
     finished_ns = time.monotonic_ns()
@@ -216,6 +229,31 @@ def _report(
         )
         for stage in _EXPECTED_STAGES
     ]
+    backend_stage_records = backend_stages or {}
+    backend_stage_metrics = [
+        BenchmarkMetric(
+            run_id=run_id,
+            scenario_id="installed-app-startup",
+            stage="backend_startup",
+            name=f"{stage}_elapsed",
+            value=record.elapsed_ms,
+            unit="ms",
+            dimension="performance",
+            source="backend.process.monotonic_ns",
+        )
+        for stage, record in sorted(backend_stage_records.items())
+    ]
+    backend_stage_diagnostics = [
+        EvaluationDiagnostic(
+            stage=f"backend_{stage}",
+            status={"ready": "passed", "failed": "failed", "skipped": "skipped"}[
+                record.status
+            ],
+            duration_ms=round(record.elapsed_ms),
+            detail="marcador correlacionado pelo run_id da avaliação",
+        )
+        for stage, record in sorted(backend_stage_records.items())
+    ]
     return InstalledSmokeReport(
         run_id=run_id,
         status=status,
@@ -227,6 +265,7 @@ def _report(
         exit_code=exit_code,
         host={"system": platform.system(), "machine": platform.machine() or "unknown"},
         stage_timings_ms=timings,
+        backend_stages=backend_stage_records,
         provenance=RunProvenance(
             run_id=run_id,
             scenario_id="installed-app-startup",
@@ -246,6 +285,7 @@ def _report(
                 source="python.monotonic_ns",
             ),
             *stage_metrics,
+            *backend_stage_metrics,
         ],
         diagnostics=[
             EvaluationDiagnostic(
@@ -255,6 +295,7 @@ def _report(
                 detail=reason,
             ),
             *stage_diagnostics,
+            *backend_stage_diagnostics,
         ],
     )
 
@@ -315,6 +356,7 @@ def run_installed_smoke(  # noqa: PLR0911
         try:
             profile.mkdir()
             env = _isolated_environment(profile, workspace)
+            env["VECTORA_EVAL_RUN_ID"] = run_id
         except OSError as exc:
             return _report(
                 run_id=run_id,
@@ -329,6 +371,7 @@ def run_installed_smoke(  # noqa: PLR0911
         reader: threading.Thread | None = None
         markers = {"window_ready": False, "passed": False}
         stage_timings_ms: dict[str, float] = {}
+        backend_stages: dict[str, BackendStageRecord] = {}
         marker_lock = threading.Lock()
         try:
             process = subprocess.Popen(  # noqa: S603  # nosec B603
@@ -368,6 +411,15 @@ def run_installed_smoke(  # noqa: PLR0911
                     match = _STAGE_MARKER.fullmatch(line.strip())
                     if match:
                         stage_timings_ms[match.group(1)] = float(match.group(2))
+                    backend_match = _BACKEND_STAGE_MARKER.search(line)
+                    if backend_match and backend_match.group(1) == run_id:
+                        backend_stages[backend_match.group(2)] = BackendStageRecord(
+                            status=cast(
+                                "Literal['ready', 'failed', 'skipped']",
+                                backend_match.group(4),
+                            ),
+                            elapsed_ms=float(backend_match.group(3)),
+                        )
 
         reader = threading.Thread(target=read_markers, daemon=True)
         reader.start()
@@ -423,4 +475,5 @@ def run_installed_smoke(  # noqa: PLR0911
             reason=reason,
             exit_code=exit_code,
             stage_timings_ms=stage_timings_ms,
+            backend_stages=backend_stages,
         )

@@ -81,3 +81,11 @@ renderer carregado, janela pronta e encerramento. Esses tempos medem etapas do
 processo Electron; não atribuem duração individual a cada sidecar. Versões sem
 os marcadores estruturados continuam sendo avaliadas pelo resultado de startup,
 com as etapas ausentes marcadas como `skipped`.
+
+O backend recebe o mesmo `run_id` e pode registrar etapas estruturadas para
+migrations SQLite, tabela de sessões, storage configurado, worker de embeddings,
+scheduler e restauração de llama.cpp. O NATS reporta `ready`, `failed` ou
+`skipped` quando for solicitado. Esses estados ficam em `backend_stages` e não
+são colapsados no resultado geral do smoke; assim um app que abriu pode mostrar
+separadamente uma dependência opcional ausente ou com falha. O marcador não
+inclui valores de configuração nem credenciais.

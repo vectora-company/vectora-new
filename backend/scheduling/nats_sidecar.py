@@ -41,6 +41,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from backend.evaluation_stages import emit_backend_stage
 from backend.services.subprocess_logging import pipe_to_logger
 from backend.services.subprocess_sidecar_utils import (
     LazyLock,
@@ -138,10 +139,12 @@ async def ensure_nats_sidecar() -> str | None:
 
     async with _spawn_lock.get():
         if _proc is not None and _proc.returncode is None:
+            emit_backend_stage("nats_sidecar", "ready")
             return _url
 
         binary = _resolve_binary()
         if binary is None:
+            emit_backend_stage("nats_sidecar", "skipped")
             logger.info(
                 "nats_sidecar: binário nats-server não encontrado — sem persistência de fila"
             )
@@ -180,6 +183,7 @@ async def ensure_nats_sidecar() -> str | None:
 
         if reusable:
             _url = registered_url
+            emit_backend_stage("nats_sidecar", "ready")
             if flatpak:
                 logger.info(
                     "nats_sidecar: reusando sidecar já ativo em %s (Flatpak)",
@@ -224,11 +228,13 @@ async def ensure_nats_sidecar() -> str | None:
                 **sidecar_process_options(),
             )
         except Exception:
+            emit_backend_stage("nats_sidecar", "failed")
             logger.warning("nats_sidecar: falha ao spawnar nats-server", exc_info=True)
             return None
 
         ready = await _wait_ready(proc)
         if not ready:
+            emit_backend_stage("nats_sidecar", "failed")
             with_kill(proc)
             return None
 
@@ -239,6 +245,7 @@ async def ensure_nats_sidecar() -> str | None:
         _url = f"nats://127.0.0.1:{port}"
         _write_pid_list(store_dir, [proc.pid], url=_url)
         _assign_to_job_object_best_effort(proc.pid)
+        emit_backend_stage("nats_sidecar", "ready")
         logger.info(
             "nats_sidecar: pronto em %s (pid=%s, store=%s)",
             _url,

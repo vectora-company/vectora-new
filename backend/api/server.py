@@ -80,6 +80,7 @@ from backend.api.handlers.workspaces import view_router as workspace_view_router
 from backend.api.handlers.workspaces import (
     workspace_scoped_router as workspace_scoped_view_router,
 )
+from backend.evaluation_stages import emit_backend_stage
 from backend.services.availability import require_services, services_enabled
 from backend.services.launch_handshake import verify_launch_handshake
 
@@ -198,7 +199,7 @@ async def _license_revalidation_loop() -> None:
         await asyncio.sleep(_LICENSE_REVALIDATE_INTERVAL_S)
 
 
-async def _autostart_storage_stack() -> None:
+async def _autostart_storage_stack() -> Literal["ready", "failed", "skipped"]:
     """Garante a infra local antes de aceitar requests do modo completo.
 
     O Docker é um serviço externo: se o daemon estiver parado, o backend
@@ -208,15 +209,16 @@ async def _autostart_storage_stack() -> None:
     from backend.settings import settings as _storage_settings
 
     if _storage_settings.storage_mode != "complete":
-        return
+        return "skipped"
     if not _storage_settings.storage_docker_autostart:
         logger.info("storage: auto-start Docker desativado por configuração")
-        return
+        return "skipped"
     from backend.storage.dev_stack import stack_up
 
     result = await asyncio.to_thread(stack_up)
     level = logger.info if result.ok else logger.warning
     level("storage: auto-start Docker: %s", "; ".join(result.messages))
+    return "ready" if result.ok else "failed"
 
 
 @asynccontextmanager
@@ -233,6 +235,7 @@ async def _lifespan(app: FastAPI):  # type: ignore[return]  # noqa: ANN202
     não-daemon de libs externas (httpx, aiosqlite) que ignoram cancel.
     """
     logger.info("api/server: startup")
+    emit_backend_stage("api_lifespan", "ready")
 
     # Preenche o catálogo de capabilities sem atrasar o início da API.
     async def _refresh_model_catalog() -> None:
@@ -246,8 +249,9 @@ async def _lifespan(app: FastAPI):  # type: ignore[return]  # noqa: ANN202
     catalog_task = asyncio.create_task(_refresh_model_catalog())
 
     try:
-        await _autostart_storage_stack()
+        emit_backend_stage("storage_stack", await _autostart_storage_stack())
     except Exception as exc:
+        emit_backend_stage("storage_stack", "failed")
         logger.warning("storage: auto-start Docker falhou: %s", exc, exc_info=True)
 
     # Telemetria nativa de execução do agente (turnos, tool calls, erros).
@@ -287,7 +291,9 @@ async def _lifespan(app: FastAPI):  # type: ignore[return]  # noqa: ANN202
             applied = await run_migrations(_conn)
             if applied:
                 logger.info("api/server: schema SQLite aplicado (checksum mudou)")
+        emit_backend_stage("sqlite_migrations", "ready")
     except Exception as exc:
+        emit_backend_stage("sqlite_migrations", "failed")
         logger.warning("api/server: migrations SQLite falhou: %s", exc)
 
     # Garante que a tabela vectora_sessions existe antes do primeiro request.
@@ -298,7 +304,9 @@ async def _lifespan(app: FastAPI):  # type: ignore[return]  # noqa: ANN202
         from backend.api.handlers.threads import ensure_sessions_table
 
         await ensure_sessions_table()
+        emit_backend_stage("sessions_table", "ready")
     except Exception as exc:
+        emit_backend_stage("sessions_table", "failed")
         logger.warning("api/server: falha ao criar vectora_sessions: %s", exc)
 
     if _WARMUP_GRAPH:
@@ -336,8 +344,12 @@ async def _lifespan(app: FastAPI):  # type: ignore[return]  # noqa: ANN202
                 logger.info(
                     "api/server: sidecar llama.cpp restaurado pelo perfil ativo"
                 )
+            emit_backend_stage("llamacpp_sidecar", "ready" if restored else "skipped")
         except Exception as exc:
+            emit_backend_stage("llamacpp_sidecar", "failed")
             logger.warning("api/server: não foi possível restaurar llama.cpp: %s", exc)
+    else:
+        emit_backend_stage("llamacpp_sidecar", "skipped")
 
     # Validação de licença: uma no boot (não-bloqueante) + revalidação a cada
     # 6h (TTL do cache). O launcher CLI valida antes do uvicorn, mas deploys
@@ -376,7 +388,9 @@ async def _lifespan(app: FastAPI):  # type: ignore[return]  # noqa: ANN202
 
         embedding_worker = await get_background_worker()
         await embedding_worker.start()
+        emit_backend_stage("embedding_worker", "ready")
     except Exception as exc:
+        emit_backend_stage("embedding_worker", "failed")
         logger.warning("api/server: falha ao iniciar embedding worker: %s", exc)
 
     # Tarefas em segundo plano: scheduler das tasks 'interval' (cron) por session.
@@ -384,7 +398,9 @@ async def _lifespan(app: FastAPI):  # type: ignore[return]  # noqa: ANN202
         from backend.scheduling.background_tasks import get_scheduler
 
         await get_scheduler().start()
+        emit_backend_stage("background_scheduler", "ready")
     except Exception as exc:
+        emit_backend_stage("background_scheduler", "failed")
         logger.warning("api/server: falha ao iniciar background scheduler: %s", exc)
 
     # Memory consolidation: sintetiza threads a cada 6h e atualiza AGENTS.md.
@@ -574,6 +590,7 @@ async def _lifespan(app: FastAPI):  # type: ignore[return]  # noqa: ANN202
         extensions_task = None
         logger.warning("api/server: falha ao restaurar extensões: %s", exc)
 
+    emit_backend_stage("api_startup_complete", "ready")
     try:
         yield
     finally:
