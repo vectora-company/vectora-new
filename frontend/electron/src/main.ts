@@ -120,6 +120,7 @@ import {
   computeDefaultWindowSize,
   computeMinimumWindowSize,
   fitBoundsToWorkArea,
+  shouldFitWindowToWorkArea,
 } from "./window-size.js";
 import {
   fetchMarketplaceThemes,
@@ -1034,6 +1035,7 @@ function attachContextMenu(webContents: WebContents): void {
 let fitTimers: NodeJS.Timeout[] = [];
 
 function fitWindowToWorkArea(): void {
+  if (!shouldFitWindowToWorkArea(process.platform, process.env)) return;
   const win = mainWindow;
   if (!win || win.isDestroyed()) return;
   // O compositor pode entregar os bounds finais depois do evento; confere em

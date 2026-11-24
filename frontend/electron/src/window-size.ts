@@ -10,7 +10,9 @@ export interface WindowSize {
   height: number;
 }
 
-const MIN_WINDOW_SIZE: WindowSize = { width: 640, height: 480 };
+// A tile no Niri pode ficar bem menor que a janela de desktop tradicional.
+// BrowserWindow e screen usam DIP no Electron; não multiplicar pelo scaleFactor.
+const MIN_WINDOW_SIZE: WindowSize = { width: 320, height: 240 };
 
 /**
  * ~62% da área útil da tela, com limites padrão de 960x600 e 1280x720.
@@ -40,6 +42,21 @@ export function computeMinimumWindowSize(screenSize: WindowSize): WindowSize {
     width: Math.min(MIN_WINDOW_SIZE.width, screenSize.width),
     height: Math.min(MIN_WINDOW_SIZE.height, screenSize.height),
   };
+}
+
+/**
+ * Wayland deixa o compositor controlar posição e tamanho da superfície.
+ * Reaplicar bounds após cada resize disputa com o configure enviado pelo Niri
+ * e pode prender a janela no tamanho anterior. O ajuste manual fica para X11.
+ */
+export function shouldFitWindowToWorkArea(
+  platform: string,
+  environment: NodeJS.ProcessEnv,
+): boolean {
+  if (platform !== "linux") return false;
+  return (
+    environment.XDG_SESSION_TYPE !== "wayland" && !environment.WAYLAND_DISPLAY
+  );
 }
 
 export interface Rect {
