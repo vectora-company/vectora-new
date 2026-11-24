@@ -31,17 +31,18 @@ def _terminate_tree(process: subprocess.Popen[str]) -> None:
         with contextlib.suppress(ProcessLookupError):
             os.killpg(process.pid, signal.SIGKILL)
     else:
-        try:
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-                check=False,
-                capture_output=True,
-                timeout=5,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        taskkill = shutil.which("taskkill")
+        if taskkill:
+            with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+                subprocess.run(
+                    [taskkill, "/F", "/T", "/PID", str(process.pid)],
+                    check=False,
+                    capture_output=True,
+                    timeout=5,
+                )
         if process.poll() is None:
-            process.kill()
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
 
 
 def _run_godot(executable: str, project: Path, arguments: list[str]) -> tuple[int, str]:
