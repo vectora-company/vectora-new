@@ -274,6 +274,27 @@ async def _run_one(
     on_tool_started: Callable[[ToolCall], Awaitable[None]] | None = None,
 ) -> VMessage:
     """Executa uma chamada do lote com contexto correlacionado à própria tool."""
+    if (
+        tool_call.name == "delegate_to_subagent"
+        and isinstance(ctx._extra, dict)
+        and ctx._extra.get("subagent_delegation_disabled") is True
+    ):
+        return VMessage(
+            role=MessageRole.TOOL,
+            content=[
+                ContentBlock(
+                    kind="text",
+                    text=(
+                        "Error: delegação bloqueada por instrução explícita do usuário. "
+                        "Continue o trabalho diretamente."
+                    ),
+                )
+            ],
+            tool_call_id=tool_call.id,
+            name=tool_call.name,
+            is_error=True,
+        )
+
     allowed, deny_reason = await _authorize_call(tool_call, ctx, policy_snapshot)
     if not allowed:
         return VMessage(

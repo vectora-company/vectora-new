@@ -3088,3 +3088,80 @@ async def test_memories_stay_frozen_per_thread(monkeypatch) -> None:
     assert await cl._load_persistent_context_memories(ctx) == ["primeira"]
     outra = ToolContext(thread_id="t-outra")
     assert await cl._load_persistent_context_memories(outra) == ["segunda"]
+
+
+@pytest.mark.asyncio
+async def test_conversation_enforces_user_subagent_ban_before_and_during_dispatch(
+    session_store, ctx
+) -> None:
+    """A restrição do usuário remove a tool e também bloqueia chamada forçada."""
+    import backend.tools.subagent_delegate  # registra a tool nativa
+
+    delegate_spec = TOOL_REGISTRY.get("delegate_to_subagent")
+    assert delegate_spec is not None
+    delegate_handler = AsyncMock(return_value="não deveria executar")
+    registry = ToolRegistry()
+    registry.register(replace(delegate_spec, handler=delegate_handler))
+    await session_store.append_message(
+        ctx.thread_id,
+        VMessage(
+            role=MessageRole.USER,
+            content=[
+                ContentBlock(
+                    kind="text", text="Não use subagentes. Corrija diretamente."
+                )
+            ],
+        ),
+    )
+
+    class RestrictedChatClient:
+        calls = 0
+        offered_tool_names: set[str] = set()
+
+        async def astream(
+            self, messages, *, tools=None, temperature=None, max_tokens=None
+        ):
+            self.calls += 1
+            self.offered_tool_names = {tool.name for tool in tools or []}
+            assert "delegate_to_subagent" not in self.offered_tool_names
+            if self.calls == 1:
+                yield _tool_call_chunk(
+                    index=0,
+                    id="forbidden-delegation",
+                    name="delegate_to_subagent",
+                    args=(
+                        '{"subagent_type":"code","prompt":"faça a tarefa",'
+                        '"description":"tarefa"}'
+                    ),
+                )
+                return
+            denial = next(
+                message
+                for message in messages
+                if message.role is MessageRole.TOOL
+                and message.name == "delegate_to_subagent"
+            )
+            assert denial.is_error
+            assert "instrução explícita" in denial.text()
+            yield _text_chunk("Vou continuar e concluir a tarefa diretamente.")
+
+        async def agenerate(
+            self, messages, *, tools=None, temperature=None, max_tokens=None
+        ):
+            raise AssertionError("run_conversation deve usar astream")
+
+    client = RestrictedChatClient()
+    result = await run_conversation(
+        session_store=session_store,
+        chat_client=client,
+        tool_registry=registry,
+        ctx=ctx,
+        thread_id=ctx.thread_id,
+        config=LoopConfig(run_id="subagent-ban-integration"),
+        should_require_approval=lambda *_args: False,
+    )
+
+    assert result.stopped_reason == "stop"
+    assert client.calls == 2
+    assert "delegate_to_subagent" not in client.offered_tool_names
+    delegate_handler.assert_not_awaited()
