@@ -22,6 +22,10 @@ def _project(path: Path, feature: str = "4.6") -> Path:
     return path
 
 
+def test_version_family_accepts_godot_engine_prefix() -> None:
+    assert godot._version_family("Godot Engine v4.6.3.stable.official") == "4.6"
+
+
 class _Stream:
     def __init__(self, chunks: list[bytes]) -> None:
         self._chunks = chunks

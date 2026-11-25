@@ -88,7 +88,7 @@ def test_platformer_imports_and_gameplay_regressions_pass() -> None:
         text=True,
         timeout=10,
     ).stdout
-    match = re.search(r"\b(\d+)\.(\d+)", version)
+    match = re.search(r"\b(?:v)?(\d+)\.(\d+)", version)
     assert match is not None and match.groups() == ("4", "6"), (
         f"O fixture exige Godot 4.6; encontrado: {version.strip()}"
     )
@@ -126,7 +126,7 @@ def test_godot_errors_disappear_after_the_causal_files_are_repaired() -> None:
         text=True,
         timeout=10,
     ).stdout
-    match = re.search(r"\b(\d+)\.(\d+)", version)
+    match = re.search(r"\b(?:v)?(\d+)\.(\d+)", version)
     assert match is not None and match.groups() == ("4", "6"), (
         f"O fixture exige Godot 4.6; encontrado: {version.strip()}"
     )
