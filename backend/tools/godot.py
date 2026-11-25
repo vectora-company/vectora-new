@@ -18,7 +18,7 @@ from backend.tools.context import ToolContext
 from backend.tools.fs import _confine, _require_local, _require_trust
 from backend.tools.registry import ToolExtras, vtool
 
-_VERSION_RE = re.compile(r"\b(\d+)\.(\d+)(?:\.(\d+))?")
+_VERSION_RE = re.compile(r"\b(?:v)?(\d+)\.(\d+)(?:\.(\d+))?")
 _FEATURES_RE = re.compile(r"config/features\s*=\s*PackedStringArray\(([^)]*)\)")
 _ERROR_LINE_RE = re.compile(r"(?:^|\s)(?:SCRIPT )?ERROR:", re.IGNORECASE)
 _MAX_OUTPUT_CHARS = 8_000

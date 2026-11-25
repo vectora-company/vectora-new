@@ -169,7 +169,7 @@ async def test_validation_requires_matching_installed_engine(
     monkeypatch.setattr(godot, "_require_local", lambda _ctx: None)
     monkeypatch.setattr(godot, "_confine", lambda _path, _ctx: (project_dir, ""))
     monkeypatch.setattr(godot.shutil, "which", lambda _name: "/usr/bin/godot")
-    runner = AsyncMock(return_value=(0, "4.7.2.stable.official", False))
+    runner = AsyncMock(return_value=(0, "Godot Engine v4.7.2.stable.official", False))
     monkeypatch.setattr(godot, "_run_engine", runner)
 
     result = json.loads(
@@ -192,7 +192,7 @@ async def test_validation_reports_import_errors_even_when_engine_exits_zero(
     monkeypatch.setattr(godot.shutil, "which", lambda _name: "/usr/bin/godot")
     runner = AsyncMock(
         side_effect=[
-            (0, "4.6.3.stable.official", False),
+            (0, "Godot Engine v4.6.3.stable.official", False),
             (0, "ERROR: Failed parsing main scene", False),
         ]
     )
@@ -218,7 +218,7 @@ async def test_validation_reports_completed_import_and_startup(
     monkeypatch.setattr(godot.shutil, "which", lambda _name: "/usr/bin/godot")
     runner = AsyncMock(
         side_effect=[
-            (0, "4.6.3.stable.official", False),
+            (0, "Godot Engine v4.6.3.stable.official", False),
             (0, "", False),
             (0, "", False),
         ]

@@ -2082,6 +2082,182 @@ class TestTodosUpdated:
         assert not [e for e in events if isinstance(e, TodosUpdated)]
 
 
+@pytest.mark.asyncio
+async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
+    session_store, ctx, tmp_path, monkeypatch
+) -> None:
+    """O resultado da validação volta ao modelo antes de editar e concluir."""
+    import shutil
+    from pathlib import Path
+
+    from backend.tools import godot as godot_tools
+    from backend.vtypes import Workspace
+    from backend.workspace import workspace as workspace_module
+
+    fixture = Path(__file__).parents[1] / "fixtures" / "godot-platformer"
+    project = tmp_path / "project"
+    shutil.copytree(fixture, project, ignore=shutil.ignore_patterns(".godot"))
+    player_script = project / "scripts" / "player.gd"
+    original_player = player_script.read_text(encoding="utf-8")
+    broken_player = original_player.replace(
+        "var health: int = 3", 'var health: int = "inválido"'
+    )
+    assert broken_player != original_player
+    player_script.write_text(broken_player, encoding="utf-8")
+    bullet_scene = project / "scenes" / "bullet.tscn"
+    original_bullet = bullet_scene.read_text(encoding="utf-8")
+    bullet_scene.unlink()
+
+    workspace = Workspace(
+        id="godot-repair",
+        name="Godot repair fixture",
+        cwd=str(project),
+        created_at="2026-11-24T00:00:00Z",
+        trusted=True,
+    )
+    monkeypatch.setattr(
+        workspace_module.workspace_registry,
+        "get",
+        lambda workspace_id: workspace if workspace_id == workspace.id else None,
+    )
+    ctx.workspace_id = workspace.id
+    ctx.permission_mode = "bypass"
+
+    async def run_engine(_executable, arguments, project_dir, _timeout):
+        if arguments == ["--headless", "--version"]:
+            return 0, "Godot Engine v4.6.3.stable.official", False
+        if "--editor" in arguments:
+            script = (project_dir / "scripts" / "player.gd").read_text(encoding="utf-8")
+            scene_exists = (project_dir / "scenes" / "bullet.tscn").is_file()
+            if 'var health: int = "inválido"' in script or not scene_exists:
+                return (
+                    1,
+                    "ERROR: Parse error in scripts/player.gd\n"
+                    "ERROR: Missing resource res://scenes/bullet.tscn",
+                    False,
+                )
+        return 0, "", False
+
+    monkeypatch.setattr(godot_tools.shutil, "which", lambda _name: "/usr/bin/godot")
+    monkeypatch.setattr(godot_tools, "_run_engine", run_engine)
+    registry = ToolRegistry()
+    _register(registry, "validate_godot_project")
+    _register(registry, "file_edit")
+    _register(registry, "file_write")
+
+    await session_store.append_message(
+        ctx.thread_id,
+        VMessage(
+            role=MessageRole.USER,
+            content=[
+                ContentBlock(
+                    kind="text",
+                    text=(
+                        "Corrija os erros do Godot: Parse error em player.gd e "
+                        "recurso scenes/bullet.tscn ausente. Valide depois."
+                    ),
+                )
+            ],
+        ),
+    )
+
+    class RepairingChatClient:
+        calls = 0
+
+        async def astream(
+            self, messages, *, tools=None, temperature=None, max_tokens=None
+        ):
+            call = self.calls
+            self.calls += 1
+            tool_results = [
+                message for message in messages if message.role is MessageRole.TOOL
+            ]
+            if call == 0:
+                yield _tool_call_chunk(
+                    index=0,
+                    id="validate-before",
+                    name="validate_godot_project",
+                    args='{"project_path":".","expected_version":"4.6"}',
+                )
+            elif call == 1:
+                validation = next(
+                    message
+                    for message in reversed(tool_results)
+                    if message.name == "validate_godot_project"
+                )
+                assert '"status": "error"' in validation.text()
+                assert "scripts/player.gd" in validation.text()
+                assert "scenes/bullet.tscn" in validation.text()
+                yield _tool_call_chunk(
+                    index=0,
+                    id="repair-player",
+                    name="file_edit",
+                    args=json.dumps(
+                        {
+                            "file_path": "scripts/player.gd",
+                            "old_text": 'var health: int = "inválido"',
+                            "new_text": "var health: int = 3",
+                        }
+                    ),
+                )
+                yield _tool_call_chunk(
+                    index=1,
+                    id="restore-bullet",
+                    name="file_write",
+                    args=json.dumps(
+                        {"file_path": "scenes/bullet.tscn", "content": original_bullet}
+                    ),
+                )
+            elif call == 2:
+                edits = [
+                    message
+                    for message in tool_results
+                    if message.name in {"file_edit", "file_write"}
+                ]
+                assert len(edits) == 2
+                assert all("[OK]" in message.text() for message in edits)
+                yield _tool_call_chunk(
+                    index=0,
+                    id="validate-after",
+                    name="validate_godot_project",
+                    args='{"project_path":".","expected_version":"4.6"}',
+                )
+            else:
+                validation = next(
+                    message
+                    for message in reversed(tool_results)
+                    if message.name == "validate_godot_project"
+                )
+                assert '"status": "passed"' in validation.text()
+                yield _text_chunk(
+                    "Corrigi player.gd e bullet.tscn; a validação Godot 4.6 passou."
+                )
+
+        async def agenerate(
+            self, messages, *, tools=None, temperature=None, max_tokens=None
+        ):
+            raise AssertionError("run_conversation deve usar astream")
+
+    result = await run_conversation(
+        session_store=session_store,
+        chat_client=RepairingChatClient(),
+        tool_registry=registry,
+        ctx=ctx,
+        thread_id=ctx.thread_id,
+        config=LoopConfig(run_id="godot-agent-repair"),
+        should_require_approval=lambda *_args: False,
+    )
+
+    assert result.stopped_reason == "stop"
+    assert "validação Godot 4.6 passou" in (
+        result.final_message.text() if result.final_message else ""
+    )
+    assert 'var health: int = "inválido"' not in player_script.read_text(
+        encoding="utf-8"
+    )
+    assert bullet_scene.read_text(encoding="utf-8") == original_bullet
+
+
 class TestLoopCapGuardrail:
     async def test_estoura_teto_de_tool_calls_encerra_turno_sem_esgotar_max_iterations(
         self, session_store, ctx
