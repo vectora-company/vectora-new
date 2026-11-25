@@ -329,6 +329,7 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
     },
   });
   const dag = dagQuery.data;
+  const dagLoadError = dagQuery.isError ? m.workbench_plan_load_failed() : null;
   const refreshDag = dagQuery.refetch;
   useEffect(() => {
     if (todos.length > 0) void refreshDag();
@@ -527,7 +528,7 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   const hasPlanContent = items.length > 0 || todos.length > 0 || Boolean(dag);
   const initialLoading = shouldShowPlanLoadSpinner(
     fetchedAt,
-    planLoadPending,
+    planLoadPending || (!hasPlanContent && dagQuery.isPending),
     hasPlanContent,
   );
 
@@ -543,17 +544,22 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
   // Plan Mode gera o plano via write_todos (todos), sem create_artifact — olhar
   // só `items` (artifacts) escondia o plano inteiro atrás do empty-state.
   if (items.length === 0 && todos.length === 0 && !dag) {
-    if (planLoadError) {
+    if (planLoadError || dagLoadError) {
       return (
         <div className="h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
           <p role="alert" className="text-xs text-destructive">
-            {planLoadError}
+            {planLoadError ?? dagLoadError}
           </p>
           <Button
             variant="outline"
             size="sm"
             className="h-7 text-xs"
-            onClick={() => setPlanLoadAttempt((attempt) => attempt + 1)}
+            onClick={() => {
+              if (planLoadError) {
+                setPlanLoadAttempt((attempt) => attempt + 1);
+              }
+              if (dagLoadError) void dagQuery.refetch();
+            }}
           >
             {m.workbench_plan_load_retry()}
           </Button>
@@ -585,13 +591,18 @@ export function PlanTab({ threadId, onOpenPlanDocument }: PlanTabProps) {
 
   return (
     <div className="h-full flex flex-col">
-      {planLoadError && (
+      {(planLoadError || dagLoadError) && (
         <p role="alert" className="px-2 py-1 text-[11px] text-destructive">
-          {planLoadError}
+          {planLoadError ?? dagLoadError}
           <button
             type="button"
             className="ml-2 underline underline-offset-2"
-            onClick={() => setPlanLoadAttempt((attempt) => attempt + 1)}
+            onClick={() => {
+              if (planLoadError) {
+                setPlanLoadAttempt((attempt) => attempt + 1);
+              }
+              if (dagLoadError) void dagQuery.refetch();
+            }}
           >
             {m.workbench_plan_load_retry()}
           </button>
