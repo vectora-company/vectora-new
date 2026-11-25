@@ -101,3 +101,21 @@ export function fitBoundsToWorkArea(bounds: Rect, workArea: Rect): Rect | null {
     y === bounds.y;
   return fits ? null : { x, y, width, height };
 }
+
+/** Atualiza o mínimo nativo quando o resize cruza telas com áreas/escala distintas. */
+export function updateWindowMinimumSize(
+  screenSize: WindowSize,
+  scaleFactor: number,
+  currentMinimum: WindowSize,
+  setMinimumSize: (size: WindowSize) => void,
+): boolean {
+  const minimum = computeMinimumWindowSize(screenSize, scaleFactor);
+  if (
+    currentMinimum.width !== minimum.width ||
+    currentMinimum.height !== minimum.height
+  ) {
+    setMinimumSize(minimum);
+    return true;
+  }
+  return false;
+}

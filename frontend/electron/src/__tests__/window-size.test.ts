@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   computeDefaultWindowSize,
   computeMinimumWindowSize,
   fitBoundsToWorkArea,
   shouldFitWindowToWorkArea,
+  updateWindowMinimumSize,
 } from "../window-size";
 
 describe("computeDefaultWindowSize", () => {
@@ -126,5 +127,106 @@ describe("fitBoundsToWorkArea", () => {
     expect(fitBoundsToWorkArea(narrowTile, logicalWorkArea)).toBeNull();
     expect(fitBoundsToWorkArea(widerTile, logicalWorkArea)).toBeNull();
     expect(fitBoundsToWorkArea(narrowTile, logicalWorkArea)).toBeNull();
+  });
+
+  it.each([1, 1.25, 1.5, 2])(
+    "atualiza o mínimo e preserva o ciclo de resize Wayland em scaleFactor %s",
+    (scaleFactor) => {
+      const physicalWorkArea = { width: 2560, height: 1600 };
+      const scaledWorkArea = {
+        x: 0,
+        y: 0,
+        width: Math.round(physicalWorkArea.width / scaleFactor),
+        height: Math.round(physicalWorkArea.height / scaleFactor),
+      };
+      const toLogical = (value: number) => Math.round(value / scaleFactor);
+      const compositorBounds = [
+        { x: 0, y: 0, width: 630, height: 540 },
+        { x: 0, y: 0, width: 1290, height: 900 },
+        { x: 0, y: 0, width: 630, height: 540 },
+      ].map((rect) => ({
+        x: rect.x,
+        y: rect.y,
+        width: toLogical(rect.width),
+        height: toLogical(rect.height),
+      }));
+      const setMinimumSize = vi.fn();
+      let currentMinimum = computeMinimumWindowSize(
+        scaledWorkArea,
+        scaleFactor,
+      );
+
+      for (const bounds of compositorBounds) {
+        expect(fitBoundsToWorkArea(bounds, scaledWorkArea)).toBeNull();
+        expect(
+          updateWindowMinimumSize(
+            scaledWorkArea,
+            scaleFactor,
+            currentMinimum,
+            (minimum) => {
+              setMinimumSize(minimum);
+              currentMinimum = minimum;
+            },
+          ),
+        ).toBe(false);
+      }
+
+      expect(setMinimumSize).not.toHaveBeenCalled();
+      expect(compositorBounds[0]?.width).toBe(compositorBounds[2]?.width);
+      expect(compositorBounds[0]?.height).toBe(compositorBounds[2]?.height);
+      expect(compositorBounds[1]?.width).toBeGreaterThan(
+        compositorBounds[0]?.width ?? 0,
+      );
+      expect(compositorBounds[1]?.height).toBeGreaterThan(
+        compositorBounds[0]?.height ?? 0,
+      );
+    },
+  );
+
+  it("continua corrigindo bounds fora da tela no X11", () => {
+    const fitted = fitBoundsToWorkArea(
+      { x: 0, y: 0, width: 1956, height: 1040 },
+      workArea,
+    );
+    expect(fitted).toEqual({
+      x: 0,
+      y: 0,
+      width: 1920,
+      height: 1040,
+    });
+  });
+
+  it("recalcula o mínimo ao mover entre monitores com escalas diferentes", () => {
+    const setMinimumSize = vi.fn();
+    expect(
+      updateWindowMinimumSize(
+        { width: 1920, height: 1080 },
+        1,
+        { width: 213, height: 160 },
+        setMinimumSize,
+      ),
+    ).toBe(true);
+    expect(setMinimumSize).toHaveBeenCalledWith({ width: 320, height: 240 });
+    expect(
+      updateWindowMinimumSize(
+        { width: 1920, height: 1080 },
+        1,
+        { width: 320, height: 240 },
+        setMinimumSize,
+      ),
+    ).toBe(false);
+    expect(setMinimumSize).toHaveBeenCalledTimes(1);
+    expect(
+      updateWindowMinimumSize(
+        { width: 1920, height: 1080 },
+        2,
+        { width: 320, height: 240 },
+        setMinimumSize,
+      ),
+    ).toBe(true);
+    expect(setMinimumSize).toHaveBeenLastCalledWith({
+      width: 160,
+      height: 120,
+    });
   });
 });

@@ -121,6 +121,7 @@ import {
   computeMinimumWindowSize,
   fitBoundsToWorkArea,
   shouldFitWindowToWorkArea,
+  updateWindowMinimumSize,
 } from "./window-size.js";
 import {
   fetchMarketplaceThemes,
@@ -1039,17 +1040,13 @@ function fitWindowToWorkArea(): void {
   const win = mainWindow;
   if (!win || win.isDestroyed()) return;
   const display = screen.getDisplayMatching(win.getBounds());
-  const minimumSize = computeMinimumWindowSize(
+  const currentMinimum = win.getMinimumSize();
+  updateWindowMinimumSize(
     display.workAreaSize,
     display.scaleFactor,
+    { width: currentMinimum[0], height: currentMinimum[1] },
+    (minimum) => win.setMinimumSize(minimum.width, minimum.height),
   );
-  const currentMinimum = win.getMinimumSize();
-  if (
-    currentMinimum[0] !== minimumSize.width ||
-    currentMinimum[1] !== minimumSize.height
-  ) {
-    win.setMinimumSize(minimumSize.width, minimumSize.height);
-  }
   if (!shouldFitWindowToWorkArea(process.platform, process.env)) return;
   // O compositor pode entregar os bounds finais depois do evento; confere em
   // vários instantes e cancela a verificação anterior para não acumular.
