@@ -521,10 +521,14 @@ export const useWorkbenchStore = create<WorkbenchState>()(
         getActiveTab: (threadId) => {
           const stored = get().activeTabByThread[threadId];
           if (stored) return stored;
-          // Sem preferência salva: plano ativo vira o painel principal,
-          // senão o default é Arquivos.
+          // Sem preferência salva, abrir o plano estruturado da conversa,
+          // incluindo a checklist ao vivo de write_todos. Sem plano, usar
+          // Arquivos como padrão.
           const plan = get().plan[threadId];
-          if (plan && plan.items.length > 0) return "plan";
+          const todos = get().todos[threadId];
+          if ((plan && plan.items.length > 0) || (todos && todos.length > 0)) {
+            return "plan";
+          }
           return "files";
         },
         setActiveTab: (threadId, tab) =>
