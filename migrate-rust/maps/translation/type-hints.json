@@ -1,0 +1,25 @@
+{
+  "_about": "Anotação Python → tipo Rust da assinatura. Tipos fora da tabela mantêm a função no pattern sem tipos.",
+  "simple": {
+    "int": "i64",
+    "float": "f64",
+    "bool": "bool",
+    "str": "String",
+    "bytes": "Vec<u8>",
+    "None": "()",
+    "Path": "PathBuf",
+    "pathlib.Path": "PathBuf",
+    "Any": "Object",
+    "object": "Object"
+  },
+  "generic": {
+    "list": "Vec<{0}>",
+    "List": "Vec<{0}>",
+    "Optional": "Option<{0}>",
+    "dict": "BTreeMap<{0}, {1}>",
+    "Dict": "BTreeMap<{0}, {1}>"
+  },
+  "union with None": "Option<{0}>",
+  "dict keys": ["String"],
+  "imports": "use std::collections::BTreeMap;\nuse std::path::PathBuf;"
+}

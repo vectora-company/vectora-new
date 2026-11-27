@@ -1,0 +1,42 @@
+{
+  "binary": {
+    "+": "object::add",
+    "-": "object::sub",
+    "*": "object::mul",
+    "/": "object::div",
+    "//": "object::floordiv",
+    "%": "object::mod_",
+    "**": "object::pow",
+    "|": "object::bitor",
+    "&": "object::bitand"
+  },
+  "compare": {
+    "==": "object::cmp_eq",
+    "!=": "object::cmp_ne",
+    "<": "object::lt",
+    "<=": "object::le",
+    ">": "object::gt",
+    ">=": "object::ge",
+    "in": "object::in_",
+    "not in": "object::not_in",
+    "is": "object::is",
+    "is not": "object::is_not"
+  },
+  "unary": {
+    "-": "object::neg",
+    "not": "object::not"
+  },
+  "augmented": {
+    "+=": "object::add",
+    "-=": "object::sub",
+    "*=": "object::mul",
+    "/=": "object::div",
+    "//=": "object::floordiv",
+    "%=": "object::mod_",
+    "|=": "object::bitor",
+    "&=": "object::bitand"
+  },
+  "and": "{{ let __left = {left}; if object::truthy(&__left) {{ {right} }} else {{ __left }} }}",
+  "or": "{{ let __left = {left}; if object::truthy(&__left) {{ __left }} else {{ {right} }} }}",
+  "conditional": "if object::truthy(&{condition}) {{ {then} }} else {{ {other} }}"
+}

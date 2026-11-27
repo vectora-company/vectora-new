@@ -1,0 +1,105 @@
+{
+  "_about": "Regras que reconhecem a situação (when) e escolhem como usar os mapas de translation/ (use). A primeira que reconhece vence.",
+  "patterns": [
+    {
+      "pattern": "fixture",
+      "when": {
+        "decorator": "pytest.fixture"
+      },
+      "use": {
+        "signature": "dynamic",
+        "body": "generator body if it yields, coroutine body if async, else plain",
+        "invoke": "object::fixture"
+      }
+    },
+    {
+      "pattern": "teste parametrizado",
+      "when": {
+        "test": true,
+        "decorator": "pytest.mark.parametrize"
+      },
+      "use": {
+        "signature": "dynamic",
+        "body": "coroutine body if async, else plain",
+        "wrapper": "test wrapper per row, values bound by name"
+      }
+    },
+    {
+      "pattern": "teste com fixtures",
+      "when": {
+        "test": true,
+        "parameters": true
+      },
+      "use": {
+        "signature": "dynamic",
+        "body": "coroutine body if async, else plain",
+        "wrapper": "test wrapper resolving doubles.fixtures, then fixtures of the file"
+      }
+    },
+    {
+      "pattern": "teste async",
+      "when": {
+        "test": true,
+        "async": true
+      },
+      "use": {
+        "signature": "dynamic",
+        "body": "coroutine body",
+        "wrapper": "test wrapper"
+      }
+    },
+    {
+      "pattern": "teste síncrono",
+      "when": {
+        "test": true
+      },
+      "use": {
+        "signature": "dynamic",
+        "body": "plain",
+        "wrapper": "test wrapper"
+      }
+    },
+    {
+      "pattern": "auxiliar tipado",
+      "when": {
+        "all types mapped": true,
+        "async": false,
+        "yields": false
+      },
+      "use": {
+        "signature": "typed function + typed adapter",
+        "types": "type-hints",
+        "returns": "typed"
+      }
+    },
+    {
+      "pattern": "auxiliar sem tipos",
+      "when": {},
+      "use": {
+        "signature": "dynamic",
+        "body": "generator body if it yields, coroutine body if async, else plain"
+      }
+    },
+    {
+      "pattern": "classe",
+      "when": {
+        "class": true
+      },
+      "use": "exception class if a base is in exceptions, else class with methods registered as Class.method"
+    },
+    {
+      "pattern": "bloco gerenciado",
+      "when": {
+        "node": ["with_statement"]
+      },
+      "use": "statements.with per item, innermost body last; flow leaves the closure through statements.propagate"
+    },
+    {
+      "pattern": "tratamento de erro",
+      "when": {
+        "node": ["try_statement"]
+      },
+      "use": "statements.try with one statements.except per handler and statements.finally around it when present"
+    }
+  ]
+}

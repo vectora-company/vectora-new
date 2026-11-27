@@ -1,0 +1,23 @@
+{
+  "_about": "Troca direta das instruções. Os campos entre chaves são preenchidos com as traduções filhas.",
+  "if": "if object::truthy(&{condition}) {{\n{body}}}{alternatives}",
+  "elif": " else if object::truthy(&{condition}) {{\n{body}}}",
+  "else": " else {{\n{body}}}",
+  "while": "while object::truthy(&{condition}) {{\n{body}}}",
+  "for": "for {item} in object::iter(&{iterable}) {{\n{target}{body}}}",
+  "assert": "object::assert_(&{test}, {loc:?}, {message});",
+  "raise": "object::raise({exception});",
+  "bare raise": "object::raise(__raised.0.clone());",
+  "assignment": "{target} = {value};",
+  "expression": "{value};",
+  "pass": "",
+  "with": "let __flow = object::with(&{manager}, |{entered}| {{\n{target}{body}Flow::Normal\n}});\n{propagate}",
+  "try": "let __flow = match object::catch(|| {{\n{body}Flow::Normal\n}}) {{\n    Ok(__flow) => __flow,\n    Err(__raised) => {{\n{handlers}\n    }}\n}};\n{orelse}{propagate}",
+  "finally": "let __outcome = object::catch(|| {{\n{inner}Flow::Normal\n}});\n{finally}let __flow = match __outcome {{ Ok(__flow) => __flow, Err(__raised) => object::reraise(__raised) }};\n{propagate}",
+  "except": "if object::matches(&__raised, &{kind}) {{\n{bind}{body}Flow::Normal\n}} else ",
+  "except fallback": "{{ object::reraise(__raised) }}",
+  "propagate": "match __flow {{ Flow::Return(__v) => {return_value}, Flow::Break => {break_}, Flow::Continue => {continue_}, Flow::Normal => {{}} }}",
+  "pending": "object::pending({loc:?}, {source:?})",
+  "loop else": "let mut {flag} = true;\n{loop}\nif {flag} {{\n{otherwise}}}",
+  "break with else": "{{ {flag} = false; break }}"
+}

@@ -1,0 +1,10 @@
+[package]
+name = "vectora-test-support"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+description = "Name table shared by the translated tests"
+
+[dependencies]
+vectora-runtime = { path = "../runtime" }
+vectora-test-mocks = { path = "../mocks" }

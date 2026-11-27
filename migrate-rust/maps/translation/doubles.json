@@ -1,0 +1,27 @@
+{
+  "_about": "Mocks e fixtures do Python → dublês e fixtures Rust já escritos em mocks/.",
+  "names": {
+    "unittest.mock.AsyncMock": "doubles::async_mock",
+    "unittest.mock.MagicMock": "doubles::magic_mock",
+    "unittest.mock.Mock": "doubles::magic_mock",
+    "unittest.mock.patch": "doubles::patch",
+    "unittest.mock.patch.object": "doubles::patch_object",
+    "unittest.mock.patch.dict": "doubles::patch_dict",
+    "types.SimpleNamespace": "doubles::simple_namespace",
+    "contextlib.suppress": "doubles::suppress",
+    "pytest.raises": "doubles::raises",
+    "pytest.skip": "doubles::skip",
+    "pytest.fail": "doubles::fail",
+    "pytest.approx": "doubles::approx",
+    "contextlib.contextmanager": "doubles::context_manager",
+    "contextlib.asynccontextmanager": "doubles::context_manager"
+  },
+  "fixtures": {
+    "tmp_path": "doubles::tmp_path_fixture()",
+    "monkeypatch": "doubles::monkeypatch_fixture()",
+    "caplog": "doubles::caplog_fixture()",
+    "tmp_path_factory": "doubles::tmp_path_factory_fixture()",
+    "capsys": "doubles::capsys_fixture()",
+    "request": "doubles::request_fixture()"
+  }
+}

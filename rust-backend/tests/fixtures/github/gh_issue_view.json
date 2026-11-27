@@ -1,0 +1,60 @@
+{
+  "assignees": [],
+  "author": {
+    "id": "U_kgDODo7I4w",
+    "is_bot": false,
+    "login": "brunosrz",
+    "name": "Bruno Soares"
+  },
+  "body": "## Objetivo\nA workbench Git deve ter uma aba Actions, ao lado de Issues, que lista os runs do GitHub Actions e abre cada um como document, tudo somente leitura.\n\n## Não objetivos\nReescrever o loop agêntico ou trocar de provider.\n\n## Comportamento esperado\nA aba Actions lista os runs do repositório, com busca por título, estado, workflow e o filtro Esta branch ligado por padrão, e se relê sozinha enquanto há run em andamento, sem piscar; clicar num run abre um document com cabeçalho no padrão de PR e issue, metadados, jobs (falha e ativo abertos) com os passos e o log de cada job sob demanda; nenhuma ação escreve no GitHub: sem re-run, cancelar, disparar workflow nem comentar; o backend ganha rotas de leitura de runs, detalhe, log e workflows.\n\n## Critérios de aceite\nAs rotas só respondem GET, validam estado, branch e workflow contra injeção de argumento e distinguem gh indisponível de erro; o log é limitado e mantém o final; a lista e o detalhe mantêm o conteúdo durante a releitura e a releitura que falha não apaga a tela; run concluído não relê; a store restaura runs com id seguro e descarta inválidos; testes provam que não há botões nem chamadas de escrita; a suíte, o typecheck, o lint, ruff, ty e pytest passam.\n\n## Riscos e plano de testes\nTestes unitários direcionados; mudança contida na interface.",
+  "comments": [
+    {
+      "id": "IC_kwDOSjesv88AAAABouugUw",
+      "author": {
+        "login": "brunosrz"
+      },
+      "authorAssociation": "MEMBER",
+      "body": "Implementada por #803 (`feat/git-actions-tab`, empilhado sobre a branch `feat/git-pr-issue-documents`). O PR tem `Closes #802`: a issue fecha quando o PR chega à `master`; em stack o merge segue a ordem, e cada PR é retargeteado para a `master` quando o anterior é mergeado.",
+      "createdAt": "2026-11-20T02:20:07Z",
+      "url": "https://github.com/vectora-company/vectora/issues/802#issuecomment-7028318291"
+    }
+  ],
+  "createdAt": "2026-11-20T02:19:59Z",
+  "labels": [
+    {
+      "id": "LA_kwDOSjesv88AAAACkEm8gg",
+      "name": "enhancement",
+      "description": "New feature or request",
+      "color": "a2eeef"
+    },
+    {
+      "id": "LA_kwDOSjesv88AAAACypieNQ",
+      "name": "backend",
+      "description": "",
+      "color": "ededed"
+    },
+    {
+      "id": "LA_kwDOSjesv88AAAACypiePQ",
+      "name": "frontend",
+      "description": "",
+      "color": "ededed"
+    },
+    {
+      "id": "LA_kwDOSjesv88AAAADD3HcFA",
+      "name": "git-workbench",
+      "description": "Workbench Git e GitHub",
+      "color": "F05032"
+    }
+  ],
+  "milestone": {
+    "number": 2,
+    "title": "0.1.x",
+    "description": "Release patch da linha de manutenção release/0.1.",
+    "dueOn": null
+  },
+  "number": 802,
+  "state": "OPEN",
+  "title": "feat: aba Actions na workbench Git, somente leitura",
+  "updatedAt": "2026-11-20T02:20:07Z",
+  "url": "https://github.com/vectora-company/vectora/issues/802"
+}

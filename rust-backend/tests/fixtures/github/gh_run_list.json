@@ -1,0 +1,50 @@
+[
+  {
+    "attempt": 1,
+    "conclusion": "success",
+    "createdAt": "2026-11-20T02:20:04Z",
+    "databaseId": 44660022585,
+    "displayTitle": "feat: aba Actions na workbench Git, somente leitura",
+    "event": "pull_request",
+    "headBranch": "feat/git-actions-tab",
+    "headSha": "36545bdf2ddd5fc0b71e003a8b2922f2e09c330f",
+    "number": 592,
+    "startedAt": "2026-11-20T02:20:04Z",
+    "status": "completed",
+    "updatedAt": "2026-11-20T02:20:51Z",
+    "url": "https://github.com/vectora-company/vectora/actions/runs/44660022585",
+    "workflowName": "PR Gate"
+  },
+  {
+    "attempt": 1,
+    "conclusion": "success",
+    "createdAt": "2026-11-20T02:20:03Z",
+    "databaseId": 44660020996,
+    "displayTitle": "feat: aba Actions na workbench Git, somente leitura",
+    "event": "pull_request",
+    "headBranch": "feat/git-actions-tab",
+    "headSha": "36545bdf2ddd5fc0b71e003a8b2922f2e09c330f",
+    "number": 591,
+    "startedAt": "2026-11-20T02:20:03Z",
+    "status": "completed",
+    "updatedAt": "2026-11-20T02:24:03Z",
+    "url": "https://github.com/vectora-company/vectora/actions/runs/44660020996",
+    "workflowName": "PR Gate"
+  },
+  {
+    "attempt": 1,
+    "conclusion": "",
+    "createdAt": "2026-11-20T02:20:03Z",
+    "databaseId": 44660020896,
+    "displayTitle": "feat: aba Actions na workbench Git, somente leitura",
+    "event": "pull_request",
+    "headBranch": "feat/git-actions-tab",
+    "headSha": "36545bdf2ddd5fc0b71e003a8b2922f2e09c330f",
+    "number": 4096,
+    "startedAt": "2026-11-20T02:20:03Z",
+    "status": "in_progress",
+    "updatedAt": "2026-11-20T02:29:15Z",
+    "url": "https://github.com/vectora-company/vectora/actions/runs/44660020896",
+    "workflowName": "Vectora (app)"
+  }
+]

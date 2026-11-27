@@ -1,0 +1,58 @@
+[
+  {
+    "author": {
+      "id": "U_kgDODo7I4w",
+      "is_bot": false,
+      "login": "brunosrz",
+      "name": "Bruno Soares"
+    },
+    "comments": [
+      {
+        "id": "IC_kwDOSjesv88AAAABouugUw",
+        "author": {
+          "login": "brunosrz"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Implementada por #803 (`feat/git-actions-tab`, empilhado sobre a branch `feat/git-pr-issue-documents`). O PR tem `Closes #802`: a issue fecha quando o PR chega à `master`; em stack o merge segue a ordem, e cada PR é retargeteado para a `master` quando o anterior é mergeado.",
+        "createdAt": "2026-11-20T02:20:07Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/vectora-company/vectora/issues/802#issuecomment-7028318291",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDOSjesv88AAAACkEm8gg",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      },
+      {
+        "id": "LA_kwDOSjesv88AAAACypieNQ",
+        "name": "backend",
+        "description": "",
+        "color": "ededed"
+      },
+      {
+        "id": "LA_kwDOSjesv88AAAACypiePQ",
+        "name": "frontend",
+        "description": "",
+        "color": "ededed"
+      },
+      {
+        "id": "LA_kwDOSjesv88AAAADD3HcFA",
+        "name": "git-workbench",
+        "description": "Workbench Git e GitHub",
+        "color": "F05032"
+      }
+    ],
+    "number": 802,
+    "state": "OPEN",
+    "title": "feat: aba Actions na workbench Git, somente leitura",
+    "updatedAt": "2026-11-20T02:20:07Z",
+    "url": "https://github.com/vectora-company/vectora/issues/802"
+  }
+]

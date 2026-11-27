@@ -10,6 +10,9 @@ useDefault = true
 description = "Fixtures de teste, exemplos de documentação e traduções"
 paths = [
   '''^tests/''',
+  # A suíte traduzida para Rust carrega os mesmos valores fictícios da suíte
+  # Python.
+  '''^rust-backend/tests/''',
   '''^frontend/(src|tests|e2e)/.*(\.test\.|__tests__|fixtures)''',
   '''^frontend/messages/''',
   # Caminhos anteriores à mudança do app para a raiz, que ainda aparecem no

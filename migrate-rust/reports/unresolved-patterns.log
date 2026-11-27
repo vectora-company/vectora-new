@@ -1,0 +1,69 @@
+e2e/test_agent_live_runs.py:87: test_qa_simples_real: [fixture live_backend] async def test_qa_simples_real(live_backend: str) -> None:
+e2e/test_agent_live_runs.py:98: test_qa_content_ausente_erro_422: [fixture live_backend] async def test_qa_content_ausente_erro_422(live_backend: str) -> None:
+e2e/test_agent_live_runs.py:116: test_tool_call_busca_web_real: [fixture live_backend] async def test_tool_call_busca_web_real(live_backend: str) -> None:
+e2e/test_agent_live_runs.py:141: test_leitura_escrita_arquivo_real: [fixture live_backend] async def test_leitura_escrita_arquivo_real(live_backend: str, tmp_path) -> None:
+e2e/test_agent_live_runs.py:189: test_multiturno_com_contexto_real: [fixture live_backend] async def test_multiturno_com_contexto_real(live_backend: str) -> None:
+e2e/test_agent_live_runs.py:216: test_erro_recuperavel_tool_args_invalidos_real: [fixture live_backend] async def test_erro_recuperavel_tool_args_invalidos_real(
+integration/test_api_background.py:402: test_missing_session_rejects_orphan_run_even_with_owned_task.get_session: [del] thread_id
+integration/test_api_background.py:476: test_first_workspace_task_persists_workspace_on_session._allow_workspace_access: [del] workspace_id
+integration/test_api_background.py:476: test_first_workspace_task_persists_workspace_on_session._allow_workspace_access: [del] request
+integration/test_storage_postgres.py:16: <module>: [module statement] if TYPE_CHECKING:
+integration/test_systemone_local_live.py:321: test_selected_decision_adapter_live_contract: [fixture record_testsuite_property] async def test_selected_decision_adapter_live_contract(
+integration/test_systemone_local_live.py:321: test_selected_decision_adapter_live_contract: [fixture record_testsuite_property] async def test_selected_decision_adapter_live_contract(
+integration/test_systemone_local_live.py:321: test_selected_decision_adapter_live_contract: [fixture record_testsuite_property] async def test_selected_decision_adapter_live_contract(
+integration/test_systemone_local_live.py:321: test_selected_decision_adapter_live_contract: [fixture record_testsuite_property] async def test_selected_decision_adapter_live_contract(
+integration/test_systemone_local_live.py:321: test_selected_decision_adapter_live_contract: [fixture record_testsuite_property] async def test_selected_decision_adapter_live_contract(
+integration/test_systemone_local_live.py:321: test_selected_decision_adapter_live_contract: [fixture record_testsuite_property] async def test_selected_decision_adapter_live_contract(
+integration/test_systemone_local_live.py:321: test_selected_decision_adapter_live_contract: [fixture record_testsuite_property] async def test_selected_decision_adapter_live_contract(
+integration/test_systemone_local_live.py:321: test_selected_decision_adapter_live_contract: [fixture record_testsuite_property] async def test_selected_decision_adapter_live_contract(
+unit/test_admin_media_limits.py:13: <module>: [module statement] if TYPE_CHECKING:
+unit/test_admin_transcription.py:16: <module>: [module statement] if TYPE_CHECKING:
+unit/test_agent_factory_native_dispatch.py:95: TestGetNativeAgent.test_native_agent_catalog_matches_node_contract: [named_expression] spec := TOOL_REGISTRY.get(name)
+unit/test_api_auth.py:560: TestEnvOverridesEndpoints._setup_root: [starred target] self._cached_access, *_
+unit/test_api_auth.py:787: TestAdminEndpoints._setup_root: [starred target] self._cached_access, *_
+unit/test_api_settings_prefs.py:55: _isolated_runtime_settings: [del] handler
+unit/test_api_threads_history.py:21: <module>: [module statement] os.environ.setdefault("VECTORA_AUTH_REQUIRED", "false")
+unit/test_backup_manifest.py:124: test_rejeita_symlink_em_entrada_do_backup: [operator <<] 0o120777 << 16
+unit/test_build_hybrid_secrets_guard.py:24: <module>: [module statement] assert _SPEC is not None and _SPEC.loader is not None
+unit/test_build_hybrid_secrets_guard.py:26: <module>: [module statement] _SPEC.loader.exec_module(build_hybrid)
+unit/test_gateway_client.py:14: <module>: [module statement] if TYPE_CHECKING:
+unit/test_github_real_fixtures.py:324: test_fixtures_never_contain_an_email_address: [parametrize] @pytest.mark.parametrize(
+unit/test_github_real_fixtures.py:329: test_fixtures_never_contain_an_email_address: [fixture path] def test_fixtures_never_contain_an_email_address(path: Path) -> None:
+unit/test_github_real_fixtures.py:333: test_raw_fixtures_are_valid_json: [parametrize] @pytest.mark.parametrize("path", sorted(RAW.glob("gh_*.json")), ids=lambda p: p.name)
+unit/test_github_real_fixtures.py:334: test_raw_fixtures_are_valid_json: [fixture path] def test_raw_fixtures_are_valid_json(path: Path) -> None:
+unit/test_nats_mq_kv.py:214: test_erro_borda_surrogate_isolado_nao_lanca_unicodeencodeerror: [escape sequence] partial:\ud800
+unit/test_nats_mq_kv.py:233: test_erro_borda_kv_set_com_surrogate_isolado_nao_propaga_excecao: [escape sequence] partial:\ud800
+unit/test_persistence_native_session_store.py:615: TestAppendMessageEGetHistory.test_persistencia_de_imagem_nao_grava_base64: [starred target] _, content_json, *_
+unit/test_persistence_native_session_store.py:629: TestAppendMessageEGetHistory.test_persistencia_preserva_url_legada_sem_metadados: [starred target] _, content_json, *_
+unit/test_persistence_native_session_store.py:639: TestAppendMessageEGetHistory.test_persistencia_remove_data_uri_case_insensitive: [starred target] _, content_json, *_
+unit/test_postgres_session_store_branches.py:21: <module>: [module statement] if TYPE_CHECKING:
+unit/test_provider_routing_handler.py:44: <module>: [module statement] if TYPE_CHECKING:
+unit/test_release_workflow_simulation.py:17: <module>: [module statement] sys.path.insert(0, str(REPO_ROOT / "utils"))
+unit/test_sandbox_egress.py:50: _process_memory_contains: [starred target] address_range, permissions, *_
+unit/test_sandbox_landlock.py:154: test_access_fs_v1_all_inclui_todos_os_13_direitos: [operator <<] 1 << i
+unit/test_storage_migrations.py:40: TestMigrationRunner.test_status_pending_on_empty_db: [fixture runner_conn] async def test_status_pending_on_empty_db(self, runner_conn) -> None:
+unit/test_storage_migrations.py:51: TestMigrationRunner.test_status_shows_applied_after_upgrade: [fixture runner_conn] async def test_status_shows_applied_after_upgrade(self, runner_conn) -> None:
+unit/test_storage_migrations.py:63: TestMigrationRunner.test_upgrade_applies_schema_and_returns_true: [fixture runner_conn] async def test_upgrade_applies_schema_and_returns_true(self, runner_conn) -> None:
+unit/test_storage_migrations.py:72: TestMigrationRunner.test_upgrade_idempotent: [fixture runner_conn] async def test_upgrade_idempotent(self, runner_conn) -> None:
+unit/test_storage_migrations.py:82: TestMigrationRunner.test_schema_migrations_table_created: [fixture runner_conn] async def test_schema_migrations_table_created(self, runner_conn) -> None:
+unit/test_storage_migrations.py:107: TestMigrationRunner.test_colunas_do_kanban_chegam_em_banco_ja_populado: [fixture runner_conn] async def test_colunas_do_kanban_chegam_em_banco_ja_populado(
+unit/test_storage_migrations.py:180: TestMigrationRunner.test_vectora_sessions_table_created: [fixture runner_conn] async def test_vectora_sessions_table_created(self, runner_conn) -> None:
+unit/test_storage_migrations.py:192: TestMigrationRunner.test_vectora_sessions_has_extra_column: [fixture runner_conn] async def test_vectora_sessions_has_extra_column(self, runner_conn) -> None:
+unit/test_storage_migrations.py:203: TestMigrationRunner.test_reapply_after_content_change_updates_checksum: [fixture runner_conn] async def test_reapply_after_content_change_updates_checksum(
+unit/test_storage_migrations.py:239: TestMigrationRunner.test_plan_diagnostica_sem_mutar_o_banco: [fixture runner_conn] async def test_plan_diagnostica_sem_mutar_o_banco(self, runner_conn) -> None:
+unit/test_storage_migrations.py:254: TestMigrationRunner.test_history_diagnostica_sem_mutar_banco_vazio: [fixture runner_conn] async def test_history_diagnostica_sem_mutar_banco_vazio(self, runner_conn) -> None:
+unit/test_storage_migrations.py:266: TestMigrationRunner.test_history_ignora_formato_sem_id: [fixture runner_conn] async def test_history_ignora_formato_sem_id(self, runner_conn) -> None:
+unit/test_storage_migrations.py:278: TestMigrationRunner.test_alter_add_column_skips_existing_column: [fixture runner_conn] async def test_alter_add_column_skips_existing_column(self, runner_conn) -> None:
+unit/test_storage_migrations.py:292: TestMigrationRunner.test_upgrade_from_old_versioned_control_table: [fixture runner_conn] async def test_upgrade_from_old_versioned_control_table(self, runner_conn) -> None:
+unit/test_subagent_runner.py:28: test_spec_for_retorna_a_soul_certa_do_catalogo_pra_todas_as_10: [parametrize] @pytest.mark.parametrize("nome", list(SUBAGENT_TYPES))
+unit/test_subagent_runner.py:29: test_spec_for_retorna_a_soul_certa_do_catalogo_pra_todas_as_10: [fixture nome] def test_spec_for_retorna_a_soul_certa_do_catalogo_pra_todas_as_10(nome: str) -> None:
+unit/test_thread_persistence.py:83: <module>: [module assignment target] os.environ["VECTORA_AUTH_REQUIRED"] = "false"
+unit/test_tool_contract_matrix.py:76: test_workbench_tool_has_async_handler_and_valid_openai_schema: [parametrize] @pytest.mark.parametrize("spec", _workbench_specs(), ids=lambda spec: spec.name)
+unit/test_tool_contract_matrix.py:77: test_workbench_tool_has_async_handler_and_valid_openai_schema: [fixture spec] def test_workbench_tool_has_async_handler_and_valid_openai_schema(
+unit/test_tool_contract_matrix.py:92: test_invalid_arguments_are_reported_by_same_dispatcher: [parametrize] @pytest.mark.parametrize(
+unit/test_tool_contract_matrix.py:96: test_invalid_arguments_are_reported_by_same_dispatcher: [fixture spec] async def test_invalid_arguments_are_reported_by_same_dispatcher(
+unit/test_tools_computer_use.py:347: TestJanelaSelecionada.test_perda_de_foco_bloqueia_entrada_e_audita_sem_dados_externos._capture_audit: [del] args
+unit/test_workflow_sim.py:11: <module>: [module statement] sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "utils"))
+unit/test_workspaces_view.py:712: TestListRagBuckets.test_lista_buckets_do_workspace_com_flag_active: [fixture _isolated_runtime_settings] async def test_lista_buckets_do_workspace_com_flag_active(
+unit/test_workspaces_view.py:737: TestListRagBuckets.test_workspace_sem_buckets_retorna_lista_vazia: [fixture _isolated_runtime_settings] async def test_workspace_sem_buckets_retorna_lista_vazia(
+unit/test_workspaces_view.py:749: TestListRagBuckets.test_nao_mistura_buckets_de_outro_workspace: [fixture _isolated_runtime_settings] async def test_nao_mistura_buckets_de_outro_workspace(

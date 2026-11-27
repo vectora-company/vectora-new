@@ -1,0 +1,221 @@
+[
+  {
+    "author": {
+      "id": "U_kgDODo7I4w",
+      "is_bot": false,
+      "login": "brunosrz",
+      "name": "Bruno Soares"
+    },
+    "baseRefName": "feat/git-pr-issue-documents",
+    "headRefName": "feat/git-actions-tab",
+    "isDraft": false,
+    "number": 803,
+    "reviewDecision": "",
+    "state": "OPEN",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:00Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660013625/job/136035721160",
+        "name": "Ollama Qwen + llama.cpp Jev + Laya SystemOne",
+        "startedAt": "2026-11-20T02:20:09Z",
+        "status": "COMPLETED",
+        "workflowName": "Local LLM (Ollama Qwen, llama.cpp Jev e Laya)"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:12Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020996/job/136035682536",
+        "name": "Título e descrição do PR sem proveniência de processo",
+        "startedAt": "2026-11-20T02:20:06Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:13Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660022585/job/136035686810",
+        "name": "Título e descrição do PR sem proveniência de processo",
+        "startedAt": "2026-11-20T02:20:07Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:33Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136035683058",
+        "name": "Lint & Format Check",
+        "startedAt": "2026-11-20T02:20:07Z",
+        "status": "COMPLETED",
+        "workflowName": "Vectora (app)"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:04Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020996/job/136035684812",
+        "name": "Varredura de segredos dos commits enviados",
+        "startedAt": "2026-11-20T02:20:04Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:04Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660022585/job/136035688440",
+        "name": "Varredura de segredos dos commits enviados",
+        "startedAt": "2026-11-20T02:20:05Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:44Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136035683079",
+        "name": "Security Scanning",
+        "startedAt": "2026-11-20T02:20:06Z",
+        "status": "COMPLETED",
+        "workflowName": "Vectora (app)"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:12Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020996/job/136035740018",
+        "name": "Comenta a reprovação de título/descrição no PR",
+        "startedAt": "2026-11-20T02:20:12Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:14Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660022585/job/136035751941",
+        "name": "Comenta a reprovação de título/descrição no PR",
+        "startedAt": "2026-11-20T02:20:14Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:23:35Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136035682886",
+        "name": "Frontend (lint + types + tests)",
+        "startedAt": "2026-11-20T02:20:07Z",
+        "status": "COMPLETED",
+        "workflowName": "Vectora (app)"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:49Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020996/job/136035737785",
+        "name": "Título (Conventional Commits), labels e milestone",
+        "startedAt": "2026-11-20T02:20:14Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:50Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660022585/job/136035749924",
+        "name": "Título (Conventional Commits), labels e milestone",
+        "startedAt": "2026-11-20T02:20:17Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:16Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136035682596",
+        "name": "Detect release promotion",
+        "startedAt": "2026-11-20T02:20:06Z",
+        "status": "COMPLETED",
+        "workflowName": "Vectora (app)"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:20:50Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660022585/job/136036002462",
+        "name": "Código (pre-commit, contratos, testes de release, segredos)",
+        "startedAt": "2026-11-20T02:20:51Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:24:02Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020996/job/136035991923",
+        "name": "Código (pre-commit, contratos, testes de release, segredos)",
+        "startedAt": "2026-11-20T02:20:52Z",
+        "status": "COMPLETED",
+        "workflowName": "PR Gate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:24:31Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136037114940",
+        "name": "Build Verification",
+        "startedAt": "2026-11-20T02:23:38Z",
+        "status": "COMPLETED",
+        "workflowName": "Vectora (app)"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:28:59Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136037495959",
+        "name": "Unit Tests",
+        "startedAt": "2026-11-20T02:24:33Z",
+        "status": "COMPLETED",
+        "workflowName": "Vectora (app)"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:26:14Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136037495822",
+        "name": "Integration + E2E Tests",
+        "startedAt": "2026-11-20T02:24:34Z",
+        "status": "COMPLETED",
+        "workflowName": "Vectora (app)"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-20T02:29:11Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136039283454",
+        "name": "Resolve release version and update channel",
+        "startedAt": "2026-11-20T02:29:02Z",
+        "status": "COMPLETED",
+        "workflowName": "Vectora (app)"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136039364433",
+        "name": "Release native (linux/x64)",
+        "startedAt": "2026-11-20T02:29:14Z",
+        "status": "IN_PROGRESS",
+        "workflowName": "Vectora (app)"
+      }
+    ],
+    "title": "feat: aba Actions na workbench Git, somente leitura",
+    "updatedAt": "2026-11-20T02:20:34Z",
+    "url": "https://github.com/vectora-company/vectora/pull/803"
+  }
+]

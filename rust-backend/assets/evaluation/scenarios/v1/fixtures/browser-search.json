@@ -1,0 +1,10 @@
+{
+  "query": "Vectora synthetic search fixture",
+  "results": [
+    {
+      "title": "Fixture result",
+      "url": "https://example.invalid/result",
+      "snippet": "Synthetic result for offline replay."
+    }
+  ]
+}

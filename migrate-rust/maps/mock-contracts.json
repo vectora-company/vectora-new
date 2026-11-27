@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "crate": "vectora-test-mocks",
+  "contracts": [
+    {
+      "python": ["unittest.mock.Mock", "unittest.mock.MagicMock"],
+      "rust": "vectora_test_mocks::Script",
+      "status": "partial",
+      "supported": [
+        "typed arguments",
+        "ordered outcomes",
+        "explicit fallback",
+        "call history",
+        "call assertions (verify::CallAssertions)"
+      ],
+      "pending": [
+        "dynamic attributes",
+        "magic methods",
+        "callable side effects"
+      ]
+    },
+    {
+      "python": ["unittest.mock.AsyncMock"],
+      "rust": "vectora_test_mocks::AsyncScript",
+      "status": "partial",
+      "supported": [
+        "typed arguments",
+        "ordered outcomes",
+        "explicit fallback",
+        "separate call and await history",
+        "call and await assertions (verify::CallAssertions, verify::AwaitAssertions)"
+      ],
+      "pending": ["async side effects with suspension", "dynamic attributes"]
+    },
+    {
+      "python": [
+        "backend.api.handlers.provider_routing.get_systemone_provider"
+      ],
+      "rust": "vectora_test_mocks::provider::ProviderProbe",
+      "status": "fake_available",
+      "supported": [
+        "independent capabilities and health outcomes",
+        "await counts"
+      ],
+      "pending": ["bind the factory and fake to the migrated provider contract"]
+    },
+    {
+      "python": ["pytest.MonkeyPatch.setenv", "pytest.MonkeyPatch.delenv"],
+      "rust": "vectora_test_mocks::environment::Environment",
+      "status": "partial",
+      "supported": ["isolated values", "set and remove"],
+      "pending": ["inject into each consumer"]
+    },
+    {
+      "python": [
+        "httpx.AsyncClient.get",
+        "httpx.AsyncClient.post",
+        "httpx.AsyncClient.request"
+      ],
+      "rust": "vectora_test_mocks::http::HttpClient",
+      "status": "partial",
+      "supported": [
+        "method, URL, headers and body",
+        "transport errors",
+        "async call history"
+      ],
+      "pending": [
+        "HTTP context manager",
+        "streamed response and framework adapters"
+      ]
+    },
+    {
+      "python": [
+        "asyncio.create_subprocess_exec",
+        "asyncio.create_subprocess_shell"
+      ],
+      "rust": "vectora_test_mocks::process::CommandRunner",
+      "status": "partial",
+      "supported": [
+        "program, arguments, working directory, input and output",
+        "scripted process failure"
+      ],
+      "pending": [
+        "process lifecycle, wait and kill",
+        "process environment and pipes"
+      ]
+    },
+    {
+      "python": ["time.monotonic", "asyncio.sleep"],
+      "rust": "vectora_test_mocks::clock::Clock",
+      "status": "partial",
+      "supported": ["virtual elapsed time", "awaited delays"],
+      "pending": [
+        "consumer clock injection",
+        "coordinated timers where waits must suspend"
+      ]
+    },
+    {
+      "python": ["backend.persistence.kv.get_kv"],
+      "rust": "vectora_test_mocks::storage::KeyValue",
+      "status": "partial",
+      "supported": ["per-instance state", "operation ordering"],
+      "pending": ["TTL, transactions and contract-specific errors"]
+    },
+    {
+      "python": [
+        "unittest.mock.Mock(side_effect=callable)",
+        "unittest.mock.AsyncMock(side_effect=async_callable)"
+      ],
+      "rust": "vectora_test_mocks::function::{FunctionMock, AsyncFunctionMock}",
+      "status": "partial",
+      "supported": [
+        "typed callable effects",
+        "sync and suspending async outcomes",
+        "call and await history"
+      ],
+      "pending": [
+        "resolve callable captures in migrated consumers",
+        "attach to migrated dependency interfaces"
+      ]
+    },
+    {
+      "python": ["pytest.tmp_path"],
+      "rust": "vectora_test_mocks::fixtures::TempDir",
+      "status": "partial",
+      "supported": [
+        "unique empty absolute directory",
+        "recursive teardown",
+        "injected by Depyler into synchronous module-level tests whose only parameter is tmp_path and is emitted as &str, &Path or &PathBuf"
+      ],
+      "pending": [
+        "classes, parametrize, marks, async and other fixtures",
+        "pytest retention of recent directories",
+        "tmp_path_factory"
+      ]
+    },
+    {
+      "python": ["pytest.MonkeyPatch.setattr", "unittest.mock.patch.object"],
+      "rust": "vectora_test_mocks::patch::Slot",
+      "status": "fake_available",
+      "supported": [
+        "scoped replacement of an injected value",
+        "restore on drop and on panic",
+        "out-of-order guard drop"
+      ],
+      "pending": [
+        "dependency slots in migrated consumers",
+        "delattr, setitem, raising=False",
+        "generator rule"
+      ]
+    },
+    {
+      "python": ["asyncio.create_subprocess_exec", "MagicMock process"],
+      "rust": "vectora_test_mocks::subprocess::{Spawner, Process}",
+      "status": "fake_available",
+      "supported": [
+        "argv, cwd and environment",
+        "communicate, wait, kill, terminate, stdin write/drain, stdout readline",
+        "separate call and await history",
+        "explicit return code",
+        "spawn errors"
+      ],
+      "pending": [
+        "pid, stderr stream reads",
+        "process-tree signals",
+        "generator rule"
+      ]
+    },
+    {
+      "python": [
+        "httpx.AsyncClient (async context manager)",
+        "local _FakeClient/_FakeResponse"
+      ],
+      "rust": "vectora_test_mocks::http_session::{Client, Response}",
+      "status": "fake_available",
+      "supported": [
+        "enter and exit",
+        "get, post, request records with headers and JSON",
+        "URL fragment routing with fallback",
+        "transport errors",
+        "json, text, raise_for_status from 400"
+      ],
+      "pending": [
+        "streaming responses",
+        "params, timeout and constructor arguments",
+        "synchronous httpx.Client",
+        "generator rule"
+      ]
+    },
+    {
+      "python": [
+        "tests/unit/test_tools_browser.py::_FakePage",
+        "fixture fake_page"
+      ],
+      "rust": "vectora_test_mocks::browser::Page",
+      "status": "partial",
+      "supported": [
+        "default results",
+        "navigation updates url on await",
+        "positional and keyword arguments",
+        "call and await history",
+        "scripted errors, changed between calls",
+        "Depyler translates fixture consumers whose every statement is supported (24 of 31 in test_tools_browser.py)"
+      ],
+      "pending": [
+        "navigation guard handler invocation",
+        "local side_effect functions",
+        "7 consumers with unsupported statements"
+      ]
+    },
+    {
+      "python": ["fixture db (aiosqlite file with schema)"],
+      "rust": "vectora_test_mocks::database::SqliteDb",
+      "status": "partial",
+      "supported": [
+        "isolated file",
+        "schema supplied by consumer",
+        "new connection per call",
+        "rows by column name",
+        "teardown",
+        "parameterised statements and queries",
+        "Python truthiness and len of results",
+        "Depyler translates inline-schema fixtures and SQL seeding helpers (16 of 49 in test_kanban_model.py)"
+      ],
+      "pending": [
+        "schema read from the Python repository",
+        "blob and container parameters",
+        "other consumers with unsupported fixtures or statements",
+        "SessionStore fixtures need the backend implementation"
+      ]
+    },
+    {
+      "python": ["fixture trusted_ws"],
+      "rust": "vectora_test_mocks::workspace::Registry",
+      "status": "fake_available",
+      "supported": [
+        "trusted workspace fields",
+        "lookup by id with call history"
+      ],
+      "pending": [
+        "TempDir composition by consumer",
+        "other registry methods",
+        "generator rule"
+      ]
+    },
+    {
+      "python": ["backend capability call"],
+      "rust": "vectora_test_mocks::backend::Backend",
+      "status": "partial",
+      "supported": [
+        "fixed failure message while unimplemented",
+        "JSON arguments and results",
+        "recorded AsyncMock return patches",
+        "shared page",
+        "installed AsyncMocks shared with the test",
+        "patched synchronous return objects"
+      ],
+      "pending": [
+        "typed contracts once the Rust backend exists",
+        "exceptions raised by capabilities"
+      ]
+    },
+    {
+      "python": ["fixtures client and app (fastapi.testclient.TestClient)"],
+      "rust": "vectora_test_mocks::client::request",
+      "status": "partial",
+      "supported": [
+        "verb, URL and keyword arguments",
+        "status_code, json and text",
+        "authentication disabled in the isolated environment",
+        "Depyler translates 21 of 52 consumers in test_provider_routing_handler.py"
+      ],
+      "pending": [
+        "isolated session database of the app fixture",
+        "server exceptions as 500 are the implementation's duty",
+        "other client fixtures",
+        "31 consumers with unsupported fixtures or statements"
+      ]
+    },
+    {
+      "python": ["socket.socket"],
+      "rust": "vectora_test_mocks::system::socket",
+      "status": "partial",
+      "supported": [
+        "TCP and Unix stream sockets",
+        "bind, listen, accept, connect",
+        "recv, send, sendall, getsockname",
+        "context manager"
+      ],
+      "pending": ["UDP", "timeouts", "socket options"]
+    },
+    {
+      "python": ["threading.Thread"],
+      "rust": "vectora_test_mocks::system::thread",
+      "status": "partial",
+      "supported": [
+        "target and args",
+        "start",
+        "join with timeout",
+        "is_alive"
+      ],
+      "pending": ["name", "daemon semantics at exit"]
+    },
+    {
+      "python": [
+        "subprocess.run",
+        "subprocess.Popen",
+        "asyncio.create_subprocess_exec"
+      ],
+      "rust": "vectora_test_mocks::system",
+      "status": "partial",
+      "supported": [
+        "real child process",
+        "env and cwd",
+        "DEVNULL and PIPE",
+        "poll, wait, kill, returncode",
+        "check=True"
+      ],
+      "pending": ["stdin", "communicate", "signals other than kill", "timeout"]
+    },
+    {
+      "python": ["httpx.get"],
+      "rust": "vectora_test_mocks::system::http_get",
+      "status": "partial",
+      "supported": [
+        "plain HTTP GET",
+        "status_code and text",
+        "ConnectError when unreachable"
+      ],
+      "pending": ["TLS: https fails as ConnectError"]
+    },
+    {
+      "python": ["pandas.DataFrame"],
+      "rust": "vectora_test_mocks::doubles::data_frame",
+      "status": "partial",
+      "supported": [
+        "records",
+        "column access",
+        "iterrows",
+        "to_dict",
+        "empty, shape, columns, head, tail"
+      ],
+      "pending": ["len counts columns", "other constructors"]
+    }
+  ]
+}

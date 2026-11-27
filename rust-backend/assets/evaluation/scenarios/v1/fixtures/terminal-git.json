@@ -1,0 +1,6 @@
+{
+  "repository": { "branch": "main", "tracked_files": ["README.md"] },
+  "command": "git status --short",
+  "expected_exit_code": 0,
+  "expected_stdout": ""
+}

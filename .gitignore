@@ -399,3 +399,10 @@ graphify-out/
 # Conteúdo de .vectora/ fica fora do git, exceto o lock de skills
 .vectora/*
 !.vectora/skills.lock.json
+
+# Backend Rust (rust-backend/) e migrador (migrate-rust/): o build do Cargo
+# fica fora do repositório; o log de pendências do migrador é um relatório
+# versionado, apesar da regra global de *.log acima.
+rust-backend/target/
+migrate-rust/target/
+!migrate-rust/reports/*.log

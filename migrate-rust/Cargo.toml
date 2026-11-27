@@ -1,0 +1,17 @@
+[package]
+name = "vectora-test-migrator"
+version = "0.1.0"
+edition = "2024"
+description = "Translate pytest files to Rust by applying swap maps and patterns"
+license = "AGPL-3.0-only"
+
+[[bin]]
+name = "vectora-test-migrator"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tree-sitter = "0.25"
+tree-sitter-python = "0.25"
+walkdir = "2.5"

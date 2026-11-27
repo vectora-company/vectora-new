@@ -1,0 +1,231 @@
+{
+  "_about": "Classe de exceção → cadeia de bases, em ordem de definição.",
+  "classes": [
+    ["builtins.BaseException", []],
+    ["builtins.Exception", ["builtins.BaseException"]],
+    [
+      "builtins.ArithmeticError",
+      ["builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.AssertionError",
+      ["builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.AttributeError",
+      ["builtins.Exception", "builtins.BaseException"]
+    ],
+    ["builtins.ImportError", ["builtins.Exception", "builtins.BaseException"]],
+    ["builtins.LookupError", ["builtins.Exception", "builtins.BaseException"]],
+    ["builtins.NameError", ["builtins.Exception", "builtins.BaseException"]],
+    ["builtins.OSError", ["builtins.Exception", "builtins.BaseException"]],
+    ["builtins.RuntimeError", ["builtins.Exception", "builtins.BaseException"]],
+    [
+      "builtins.StopIteration",
+      ["builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.StopAsyncIteration",
+      ["builtins.Exception", "builtins.BaseException"]
+    ],
+    ["builtins.TypeError", ["builtins.Exception", "builtins.BaseException"]],
+    ["builtins.ValueError", ["builtins.Exception", "builtins.BaseException"]],
+    [
+      "builtins.ZeroDivisionError",
+      [
+        "builtins.ArithmeticError",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    [
+      "builtins.OverflowError",
+      [
+        "builtins.ArithmeticError",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    [
+      "builtins.KeyError",
+      ["builtins.LookupError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.IndexError",
+      ["builtins.LookupError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.UnboundLocalError",
+      ["builtins.NameError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.NotImplementedError",
+      ["builtins.RuntimeError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.ModuleNotFoundError",
+      ["builtins.ImportError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.TimeoutError",
+      ["builtins.OSError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.FileNotFoundError",
+      ["builtins.OSError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.FileExistsError",
+      ["builtins.OSError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.PermissionError",
+      ["builtins.OSError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.ConnectionError",
+      ["builtins.OSError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.ProcessLookupError",
+      ["builtins.OSError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.UnicodeDecodeError",
+      ["builtins.ValueError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "builtins.ConnectionAbortedError",
+      [
+        "builtins.ConnectionError",
+        "builtins.OSError",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    [
+      "builtins.ConnectionResetError",
+      [
+        "builtins.ConnectionError",
+        "builtins.OSError",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    [
+      "builtins.ConnectionRefusedError",
+      [
+        "builtins.ConnectionError",
+        "builtins.OSError",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    ["builtins.SystemExit", ["builtins.BaseException"]],
+    ["builtins.KeyboardInterrupt", ["builtins.BaseException"]],
+    ["asyncio.CancelledError", ["builtins.BaseException"]],
+    [
+      "asyncio.TimeoutError",
+      [
+        "builtins.TimeoutError",
+        "builtins.OSError",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    [
+      "json.JSONDecodeError",
+      ["builtins.ValueError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "subprocess.TimeoutExpired",
+      ["builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "subprocess.CalledProcessError",
+      ["builtins.Exception", "builtins.BaseException"]
+    ],
+    ["fastapi.HTTPException", ["builtins.Exception", "builtins.BaseException"]],
+    [
+      "starlette.exceptions.HTTPException",
+      ["builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "pydantic.ValidationError",
+      ["builtins.ValueError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    ["Failed", ["builtins.Exception", "builtins.BaseException"]],
+    ["httpx.HTTPError", ["builtins.Exception", "builtins.BaseException"]],
+    [
+      "httpx.TransportError",
+      ["httpx.HTTPError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "httpx.ConnectError",
+      [
+        "httpx.TransportError",
+        "httpx.HTTPError",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    [
+      "httpx.ReadError",
+      [
+        "httpx.TransportError",
+        "httpx.HTTPError",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    [
+      "httpx.RemoteProtocolError",
+      [
+        "httpx.TransportError",
+        "httpx.HTTPError",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    [
+      "httpx.HTTPStatusError",
+      ["httpx.HTTPError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    ["git.GitCommandError", ["builtins.Exception", "builtins.BaseException"]],
+    [
+      "git.exc.GitCommandError",
+      ["git.GitCommandError", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "git.GitCommandNotFound",
+      ["builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "git.exc.GitCommandNotFound",
+      ["git.GitCommandNotFound", "builtins.Exception", "builtins.BaseException"]
+    ],
+    ["sqlite3.Error", ["builtins.Exception", "builtins.BaseException"]],
+    [
+      "sqlite3.DatabaseError",
+      ["sqlite3.Error", "builtins.Exception", "builtins.BaseException"]
+    ],
+    [
+      "sqlite3.OperationalError",
+      [
+        "sqlite3.DatabaseError",
+        "sqlite3.Error",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ],
+    [
+      "sqlite3.IntegrityError",
+      [
+        "sqlite3.DatabaseError",
+        "sqlite3.Error",
+        "builtins.Exception",
+        "builtins.BaseException"
+      ]
+    ]
+  ]
+}

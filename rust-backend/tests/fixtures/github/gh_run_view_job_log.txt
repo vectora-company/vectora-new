@@ -1,0 +1,25 @@
+Título e descrição do PR sem proveniência de processo	Set up job	﻿2026-11-20T02:20:07.7698949Z Current runner version: '2.338.2'
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7722961Z ##[group]Runner Image Provisioner
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7723758Z Hosted Compute Agent
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7724357Z Version: 20261103.629
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7724923Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7725564Z Build Date: 2026-11-03T17:26:59Z
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7726159Z Worker ID: {ddae8ada-5e11-4f82-bae3-d8fd2a21bca2}
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7726750Z Region: eastus2
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7727255Z Cloud: Azure
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7727746Z ##[endgroup]
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7728787Z ##[group]Operating System
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7729383Z Ubuntu
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7729877Z 24.04.5
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7730360Z LTS
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7730842Z ##[endgroup]
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7731306Z ##[group]Runner Image
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7732116Z Image: ubuntu-24.04
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7732606Z Version: 20261111.370.1
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7733553Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7735021Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7735886Z ##[endgroup]
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7736873Z ##[group]GITHUB_TOKEN Permissions
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7738451Z Contents: read
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7739005Z Metadata: read
+Título e descrição do PR sem proveniência de processo	Set up job	2026-11-20T02:20:07.7739541Z ##[endgroup]

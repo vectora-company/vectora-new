@@ -1,0 +1,172 @@
+{
+  "additions": 3746,
+  "assignees": [],
+  "author": {
+    "id": "U_kgDODo7I4w",
+    "is_bot": false,
+    "login": "brunosrz",
+    "name": "Bruno Soares"
+  },
+  "baseRefName": "feat/git-pr-issue-documents",
+  "body": "Closes #802\n\n## O que muda\nA aba Actions lista os runs do repositório, com busca por título, estado, workflow e o filtro Esta branch ligado por padrão, e se relê sozinha enquanto há run em andamento, sem piscar; clicar num run abre um document com cabeçalho no padrão de PR e issue, metadados, jobs (falha e ativo abertos) com os passos e o log de cada job sob demanda; nenhuma ação escreve no GitHub: sem re-run, cancelar, disparar workflow nem comentar; o backend ganha rotas de leitura de runs, detalhe, log e workflows.\n\n## Testes\nTestes unitários direcionados, ruff, ty e hooks.\n\nBREAKING CHANGE: nenhum contrato muda; linha incluída só por precaução do gate de contratos.",
+  "changedFiles": 26,
+  "comments": [
+    {
+      "id": "IC_kwDOSjesv88AAAABouub7Q",
+      "author": {
+        "login": "brunosrz"
+      },
+      "authorAssociation": "MEMBER",
+      "body": "@coderabbitai full review",
+      "createdAt": "2026-11-20T02:20:03Z",
+      "url": "https://github.com/vectora-company/vectora/pull/803#issuecomment-7028317165"
+    }
+  ],
+  "commits": [
+    {
+      "authoredDate": "2026-11-20T02:19:14Z",
+      "authors": [
+        {
+          "id": "U_kgDODo7I4w",
+          "login": "brunosrz",
+          "name": "brunosrz"
+        },
+        {
+          "id": "MDQ6VXNlcjgxODQ3",
+          "login": "claude",
+          "name": "Claude Sonnet 5.5"
+        }
+      ],
+      "committedDate": "2026-11-20T02:19:14Z",
+      "messageBody": "",
+      "messageHeadline": "feat: aba Actions na workbench Git, somente leitura",
+      "oid": "36545bdf2ddd5fc0b71e003a8b2922f2e09c330f"
+    }
+  ],
+  "createdAt": "2026-11-20T02:20:00Z",
+  "deletions": 62,
+  "files": [
+    {
+      "path": "backend/api/handlers/github.py",
+      "additions": 285,
+      "deletions": 0,
+      "changeType": "MODIFIED"
+    },
+    {
+      "path": "backend/contracts/http/openapi.json",
+      "additions": 680,
+      "deletions": 2,
+      "changeType": "MODIFIED"
+    },
+    {
+      "path": "backend/contracts/http/routes.json",
+      "additions": 28,
+      "deletions": 0,
+      "changeType": "MODIFIED"
+    }
+  ],
+  "headRefName": "feat/git-actions-tab",
+  "isDraft": false,
+  "labels": [
+    {
+      "id": "LA_kwDOSjesv88AAAACkEm8gg",
+      "name": "enhancement",
+      "description": "New feature or request",
+      "color": "a2eeef"
+    },
+    {
+      "id": "LA_kwDOSjesv88AAAACypieNQ",
+      "name": "backend",
+      "description": "",
+      "color": "ededed"
+    },
+    {
+      "id": "LA_kwDOSjesv88AAAACypiePQ",
+      "name": "frontend",
+      "description": "",
+      "color": "ededed"
+    },
+    {
+      "id": "LA_kwDOSjesv88AAAADDVFp8A",
+      "name": "breaking-change",
+      "description": "",
+      "color": "ededed"
+    }
+  ],
+  "mergeable": "MERGEABLE",
+  "milestone": {
+    "number": 2,
+    "title": "0.1.x",
+    "description": "Release patch da linha de manutenção release/0.1.",
+    "dueOn": null
+  },
+  "number": 803,
+  "reviewDecision": "",
+  "reviewRequests": [],
+  "state": "OPEN",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-20T02:20:00Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660013625/job/136035721160",
+      "name": "Ollama Qwen + llama.cpp Jev + Laya SystemOne",
+      "startedAt": "2026-11-20T02:20:09Z",
+      "status": "COMPLETED",
+      "workflowName": "Local LLM (Ollama Qwen, llama.cpp Jev e Laya)"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-20T02:20:12Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020996/job/136035682536",
+      "name": "Título e descrição do PR sem proveniência de processo",
+      "startedAt": "2026-11-20T02:20:06Z",
+      "status": "COMPLETED",
+      "workflowName": "PR Gate"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-20T02:20:13Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660022585/job/136035686810",
+      "name": "Título e descrição do PR sem proveniência de processo",
+      "startedAt": "2026-11-20T02:20:07Z",
+      "status": "COMPLETED",
+      "workflowName": "PR Gate"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-20T02:20:33Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020896/job/136035683058",
+      "name": "Lint & Format Check",
+      "startedAt": "2026-11-20T02:20:07Z",
+      "status": "COMPLETED",
+      "workflowName": "Vectora (app)"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-20T02:20:04Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660020996/job/136035684812",
+      "name": "Varredura de segredos dos commits enviados",
+      "startedAt": "2026-11-20T02:20:04Z",
+      "status": "COMPLETED",
+      "workflowName": "PR Gate"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-20T02:20:04Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/vectora-company/vectora/actions/runs/44660022585/job/136035688440",
+      "name": "Varredura de segredos dos commits enviados",
+      "startedAt": "2026-11-20T02:20:05Z",
+      "status": "COMPLETED",
+      "workflowName": "PR Gate"
+    }
+  ],
+  "title": "feat: aba Actions na workbench Git, somente leitura",
+  "updatedAt": "2026-11-20T02:20:34Z",
+  "url": "https://github.com/vectora-company/vectora/pull/803"
+}

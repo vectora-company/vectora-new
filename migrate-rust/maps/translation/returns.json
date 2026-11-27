@@ -1,0 +1,10 @@
+{
+  "_about": "Retornos conforme o contexto em que o return aparece.",
+  "dynamic": "return {value};",
+  "typed": "return convert::to::<{type}>(&{value}, {loc:?});",
+  "inside block": "return Flow::Return({value});",
+  "end dynamic": "Object::None",
+  "end typed": "convert::to::<{type}>(&Object::None, {loc:?})",
+  "break inside block": "return Flow::Break;",
+  "continue inside block": "return Flow::Continue;"
+}

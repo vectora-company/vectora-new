@@ -1,0 +1,19 @@
+{
+  "_about": "Decorador de teste → efeito no wrapper. none: sem efeito; patch: mock injetado como argumento posicional; runtime: avaliado ao rodar (marcas skip/skipif aplicadas). Decorador sem linha é runtime.",
+  "pytest.mark.asyncio": "none",
+  "pytest.mark.anyio": "none",
+  "pytest.mark.timeout": "none",
+  "pytest.mark.benchmark": "none",
+  "pytest.mark.godot": "none",
+  "pytest.mark.live": "none",
+  "pytest.mark.real_lancedb": "none",
+  "pytest.mark.slow": "none",
+  "pytest.mark.skipif": "skipif",
+  "pytest.mark.skip": "skip",
+  "pytest.mark.parametrize": "parametrize",
+  "pytest.mark.usefixtures": "usefixtures",
+  "pytest.fixture": "fixture",
+  "unittest.mock.patch": "patch",
+  "unittest.mock.patch.object": "patch",
+  "unittest.mock.patch.dict": "runtime"
+}

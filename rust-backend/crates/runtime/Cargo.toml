@@ -1,0 +1,11 @@
+[package]
+name = "vectora-runtime"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+description = "Dynamic value runtime shared by the translated Vectora backend and its tests"
+
+[dependencies]
+regex = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde_json = "1"

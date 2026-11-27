@@ -1,0 +1,18 @@
+{
+  "None": "Object::None",
+  "True": "Object::Bool(true)",
+  "False": "Object::Bool(false)",
+  "...": "Object::None",
+  "int": "Object::Int({0})",
+  "float": "Object::Float({0})",
+  "str": "object::str_({0:?})",
+  "bytes": "object::bytes(&[{0}])",
+  "list": "object::list(vec![{0}])",
+  "tuple": "object::tuple(vec![{0}])",
+  "set": "object::set(vec![{0}])",
+  "dict": "object::dict(vec![{0}])",
+  "dict with spread": "object::dict_spread(vec![{0}])",
+  "fstring": "object::fstring(vec![{0}])",
+  "fstring part": "object::format_value(&{0}, {1:?}, {2:?})",
+  "__file__": "natives::source_file(env!(\"CARGO_MANIFEST_DIR\"), {source_file:?})"
+}

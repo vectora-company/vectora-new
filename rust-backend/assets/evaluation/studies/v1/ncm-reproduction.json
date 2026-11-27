@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "study_id": "ncm-generation-reproduction",
+  "title": "Replicar desempenho e qualidade publicados para Next-Concept Modeling",
+  "state": "planned",
+  "claim_under_test": "O preprint reporta ganhos de velocidade de geração em tarefas específicas sem perda relevante de qualidade frente aos baselines comparados.",
+  "hypothesis": "Com checkpoints, datasets, configurações e hardware compatíveis com o protocolo publicado, as medições independentes reproduzirão a direção dos resultados de qualidade e latência nos subconjuntos selecionados.",
+  "falsification_criterion": "A hipótese será refutada se, após reproduzir o protocolo e validar a paridade das entradas, a diferença de qualidade cruzar o limite de não inferioridade pré-registrado ou a latência mediana não melhorar no hardware declarado; execução incompleta será inconclusiva.",
+  "method": "Fixar SHA do código, hashes de checkpoints e datasets; selecionar antes da execução uma tarefa de texto e Sudoku; seguir o comando e as configurações publicados; comparar NCM aos baselines disponíveis usando as mesmas entradas, precisão, hardware e limites de batch; medir qualidade pela métrica da tarefa e latência end-to-end após warmup; repetir as medições e publicar logs redigidos, distribuições e desvios do protocolo.",
+  "sample": "Executar a totalidade do split de avaliação disponível para as tarefas selecionadas e 30 repetições temporizadas por condição; reportar qualquer redução de amostra ou indisponibilidade de baseline como limitação, sem imputar valores.",
+  "environment": {
+    "os": "registrar distribuição e versão no início do experimento",
+    "hardware": "registrar GPU, VRAM, CPU e memória; a comparação principal exige o hardware do protocolo reproduzido",
+    "software_revision": "registrar SHA do repositório HazyResearch/ncm e do avaliador Vectora",
+    "provider": "execução local com checkpoints fixados; nenhum provider remoto"
+  },
+  "independent_variable": "Método de geração: NCM ou baseline reproduzido, mantendo tarefa e condições constantes.",
+  "controls": [
+    "Usar os mesmos exemplos, checkpoints e partições indicados pelo protocolo publicado.",
+    "Manter hardware, precisão, batch, warmup, decodificação e número de amostras iguais entre as condições.",
+    "Registrar compilation, carregamento e preparação separadamente da região temporizada, conforme o protocolo original."
+  ],
+  "decision_rule": "Classificar separadamente qualidade e desempenho. Sustentar a hipótese apenas se todos os limites pré-registrados forem atingidos e a incerteza for reportada; caso contrário, refutar ou declarar inconclusivo conforme a causa, sem converter indisponibilidade de artefato em falha do modelo.",
+  "conclusion": "not_run",
+  "evidence": [
+    {
+      "evidence_id": "ncm-preprint",
+      "kind": "external_claim",
+      "source": "https://arxiv.org/abs/2610.14162",
+      "observation": "O preprint descreve geração coarse-to-fine com códigos discretos hierárquicos e relata resultados de qualidade e velocidade para LM1B, OpenWebText, XSum e Sudoku.",
+      "limitations": [
+        "A alegação é dos autores do preprint e não foi reproduzida por este estudo.",
+        "Os números dependem de tarefas, baselines, hardware, checkpoints e configurações específicos."
+      ]
+    },
+    {
+      "evidence_id": "ncm-release-repository",
+      "kind": "external_claim",
+      "source": "https://github.com/HazyResearch/ncm",
+      "observation": "O repositório do projeto publica código de geração, avaliação e benchmark, além de referências a checkpoints e datasets.",
+      "limitations": [
+        "A existência de código e artefatos não valida os resultados publicados.",
+        "O estudo deverá fixar os SHAs e hashes realmente usados; a branch default pode mudar."
+      ]
+    }
+  ],
+  "observed_results": [],
+  "limitations": [
+    "Estudo planejado: nenhuma execução, checkpoint ou resultado foi verificado.",
+    "Resultados de uma GPU ou tarefa não estabelecem superioridade geral nem prontidão comercial.",
+    "A disponibilidade de hardware e baselines pode limitar a réplica; desvios devem permanecer explícitos."
+  ],
+  "related_code": [
+    "backend/evaluation/",
+    "backend/evaluation/studies.py",
+    "backend/evaluation/study_evidence.py"
+  ]
+}

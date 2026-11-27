@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "suite_id": "vectora-core-flows-v1",
+  "scenarios": [
+    {
+      "scenario_id": "workspace-project-open-v1",
+      "category": "workspace",
+      "capability": "workspace.open",
+      "capability_maturity": "unassessed",
+      "task": "Abrir um projeto sintético e reconhecer seus arquivos iniciais.",
+      "fixture": "fixtures/workspace.json",
+      "fixture_sha256": "8f89cd2b18f558d8dd554ae7bee1a3bfe426befbc983c0bfc2fbcc68a072c016",
+      "context": {
+        "workspace_isolated": true
+      },
+      "tools": ["filesystem.list"],
+      "policy": {
+        "network": "deny",
+        "workspace_write": "allow"
+      },
+      "setup": ["criar_workspace_temporario"],
+      "teardown": ["remover_workspace_temporario"],
+      "success_criteria": [
+        "README.md existe",
+        "nenhum arquivo do host foi alterado"
+      ],
+      "required_capabilities": ["workspace.open", "filesystem.list"],
+      "requires_provider": true,
+      "remote_provider_allowed": true
+    },
+    {
+      "scenario_id": "filesystem-edit-v1",
+      "category": "filesystem",
+      "capability": "filesystem.edit",
+      "capability_maturity": "unassessed",
+      "task": "Alterar um arquivo sintético e validar o conteúdo e diff resultantes.",
+      "fixture": "fixtures/file-edit.json",
+      "fixture_sha256": "94ad4ad8265da2898537374e1cd464eb439f175c60b5110f9b2f2b3940107722",
+      "context": {
+        "workspace_isolated": true
+      },
+      "tools": ["filesystem.read", "filesystem.write"],
+      "policy": {
+        "network": "deny",
+        "workspace_write": "allow"
+      },
+      "setup": ["materializar_arquivo_inicial"],
+      "teardown": ["remover_workspace_temporario"],
+      "success_criteria": [
+        "conteúdo final corresponde à expectativa",
+        "diff contém somente a alteração esperada"
+      ],
+      "required_capabilities": ["filesystem.read", "filesystem.write"],
+      "requires_provider": true,
+      "remote_provider_allowed": true
+    },
+    {
+      "scenario_id": "terminal-git-status-v1",
+      "category": "terminal-git",
+      "capability": "git.status",
+      "capability_maturity": "unassessed",
+      "task": "Consultar o estado de um repositório descartável sem alterar o checkout do usuário.",
+      "fixture": "fixtures/terminal-git.json",
+      "fixture_sha256": "091ec98d3164f3a452c4cace1d3b940d3c84023511e0c625c3f6fadfa80db85b",
+      "context": {
+        "repository_is_temporary": true
+      },
+      "tools": ["terminal.execute", "git.status"],
+      "policy": {
+        "network": "deny",
+        "repository_write": "deny"
+      },
+      "setup": ["criar_repositorio_git_temporario"],
+      "teardown": ["remover_repositorio_temporario"],
+      "success_criteria": [
+        "comando termina com código zero",
+        "checkout permanece limpo"
+      ],
+      "required_capabilities": ["terminal.execute", "git.status"],
+      "requires_provider": true,
+      "remote_provider_allowed": true
+    },
+    {
+      "scenario_id": "browser-search-fetch-v1",
+      "category": "browser-search-fetch",
+      "capability": "browser.search",
+      "capability_maturity": "unassessed",
+      "task": "Reproduzir resultados de busca sintéticos sem acessar serviços externos.",
+      "fixture": "fixtures/browser-search.json",
+      "fixture_sha256": "22ff620d19e124c72ca06c2f5c56a5409a6fef14d16600f0c79c3e242b69cd97",
+      "context": {
+        "network": "cassette-only"
+      },
+      "tools": ["browser.search", "browser.fetch"],
+      "policy": {
+        "network": "fixture-only"
+      },
+      "setup": ["carregar_cassete_local"],
+      "teardown": ["descartar_sessao_de_browser"],
+      "success_criteria": [
+        "resultado corresponde à fixture",
+        "nenhuma requisição externa foi feita"
+      ],
+      "required_capabilities": ["browser.search", "browser.fetch"],
+      "requires_provider": true,
+      "remote_provider_allowed": true
+    },
+    {
+      "scenario_id": "mcp-tool-echo-v1",
+      "category": "mcp",
+      "capability": "mcp.invoke",
+      "capability_maturity": "unassessed",
+      "task": "Invocar ferramenta MCP de fixture isolada e validar sua resposta.",
+      "fixture": "fixtures/mcp.json",
+      "fixture_sha256": "02e82d3222556818b947f6390a391f106bd04c0d03d7880e632f0dc0bc1de5ed",
+      "context": {
+        "server_process": "fixture"
+      },
+      "tools": ["mcp.invoke"],
+      "policy": {
+        "network": "deny",
+        "mcp_servers": ["fixture-mcp"]
+      },
+      "setup": ["iniciar_servidor_mcp_de_fixture"],
+      "teardown": ["encerrar_servidor_mcp_de_fixture"],
+      "success_criteria": [
+        "resposta corresponde à fixture",
+        "processo MCP foi encerrado"
+      ],
+      "required_capabilities": ["mcp.invoke"],
+      "requires_provider": true,
+      "remote_provider_allowed": true
+    },
+    {
+      "scenario_id": "rag-context-graph-retrieval-v1",
+      "category": "rag-context-graph",
+      "capability": "context.retrieve",
+      "capability_maturity": "unassessed",
+      "task": "Recuperar o documento de suporte e fato esperado do corpus sintético.",
+      "fixture": "fixtures/rag-context-graph.json",
+      "fixture_sha256": "2279f70d47c5a36d51082638ea32930145a5c0b4ac765124cb378c2275bc9ddf",
+      "context": {
+        "corpus": "fixture",
+        "external_data": false
+      },
+      "tools": ["context.retrieve", "context.graph"],
+      "policy": {
+        "network": "deny"
+      },
+      "setup": ["indexar_documentos_sinteticos"],
+      "teardown": ["remover_indice_temporario"],
+      "success_criteria": [
+        "documento esperado aparece na recuperação",
+        "fato esperado está ligado à proveniência"
+      ],
+      "required_capabilities": ["context.retrieve", "context.graph"],
+      "requires_provider": true,
+      "remote_provider_allowed": true
+    },
+    {
+      "scenario_id": "memory-recall-v1",
+      "category": "memory",
+      "capability": "memory.recall",
+      "capability_maturity": "unassessed",
+      "task": "Guardar e recuperar uma memória sintética com escopo do workspace.",
+      "fixture": "fixtures/memory.json",
+      "fixture_sha256": "719c080a064323246749a1586c7c30586932db5415e0e2c56d8cddaa1f3176bd",
+      "context": {
+        "memory_scope": "temporary-workspace"
+      },
+      "tools": ["memory.write", "memory.search"],
+      "policy": {
+        "network": "deny",
+        "cross_workspace_read": "deny"
+      },
+      "setup": ["criar_perfil_de_memoria_temporario"],
+      "teardown": ["apagar_perfil_de_memoria_temporario"],
+      "success_criteria": [
+        "fato esperado é recuperado",
+        "nenhuma memória persiste fora do perfil temporário"
+      ],
+      "required_capabilities": ["memory.write", "memory.search"],
+      "requires_provider": true,
+      "remote_provider_allowed": true
+    }
+  ]
+}

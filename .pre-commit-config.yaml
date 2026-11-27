@@ -72,9 +72,13 @@ repos:
     hooks:
       - id: trailing-whitespace
         name: Trim Trailing Whitespace
+        # Saídas do migrador: formatá-las aqui as faria divergir da geração.
+        exclude: ^(rust-backend|migrate-rust/reports)/
         args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
         name: Fix End of File
+        # Saídas do migrador: formatá-las aqui as faria divergir da geração.
+        exclude: ^(rust-backend|migrate-rust/reports)/
       - id: check-yaml
         name: Validate YAML
         args: ["--allow-multiple-documents", "--unsafe"]
@@ -135,10 +139,93 @@ repos:
         name: Ruff Format (Python)
         files: \.py$
 
+  # ==========================================
+  # Rust — migrate-rust/ (migrador) e rust-backend/ (gerado)
+  # ==========================================
+  # Só rodam com arquivos dessas duas pastas. Exigem o toolchain stable com
+  # rustfmt e clippy, e `cargo install cargo-machete`.
+  - repo: local
+    hooks:
+      - id: rust-backend-generate
+        name: Rust backend em dia com o migrador
+        # Regenera rust-backend/; se algum arquivo mudar, o commit é barrado.
+        entry: cargo +stable run --quiet --locked --manifest-path migrate-rust/Cargo.toml
+        language: system
+        pass_filenames: false
+        require_serial: true
+        files: ^(migrate-rust|rust-backend)/
+      - id: migrator-fmt
+        name: Rust format — migrador
+        entry: cargo +stable fmt --manifest-path migrate-rust/Cargo.toml --all -- --check
+        language: system
+        pass_filenames: false
+        files: ^migrate-rust/(src/.*\.rs|Cargo\.toml)$
+      - id: runtime-fmt
+        name: Rust format — runtime e mocks
+        entry: cargo +stable fmt --manifest-path migrate-rust/mocks/Cargo.toml --all -- --check
+        language: system
+        pass_filenames: false
+        files: ^migrate-rust/(runtime|mocks)/.*(\.rs|Cargo\.toml)$
+      - id: rust-backend-fmt
+        name: Rust format — backend
+        entry: cargo +stable fmt --manifest-path rust-backend/Cargo.toml --all -- --check
+        language: system
+        pass_filenames: false
+        files: ^rust-backend/.*(\.rs|Cargo\.toml)$
+      - id: migrator-clippy
+        name: Rust lint — migrador
+        entry: >-
+          cargo +stable clippy --manifest-path migrate-rust/Cargo.toml --all-targets
+          --target-dir migrate-rust/target/hooks --locked -- -D warnings
+        language: system
+        pass_filenames: false
+        files: ^migrate-rust/(src/.*\.rs|Cargo\.(toml|lock))$
+      - id: runtime-clippy
+        name: Rust lint — runtime
+        entry: >-
+          cargo +stable clippy --manifest-path migrate-rust/runtime/Cargo.toml --all-targets
+          --target-dir migrate-rust/target/hooks --locked -- -D warnings
+        language: system
+        pass_filenames: false
+        files: ^migrate-rust/runtime/
+      - id: mocks-clippy
+        name: Rust lint — mocks
+        entry: >-
+          cargo +stable clippy --manifest-path migrate-rust/mocks/Cargo.toml --all-targets
+          --target-dir migrate-rust/target/hooks --locked -- -D warnings
+        language: system
+        pass_filenames: false
+        files: ^migrate-rust/(runtime|mocks)/
+      - id: mocks-test
+        name: Rust tests — runtime e mocks
+        entry: >-
+          cargo +stable test --manifest-path migrate-rust/mocks/Cargo.toml
+          --target-dir migrate-rust/target/hooks --locked --quiet
+        language: system
+        pass_filenames: false
+        files: ^migrate-rust/(runtime|mocks)/
+      - id: rust-backend-clippy
+        name: Rust lint — backend
+        # Só lib e binários: os alvos de teste são centenas.
+        entry: >-
+          cargo +stable clippy --manifest-path rust-backend/Cargo.toml --workspace --lib --bins
+          --target-dir rust-backend/target --locked -- -D warnings
+        language: system
+        pass_filenames: false
+        files: ^rust-backend/(src|crates)/|^rust-backend/Cargo\.(toml|lock)$
+      - id: rust-machete
+        name: Rust — dependências sem uso
+        entry: cargo machete migrate-rust rust-backend
+        language: system
+        pass_filenames: false
+        files: ^(migrate-rust|rust-backend)/.*(\.rs|Cargo\.(toml|lock))$
+
   - repo: local
     hooks:
       - id: prettier
         name: Prettier
+        # Saídas do migrador: formatá-las aqui as faria divergir da geração.
+        exclude: ^(rust-backend|migrate-rust/reports)/
         entry: prettier --write
         # `language: node` com versão fixa: o pre-commit cria um ambiente
         # isolado com esse prettier exato (o mesmo do package.json), igual

@@ -1,0 +1,2049 @@
+[workspace]
+members = [".", "crates/runtime", "crates/mocks", "crates/test-support"]
+resolver = "3"
+
+[package]
+name = "vectora-backend"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+description = "Vectora backend in Rust"
+autobins = false
+autotests = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "vectora-backend"
+path = "src/bin/vectora-backend.rs"
+
+[dev-dependencies]
+vectora-runtime = { path = "crates/runtime" }
+vectora-test-mocks = { path = "crates/mocks" }
+vectora-test-support = { path = "crates/test-support" }
+
+# Hundreds of test binaries: no debug info keeps compile and link within memory.
+[profile.dev]
+debug = 0
+incremental = false
+
+[[test]]
+name = "m000_test_agent_live_runs"
+path = "tests/e2e/test_agent_live_runs.rs"
+
+[[test]]
+name = "m001_test_installed_runtime"
+path = "tests/installed_tests/test_installed_runtime.rs"
+
+[[test]]
+name = "m002_test_api_background"
+path = "tests/integration/test_api_background.rs"
+
+[[test]]
+name = "m003_test_api_boards"
+path = "tests/integration/test_api_boards.rs"
+
+[[test]]
+name = "m004_test_dev_stack_real"
+path = "tests/integration/test_dev_stack_real.rs"
+
+[[test]]
+name = "m005_test_embedding_postgres_queue"
+path = "tests/integration/test_embedding_postgres_queue.rs"
+
+[[test]]
+name = "m006_test_frontend_served_lifecycle"
+path = "tests/integration/test_frontend_served_lifecycle.rs"
+
+[[test]]
+name = "m007_test_godot_platformer_fixture"
+path = "tests/integration/test_godot_platformer_fixture.rs"
+
+[[test]]
+name = "m008_test_local_llm_live"
+path = "tests/integration/test_local_llm_live.rs"
+
+[[test]]
+name = "m009_test_mcp_marketplace_3rd_party_real"
+path = "tests/integration/test_mcp_marketplace_3rd_party_real.rs"
+
+[[test]]
+name = "m010_test_no_services_e2e"
+path = "tests/integration/test_no_services_e2e.rs"
+
+[[test]]
+name = "m011_test_persistence_native_postgres_session_store"
+path = "tests/integration/test_persistence_native_postgres_session_store.rs"
+
+[[test]]
+name = "m012_test_sandbox_escape_real"
+path = "tests/integration/test_sandbox_escape_real.rs"
+
+[[test]]
+name = "m013_test_sandbox_singularity_escape_real"
+path = "tests/integration/test_sandbox_singularity_escape_real.rs"
+
+[[test]]
+name = "m014_test_storage_postgres"
+path = "tests/integration/test_storage_postgres.rs"
+
+[[test]]
+name = "m015_test_storage_qdrant"
+path = "tests/integration/test_storage_qdrant.rs"
+
+[[test]]
+name = "m016_test_storage_redis"
+path = "tests/integration/test_storage_redis.rs"
+
+[[test]]
+name = "m017_test_systemone_local_live"
+path = "tests/integration/test_systemone_local_live.rs"
+
+[[test]]
+name = "m018_test_web_ctrl_c_shutdown"
+path = "tests/integration/test_web_ctrl_c_shutdown.rs"
+
+[[test]]
+name = "m019_test_webhook_gateway_e2e_real"
+path = "tests/integration/test_webhook_gateway_e2e_real.rs"
+
+[[test]]
+name = "m020_test_workbench_live_dispatch"
+path = "tests/integration/test_workbench_live_dispatch.rs"
+
+[[test]]
+name = "m021_test_queue_concurrent"
+path = "tests/stress/test_queue_concurrent.rs"
+
+[[test]]
+name = "m022_test_queue_mark_operations"
+path = "tests/stress/test_queue_mark_operations.rs"
+
+[[test]]
+name = "m023_test_queue_reader_writer"
+path = "tests/stress/test_queue_reader_writer.rs"
+
+[[test]]
+name = "m024_test_text_token_counting"
+path = "tests/stress/test_text_token_counting.rs"
+
+[[test]]
+name = "m025_test_compat"
+path = "tests/unit/contracts/test_compat.rs"
+
+[[test]]
+name = "m026_test_harness_contracts"
+path = "tests/unit/contracts/test_harness_contracts.rs"
+
+[[test]]
+name = "m027_test_http_contracts"
+path = "tests/unit/contracts/test_http_contracts.rs"
+
+[[test]]
+name = "m028_test_quality_gates_schema"
+path = "tests/unit/contracts/test_quality_gates_schema.rs"
+
+[[test]]
+name = "m029_test_redaction"
+path = "tests/unit/contracts/test_redaction.rs"
+
+[[test]]
+name = "m030_test_settings_schema"
+path = "tests/unit/contracts/test_settings_schema.rs"
+
+[[test]]
+name = "m031_test_sse_schema"
+path = "tests/unit/contracts/test_sse_schema.rs"
+
+[[test]]
+name = "m032_test_harness_and_consumers"
+path = "tests/unit/llm/systemone/test_harness_and_consumers.rs"
+
+[[test]]
+name = "m033_test_jev_endpoints"
+path = "tests/unit/llm/systemone/test_jev_endpoints.rs"
+
+[[test]]
+name = "m034_test_laya_local"
+path = "tests/unit/llm/systemone/test_laya_local.rs"
+
+[[test]]
+name = "m035_test_response_validation"
+path = "tests/unit/llm/systemone/test_response_validation.rs"
+
+[[test]]
+name = "m036_test_systemone_decision_models"
+path = "tests/unit/llm/systemone/test_systemone_decision_models.rs"
+
+[[test]]
+name = "m037_test_systemone_exhaustive_suite"
+path = "tests/unit/llm/systemone/test_systemone_exhaustive_suite.rs"
+
+[[test]]
+name = "m038_test_adapters_error"
+path = "tests/unit/test_adapters_error.rs"
+
+[[test]]
+name = "m039_test_adapters_hitl_pre_approved"
+path = "tests/unit/test_adapters_hitl_pre_approved.rs"
+
+[[test]]
+name = "m040_test_adapters_streaming"
+path = "tests/unit/test_adapters_streaming.rs"
+
+[[test]]
+name = "m041_test_adapters_subagent_delegation"
+path = "tests/unit/test_adapters_subagent_delegation.rs"
+
+[[test]]
+name = "m042_test_adapters_terminal_streaming"
+path = "tests/unit/test_adapters_terminal_streaming.rs"
+
+[[test]]
+name = "m043_test_adapters_tool_activity"
+path = "tests/unit/test_adapters_tool_activity.rs"
+
+[[test]]
+name = "m044_test_admin"
+path = "tests/unit/test_admin.rs"
+
+[[test]]
+name = "m045_test_admin_embedding_queue"
+path = "tests/unit/test_admin_embedding_queue.rs"
+
+[[test]]
+name = "m046_test_admin_media_limits"
+path = "tests/unit/test_admin_media_limits.rs"
+
+[[test]]
+name = "m047_test_admin_storage"
+path = "tests/unit/test_admin_storage.rs"
+
+[[test]]
+name = "m048_test_admin_transcription"
+path = "tests/unit/test_admin_transcription.rs"
+
+[[test]]
+name = "m049_test_agent_factory_history"
+path = "tests/unit/test_agent_factory_history.rs"
+
+[[test]]
+name = "m050_test_agent_factory_memory_policy"
+path = "tests/unit/test_agent_factory_memory_policy.rs"
+
+[[test]]
+name = "m051_test_agent_factory_native_dispatch"
+path = "tests/unit/test_agent_factory_native_dispatch.rs"
+
+[[test]]
+name = "m052_test_agent_factory_postgres_infra"
+path = "tests/unit/test_agent_factory_postgres_infra.rs"
+
+[[test]]
+name = "m053_test_agent_factory_prompt_injection"
+path = "tests/unit/test_agent_factory_prompt_injection.rs"
+
+[[test]]
+name = "m054_test_agent_profiles"
+path = "tests/unit/test_agent_profiles.rs"
+
+[[test]]
+name = "m055_test_agent_profiles_handler"
+path = "tests/unit/test_agent_profiles_handler.rs"
+
+[[test]]
+name = "m056_test_agent_run_contract"
+path = "tests/unit/test_agent_run_contract.rs"
+
+[[test]]
+name = "m057_test_agents_identity"
+path = "tests/unit/test_agents_identity.rs"
+
+[[test]]
+name = "m058_test_anthropic_chat_client"
+path = "tests/unit/test_anthropic_chat_client.rs"
+
+[[test]]
+name = "m059_test_api_auth"
+path = "tests/unit/test_api_auth.rs"
+
+[[test]]
+name = "m060_test_api_auth_setup_local"
+path = "tests/unit/test_api_auth_setup_local.rs"
+
+[[test]]
+name = "m061_test_api_auth_username"
+path = "tests/unit/test_api_auth_username.rs"
+
+[[test]]
+name = "m062_test_api_backup"
+path = "tests/unit/test_api_backup.rs"
+
+[[test]]
+name = "m063_test_api_browser_workbench_navigate"
+path = "tests/unit/test_api_browser_workbench_navigate.rs"
+
+[[test]]
+name = "m064_test_api_chat_cancel"
+path = "tests/unit/test_api_chat_cancel.rs"
+
+[[test]]
+name = "m065_test_api_chat_config"
+path = "tests/unit/test_api_chat_config.rs"
+
+[[test]]
+name = "m066_test_api_chat_resume_model"
+path = "tests/unit/test_api_chat_resume_model.rs"
+
+[[test]]
+name = "m067_test_api_chat_resume_stream"
+path = "tests/unit/test_api_chat_resume_stream.rs"
+
+[[test]]
+name = "m068_test_api_chat_transcribe"
+path = "tests/unit/test_api_chat_transcribe.rs"
+
+[[test]]
+name = "m069_test_api_connect"
+path = "tests/unit/test_api_connect.rs"
+
+[[test]]
+name = "m070_test_api_license"
+path = "tests/unit/test_api_license.rs"
+
+[[test]]
+name = "m071_test_api_mcp_marketplace"
+path = "tests/unit/test_api_mcp_marketplace.rs"
+
+[[test]]
+name = "m072_test_api_memory"
+path = "tests/unit/test_api_memory.rs"
+
+[[test]]
+name = "m073_test_api_memory_buckets"
+path = "tests/unit/test_api_memory_buckets.rs"
+
+[[test]]
+name = "m074_test_api_middleware_auth"
+path = "tests/unit/test_api_middleware_auth.rs"
+
+[[test]]
+name = "m075_test_api_oidc"
+path = "tests/unit/test_api_oidc.rs"
+
+[[test]]
+name = "m076_test_api_rate_limit"
+path = "tests/unit/test_api_rate_limit.rs"
+
+[[test]]
+name = "m077_test_api_schemas"
+path = "tests/unit/test_api_schemas.rs"
+
+[[test]]
+name = "m078_test_api_schemas_sse"
+path = "tests/unit/test_api_schemas_sse.rs"
+
+[[test]]
+name = "m079_test_api_server"
+path = "tests/unit/test_api_server.rs"
+
+[[test]]
+name = "m080_test_api_settings_prefs"
+path = "tests/unit/test_api_settings_prefs.rs"
+
+[[test]]
+name = "m081_test_api_skills_catalog"
+path = "tests/unit/test_api_skills_catalog.rs"
+
+[[test]]
+name = "m082_test_api_terminal"
+path = "tests/unit/test_api_terminal.rs"
+
+[[test]]
+name = "m083_test_api_threads_history"
+path = "tests/unit/test_api_threads_history.rs"
+
+[[test]]
+name = "m084_test_api_workspaces_git_revert"
+path = "tests/unit/test_api_workspaces_git_revert.rs"
+
+[[test]]
+name = "m085_test_artifact_retention"
+path = "tests/unit/test_artifact_retention.rs"
+
+[[test]]
+name = "m086_test_artifact_slug"
+path = "tests/unit/test_artifact_slug.rs"
+
+[[test]]
+name = "m087_test_artifacts_handler"
+path = "tests/unit/test_artifacts_handler.rs"
+
+[[test]]
+name = "m088_test_assets"
+path = "tests/unit/test_assets.rs"
+
+[[test]]
+name = "m089_test_background_handlers_kanban"
+path = "tests/unit/test_background_handlers_kanban.rs"
+
+[[test]]
+name = "m090_test_background_session"
+path = "tests/unit/test_background_session.rs"
+
+[[test]]
+name = "m091_test_background_worker"
+path = "tests/unit/test_background_worker.rs"
+
+[[test]]
+name = "m092_test_backup_manifest"
+path = "tests/unit/test_backup_manifest.rs"
+
+[[test]]
+name = "m093_test_boards_model"
+path = "tests/unit/test_boards_model.rs"
+
+[[test]]
+name = "m094_test_browser_dev_server"
+path = "tests/unit/test_browser_dev_server.rs"
+
+[[test]]
+name = "m095_test_browser_profiles"
+path = "tests/unit/test_browser_profiles.rs"
+
+[[test]]
+name = "m096_test_browser_search_fallback_real"
+path = "tests/unit/test_browser_search_fallback_real.rs"
+
+[[test]]
+name = "m097_test_browser_session_jail"
+path = "tests/unit/test_browser_session_jail.rs"
+
+[[test]]
+name = "m098_test_browser_session_ownership"
+path = "tests/unit/test_browser_session_ownership.rs"
+
+[[test]]
+name = "m099_test_browser_session_real"
+path = "tests/unit/test_browser_session_real.rs"
+
+[[test]]
+name = "m100_test_browser_session_uid_helpers"
+path = "tests/unit/test_browser_session_uid_helpers.rs"
+
+[[test]]
+name = "m101_test_build_env"
+path = "tests/unit/test_build_env.rs"
+
+[[test]]
+name = "m102_test_build_hybrid"
+path = "tests/unit/test_build_hybrid.rs"
+
+[[test]]
+name = "m103_test_build_hybrid_secrets_guard"
+path = "tests/unit/test_build_hybrid_secrets_guard.rs"
+
+[[test]]
+name = "m104_test_cache_embeddings"
+path = "tests/unit/test_cache_embeddings.rs"
+
+[[test]]
+name = "m105_test_cache_sync"
+path = "tests/unit/test_cache_sync.rs"
+
+[[test]]
+name = "m106_test_chat_media_attachments"
+path = "tests/unit/test_chat_media_attachments.rs"
+
+[[test]]
+name = "m107_test_chat_persisted_effects"
+path = "tests/unit/test_chat_persisted_effects.rs"
+
+[[test]]
+name = "m108_test_chat_planning_mode"
+path = "tests/unit/test_chat_planning_mode.rs"
+
+[[test]]
+name = "m109_test_checkpoint_git_strategy"
+path = "tests/unit/test_checkpoint_git_strategy.rs"
+
+[[test]]
+name = "m110_test_cli"
+path = "tests/unit/test_cli.rs"
+
+[[test]]
+name = "m111_test_cli_hooks"
+path = "tests/unit/test_cli_hooks.rs"
+
+[[test]]
+name = "m112_test_cli_keys"
+path = "tests/unit/test_cli_keys.rs"
+
+[[test]]
+name = "m113_test_cohere_chat_client"
+path = "tests/unit/test_cohere_chat_client.rs"
+
+[[test]]
+name = "m114_test_cohere_voyage_embeddings"
+path = "tests/unit/test_cohere_voyage_embeddings.rs"
+
+[[test]]
+name = "m115_test_cohere_voyage_rerank"
+path = "tests/unit/test_cohere_voyage_rerank.rs"
+
+[[test]]
+name = "m116_test_cold_storage"
+path = "tests/unit/test_cold_storage.rs"
+
+[[test]]
+name = "m117_test_commit_message"
+path = "tests/unit/test_commit_message.rs"
+
+[[test]]
+name = "m118_test_config_registry"
+path = "tests/unit/test_config_registry.rs"
+
+[[test]]
+name = "m119_test_config_registry_collections"
+path = "tests/unit/test_config_registry_collections.rs"
+
+[[test]]
+name = "m120_test_config_registry_user_scoped"
+path = "tests/unit/test_config_registry_user_scoped.rs"
+
+[[test]]
+name = "m121_test_config_settings"
+path = "tests/unit/test_config_settings.rs"
+
+[[test]]
+name = "m122_test_connect_adapters"
+path = "tests/unit/test_connect_adapters.rs"
+
+[[test]]
+name = "m123_test_connect_runner"
+path = "tests/unit/test_connect_runner.rs"
+
+[[test]]
+name = "m124_test_context_budget"
+path = "tests/unit/test_context_budget.rs"
+
+[[test]]
+name = "m125_test_context_compaction"
+path = "tests/unit/test_context_compaction.rs"
+
+[[test]]
+name = "m126_test_context_graph_affected"
+path = "tests/unit/test_context_graph_affected.rs"
+
+[[test]]
+name = "m127_test_context_graph_analyze"
+path = "tests/unit/test_context_graph_analyze.rs"
+
+[[test]]
+name = "m128_test_context_graph_api"
+path = "tests/unit/test_context_graph_api.rs"
+
+[[test]]
+name = "m129_test_context_graph_build"
+path = "tests/unit/test_context_graph_build.rs"
+
+[[test]]
+name = "m130_test_context_graph_cache"
+path = "tests/unit/test_context_graph_cache.rs"
+
+[[test]]
+name = "m131_test_context_graph_cluster"
+path = "tests/unit/test_context_graph_cluster.rs"
+
+[[test]]
+name = "m132_test_context_graph_dedup"
+path = "tests/unit/test_context_graph_dedup.rs"
+
+[[test]]
+name = "m133_test_context_graph_detect"
+path = "tests/unit/test_context_graph_detect.rs"
+
+[[test]]
+name = "m134_test_context_graph_export"
+path = "tests/unit/test_context_graph_export.rs"
+
+[[test]]
+name = "m135_test_context_graph_extract"
+path = "tests/unit/test_context_graph_extract.rs"
+
+[[test]]
+name = "m136_test_context_graph_file_slice"
+path = "tests/unit/test_context_graph_file_slice.rs"
+
+[[test]]
+name = "m137_test_context_graph_graph_index"
+path = "tests/unit/test_context_graph_graph_index.rs"
+
+[[test]]
+name = "m138_test_context_graph_manifest_ingest"
+path = "tests/unit/test_context_graph_manifest_ingest.rs"
+
+[[test]]
+name = "m139_test_context_graph_mcp_ingest"
+path = "tests/unit/test_context_graph_mcp_ingest.rs"
+
+[[test]]
+name = "m140_test_context_graph_minhash"
+path = "tests/unit/test_context_graph_minhash.rs"
+
+[[test]]
+name = "m141_test_context_graph_multigraph"
+path = "tests/unit/test_context_graph_multigraph.rs"
+
+[[test]]
+name = "m142_test_context_graph_paths"
+path = "tests/unit/test_context_graph_paths.rs"
+
+[[test]]
+name = "m143_test_context_graph_pipeline"
+path = "tests/unit/test_context_graph_pipeline.rs"
+
+[[test]]
+name = "m144_test_context_graph_pipeline_ext"
+path = "tests/unit/test_context_graph_pipeline_ext.rs"
+
+[[test]]
+name = "m145_test_context_graph_query"
+path = "tests/unit/test_context_graph_query.rs"
+
+[[test]]
+name = "m146_test_context_graph_report"
+path = "tests/unit/test_context_graph_report.rs"
+
+[[test]]
+name = "m147_test_context_graph_security"
+path = "tests/unit/test_context_graph_security.rs"
+
+[[test]]
+name = "m148_test_context_graph_semantic"
+path = "tests/unit/test_context_graph_semantic.rs"
+
+[[test]]
+name = "m149_test_context_graph_semantic_cleanup"
+path = "tests/unit/test_context_graph_semantic_cleanup.rs"
+
+[[test]]
+name = "m150_test_context_graph_symbol_resolution"
+path = "tests/unit/test_context_graph_symbol_resolution.rs"
+
+[[test]]
+name = "m151_test_context_graph_tools"
+path = "tests/unit/test_context_graph_tools.rs"
+
+[[test]]
+name = "m152_test_context_graph_validate"
+path = "tests/unit/test_context_graph_validate.rs"
+
+[[test]]
+name = "m153_test_context_media_tokens"
+path = "tests/unit/test_context_media_tokens.rs"
+
+[[test]]
+name = "m154_test_context_planner"
+path = "tests/unit/test_context_planner.rs"
+
+[[test]]
+name = "m155_test_context_planner_fallback"
+path = "tests/unit/test_context_planner_fallback.rs"
+
+[[test]]
+name = "m156_test_context_summary"
+path = "tests/unit/test_context_summary.rs"
+
+[[test]]
+name = "m157_test_dag_api"
+path = "tests/unit/test_dag_api.rs"
+
+[[test]]
+name = "m158_test_dag_runner"
+path = "tests/unit/test_dag_runner.rs"
+
+[[test]]
+name = "m159_test_dag_store"
+path = "tests/unit/test_dag_store.rs"
+
+[[test]]
+name = "m160_test_decision_catalog"
+path = "tests/unit/test_decision_catalog.rs"
+
+[[test]]
+name = "m161_test_deferred_toolsets"
+path = "tests/unit/test_deferred_toolsets.rs"
+
+[[test]]
+name = "m162_test_delegate"
+path = "tests/unit/test_delegate.rs"
+
+[[test]]
+name = "m163_test_delegation_policy"
+path = "tests/unit/test_delegation_policy.rs"
+
+[[test]]
+name = "m164_test_dev_stack"
+path = "tests/unit/test_dev_stack.rs"
+
+[[test]]
+name = "m165_test_device_id"
+path = "tests/unit/test_device_id.rs"
+
+[[test]]
+name = "m166_test_distribution_channels"
+path = "tests/unit/test_distribution_channels.rs"
+
+[[test]]
+name = "m167_test_docker_model_runner"
+path = "tests/unit/test_docker_model_runner.rs"
+
+[[test]]
+name = "m168_test_doctor"
+path = "tests/unit/test_doctor.rs"
+
+[[test]]
+name = "m169_test_e_b_parity"
+path = "tests/unit/test_e_b_parity.rs"
+
+[[test]]
+name = "m170_test_egress_policy"
+path = "tests/unit/test_egress_policy.rs"
+
+[[test]]
+name = "m171_test_electron_launcher"
+path = "tests/unit/test_electron_launcher.rs"
+
+[[test]]
+name = "m172_test_electron_sidecar"
+path = "tests/unit/test_electron_sidecar.rs"
+
+[[test]]
+name = "m173_test_electron_sidecar_real"
+path = "tests/unit/test_electron_sidecar_real.rs"
+
+[[test]]
+name = "m174_test_embedding_curator"
+path = "tests/unit/test_embedding_curator.rs"
+
+[[test]]
+name = "m175_test_embedding_dimension_guard"
+path = "tests/unit/test_embedding_dimension_guard.rs"
+
+[[test]]
+name = "m176_test_embedding_postgres_contract"
+path = "tests/unit/test_embedding_postgres_contract.rs"
+
+[[test]]
+name = "m177_test_embedding_queue_cli"
+path = "tests/unit/test_embedding_queue_cli.rs"
+
+[[test]]
+name = "m178_test_embedding_queue_retry"
+path = "tests/unit/test_embedding_queue_retry.rs"
+
+[[test]]
+name = "m179_test_engine_conversation_loop"
+path = "tests/unit/test_engine_conversation_loop.rs"
+
+[[test]]
+name = "m180_test_engine_guardrails"
+path = "tests/unit/test_engine_guardrails.rs"
+
+[[test]]
+name = "m181_test_engine_hitl"
+path = "tests/unit/test_engine_hitl.rs"
+
+[[test]]
+name = "m182_test_engine_stream_events"
+path = "tests/unit/test_engine_stream_events.rs"
+
+[[test]]
+name = "m183_test_engine_subagents"
+path = "tests/unit/test_engine_subagents.rs"
+
+[[test]]
+name = "m184_test_engine_tool_batch"
+path = "tests/unit/test_engine_tool_batch.rs"
+
+[[test]]
+name = "m185_test_env_keys"
+path = "tests/unit/test_env_keys.rs"
+
+[[test]]
+name = "m186_test_eval_installed"
+path = "tests/unit/test_eval_installed.rs"
+
+[[test]]
+name = "m187_test_eval_isolation"
+path = "tests/unit/test_eval_isolation.rs"
+
+[[test]]
+name = "m188_test_eval_lab"
+path = "tests/unit/test_eval_lab.rs"
+
+[[test]]
+name = "m189_test_eval_metrics"
+path = "tests/unit/test_eval_metrics.rs"
+
+[[test]]
+name = "m190_test_eval_reports"
+path = "tests/unit/test_eval_reports.rs"
+
+[[test]]
+name = "m191_test_eval_resources"
+path = "tests/unit/test_eval_resources.rs"
+
+[[test]]
+name = "m192_test_eval_scenario_runner"
+path = "tests/unit/test_eval_scenario_runner.rs"
+
+[[test]]
+name = "m193_test_eval_scenarios"
+path = "tests/unit/test_eval_scenarios.rs"
+
+[[test]]
+name = "m194_test_eval_stages"
+path = "tests/unit/test_eval_stages.rs"
+
+[[test]]
+name = "m195_test_eval_studies"
+path = "tests/unit/test_eval_studies.rs"
+
+[[test]]
+name = "m196_test_executable_plan"
+path = "tests/unit/test_executable_plan.rs"
+
+[[test]]
+name = "m197_test_extension_host"
+path = "tests/unit/test_extension_host.rs"
+
+[[test]]
+name = "m198_test_extensions_api"
+path = "tests/unit/test_extensions_api.rs"
+
+[[test]]
+name = "m199_test_fallback_chat_client"
+path = "tests/unit/test_fallback_chat_client.rs"
+
+[[test]]
+name = "m200_test_feedback_handler"
+path = "tests/unit/test_feedback_handler.rs"
+
+[[test]]
+name = "m201_test_ffmpeg_binary"
+path = "tests/unit/test_ffmpeg_binary.rs"
+
+[[test]]
+name = "m202_test_file_attachments"
+path = "tests/unit/test_file_attachments.rs"
+
+[[test]]
+name = "m203_test_flags_handler"
+path = "tests/unit/test_flags_handler.rs"
+
+[[test]]
+name = "m204_test_force_exit"
+path = "tests/unit/test_force_exit.rs"
+
+[[test]]
+name = "m205_test_forward_port_workflow"
+path = "tests/unit/test_forward_port_workflow.rs"
+
+[[test]]
+name = "m206_test_fs_search"
+path = "tests/unit/test_fs_search.rs"
+
+[[test]]
+name = "m207_test_fs_watch"
+path = "tests/unit/test_fs_watch.rs"
+
+[[test]]
+name = "m208_test_gateway_client"
+path = "tests/unit/test_gateway_client.rs"
+
+[[test]]
+name = "m209_test_gateway_handler"
+path = "tests/unit/test_gateway_handler.rs"
+
+[[test]]
+name = "m210_test_gateway_messaging"
+path = "tests/unit/test_gateway_messaging.rs"
+
+[[test]]
+name = "m211_test_git_boot_sem_executavel"
+path = "tests/unit/test_git_boot_sem_executavel.rs"
+
+[[test]]
+name = "m212_test_git_people"
+path = "tests/unit/test_git_people.rs"
+
+[[test]]
+name = "m213_test_git_repos"
+path = "tests/unit/test_git_repos.rs"
+
+[[test]]
+name = "m214_test_git_service"
+path = "tests/unit/test_git_service.rs"
+
+[[test]]
+name = "m215_test_git_tools"
+path = "tests/unit/test_git_tools.rs"
+
+[[test]]
+name = "m216_test_git_tools_basic"
+path = "tests/unit/test_git_tools_basic.rs"
+
+[[test]]
+name = "m217_test_github_actions_handler"
+path = "tests/unit/test_github_actions_handler.rs"
+
+[[test]]
+name = "m218_test_github_actions_live"
+path = "tests/unit/test_github_actions_live.rs"
+
+[[test]]
+name = "m219_test_github_cli_service"
+path = "tests/unit/test_github_cli_service.rs"
+
+[[test]]
+name = "m220_test_github_handler"
+path = "tests/unit/test_github_handler.rs"
+
+[[test]]
+name = "m221_test_github_real_fixtures"
+path = "tests/unit/test_github_real_fixtures.rs"
+
+[[test]]
+name = "m222_test_gitignore_append"
+path = "tests/unit/test_gitignore_append.rs"
+
+[[test]]
+name = "m223_test_goal_mode"
+path = "tests/unit/test_goal_mode.rs"
+
+[[test]]
+name = "m224_test_godot_project_validation"
+path = "tests/unit/test_godot_project_validation.rs"
+
+[[test]]
+name = "m225_test_godot_workbench_endpoint"
+path = "tests/unit/test_godot_workbench_endpoint.rs"
+
+[[test]]
+name = "m226_test_google_chat_client"
+path = "tests/unit/test_google_chat_client.rs"
+
+[[test]]
+name = "m227_test_google_prompt_cache"
+path = "tests/unit/test_google_prompt_cache.rs"
+
+[[test]]
+name = "m228_test_harness_hooks"
+path = "tests/unit/test_harness_hooks.rs"
+
+[[test]]
+name = "m229_test_harness_hooks_pre_response"
+path = "tests/unit/test_harness_hooks_pre_response.rs"
+
+[[test]]
+name = "m230_test_harness_hooks_subagent"
+path = "tests/unit/test_harness_hooks_subagent.rs"
+
+[[test]]
+name = "m231_test_history_cursor"
+path = "tests/unit/test_history_cursor.rs"
+
+[[test]]
+name = "m232_test_history_parts"
+path = "tests/unit/test_history_parts.rs"
+
+[[test]]
+name = "m233_test_hooks_approval"
+path = "tests/unit/test_hooks_approval.rs"
+
+[[test]]
+name = "m234_test_ignore_validator"
+path = "tests/unit/test_ignore_validator.rs"
+
+[[test]]
+name = "m235_test_image_token_cost"
+path = "tests/unit/test_image_token_cost.rs"
+
+[[test]]
+name = "m236_test_importers"
+path = "tests/unit/test_importers.rs"
+
+[[test]]
+name = "m237_test_installed_runtime_tests"
+path = "tests/unit/test_installed_runtime_tests.rs"
+
+[[test]]
+name = "m238_test_integration_validation"
+path = "tests/unit/test_integration_validation.rs"
+
+[[test]]
+name = "m239_test_ipc_pipe_win"
+path = "tests/unit/test_ipc_pipe_win.rs"
+
+[[test]]
+name = "m240_test_kanban_budget_same_db"
+path = "tests/unit/test_kanban_budget_same_db.rs"
+
+[[test]]
+name = "m241_test_kanban_cas"
+path = "tests/unit/test_kanban_cas.rs"
+
+[[test]]
+name = "m242_test_kanban_model"
+path = "tests/unit/test_kanban_model.rs"
+
+[[test]]
+name = "m243_test_kv"
+path = "tests/unit/test_kv.rs"
+
+[[test]]
+name = "m244_test_learning"
+path = "tests/unit/test_learning.rs"
+
+[[test]]
+name = "m245_test_ledger_backfill"
+path = "tests/unit/test_ledger_backfill.rs"
+
+[[test]]
+name = "m246_test_license_loop"
+path = "tests/unit/test_license_loop.rs"
+
+[[test]]
+name = "m247_test_live_github_target"
+path = "tests/unit/test_live_github_target.rs"
+
+[[test]]
+name = "m248_test_llamacpp_sidecar"
+path = "tests/unit/test_llamacpp_sidecar.rs"
+
+[[test]]
+name = "m249_test_llm_live"
+path = "tests/unit/test_llm_live.rs"
+
+[[test]]
+name = "m250_test_log_setup"
+path = "tests/unit/test_log_setup.rs"
+
+[[test]]
+name = "m251_test_main_desktop_ipc"
+path = "tests/unit/test_main_desktop_ipc.rs"
+
+[[test]]
+name = "m252_test_main_ports"
+path = "tests/unit/test_main_ports.rs"
+
+[[test]]
+name = "m253_test_main_shutdown"
+path = "tests/unit/test_main_shutdown.rs"
+
+[[test]]
+name = "m254_test_main_web_command"
+path = "tests/unit/test_main_web_command.rs"
+
+[[test]]
+name = "m255_test_mcp_audio_transcription"
+path = "tests/unit/test_mcp_audio_transcription.rs"
+
+[[test]]
+name = "m256_test_mcp_images_to_model"
+path = "tests/unit/test_mcp_images_to_model.rs"
+
+[[test]]
+name = "m257_test_mcp_policy"
+path = "tests/unit/test_mcp_policy.rs"
+
+[[test]]
+name = "m258_test_media_adapter"
+path = "tests/unit/test_media_adapter.rs"
+
+[[test]]
+name = "m259_test_media_billing"
+path = "tests/unit/test_media_billing.rs"
+
+[[test]]
+name = "m260_test_media_gateway_capability"
+path = "tests/unit/test_media_gateway_capability.rs"
+
+[[test]]
+name = "m261_test_media_hydration"
+path = "tests/unit/test_media_hydration.rs"
+
+[[test]]
+name = "m262_test_media_native_routing"
+path = "tests/unit/test_media_native_routing.rs"
+
+[[test]]
+name = "m263_test_media_previews"
+path = "tests/unit/test_media_previews.rs"
+
+[[test]]
+name = "m264_test_media_quota"
+path = "tests/unit/test_media_quota.rs"
+
+[[test]]
+name = "m265_test_media_tools_options"
+path = "tests/unit/test_media_tools_options.rs"
+
+[[test]]
+name = "m266_test_memory"
+path = "tests/unit/test_memory.rs"
+
+[[test]]
+name = "m267_test_memory_buckets"
+path = "tests/unit/test_memory_buckets.rs"
+
+[[test]]
+name = "m268_test_memory_index"
+path = "tests/unit/test_memory_index.rs"
+
+[[test]]
+name = "m269_test_memory_store"
+path = "tests/unit/test_memory_store.rs"
+
+[[test]]
+name = "m270_test_model_catalog_source_cache"
+path = "tests/unit/test_model_catalog_source_cache.rs"
+
+[[test]]
+name = "m271_test_models_handler"
+path = "tests/unit/test_models_handler.rs"
+
+[[test]]
+name = "m272_test_mq"
+path = "tests/unit/test_mq.rs"
+
+[[test]]
+name = "m273_test_native_stream_dedup_e2e"
+path = "tests/unit/test_native_stream_dedup_e2e.rs"
+
+[[test]]
+name = "m274_test_native_stream_error_logging"
+path = "tests/unit/test_native_stream_error_logging.rs"
+
+[[test]]
+name = "m275_test_native_stream_turn_files"
+path = "tests/unit/test_native_stream_turn_files.rs"
+
+[[test]]
+name = "m276_test_nats_mq_kv"
+path = "tests/unit/test_nats_mq_kv.rs"
+
+[[test]]
+name = "m277_test_nats_mq_kv_real"
+path = "tests/unit/test_nats_mq_kv_real.rs"
+
+[[test]]
+name = "m278_test_nats_reconnect"
+path = "tests/unit/test_nats_reconnect.rs"
+
+[[test]]
+name = "m279_test_nats_sidecar"
+path = "tests/unit/test_nats_sidecar.rs"
+
+[[test]]
+name = "m280_test_nats_sidecar_real"
+path = "tests/unit/test_nats_sidecar_real.rs"
+
+[[test]]
+name = "m281_test_nats_sidecar_singleton"
+path = "tests/unit/test_nats_sidecar_singleton.rs"
+
+[[test]]
+name = "m282_test_nl_schedule"
+path = "tests/unit/test_nl_schedule.rs"
+
+[[test]]
+name = "m283_test_no_content_guardrails"
+path = "tests/unit/test_no_content_guardrails.rs"
+
+[[test]]
+name = "m284_test_no_services"
+path = "tests/unit/test_no_services.rs"
+
+[[test]]
+name = "m285_test_no_services_routes"
+path = "tests/unit/test_no_services_routes.rs"
+
+[[test]]
+name = "m286_test_nodes_tools"
+path = "tests/unit/test_nodes_tools.rs"
+
+[[test]]
+name = "m287_test_oauth"
+path = "tests/unit/test_oauth.rs"
+
+[[test]]
+name = "m288_test_oauth_gateway_redirect"
+path = "tests/unit/test_oauth_gateway_redirect.rs"
+
+[[test]]
+name = "m289_test_oauth_providers"
+path = "tests/unit/test_oauth_providers.rs"
+
+[[test]]
+name = "m290_test_oauth_state"
+path = "tests/unit/test_oauth_state.rs"
+
+[[test]]
+name = "m291_test_ollama_capabilities"
+path = "tests/unit/test_ollama_capabilities.rs"
+
+[[test]]
+name = "m292_test_ollama_chat_client"
+path = "tests/unit/test_ollama_chat_client.rs"
+
+[[test]]
+name = "m293_test_ollama_web_search"
+path = "tests/unit/test_ollama_web_search.rs"
+
+[[test]]
+name = "m294_test_openai_chat_client"
+path = "tests/unit/test_openai_chat_client.rs"
+
+[[test]]
+name = "m295_test_openrouter_chat_client"
+path = "tests/unit/test_openrouter_chat_client.rs"
+
+[[test]]
+name = "m296_test_openrouter_client"
+path = "tests/unit/test_openrouter_client.rs"
+
+[[test]]
+name = "m297_test_openrouter_decision_adapter"
+path = "tests/unit/test_openrouter_decision_adapter.rs"
+
+[[test]]
+name = "m298_test_openrouter_embeddings_rerank"
+path = "tests/unit/test_openrouter_embeddings_rerank.rs"
+
+[[test]]
+name = "m299_test_openrouter_media"
+path = "tests/unit/test_openrouter_media.rs"
+
+[[test]]
+name = "m300_test_openrouter_speech_voice"
+path = "tests/unit/test_openrouter_speech_voice.rs"
+
+[[test]]
+name = "m301_test_openrouter_stt"
+path = "tests/unit/test_openrouter_stt.rs"
+
+[[test]]
+name = "m302_test_openrouter_video"
+path = "tests/unit/test_openrouter_video.rs"
+
+[[test]]
+name = "m303_test_orchestrator_confirms_after_delegation"
+path = "tests/unit/test_orchestrator_confirms_after_delegation.rs"
+
+[[test]]
+name = "m304_test_orchestrator_context"
+path = "tests/unit/test_orchestrator_context.rs"
+
+[[test]]
+name = "m305_test_persistence_native_session_store"
+path = "tests/unit/test_persistence_native_session_store.rs"
+
+[[test]]
+name = "m306_test_persistence_native_store"
+path = "tests/unit/test_persistence_native_store.rs"
+
+[[test]]
+name = "m307_test_persistence_telemetry"
+path = "tests/unit/test_persistence_telemetry.rs"
+
+[[test]]
+name = "m308_test_pins"
+path = "tests/unit/test_pins.rs"
+
+[[test]]
+name = "m309_test_policy_compiler"
+path = "tests/unit/test_policy_compiler.rs"
+
+[[test]]
+name = "m310_test_postgres_session_store_branches"
+path = "tests/unit/test_postgres_session_store_branches.rs"
+
+[[test]]
+name = "m311_test_prompt_injection"
+path = "tests/unit/test_prompt_injection.rs"
+
+[[test]]
+name = "m312_test_provider_fallback"
+path = "tests/unit/test_provider_fallback.rs"
+
+[[test]]
+name = "m313_test_provider_routing_handler"
+path = "tests/unit/test_provider_routing_handler.rs"
+
+[[test]]
+name = "m314_test_pty_session_broadcast"
+path = "tests/unit/test_pty_session_broadcast.rs"
+
+[[test]]
+name = "m315_test_pty_session_create"
+path = "tests/unit/test_pty_session_create.rs"
+
+[[test]]
+name = "m316_test_rag_handler"
+path = "tests/unit/test_rag_handler.rs"
+
+[[test]]
+name = "m317_test_rag_ingest"
+path = "tests/unit/test_rag_ingest.rs"
+
+[[test]]
+name = "m318_test_rag_job_events"
+path = "tests/unit/test_rag_job_events.rs"
+
+[[test]]
+name = "m319_test_rbac_oidc"
+path = "tests/unit/test_rbac_oidc.rs"
+
+[[test]]
+name = "m320_test_rbac_token_auth"
+path = "tests/unit/test_rbac_token_auth.rs"
+
+[[test]]
+name = "m321_test_reasoning_support"
+path = "tests/unit/test_reasoning_support.rs"
+
+[[test]]
+name = "m322_test_registry_client"
+path = "tests/unit/test_registry_client.rs"
+
+[[test]]
+name = "m323_test_release_workflow_simulation"
+path = "tests/unit/test_release_workflow_simulation.rs"
+
+[[test]]
+name = "m324_test_remember_trigger"
+path = "tests/unit/test_remember_trigger.rs"
+
+[[test]]
+name = "m325_test_retrieval_eval"
+path = "tests/unit/test_retrieval_eval.rs"
+
+[[test]]
+name = "m326_test_runtime_lock"
+path = "tests/unit/test_runtime_lock.rs"
+
+[[test]]
+name = "m327_test_runtime_profile"
+path = "tests/unit/test_runtime_profile.rs"
+
+[[test]]
+name = "m328_test_safe_root_archive"
+path = "tests/unit/test_safe_root_archive.rs"
+
+[[test]]
+name = "m329_test_sandbox_audit"
+path = "tests/unit/test_sandbox_audit.rs"
+
+[[test]]
+name = "m330_test_sandbox_docker"
+path = "tests/unit/test_sandbox_docker.rs"
+
+[[test]]
+name = "m331_test_sandbox_dry_run"
+path = "tests/unit/test_sandbox_dry_run.rs"
+
+[[test]]
+name = "m332_test_sandbox_egress"
+path = "tests/unit/test_sandbox_egress.rs"
+
+[[test]]
+name = "m333_test_sandbox_escape"
+path = "tests/unit/test_sandbox_escape.rs"
+
+[[test]]
+name = "m334_test_sandbox_hardening"
+path = "tests/unit/test_sandbox_hardening.rs"
+
+[[test]]
+name = "m335_test_sandbox_isolation"
+path = "tests/unit/test_sandbox_isolation.rs"
+
+[[test]]
+name = "m336_test_sandbox_landlock"
+path = "tests/unit/test_sandbox_landlock.rs"
+
+[[test]]
+name = "m337_test_sandbox_landlock_native"
+path = "tests/unit/test_sandbox_landlock_native.rs"
+
+[[test]]
+name = "m338_test_sandbox_linux"
+path = "tests/unit/test_sandbox_linux.rs"
+
+[[test]]
+name = "m339_test_sandbox_macos"
+path = "tests/unit/test_sandbox_macos.rs"
+
+[[test]]
+name = "m340_test_sandbox_mcp_launcher"
+path = "tests/unit/test_sandbox_mcp_launcher.rs"
+
+[[test]]
+name = "m341_test_sandbox_modal"
+path = "tests/unit/test_sandbox_modal.rs"
+
+[[test]]
+name = "m342_test_sandbox_policy"
+path = "tests/unit/test_sandbox_policy.rs"
+
+[[test]]
+name = "m343_test_sandbox_resources"
+path = "tests/unit/test_sandbox_resources.rs"
+
+[[test]]
+name = "m344_test_sandbox_rlimits"
+path = "tests/unit/test_sandbox_rlimits.rs"
+
+[[test]]
+name = "m345_test_sandbox_runner"
+path = "tests/unit/test_sandbox_runner.rs"
+
+[[test]]
+name = "m346_test_sandbox_singularity"
+path = "tests/unit/test_sandbox_singularity.rs"
+
+[[test]]
+name = "m347_test_sandbox_ssh"
+path = "tests/unit/test_sandbox_ssh.rs"
+
+[[test]]
+name = "m348_test_sandbox_trusted_policy"
+path = "tests/unit/test_sandbox_trusted_policy.rs"
+
+[[test]]
+name = "m349_test_sandbox_windows"
+path = "tests/unit/test_sandbox_windows.rs"
+
+[[test]]
+name = "m350_test_sandbox_worker"
+path = "tests/unit/test_sandbox_worker.rs"
+
+[[test]]
+name = "m351_test_sandbox_workspace_jail"
+path = "tests/unit/test_sandbox_workspace_jail.rs"
+
+[[test]]
+name = "m352_test_scheduling_liveness"
+path = "tests/unit/test_scheduling_liveness.rs"
+
+[[test]]
+name = "m353_test_search_registry"
+path = "tests/unit/test_search_registry.rs"
+
+[[test]]
+name = "m354_test_secret_key_listing"
+path = "tests/unit/test_secret_key_listing.rs"
+
+[[test]]
+name = "m355_test_security_shell_command"
+path = "tests/unit/test_security_shell_command.rs"
+
+[[test]]
+name = "m356_test_service_auth"
+path = "tests/unit/test_service_auth.rs"
+
+[[test]]
+name = "m357_test_services_auth"
+path = "tests/unit/test_services_auth.rs"
+
+[[test]]
+name = "m358_test_services_auth_name"
+path = "tests/unit/test_services_auth_name.rs"
+
+[[test]]
+name = "m359_test_services_auth_username"
+path = "tests/unit/test_services_auth_username.rs"
+
+[[test]]
+name = "m360_test_services_background"
+path = "tests/unit/test_services_background.rs"
+
+[[test]]
+name = "m361_test_services_context_files"
+path = "tests/unit/test_services_context_files.rs"
+
+[[test]]
+name = "m362_test_services_file_watcher"
+path = "tests/unit/test_services_file_watcher.rs"
+
+[[test]]
+name = "m363_test_services_ignore"
+path = "tests/unit/test_services_ignore.rs"
+
+[[test]]
+name = "m364_test_services_license"
+path = "tests/unit/test_services_license.rs"
+
+[[test]]
+name = "m365_test_services_memory_consolidation"
+path = "tests/unit/test_services_memory_consolidation.rs"
+
+[[test]]
+name = "m366_test_services_permissions"
+path = "tests/unit/test_services_permissions.rs"
+
+[[test]]
+name = "m367_test_services_plugins"
+path = "tests/unit/test_services_plugins.rs"
+
+[[test]]
+name = "m368_test_services_pty_registry"
+path = "tests/unit/test_services_pty_registry.rs"
+
+[[test]]
+name = "m369_test_services_queue"
+path = "tests/unit/test_services_queue.rs"
+
+[[test]]
+name = "m370_test_services_rag_buckets"
+path = "tests/unit/test_services_rag_buckets.rs"
+
+[[test]]
+name = "m371_test_services_runtime_settings"
+path = "tests/unit/test_services_runtime_settings.rs"
+
+[[test]]
+name = "m372_test_services_security"
+path = "tests/unit/test_services_security.rs"
+
+[[test]]
+name = "m373_test_services_text"
+path = "tests/unit/test_services_text.rs"
+
+[[test]]
+name = "m374_test_services_tool_policy"
+path = "tests/unit/test_services_tool_policy.rs"
+
+[[test]]
+name = "m375_test_services_tool_resolver"
+path = "tests/unit/test_services_tool_resolver.rs"
+
+[[test]]
+name = "m376_test_services_tracer"
+path = "tests/unit/test_services_tracer.rs"
+
+[[test]]
+name = "m377_test_services_usage"
+path = "tests/unit/test_services_usage.rs"
+
+[[test]]
+name = "m378_test_services_utils_load_native_llm"
+path = "tests/unit/test_services_utils_load_native_llm.rs"
+
+[[test]]
+name = "m379_test_services_utils_stream_timeout"
+path = "tests/unit/test_services_utils_stream_timeout.rs"
+
+[[test]]
+name = "m380_test_services_workspace"
+path = "tests/unit/test_services_workspace.rs"
+
+[[test]]
+name = "m381_test_session_search"
+path = "tests/unit/test_session_search.rs"
+
+[[test]]
+name = "m382_test_settings_provider_key_precedence"
+path = "tests/unit/test_settings_provider_key_precedence.rs"
+
+[[test]]
+name = "m383_test_share_handler"
+path = "tests/unit/test_share_handler.rs"
+
+[[test]]
+name = "m384_test_sign_release_artifacts"
+path = "tests/unit/test_sign_release_artifacts.rs"
+
+[[test]]
+name = "m385_test_skills_lock"
+path = "tests/unit/test_skills_lock.rs"
+
+[[test]]
+name = "m386_test_smart_approval"
+path = "tests/unit/test_smart_approval.rs"
+
+[[test]]
+name = "m387_test_smart_approval_endpoints"
+path = "tests/unit/test_smart_approval_endpoints.rs"
+
+[[test]]
+name = "m388_test_snapshot_checkpoint"
+path = "tests/unit/test_snapshot_checkpoint.rs"
+
+[[test]]
+name = "m389_test_speech_to_text"
+path = "tests/unit/test_speech_to_text.rs"
+
+[[test]]
+name = "m390_test_sqlite_concurrent_writes"
+path = "tests/unit/test_sqlite_concurrent_writes.rs"
+
+[[test]]
+name = "m391_test_sse_sequence"
+path = "tests/unit/test_sse_sequence.rs"
+
+[[test]]
+name = "m392_test_ssrf_guard"
+path = "tests/unit/test_ssrf_guard.rs"
+
+[[test]]
+name = "m393_test_steering"
+path = "tests/unit/test_steering.rs"
+
+[[test]]
+name = "m394_test_storage_benchmark"
+path = "tests/unit/test_storage_benchmark.rs"
+
+[[test]]
+name = "m395_test_storage_lancedb"
+path = "tests/unit/test_storage_lancedb.rs"
+
+[[test]]
+name = "m396_test_storage_lancedb_index"
+path = "tests/unit/test_storage_lancedb_index.rs"
+
+[[test]]
+name = "m397_test_storage_lancedb_optimize"
+path = "tests/unit/test_storage_lancedb_optimize.rs"
+
+[[test]]
+name = "m398_test_storage_maintenance"
+path = "tests/unit/test_storage_maintenance.rs"
+
+[[test]]
+name = "m399_test_storage_migrations"
+path = "tests/unit/test_storage_migrations.rs"
+
+[[test]]
+name = "m400_test_storage_parity_and_ledger_api"
+path = "tests/unit/test_storage_parity_and_ledger_api.rs"
+
+[[test]]
+name = "m401_test_storage_pool"
+path = "tests/unit/test_storage_pool.rs"
+
+[[test]]
+name = "m402_test_storage_recipes"
+path = "tests/unit/test_storage_recipes.rs"
+
+[[test]]
+name = "m403_test_storage_vectorstore_lancedb"
+path = "tests/unit/test_storage_vectorstore_lancedb.rs"
+
+[[test]]
+name = "m404_test_storage_vectorstore_qdrant"
+path = "tests/unit/test_storage_vectorstore_qdrant.rs"
+
+[[test]]
+name = "m405_test_structured_questions"
+path = "tests/unit/test_structured_questions.rs"
+
+[[test]]
+name = "m406_test_subagent_dag"
+path = "tests/unit/test_subagent_dag.rs"
+
+[[test]]
+name = "m407_test_subagent_events_and_adapters"
+path = "tests/unit/test_subagent_events_and_adapters.rs"
+
+[[test]]
+name = "m408_test_subagent_runner"
+path = "tests/unit/test_subagent_runner.rs"
+
+[[test]]
+name = "m409_test_subprocess_compat"
+path = "tests/unit/test_subprocess_compat.rs"
+
+[[test]]
+name = "m410_test_subprocess_logging"
+path = "tests/unit/test_subprocess_logging.rs"
+
+[[test]]
+name = "m411_test_subprocess_sidecar_utils"
+path = "tests/unit/test_subprocess_sidecar_utils.rs"
+
+[[test]]
+name = "m412_test_subscription_gating"
+path = "tests/unit/test_subscription_gating.rs"
+
+[[test]]
+name = "m413_test_sx_fs_diff"
+path = "tests/unit/test_sx_fs_diff.rs"
+
+[[test]]
+name = "m414_test_task_budget"
+path = "tests/unit/test_task_budget.rs"
+
+[[test]]
+name = "m415_test_tavily_client"
+path = "tests/unit/test_tavily_client.rs"
+
+[[test]]
+name = "m416_test_tavily_crawl_research"
+path = "tests/unit/test_tavily_crawl_research.rs"
+
+[[test]]
+name = "m417_test_testing_assertions"
+path = "tests/unit/test_testing_assertions.rs"
+
+[[test]]
+name = "m418_test_testing_mocks"
+path = "tests/unit/test_testing_mocks.rs"
+
+[[test]]
+name = "m419_test_third_party_notices_derived"
+path = "tests/unit/test_third_party_notices_derived.rs"
+
+[[test]]
+name = "m420_test_thread_activity"
+path = "tests/unit/test_thread_activity.rs"
+
+[[test]]
+name = "m421_test_thread_attachments"
+path = "tests/unit/test_thread_attachments.rs"
+
+[[test]]
+name = "m422_test_thread_ledger_store"
+path = "tests/unit/test_thread_ledger_store.rs"
+
+[[test]]
+name = "m423_test_thread_persistence"
+path = "tests/unit/test_thread_persistence.rs"
+
+[[test]]
+name = "m424_test_threads_contract"
+path = "tests/unit/test_threads_contract.rs"
+
+[[test]]
+name = "m425_test_threads_empty_cleanup"
+path = "tests/unit/test_threads_empty_cleanup.rs"
+
+[[test]]
+name = "m426_test_threads_pending_interrupt"
+path = "tests/unit/test_threads_pending_interrupt.rs"
+
+[[test]]
+name = "m427_test_threads_reconcile_vectora_sessions"
+path = "tests/unit/test_threads_reconcile_vectora_sessions.rs"
+
+[[test]]
+name = "m428_test_threads_rewind"
+path = "tests/unit/test_threads_rewind.rs"
+
+[[test]]
+name = "m429_test_threads_session_store_ownership"
+path = "tests/unit/test_threads_session_store_ownership.rs"
+
+[[test]]
+name = "m430_test_threads_title"
+path = "tests/unit/test_threads_title.rs"
+
+[[test]]
+name = "m431_test_tool_contract_matrix"
+path = "tests/unit/test_tool_contract_matrix.rs"
+
+[[test]]
+name = "m432_test_tool_images_to_model"
+path = "tests/unit/test_tool_images_to_model.rs"
+
+[[test]]
+name = "m433_test_tool_usage"
+path = "tests/unit/test_tool_usage.rs"
+
+[[test]]
+name = "m434_test_tools_aitl"
+path = "tests/unit/test_tools_aitl.rs"
+
+[[test]]
+name = "m435_test_tools_background_task"
+path = "tests/unit/test_tools_background_task.rs"
+
+[[test]]
+name = "m436_test_tools_browser"
+path = "tests/unit/test_tools_browser.rs"
+
+[[test]]
+name = "m437_test_tools_browser_devtools"
+path = "tests/unit/test_tools_browser_devtools.rs"
+
+[[test]]
+name = "m438_test_tools_computer_use"
+path = "tests/unit/test_tools_computer_use.rs"
+
+[[test]]
+name = "m439_test_tools_fs"
+path = "tests/unit/test_tools_fs.rs"
+
+[[test]]
+name = "m440_test_tools_fs_sandbox"
+path = "tests/unit/test_tools_fs_sandbox.rs"
+
+[[test]]
+name = "m441_test_tools_git"
+path = "tests/unit/test_tools_git.rs"
+
+[[test]]
+name = "m442_test_tools_github"
+path = "tests/unit/test_tools_github.rs"
+
+[[test]]
+name = "m443_test_tools_github_live"
+path = "tests/unit/test_tools_github_live.rs"
+
+[[test]]
+name = "m444_test_tools_homeassistant"
+path = "tests/unit/test_tools_homeassistant.rs"
+
+[[test]]
+name = "m445_test_tools_integrations"
+path = "tests/unit/test_tools_integrations.rs"
+
+[[test]]
+name = "m446_test_tools_kanban"
+path = "tests/unit/test_tools_kanban.rs"
+
+[[test]]
+name = "m447_test_tools_learning"
+path = "tests/unit/test_tools_learning.rs"
+
+[[test]]
+name = "m448_test_tools_library"
+path = "tests/unit/test_tools_library.rs"
+
+[[test]]
+name = "m449_test_tools_library_catalog"
+path = "tests/unit/test_tools_library_catalog.rs"
+
+[[test]]
+name = "m450_test_tools_mcp"
+path = "tests/unit/test_tools_mcp.rs"
+
+[[test]]
+name = "m451_test_tools_media"
+path = "tests/unit/test_tools_media.rs"
+
+[[test]]
+name = "m452_test_tools_media_native"
+path = "tests/unit/test_tools_media_native.rs"
+
+[[test]]
+name = "m453_test_tools_memory_semantic"
+path = "tests/unit/test_tools_memory_semantic.rs"
+
+[[test]]
+name = "m454_test_tools_memory_workspace"
+path = "tests/unit/test_tools_memory_workspace.rs"
+
+[[test]]
+name = "m455_test_tools_native"
+path = "tests/unit/test_tools_native.rs"
+
+[[test]]
+name = "m456_test_tools_planning"
+path = "tests/unit/test_tools_planning.rs"
+
+[[test]]
+name = "m457_test_tools_rag"
+path = "tests/unit/test_tools_rag.rs"
+
+[[test]]
+name = "m458_test_tools_registration"
+path = "tests/unit/test_tools_registration.rs"
+
+[[test]]
+name = "m459_test_tools_registry"
+path = "tests/unit/test_tools_registry.rs"
+
+[[test]]
+name = "m460_test_tools_sequential_thinking"
+path = "tests/unit/test_tools_sequential_thinking.rs"
+
+[[test]]
+name = "m461_test_tools_subagent_delegate"
+path = "tests/unit/test_tools_subagent_delegate.rs"
+
+[[test]]
+name = "m462_test_tools_terminal_sessions"
+path = "tests/unit/test_tools_terminal_sessions.rs"
+
+[[test]]
+name = "m463_test_tools_terminal_stdin"
+path = "tests/unit/test_tools_terminal_stdin.rs"
+
+[[test]]
+name = "m464_test_tools_video"
+path = "tests/unit/test_tools_video.rs"
+
+[[test]]
+name = "m465_test_tools_web"
+path = "tests/unit/test_tools_web.rs"
+
+[[test]]
+name = "m466_test_tools_workbench_context"
+path = "tests/unit/test_tools_workbench_context.rs"
+
+[[test]]
+name = "m467_test_tools_youtube"
+path = "tests/unit/test_tools_youtube.rs"
+
+[[test]]
+name = "m468_test_transcription"
+path = "tests/unit/test_transcription.rs"
+
+[[test]]
+name = "m469_test_transport_codespace"
+path = "tests/unit/test_transport_codespace.rs"
+
+[[test]]
+name = "m470_test_transport_codespace_start"
+path = "tests/unit/test_transport_codespace_start.rs"
+
+[[test]]
+name = "m471_test_transport_ssh_files"
+path = "tests/unit/test_transport_ssh_files.rs"
+
+[[test]]
+name = "m472_test_tray"
+path = "tests/unit/test_tray.rs"
+
+[[test]]
+name = "m473_test_turn_files"
+path = "tests/unit/test_turn_files.rs"
+
+[[test]]
+name = "m474_test_unused_code_detector"
+path = "tests/unit/test_unused_code_detector.rs"
+
+[[test]]
+name = "m475_test_url_preview"
+path = "tests/unit/test_url_preview.rs"
+
+[[test]]
+name = "m476_test_usage_insights"
+path = "tests/unit/test_usage_insights.rs"
+
+[[test]]
+name = "m477_test_usage_providers"
+path = "tests/unit/test_usage_providers.rs"
+
+[[test]]
+name = "m478_test_username"
+path = "tests/unit/test_username.rs"
+
+[[test]]
+name = "m479_test_verification_engine"
+path = "tests/unit/test_verification_engine.rs"
+
+[[test]]
+name = "m480_test_verification_feedback"
+path = "tests/unit/test_verification_feedback.rs"
+
+[[test]]
+name = "m481_test_verification_in_chat"
+path = "tests/unit/test_verification_in_chat.rs"
+
+[[test]]
+name = "m482_test_version"
+path = "tests/unit/test_version.rs"
+
+[[test]]
+name = "m483_test_vtypes_context_graph"
+path = "tests/unit/test_vtypes_context_graph.rs"
+
+[[test]]
+name = "m484_test_vtypes_contracts"
+path = "tests/unit/test_vtypes_contracts.rs"
+
+[[test]]
+name = "m485_test_vtypes_domains"
+path = "tests/unit/test_vtypes_domains.rs"
+
+[[test]]
+name = "m486_test_vtypes_message"
+path = "tests/unit/test_vtypes_message.rs"
+
+[[test]]
+name = "m487_test_web_search_live"
+path = "tests/unit/test_web_search_live.rs"
+
+[[test]]
+name = "m488_test_webhooks"
+path = "tests/unit/test_webhooks.rs"
+
+[[test]]
+name = "m489_test_win_job_object"
+path = "tests/unit/test_win_job_object.rs"
+
+[[test]]
+name = "m490_test_workflow_sim"
+path = "tests/unit/test_workflow_sim.rs"
+
+[[test]]
+name = "m491_test_workspace_config"
+path = "tests/unit/test_workspace_config.rs"
+
+[[test]]
+name = "m492_test_workspace_devtools"
+path = "tests/unit/test_workspace_devtools.rs"
+
+[[test]]
+name = "m493_test_workspace_events"
+path = "tests/unit/test_workspace_events.rs"
+
+[[test]]
+name = "m494_test_workspace_lock"
+path = "tests/unit/test_workspace_lock.rs"
+
+[[test]]
+name = "m495_test_workspace_ownership_gate"
+path = "tests/unit/test_workspace_ownership_gate.rs"
+
+[[test]]
+name = "m496_test_workspace_preview"
+path = "tests/unit/test_workspace_preview.rs"
+
+[[test]]
+name = "m497_test_workspace_q"
+path = "tests/unit/test_workspace_q.rs"
+
+[[test]]
+name = "m498_test_workspace_skills_from_content"
+path = "tests/unit/test_workspace_skills_from_content.rs"
+
+[[test]]
+name = "m499_test_workspaces_git_repo_choice"
+path = "tests/unit/test_workspaces_git_repo_choice.rs"
+
+[[test]]
+name = "m500_test_workspaces_git_rest"
+path = "tests/unit/test_workspaces_git_rest.rs"
+
+[[test]]
+name = "m501_test_workspaces_remote_fs"
+path = "tests/unit/test_workspaces_remote_fs.rs"
+
+[[test]]
+name = "m502_test_workspaces_sandbox_policy"
+path = "tests/unit/test_workspaces_sandbox_policy.rs"
+
+[[test]]
+name = "m503_test_workspaces_sandbox_state"
+path = "tests/unit/test_workspaces_sandbox_state.rs"
+
+[[test]]
+name = "m504_test_workspaces_view"
+path = "tests/unit/test_workspaces_view.rs"

@@ -1,0 +1,35 @@
+# Hooks do backend Rust quando este diretório é um repositório próprio.
+default_stages: [pre-commit]
+minimum_pre_commit_version: 4.0.0
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=5000]
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: rustfmt
+        name: Rust formatting
+        entry: cargo fmt --all -- --check
+        language: system
+        pass_filenames: false
+        files: \.rs$|Cargo\.toml$
+      - id: clippy
+        name: Rust lint (clippy)
+        # Só lib e binários: os alvos de teste são centenas e ficam para o CI.
+        entry: cargo clippy --workspace --lib --bins --locked -- -D warnings
+        language: system
+        pass_filenames: false
+        files: \.rs$|Cargo\.toml$|Cargo\.lock$
+      - id: rust-machete
+        name: Unused Rust dependencies
+        entry: cargo machete
+        language: system
+        pass_filenames: false
+        files: \.rs$|Cargo\.toml$|Cargo\.lock$
