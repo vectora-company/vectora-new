@@ -371,6 +371,12 @@ class TestContratoDoSConstruct:
         ):
             assert step in text
 
+    def test_install_sincroniza_frontend_sem_purgar_node_modules(self) -> None:
+        text = self._text()
+        assert 'PNPM_INSTALL = ["install", "--frozen-lockfile"' in text
+        assert "PNPM_CI" not in text
+        assert text.count('"--dir", "frontend", *PNPM_INSTALL') == 2
+
     def test_sidecars_nao_tem_alvo_avulso(self) -> None:
         """NATS, FFmpeg e o helper de fala só são preparados pelo ``install``."""
         text = self._text()

@@ -69,10 +69,10 @@ describe("useSettingsStore — valores padrão", () => {
     vi.resetModules();
   });
 
-  it("showToolCalls deve ser true por padrão", async () => {
+  it("tool calls ficam ocultas por padrão", async () => {
     const { useSettingsStore } = await getStore();
     const state = useSettingsStore.getState();
-    expect(state.showToolCalls).toBe(true);
+    expect(state.showToolCalls).toBe(false);
   });
 
   it("permissionMode deve ser 'ask' por padrão (R2)", async () => {
@@ -335,7 +335,7 @@ describe("useSettingsStore — reset", () => {
     useSettingsStore.getState().resetSettings();
 
     const after = useSettingsStore.getState();
-    expect(after.showToolCalls).toBe(true);
+    expect(after.showToolCalls).toBe(false);
     expect(after.theme).toBe("system");
     expect(after.customSystemPrompt).toBe("");
     expect(after.permissionMode).toBe("ask");
@@ -378,14 +378,19 @@ async function migrateSettings(
 }
 
 describe("useSettingsStore — migração de showToolCalls", () => {
-  it("valor salvo antes da v8 volta a true", async () => {
+  it("desliga o padrão antigo ao migrar para v10", async () => {
     const migrated = await migrateSettings({ showToolCalls: false }, 7);
-    expect(migrated.showToolCalls).toBe(true);
+    expect(migrated.showToolCalls).toBe(false);
   });
 
-  it("escolha salva na v8 é preservada", async () => {
-    const migrated = await migrateSettings({ showToolCalls: false }, 8);
+  it("desliga o padrão antigo salvo como true na v9", async () => {
+    const migrated = await migrateSettings({ showToolCalls: true }, 9);
     expect(migrated.showToolCalls).toBe(false);
+  });
+
+  it("preserva a preferência depois da v10", async () => {
+    const migrated = await migrateSettings({ showToolCalls: true }, 10);
+    expect(migrated.showToolCalls).toBe(true);
   });
 });
 

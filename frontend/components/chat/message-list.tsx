@@ -24,6 +24,7 @@ import type { EditedFile, Message } from "@/lib/types";
 import { m } from "@/lib/paraglide/messages";
 import { MessageItem } from "./message-item";
 import { MessageSkeletons } from "./message-skeleton";
+import { groupConsecutiveToolMessages } from "@/lib/utils/chat/group-tool-messages";
 import { ArrowDown } from "lucide-react";
 import {
   listConversationBranches,
@@ -303,13 +304,18 @@ export const MessageList = memo(function MessageList({
   const lastScrollTopRef = useRef(0);
   const firstMessageIdRef = useRef<string | null>(null);
 
+  const displayMessages = useMemo(
+    () => groupConsecutiveToolMessages(messages),
+    [messages],
+  );
+
   // Refs para debounce de scroll na thread inicial
   const scrollTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const mutationObserverRef = useRef<MutationObserver | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   // M1 — Ativa virtualização somente acima do threshold
-  const shouldVirtualize = messages.length > VIRTUALIZE_THRESHOLD;
+  const shouldVirtualize = displayMessages.length > VIRTUALIZE_THRESHOLD;
 
   // M1 — Virtualizer (@tanstack/react-virtual). O aviso abaixo é do
   // React Compiler, que este projeto não usa (sem babel-plugin-react-compiler
@@ -321,11 +327,11 @@ export const MessageList = memo(function MessageList({
   // neste uso. MessageList já é memo()'d manualmente (linha ~68).
   // oxlint-disable-next-line react/incompatible-library -- ver comentário acima
   const virtualizer = useVirtualizer({
-    count: shouldVirtualize ? messages.length : 0,
+    count: shouldVirtualize ? displayMessages.length : 0,
     getScrollElement: () => scrollRef.current,
     // Chave por mensagem: ao inserir as anteriores no início, as alturas já
     // medidas continuam valendo para as mesmas mensagens.
-    getItemKey: (index) => messages[index]?.id ?? index,
+    getItemKey: (index) => displayMessages[index]?.id ?? index,
     estimateSize: () => ESTIMATE_SIZE_PX,
     overscan: 4,
     // measureElement usa ResizeObserver — mede alturas reais (incluindo streaming)
@@ -337,11 +343,13 @@ export const MessageList = memo(function MessageList({
 
   // Último ID de mensagem assistant (para controles de ação)
   const lastAssistantId = useMemo(() => {
-    const assistantMessages = messages.filter((m) => m.role === "assistant");
+    const assistantMessages = displayMessages.filter(
+      (m) => m.role === "assistant",
+    );
     return assistantMessages.length > 0
       ? assistantMessages[assistantMessages.length - 1]?.id
       : undefined;
-  }, [messages]);
+  }, [displayMessages]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // Helpers de scroll
@@ -364,14 +372,14 @@ export const MessageList = memo(function MessageList({
     // que se use pra isso (mesmo padrão já usado no auto-scroll de
     // streaming, abaixo).
     if (shouldVirtualize) {
-      virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+      virtualizer.scrollToIndex(displayMessages.length - 1, { align: "end" });
       lastScrollTopRef.current = scrollRef.current.scrollTop;
       return;
     }
     const maxScroll = scrollRef.current.scrollHeight;
     scrollRef.current.scrollTop = maxScroll;
     lastScrollTopRef.current = maxScroll;
-  }, [shouldVirtualize, virtualizer, messages.length]);
+  }, [shouldVirtualize, virtualizer, displayMessages.length]);
 
   const isAtAbsoluteBottom = useCallback(() => {
     if (!scrollRef.current) return true;
@@ -406,7 +414,7 @@ export const MessageList = memo(function MessageList({
     const currentFirst = messages[0]?.id;
     const addedCount =
       previousFirst !== null && previousFirst !== currentFirst
-        ? messages.findIndex((message) => message.id === previousFirst)
+        ? displayMessages.findIndex((message) => message.id === previousFirst)
         : -1;
     if (addedCount > 0) {
       prependedRef.current = true;
@@ -419,7 +427,7 @@ export const MessageList = memo(function MessageList({
       }
     }
     metricsRef.current.scrollHeight = el.scrollHeight;
-  }, [messages, shouldVirtualize, virtualizer]);
+  }, [messages, displayMessages, shouldVirtualize, virtualizer]);
 
   // A altura também muda sem nova renderização (imagens, markdown sendo
   // medido): sem acompanhá-la a diferença acima sairia errada.
@@ -553,7 +561,7 @@ export const MessageList = memo(function MessageList({
 
       if (shouldVirtualize) {
         // Com virtualização: rola para o último item via virtualizer
-        virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+        virtualizer.scrollToIndex(displayMessages.length - 1, { align: "end" });
       } else {
         scrollRef.current.scrollTo({
           top: scrollRef.current.scrollHeight,
@@ -568,7 +576,7 @@ export const MessageList = memo(function MessageList({
 
     lastMessageCountRef.current = messages.length;
     lastContentRef.current = currentContent;
-  }, [messages, shouldVirtualize, virtualizer]);
+  }, [messages, displayMessages.length, shouldVirtualize, virtualizer]);
 
   // M3 — Detecta scroll manual do usuário
   const handleScroll = useCallback(() => {
@@ -603,7 +611,7 @@ export const MessageList = memo(function MessageList({
     // e o percurso ainda passava por todo o conteúdo intermediário sendo
     // medido, o que produzia os engasgos.
     if (shouldVirtualize) {
-      virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+      virtualizer.scrollToIndex(displayMessages.length - 1, { align: "end" });
     } else {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -613,7 +621,7 @@ export const MessageList = memo(function MessageList({
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       isProgrammaticScrollRef.current = false;
     }, 100);
-  }, [shouldVirtualize, virtualizer, messages.length]);
+  }, [shouldVirtualize, virtualizer, displayMessages.length]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // A.2d — humanMessageRevIdx: índice reverso de cada mensagem do usuário
@@ -743,8 +751,9 @@ export const MessageList = memo(function MessageList({
                 }}
               >
                 {virtualizer.getVirtualItems().map((vItem) => {
-                  const message = messages[vItem.index]!;
-                  const isLastMessage = vItem.index === messages.length - 1;
+                  const message = displayMessages[vItem.index]!;
+                  const isLastMessage =
+                    vItem.index === displayMessages.length - 1;
                   return (
                     <div
                       key={vItem.key}
@@ -783,8 +792,8 @@ export const MessageList = memo(function MessageList({
               <div
                 className={`w-full max-w-4xl mx-auto ${horizontalPadding} py-5 sm:py-5 space-y-2`}
               >
-                {messages.map((message, idx) => {
-                  const isLastMessage = idx === messages.length - 1;
+                {displayMessages.map((message, idx) => {
+                  const isLastMessage = idx === displayMessages.length - 1;
                   return (
                     <div
                       key={message.id}
