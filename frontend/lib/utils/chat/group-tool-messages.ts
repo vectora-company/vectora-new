@@ -15,11 +15,7 @@ export function groupConsecutiveToolMessages(messages: Message[]): Message[] {
 
     const run = [first];
     let next = index + 1;
-    while (
-      next < messages.length &&
-      isToolOnlyMessage(messages[next]!) &&
-      messages[next]!.runId === first.runId
-    ) {
+    while (next < messages.length && isToolOnlyMessage(messages[next]!)) {
       run.push(messages[next]!);
       next += 1;
     }
@@ -47,6 +43,7 @@ export function groupConsecutiveToolMessages(messages: Message[]): Message[] {
         ...last,
         id: first.id,
         persistedMessageId: first.persistedMessageId,
+        runId: first.runId,
         timestamp: first.timestamp,
         thinkingStartTime: first.thinkingStartTime ?? last.thinkingStartTime,
         thinkingDuration: thinkingDuration || undefined,

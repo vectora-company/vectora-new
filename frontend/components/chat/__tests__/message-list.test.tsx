@@ -388,9 +388,10 @@ describe("MessageList — thread virtualizada (> 50 mensagens)", () => {
 });
 
 describe("MessageList — atividade de ferramentas", () => {
-  it("agrupa histórico longo antes da virtualização e mantém limites de turno", () => {
+  it("agrupa ações adjacentes mesmo sem runId igual e para na próxima mensagem", () => {
     const toolMessages = Array.from({ length: 60 }, (_, index) => ({
       ...msg(`tool-${index}`, ""),
+      runId: `run-${index}`,
       toolCalls: [{ id: `call-${index}`, name: "run_command", args: {} }],
     }));
     const afterTurn = {

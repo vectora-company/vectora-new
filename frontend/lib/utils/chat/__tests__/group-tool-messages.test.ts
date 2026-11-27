@@ -131,7 +131,7 @@ describe("groupConsecutiveToolMessages", () => {
     ).toEqual([tool, withPlan, failedMessage]);
   });
 
-  it("não cruza turnos e mantém aprovações e perguntas estruturadas próprias", () => {
+  it("agrupa ações sem mensagem entre elas e mantém aprovações e perguntas próprias", () => {
     const firstTurn = message({
       id: "turn-1-tool",
       runId: "turn-1",
@@ -165,6 +165,14 @@ describe("groupConsecutiveToolMessages", () => {
 
     expect(
       groupConsecutiveToolMessages([firstTurn, secondTurn, approval, question]),
-    ).toEqual([firstTurn, secondTurn, approval, question]);
+    ).toEqual([
+      expect.objectContaining({
+        id: "turn-1-tool",
+        runId: "turn-1",
+        toolCalls: [...firstTurn.toolCalls!, ...secondTurn.toolCalls!],
+      }),
+      approval,
+      question,
+    ]);
   });
 });
