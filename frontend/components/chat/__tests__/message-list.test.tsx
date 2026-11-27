@@ -56,7 +56,13 @@ vi.mock("@/lib/paraglide/messages", () => ({
 
 vi.mock("../message-item", () => ({
   MessageItem: ({ message }: { message: Message }) => (
-    <div data-testid="message-item">{message.content}</div>
+    <div
+      data-testid="message-item"
+      data-message-id={message.id}
+      data-tool-count={message.toolCalls?.length ?? 0}
+    >
+      {message.content}
+    </div>
   ),
 }));
 
@@ -378,6 +384,38 @@ describe("MessageList — thread virtualizada (> 50 mensagens)", () => {
 
     expect(scrollToIndexMock).toHaveBeenCalled();
     expect(scrollToIndexMock).toHaveBeenLastCalledWith(79, { align: "end" });
+  });
+});
+
+describe("MessageList — atividade de ferramentas", () => {
+  it("agrupa histórico longo antes da virtualização e mantém limites de turno", () => {
+    const toolMessages = Array.from({ length: 60 }, (_, index) => ({
+      ...msg(`tool-${index}`, ""),
+      toolCalls: [{ id: `call-${index}`, name: "run_command", args: {} }],
+    }));
+    const afterTurn = {
+      ...msg("tool-after", ""),
+      toolCalls: [{ id: "call-after", name: "run_command", args: {} }],
+    };
+
+    render(
+      <MessageList
+        {...baseProps([
+          ...toolMessages,
+          { ...msg("user", "próximo turno"), role: "user" },
+          afterTurn,
+        ])}
+        threadId="tool-activity-history"
+      />,
+    );
+
+    const items = screen.getAllByTestId("message-item");
+    expect(items).toHaveLength(3);
+    expect(items[0]).toHaveAttribute("data-message-id", "tool-0");
+    expect(items[0]).toHaveAttribute("data-tool-count", "60");
+    expect(items[1]).toHaveAttribute("data-message-id", "user");
+    expect(items[1]).toHaveAttribute("data-tool-count", "0");
+    expect(items[2]).toHaveAttribute("data-message-id", "tool-after");
   });
 });
 
