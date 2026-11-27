@@ -1,3 +1,87 @@
+## [0.1.26] (2026-11-27)
+
+Esta seção reúne as alterações publicadas nesta versão.
+
+### Features
+
+Os recursos incluídos nesta versão são listados abaixo.
+
+- feat(godot): escolher executável na Workbench (#106)
+- feat(workspace): reutilizar o gerenciador para selecionar arquivos e pastas (#103)
+- feat(workspace): configurar ambiente por projeto (#101)
+- feat(workspace): associar pastas de origem (#98)
+- feat(workspace): permitir editar a pasta principal (#97)
+- feat(workbench): validar projetos na aba Godot (#80)
+- feat(benchmarks): validar projetos Godot (#75)
+- feat: planejar um cenário específico do benchmark (#60)
+- feat: exigir nível de evidência nos estudos (#56)
+- feat: comparar séries do app instalado (#55)
+- feat: agregar distribuições do app instalado (#54)
+- feat: exercitar recarga no smoke UI instalado (#53)
+- feat: verificar referências dos estudos técnicos (#52)
+- feat: verificar montagem da interface instalada (#51)
+- feat: medir memória NVIDIA por processo (#50)
+- feat: registrar custo reportado pelo provider (#49)
+- feat: registrar maturidade das capabilities (#47)
+- feat: mostrar incerteza nas comparações (#44)
+- feat: medir recursos do app nos benchmarks (#43)
+- feat: validar estudos técnicos reproduzíveis (#42)
+- feat: embutir SHA do código nos benchmarks instalados (#41)
+- feat: medir taxa de tokens da resposta (#40)
+- feat: registrar proveniência da instalação avaliada (#39)
+- feat: correlacionar etapas do backend no smoke (#38)
+- feat: medir etapas do startup do app instalado (#37)
+- feat: executar suite versionada de cenários (#36)
+- feat: executar cenários em subprocesso isolado (#34)
+- feat: separar níveis de evidência do Evaluation Lab (#30)
+- feat: instrumentar execuções do agente para benchmark (#28)
+- feat: comparar e exportar relatórios de avaliação (#26)
+- feat: instrumentar métricas e proveniência dos benchmarks (#23)
+- feat: bancada isolada de benchmark end-to-end (#22)
+
+### Bug Fixes
+
+As correções incluídas nesta versão são listadas abaixo.
+
+- fix(plans): atualizar planos do workspace (#114)
+- fix(linux): exibir ícone do app de desenvolvimento (#113)
+- fix(plans): exibir planos salvos no workspace (#112)
+- fix(artifacts): combinar planos atuais e legados (#111)
+- fix(terminal): exibir estado da conexão (#110)
+- fix(terminal): usar shell disponível como fallback (#108)
+- fix(chat): preservar imagens ao compactar contexto (#107)
+- fix(workspace): estabilizar sessão, terminal e plano local (#105)
+- fix(chat): permitir envio de mensagens com imagens no 9Router (#96)
+- fix(godot): reconhecer versão do executável (#91)
+- fix(plan): mostrar falha ao carregar plano executável (#90)
+- fix: abrir workbench no plano ao vivo (#89)
+- fix(chat): limitar proveniência aos alvos das tools (#83)
+- fix(workbench): rastrear arquivos em vários repositórios (#82)
+- fix(godot): encerrar processos filhos no Windows (#79)
+- fix(electron): ajustar mínimo por escala do display (#78)
+- fix: validar gameplay Godot e encerrar loading do plano (#77)
+- fix(electron): corrigir resize no Wayland (#76)
+- fix(chat): rastrear arquivos observados pelas tools (#74)
+- fix(chat): compactar logs longos durante execução (#73)
+- fix(agent): validar erros antes de concluir tarefas (#72)
+- fix(agent): remover delegação automática do prompt (#71)
+- fix(electron): permitir reduzir a janela em tiles estreitos (#70)
+- fix(chat): omitir arquivos ignorados do resumo (#69)
+- fix(plan): encerrar loading com erro recuperável (#68)
+- fix(chat): compactar saídas longas de ferramentas (#67)
+- fix(agent): bloquear delegação proibida no loop (#93)
+- fix(ci): alinhar teste da fila do PR Gate (#86)
+- fix: validar referências sem perder compatibilidade (#61)
+- fix: propagar cancelamento no smoke instalado (#59)
+- fix: registrar cancelamento do runner de avaliação (#57)
+- fix: propagar proveniência do build às avaliações (#48)
+- fix: exigir evidência de todos os critérios do cenário (#46)
+- fix: rejeitar benchmarks com condições misturadas (#45)
+- fix: serializar revogação de policy e dispatch (#35)
+- fix: persistir journal de efeitos dos cenários (#32)
+- fix: exigir trilha de aprovação humana no replay (#31)
+- fix(ci): corrigir verificações do lint e CodeQL (#20)
+
 # Changelog
 
 Este arquivo registra as alterações do Vectora, organizadas por versão.
