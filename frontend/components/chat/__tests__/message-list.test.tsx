@@ -417,6 +417,65 @@ describe("MessageList — atividade de ferramentas", () => {
     expect(items[1]).toHaveAttribute("data-tool-count", "0");
     expect(items[2]).toHaveAttribute("data-message-id", "tool-after");
   });
+
+  it("atualiza um grupo em lugar sem mover a rolagem nem trocar sua identidade", async () => {
+    vi.useFakeTimers();
+    const firstTool = {
+      ...msg("tool-1", ""),
+      toolCalls: [{ id: "call-1", name: "file_read", args: {} }],
+    };
+    const initialMessages = [msg("history", "mensagem antiga"), firstTool];
+    const { rerender } = render(
+      <MessageList {...baseProps(initialMessages)} threadId="tool-stream" />,
+    );
+
+    const scroller = screen.getByLabelText("Messages");
+    mockScrollMetrics(scroller, 3000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    scroller.scrollTop = 300;
+    fireEvent.scroll(scroller);
+    const toolRow = screen.getAllByTestId("message-item")[1]!;
+    const scrollTo = vi.spyOn(scroller, "scrollTo");
+
+    rerender(
+      <MessageList
+        {...baseProps([
+          ...initialMessages,
+          {
+            ...msg("tool-2", ""),
+            toolCalls: [{ id: "call-2", name: "terminal", args: {} }],
+          },
+        ])}
+        threadId="tool-stream"
+      />,
+    );
+
+    expect(screen.getAllByTestId("message-item")[1]).toBe(toolRow);
+    expect(toolRow).toHaveAttribute("data-message-id", "tool-1");
+    expect(toolRow).toHaveAttribute("data-tool-count", "2");
+    expect(scroller.scrollTop).toBe(300);
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    rerender(
+      <MessageList
+        {...baseProps([
+          ...initialMessages.map((message) => ({ ...message })),
+          {
+            ...msg("tool-2", ""),
+            toolCalls: [{ id: "call-2", name: "terminal", args: {} }],
+          },
+        ])}
+        threadId="tool-stream"
+      />,
+    );
+    expect(screen.getAllByTestId("message-item")[1]).toBe(toolRow);
+    expect(toolRow).toHaveAttribute("data-message-id", "tool-1");
+    expect(toolRow).toHaveAttribute("data-tool-count", "2");
+    expect(scroller.scrollTop).toBe(300);
+  });
 });
 
 describe("MessageList — padding compacto (modo IDE)", () => {
