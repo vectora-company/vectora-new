@@ -44,8 +44,9 @@ import { AnimatedThinking } from "./animations/animated-thinking";
 import { HITLPanel } from "./features/hitl-panel";
 import { StructuredQuestionPanel } from "./features/structured-question-panel";
 import type { RagCitation } from "./features/rag-citation-popover";
-import type { EditedFile, Message } from "@/lib/types";
+import type { EditedFile, Message, ToolCall, ToolCategory } from "@/lib/types";
 import { stripMarkdownEnvelope } from "@/lib/utils/string";
+import { groupToolActivity } from "@/lib/utils/chat/tool-activity";
 import { estimateCost, formatCost } from "@/lib/config/model-prices";
 import { useState, useMemo, useEffect, useCallback, memo, useRef } from "react";
 import { useTheme } from "next-themes";
@@ -64,6 +65,37 @@ import { MonacoCodeBlock } from "@/components/workbench/monaco-code-block";
 
 /** Locale do date-fns a partir do idioma da UI (item 9 — "há quanto tempo"). */
 const DATE_FNS_LOCALES = { pt: ptBR, es: esLocale, en: enUS } as const;
+
+const TOOL_CATEGORY_LABELS: Record<ToolCategory, () => string> = {
+  artifacts: () => m.chat_tool_category_artifacts(),
+  filesystem: () => m.chat_tool_category_filesystem(),
+  general: () => m.chat_tool_category_general(),
+  memory: () => m.chat_tool_category_memory(),
+  mcp: () => m.chat_tool_category_mcp(),
+  rag: () => m.chat_tool_category_rag(),
+  web: () => m.chat_tool_category_web(),
+  workspace: () => m.chat_tool_category_workspace(),
+};
+
+function toolActivitySummary(tools: ToolCall[]): string {
+  const counts = new Map<ToolCategory, number>();
+  for (const tool of tools) {
+    const category = tool.category ?? "general";
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
+
+  const categories = [...counts].map(([category, count]) =>
+    m.chat_tool_category_count({
+      category: TOOL_CATEGORY_LABELS[category](),
+      count,
+    }),
+  );
+  const actionCount =
+    tools.length === 1
+      ? m.chat_tool_calls_one()
+      : m.chat_tool_calls_many({ count: tools.length });
+  return `${categories.join(", ")} · ${actionCount}`;
+}
 
 const WEB_TOOLS = new Set(["web_search", "fetch_url", "web_fetch"]);
 
@@ -1487,40 +1519,68 @@ export const MessageItem = memo(
                   </div>
                 )}
 
-                {showToolCalls &&
-                  message.toolCalls &&
-                  message.toolCalls.length > 0 && (
-                    <details
-                      className="mt-3 group"
-                      open={
-                        !!message.isThinking ||
-                        message.toolCalls.some((tool) => tool.isError)
-                      }
-                    >
-                      <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors select-none">
-                        <span className="group-open:hidden">▶</span>
-                        <span className="hidden group-open:inline">▾</span>
-                        <span>
-                          {message.toolCalls.length === 1
-                            ? m.chat_tool_calls_one()
-                            : m.chat_tool_calls_many({
-                                count: message.toolCalls.length,
-                              })}
-                        </span>
-                      </summary>
-                      <div className="mt-2 space-y-2">
-                        {message.toolCalls.map((tool) => (
-                          <ToolCallRenderer
-                            key={tool.id}
-                            tool={tool}
-                            isStreaming={
-                              message.isThinking && tool.output === undefined
-                            }
-                          />
-                        ))}
-                      </div>
-                    </details>
-                  )}
+                {message.toolCalls && message.toolCalls.length > 0 && (
+                  <div className="mt-2 space-y-1" data-testid="tool-activity">
+                    {groupToolActivity(message.toolCalls).map((item) =>
+                      item.kind === "card" ? (
+                        <ToolCallRenderer
+                          key={`card:${item.id}`}
+                          tool={item.tool}
+                          isStreaming={
+                            message.isThinking && item.tool.output === undefined
+                          }
+                        />
+                      ) : (
+                        <details
+                          key={`run:${item.id}`}
+                          className="group"
+                          data-testid="tool-activity-group"
+                          open={
+                            item.failedCount ||
+                            (message.isThinking && showToolCalls)
+                              ? true
+                              : undefined
+                          }
+                        >
+                          <summary className="cursor-pointer list-none flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors select-none">
+                            <span
+                              className="group-open:hidden"
+                              aria-hidden="true"
+                            >
+                              ▶
+                            </span>
+                            <span
+                              className="hidden group-open:inline"
+                              aria-hidden="true"
+                            >
+                              ▾
+                            </span>
+                            <span>{toolActivitySummary(item.tools)}</span>
+                            {item.failedCount && (
+                              <span className="text-destructive" role="status">
+                                {m.chat_tool_activity_failures({
+                                  count: item.failedCount,
+                                })}
+                              </span>
+                            )}
+                          </summary>
+                          <div className="mt-1.5 space-y-1.5">
+                            {item.tools.map((tool) => (
+                              <ToolCallRenderer
+                                key={tool.id}
+                                tool={tool}
+                                isStreaming={
+                                  message.isThinking &&
+                                  tool.output === undefined
+                                }
+                              />
+                            ))}
+                          </div>
+                        </details>
+                      ),
+                    )}
+                  </div>
+                )}
 
                 {message.isThinking && (
                   <AgentStatusLine activeTool={message.activeTool} />

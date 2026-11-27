@@ -828,20 +828,25 @@ describe("MessageItem — streaming incremental (token a token, como astream)", 
     const details = container.querySelector("details");
     expect(details).not.toBeNull();
     expect(details?.open).toBe(true);
-    expect(screen.getByText(m.chat_tool_calls_many({ count: 2 }))).toBeTruthy();
+    expect(details?.textContent).toContain(
+      m.chat_tool_calls_many({ count: 2 }),
+    );
   });
 
-  it("recolhe o grupo concluído sem erro e esconde quando desligado", () => {
+  it("mostra o resumo recolhido por padrão mesmo com detalhes desligados", () => {
     const tools = [{ id: "t1", name: "read_file", args: {}, output: "ok" }];
-    const { container, rerender } = render(
+    const { rerender } = render(
       <MessageItem
         {...baseProps(msg({ content: "feito", toolCalls: tools }), {
           showToolCalls: true,
         })}
       />,
     );
-    expect(container.querySelector("details")?.open).toBe(false);
-    expect(screen.getByText(m.chat_tool_calls_one())).toBeTruthy();
+    const details = screen.getByTestId(
+      "tool-activity-group",
+    ) as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toContain(m.chat_tool_calls_one());
     rerender(
       <MessageItem
         {...baseProps(msg({ content: "feito", toolCalls: tools }), {
@@ -849,7 +854,27 @@ describe("MessageItem — streaming incremental (token a token, como astream)", 
         })}
       />,
     );
-    expect(container.querySelector("details")).toBeNull();
+    expect(
+      (screen.getByTestId("tool-activity-group") as HTMLDetailsElement).open,
+    ).toBe(false);
+  });
+
+  it("mantém o grupo recolhido se a chamada anterior está ativa e a preferência está desligada", () => {
+    render(
+      <MessageItem
+        {...baseProps(
+          msg({
+            isThinking: true,
+            toolCalls: [{ id: "t1", name: "read_file", args: {} }],
+          }),
+          { showToolCalls: false },
+        )}
+      />,
+    );
+
+    expect(
+      (screen.getByTestId("tool-activity-group") as HTMLDetailsElement).open,
+    ).toBe(false);
   });
 });
 

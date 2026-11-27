@@ -1,4 +1,5 @@
 import type { Message } from "@/lib/types";
+import { groupToolActivity } from "./tool-activity";
 
 /** Combine adjacent tool-only assistant records into one compact activity row. */
 export function groupConsecutiveToolMessages(messages: Message[]): Message[] {
@@ -23,11 +24,19 @@ export function groupConsecutiveToolMessages(messages: Message[]): Message[] {
       grouped.push(first);
     } else {
       const last = run[run.length - 1]!;
+      const reasoning = run
+        .map((message) => message.reasoning?.trim())
+        .filter((value): value is string => Boolean(value))
+        .join("\n");
       grouped.push({
         ...first,
+        ...last,
+        id: first.id,
+        timestamp: first.timestamp,
         isThinking: last.isThinking,
         activeTool: last.activeTool,
-        timestamp: last.timestamp,
+        reasoning: reasoning || undefined,
+        thinkingSteps: run.flatMap((message) => message.thinkingSteps ?? []),
         toolCalls: run.flatMap((message) => message.toolCalls ?? []),
       });
     }
@@ -42,14 +51,18 @@ function isToolOnlyMessage(message: Message): boolean {
     message.role === "assistant" &&
     message.content.trim().length === 0 &&
     (message.toolCalls?.length ?? 0) > 0 &&
-    !message.reasoning &&
-    !message.thinkingSteps?.length &&
+    !groupToolActivity(message.toolCalls ?? []).some(
+      (item) => item.kind === "card",
+    ) &&
     !message.editedFiles?.length &&
     !message.subgraphOutputs?.length &&
     !message.plan?.length &&
     !message.verification &&
     !message.hitlPending &&
     !message.structuredQuestionPending &&
-    !message.isError
+    !message.isError &&
+    !message.images?.length &&
+    !message.ragCitations?.length &&
+    !message.steers?.length
   );
 }

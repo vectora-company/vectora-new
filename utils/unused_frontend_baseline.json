@@ -182,7 +182,6 @@
   "types::lib/types/auth.ts::TokenResponse",
   "types::lib/types/index.ts::ActionResult",
   "types::lib/types/index.ts::SubgraphOutput",
-  "types::lib/types/index.ts::ToolCategory",
   "types::lib/types/index.ts::UsageMetadata",
   "types::lib/types/update-backup.ts::UpdateBackupFile",
   "types::lib/types/workbench-settings.ts::ResolvedSurfaceMode",
