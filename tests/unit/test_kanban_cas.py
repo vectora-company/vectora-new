@@ -231,16 +231,10 @@ async def test_recompute_ready_atomic_promotion(
 
 
 @pytest.mark.asyncio
-async def test_version_migration_supports_dict_row_factory(tmp_path: Path) -> None:
-    """A conexão usada pelo scheduler retorna dicts, não tuplas/Rows."""
-    conn = await aiosqlite.connect(tmp_path / "dict-rows.db")
-    conn.row_factory = cast(
-        "type | None",
-        lambda cursor, row: {
-            column[0]: value
-            for column, value in zip(cursor.description, row, strict=False)
-        },
-    )
+async def test_version_migration_runs_on_row_connection(tmp_path: Path) -> None:
+    """A migração lê o ``PRAGMA`` pela conexão que o scheduler usa."""
+    conn = await aiosqlite.connect(tmp_path / "legacy-rows.db")
+    conn.row_factory = aiosqlite.Row
     await conn.execute(
         "CREATE TABLE vectora_background_tasks (id TEXT PRIMARY KEY, updated_at TEXT)"
     )
