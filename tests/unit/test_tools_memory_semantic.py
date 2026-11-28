@@ -135,7 +135,7 @@ class TestSearchMemoryTool:
 
         async def paged_search(
             _namespace: tuple[str, str, str], *, query: str, limit: int
-        ):
+        ) -> list[_FakeStoreItem]:
             """Executa a operação paged search."""
             assert query == "x"
             return [*expired, live][:limit]

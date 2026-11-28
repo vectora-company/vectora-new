@@ -73,7 +73,7 @@ def _make_client(
     monkeypatch: pytest.MonkeyPatch,
     *,
     fallback_chain: list[str],
-    clients_por_modelo,
+    clients_por_modelo: dict[str, _FakeChatClient],
     on_model_switch=None,
 ) -> FallbackChatClient:
     monkeypatch.setattr(

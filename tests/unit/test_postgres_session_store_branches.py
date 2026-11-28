@@ -23,11 +23,11 @@ if TYPE_CHECKING:
 
 
 class _AsyncContext:
-    def __init__(self, value) -> None:
+    def __init__(self, value: _Connection | None) -> None:
         """Inicializa o estado da instância."""
         self.value = value
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> _Connection | None:
         """Executa a operação aenter."""
         return self.value
 

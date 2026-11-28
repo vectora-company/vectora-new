@@ -73,7 +73,9 @@ async def test_pipe_side_buffers_antes_do_tcp(monkeypatch: pytest.MonkeyPatch) -
     """Dados recebidos antes do TCP conectar ficam no _pending e são enviados depois."""
     tcp_transport = _FakeWriteTransport()
 
-    async def fake_create_conn(proto_factory, _host: str, _port: int):
+    async def fake_create_conn(
+        proto_factory, _host: str, _port: int
+    ) -> tuple[_FakeWriteTransport, _TCPSide]:
         proto = proto_factory()
         proto.connection_made(tcp_transport)
         return tcp_transport, proto
@@ -106,7 +108,9 @@ async def test_pipe_side_encaminha_dados_apos_tcp(
     """Dados recebidos após TCP conectar são repassados diretamente."""
     tcp_transport = _FakeWriteTransport()
 
-    async def fake_create_conn(proto_factory, _host: str, _port: int):
+    async def fake_create_conn(
+        proto_factory, _host: str, _port: int
+    ) -> tuple[_FakeWriteTransport, _TCPSide]:
         proto = proto_factory()
         proto.connection_made(tcp_transport)
         return tcp_transport, proto
@@ -135,7 +139,9 @@ async def test_pipe_side_retries_until_uvicorn_accepts(
     tcp_transport = _FakeWriteTransport()
     attempts = 0
 
-    async def eventually_connects(proto_factory, _host: str, _port: int):
+    async def eventually_connects(
+        proto_factory, _host: str, _port: int
+    ) -> tuple[_FakeWriteTransport, _TCPSide]:
         nonlocal attempts
         attempts += 1
         if attempts < 3:
@@ -190,7 +196,9 @@ async def test_pipe_side_fecha_tcp_ao_desconectar(
     """Quando a pipe fecha, a conexão TCP correspondente também é fechada."""
     tcp_transport = _FakeWriteTransport()
 
-    async def fake_create_conn(proto_factory, _host: str, _port: int):
+    async def fake_create_conn(
+        proto_factory, _host: str, _port: int
+    ) -> tuple[_FakeWriteTransport, _TCPSide]:
         proto = proto_factory()
         proto.connection_made(tcp_transport)
         return tcp_transport, proto

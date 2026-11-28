@@ -244,11 +244,11 @@ class _ClienteVeoFake:
         cliente = self
 
         class _Models:
-            async def generate_videos(self, **_kw: str):
+            async def generate_videos(self, **_kw: str) -> _OperacaoFake:
                 return cliente.operacao
 
         class _Ops:
-            async def get(self, _op):
+            async def get(self, _op: _OperacaoFake) -> _OperacaoFake:
                 cliente.consultas += 1
                 return cliente.operacao.avanca()
 

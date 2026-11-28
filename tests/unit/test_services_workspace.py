@@ -29,7 +29,7 @@ def _fresh_registry(tmp_path: Path) -> Iterator[WorkspaceRegistry]:
 
 
 @pytest.fixture
-def registry(tmp_path: Path):
+def registry(tmp_path: Path) -> Iterator[tuple[WorkspaceRegistry, Path]]:
     """Registry isolado com arquivo temporário."""
     json_file = tmp_path / "workspaces.json"
     reg = WorkspaceRegistry()
