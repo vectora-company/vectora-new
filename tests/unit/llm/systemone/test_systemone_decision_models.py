@@ -36,6 +36,7 @@ from backend.llm.systemone.types import (
     SystemOneResponse,
     SystemOneUsage,
 )
+from backend.vtypes.contracts import JsonValue
 
 
 @pytest.mark.asyncio
@@ -182,7 +183,7 @@ class TestClefLocalAdapter:
         }
 
         async def fake_post(
-            client: httpx.AsyncClient, url: str, **kwargs: object
+            client: httpx.AsyncClient, url: str, **kwargs: JsonValue
         ) -> httpx.Response:
             """Executa a operação fake post."""
             assert url == "http://127.0.0.1:8080/v1/systemone"
@@ -226,7 +227,9 @@ class TestClefLocalAdapter:
             questions={"q1": NoulQuestion(criterion="Critério")},
         )
 
-        async def fake_429(*args: object, **kwargs: object) -> httpx.Response:
+        async def fake_429(
+            *args: str | httpx.AsyncClient, **kwargs: JsonValue
+        ) -> httpx.Response:
             """Executa a operação fake 429."""
             return httpx.Response(429, text="Rate limit exceeded")
 
@@ -234,7 +237,9 @@ class TestClefLocalAdapter:
         with pytest.raises(SystemOneRateLimitError):
             await adapter.decide(req)
 
-        async def fake_timeout(*args: object, **kwargs: object) -> httpx.Response:
+        async def fake_timeout(
+            *args: str | httpx.AsyncClient, **kwargs: JsonValue
+        ) -> httpx.Response:
             """Executa a operação fake timeout."""
             raise httpx.TimeoutException("Timeout")
 
@@ -243,7 +248,7 @@ class TestClefLocalAdapter:
             await adapter.decide(req)
 
         async def fake_not_implemented(
-            *args: object, **kwargs: object
+            *args: str | httpx.AsyncClient, **kwargs: JsonValue
         ) -> httpx.Response:
             """Simula um servidor que não implementa decisões estruturadas."""
             return httpx.Response(501, text="systemone not implemented")
@@ -293,7 +298,7 @@ class TestApiAdapters:
         seen: dict[str, str] = {}
 
         async def fake_post(
-            client: httpx.AsyncClient, url: str, **kwargs: object
+            client: httpx.AsyncClient, url: str, **kwargs: JsonValue
         ) -> httpx.Response:
             """Executa a operação fake post."""
             seen["url"] = url
@@ -316,7 +321,7 @@ class TestApiAdapters:
         )
 
         async def fake_post(
-            client: httpx.AsyncClient, url: str, **kwargs: object
+            client: httpx.AsyncClient, url: str, **kwargs: JsonValue
         ) -> httpx.Response:
             """Executa a operação fake post."""
             return httpx.Response(
@@ -355,7 +360,7 @@ class TestApiAdapters:
         )
 
         async def fake_post(
-            client: httpx.AsyncClient, url: str, **kwargs: object
+            client: httpx.AsyncClient, url: str, **kwargs: JsonValue
         ) -> httpx.Response:
             """Executa a operação fake post."""
             return httpx.Response(200, json={"success": False, "result": None})
@@ -384,7 +389,7 @@ class TestApiAdapters:
         }
 
         async def fake_post(
-            client: httpx.AsyncClient, url: str, **kwargs: object
+            client: httpx.AsyncClient, url: str, **kwargs: JsonValue
         ) -> httpx.Response:
             """Executa a operação fake post."""
             headers = kwargs.get("headers", {})
@@ -475,7 +480,9 @@ class TestDecisionPolicyEngine:
         settings = SystemOneSettings(enabled=True, allow_remote_fallback=False)
         engine = DecisionPolicyEngine(settings)
 
-        async def fake_post(*args: object, **kwargs: object) -> httpx.Response:
+        async def fake_post(
+            *args: str | httpx.AsyncClient, **kwargs: JsonValue
+        ) -> httpx.Response:
             """Executa a operação fake post."""
             raise httpx.ConnectError("Local provider down")
 

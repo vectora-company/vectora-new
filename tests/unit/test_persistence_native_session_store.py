@@ -539,7 +539,7 @@ class TestAppendMessageEGetHistory:
                 "is_error, created_at"
             )
 
-            async def _legacy_rows() -> list[tuple[object, ...]]:
+            async def _legacy_rows() -> list[tuple[str | int | None, ...]]:
                 async with pool.acquire() as conn:
                     return [
                         tuple(row)

@@ -191,9 +191,9 @@ class TestPersistence:
                 self._delegate = delegate
                 self._failed = False
 
-            def execute(self, sql: str, parameters: tuple[object, ...] = ()):
+            def execute(self, sql: str, parameters: tuple[str | int | None, ...] = ()):
                 # O wrapper é um dublê local apenas para injetar a falha de commit.
-                return self._delegate.execute(sql, cast("tuple", parameters))
+                return self._delegate.execute(sql, parameters)
 
             def commit(self) -> None:
                 if not self._failed:
@@ -226,11 +226,11 @@ class TestPersistence:
                 self._connection = connection
                 self._locked = True
 
-            def execute(self, sql: str, parameters: tuple[object, ...] = ()):
+            def execute(self, sql: str, parameters: tuple[str | int | None, ...] = ()):
                 if self._locked:
                     self._locked = False
                     raise sqlite3.OperationalError("database is locked")
-                return self._connection.execute(sql, cast("tuple", parameters))
+                return self._connection.execute(sql, parameters)
 
             def commit(self) -> None:
                 self._connection.commit()

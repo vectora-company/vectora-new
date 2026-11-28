@@ -614,7 +614,7 @@ async def test_run_verification_sem_arquivo_tocado_nao_varre_o_workspace(
 ) -> None:
     """Conversa sem edição e sem gate não pode hashear o workspace inteiro."""
 
-    def _nao_varrer(*_args: object, **_kwargs: object) -> None:
+    def _nao_varrer[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
         raise AssertionError("o workspace não deveria ser varrido")
 
     monkeypatch.setattr(snapshot.os, "walk", _nao_varrer)

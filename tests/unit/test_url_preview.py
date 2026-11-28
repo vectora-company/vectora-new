@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import socket
 from collections.abc import AsyncIterator
+from types import TracebackType
 from typing import TypedDict, cast
 
 import httpx
@@ -29,7 +30,12 @@ class _FakeResponse:
     async def __aenter__(self) -> _FakeResponse:
         return self
 
-    async def __aexit__(self, *_args: object) -> None:
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
         return None
 
     async def aiter_bytes(self) -> AsyncIterator[bytes]:
@@ -48,22 +54,27 @@ class _FakeClient:
     response: _FakeResponse | None = None
     calls: list[_RequestCall] = []
 
-    def __init__(self, **_kwargs: object) -> None:
+    def __init__[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> None:
         self.__class__.calls = []
 
     async def __aenter__(self) -> _FakeClient:
         return self
 
-    async def __aexit__(self, *_args: object) -> None:
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
         return None
 
-    def stream(self, method: str, url: str, **kwargs: object) -> _FakeResponse:
+    def stream(self, method: str, url: str, **kwargs: dict[str, str]) -> _FakeResponse:
         self.calls.append(
             {
                 "method": method,
                 "url": url,
-                "headers": cast("dict[str, str]", kwargs["headers"]),
-                "extensions": cast("dict[str, str]", kwargs["extensions"]),
+                "headers": kwargs["headers"],
+                "extensions": kwargs["extensions"],
             }
         )
         assert self.response is not None
@@ -227,20 +238,32 @@ async def test_preview_maps_network_timeout_to_unavailable(
         async def __aenter__(self) -> _TimeoutStream:
             raise httpx.ReadTimeout("timed out")
 
-        async def __aexit__(self, *_args: object) -> None:
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None:
             return None
 
     class _TimeoutClient:
-        def __init__(self, **_kwargs: object) -> None:
+        def __init__[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> None:
             pass
 
         async def __aenter__(self) -> _TimeoutClient:
             return self
 
-        async def __aexit__(self, *_args: object) -> None:
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None:
             return None
 
-        def stream(self, method: str, url: str, **kwargs: object) -> _TimeoutStream:
+        def stream[**P](
+            self, method: str, url: str, *_args: P.args, **kwargs: P.kwargs
+        ) -> _TimeoutStream:
             return _TimeoutStream()
 
     monkeypatch.setattr(httpx, "AsyncClient", _TimeoutClient)

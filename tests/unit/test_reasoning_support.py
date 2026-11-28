@@ -10,7 +10,7 @@ from backend.engine.conversation_loop import (
     _strip_reasoning_blocks,
     run_conversation,
 )
-from backend.engine.stream_events import ReasoningChunk
+from backend.engine.stream_events import EngineEvent, ReasoningChunk
 from backend.llm.anthropic.chat_client import AnthropicChatClient
 from backend.llm.anthropic.client import AnthropicClient
 from backend.llm.google.chat_client import (
@@ -240,9 +240,9 @@ async def test_loop_emits_and_persists_reasoning(session_store) -> None:
     await session_store.append_message(
         "thread-r", text_message(MessageRole.USER, "ajude")
     )
-    events: list[object] = []
+    events: list[EngineEvent] = []
 
-    async def on_event(event: object) -> None:
+    async def on_event(event: EngineEvent) -> None:
         events.append(event)
 
     result = await run_conversation(

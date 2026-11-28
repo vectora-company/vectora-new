@@ -251,7 +251,7 @@ class TestQdrantBackendDelete:
         active_counts = 0
         max_active_counts = 0
 
-        async def fake_count(*args: object, **kwargs: object) -> CountResult:
+        async def fake_count[**P](*args: P.args, **kwargs: P.kwargs) -> CountResult:
             """Executa a operação fake count."""
             nonlocal active_counts, max_active_counts
             active_counts += 1
@@ -262,7 +262,7 @@ class TestQdrantBackendDelete:
             finally:
                 active_counts -= 1
 
-        async def fake_delete(*args: object, **kwargs: object) -> None:
+        async def fake_delete[**P](*args: P.args, **kwargs: P.kwargs) -> None:
             """Executa a operação fake delete."""
             nonlocal count
             await asyncio.sleep(0)

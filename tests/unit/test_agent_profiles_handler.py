@@ -31,10 +31,8 @@ async def db(tmp_path, monkeypatch):
     from backend.services import agent_profiles as ap
 
     caminho = tmp_path / "agent_profiles.db"
-    conn: Any = await aiosqlite.connect(caminho)
-    conn.row_factory = lambda c, r: dict(
-        zip([col[0] for col in c.description], r, strict=False)
-    )
+    conn = await aiosqlite.connect(caminho)
+    conn.row_factory = aiosqlite.Row
     await conn.executescript(
         """
         CREATE TABLE vectora_agent_profiles (

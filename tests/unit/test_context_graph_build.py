@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from backend.vtypes.contracts import JsonObject, JsonValue
+
 
 def _extraction(
     nodes: list[dict] | None = None,
@@ -25,7 +27,9 @@ def _extraction(
     }
 
 
-def _node(nid: str, label: str = "", source_file: str = "a.py", **kw: object) -> dict:
+def _node(
+    nid: str, label: str = "", source_file: str = "a.py", **kw: JsonValue
+) -> JsonObject:
     return {
         "id": nid,
         "label": label or nid,

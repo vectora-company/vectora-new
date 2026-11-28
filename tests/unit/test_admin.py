@@ -8,9 +8,12 @@ Verifica:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
+from starlette.requests import Request
 
 from backend.vtypes.contracts import JsonValue
 
@@ -351,7 +354,7 @@ class TestInviteLinkAndTypedResponses:
     """O link do convite abre o app onde ele é servido; as respostas são tipadas."""
 
     @staticmethod
-    def _admin_request(base_url: str = "http://app.test:8080/") -> Any:
+    def _admin_request(base_url: str = "http://app.test:8080/") -> MagicMock:
         from unittest.mock import MagicMock
 
         request = MagicMock()
@@ -500,7 +503,7 @@ class TestToggleToolGlobal:
         monkeypatch.setattr(tool_policy, "_policy_dir", lambda: tmp_path / "tools")
 
     @staticmethod
-    def _admin_request() -> Any:
+    def _admin_request() -> MagicMock:
         from unittest.mock import MagicMock
 
         request = MagicMock()
@@ -692,13 +695,10 @@ class TestServiceTokenEndpoints:
             await auth_mod._db_conn.close()
             auth_mod._db_conn = None
 
-    def _req(self, role: str = "root") -> Any:
-        class _Req:
-            state = type(
-                "S", (), {"user": type("U", (), {"role": role, "id": "root-1"})()}
-            )()
-
-        return _Req()
+    def _req(self, role: str = "root") -> MagicMock:
+        request = MagicMock(spec=Request)
+        request.state = SimpleNamespace(user=SimpleNamespace(role=role, id="root-1"))
+        return request
 
     async def test_root_cria_lista_e_revoga_token(self) -> None:
         from backend.api.handlers import admin
@@ -746,7 +746,7 @@ class TestResolveAgent:
     precisar vasculhar logs."""
 
     @staticmethod
-    def _req(role: str = "admin") -> Any:
+    def _req(role: str = "admin") -> MagicMock:
         from unittest.mock import MagicMock
 
         request = MagicMock()
@@ -795,7 +795,7 @@ class TestResolveAgent:
 
 class TestTracerAdministration:
     @staticmethod
-    def _request(role: str = "admin") -> Any:
+    def _request(role: str = "admin") -> MagicMock:
         from unittest.mock import MagicMock
 
         request = MagicMock()
@@ -907,7 +907,7 @@ class TestToolAccessByRole:
         monkeypatch.setattr(tool_policy, "_policy_dir", lambda: tmp_path / "tools")
 
     @staticmethod
-    def _request(role: str = "admin") -> Any:
+    def _request(role: str = "admin") -> MagicMock:
         from unittest.mock import MagicMock
 
         request = MagicMock()

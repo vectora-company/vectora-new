@@ -12,7 +12,9 @@ import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import MagicMock
 
+import aiosqlite
 import pytest
 from fastapi import BackgroundTasks, HTTPException, Request
 
@@ -42,7 +44,10 @@ from backend.services import agent_factory
 from backend.services.agent_factory import NativeAgent
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.registry import ToolRegistry
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import VMessageChunk
+from tests.chat_fakes import ScriptedChatClient, texto_chunk
+from tests.native_engine import patch_native_engine
 
 _UUID = "aa844f17-7e0e-4b0a-8991-c3aab9bdcc63"
 _OUTRO_UUID = "bb844f17-7e0e-4b0a-8991-c3aab9bdcc64"
@@ -52,9 +57,11 @@ _SCHEMA = (
 _REAL_IS_THREAD_DELETED = thread_handler._is_thread_deleted
 
 
-def _req(uid: str | None = _UUID) -> Any:
+def _req(uid: str | None = _UUID) -> MagicMock:
     user = SimpleNamespace(id=uid) if uid is not None else None
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    request = MagicMock(spec=Request)
+    request.state = SimpleNamespace(user=user)
+    return request
 
 
 @pytest.fixture
@@ -64,11 +71,9 @@ async def db(tmp_path, monkeypatch):
 
     import aiosqlite
 
-    async def _connect() -> Any:
-        conn: Any = await aiosqlite.connect(db_path)
-        conn.row_factory = lambda c, r: dict(
-            zip([col[0] for col in c.description], r, strict=False)
-        )
+    async def _connect() -> aiosqlite.Connection:
+        conn = await aiosqlite.connect(db_path)
+        conn.row_factory = aiosqlite.Row
         return conn
 
     setup = await _connect()
@@ -108,56 +113,6 @@ def _pro_tier_by_default(monkeypatch) -> None:
     """Tarefas `webhook` exigem tier pro — este arquivo cobre o handler
     REST, não o gating em si (coberto em test_services_background.py)."""
     monkeypatch.setenv("VECTORA_LICENSE_BYPASS", "1")
-
-
-class _ScriptedChatClient:
-    """Cliente de chat fake — devolve um único turno de texto puro (sem
-    tool call), suficiente pra exercitar o handler REST ponta a ponta."""
-
-    def __init__(self, texto: str) -> None:
-        self._texto = texto
-
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
-        yield VMessageChunk(delta_text=self._texto)
-
-
-def _patch_native_engine(
-    monkeypatch, *, session_store: SessionStore, texto: str
-) -> None:
-    """Substitui as dependências que `run_task`/`resume_background_run`
-    resolvem via `agent_factory` (motor nativo) + `FallbackChatClient` —
-    mesmo padrão de `tests/unit/test_services_background.py`."""
-    native_agent = NativeAgent(
-        tool_registry=ToolRegistry(),
-        subagent_catalog={},
-        system_prompt="system prompt de teste",
-    )
-
-    async def _fake_get_native_agent(
-        user_id: str | None = None,
-        chat_mode: bool = False,
-        workspace_id: str | None = None,
-    ) -> NativeAgent:
-        return native_agent
-
-    async def _fake_get_session_store() -> SessionStore:
-        return session_store
-
-    approval_gate = ApprovalGate(session_store)
-
-    async def _fake_get_approval_gate() -> ApprovalGate:
-        return approval_gate
-
-    async def _fake_get_store() -> None:
-        return None
-
-    monkeypatch.setattr(agent_factory, "get_native_agent", _fake_get_native_agent)
-    monkeypatch.setattr(agent_factory, "get_session_store", _fake_get_session_store)
-    monkeypatch.setattr(agent_factory, "get_approval_gate", _fake_get_approval_gate)
-    monkeypatch.setattr(agent_factory, "get_store", _fake_get_store)
-    monkeypatch.setattr(
-        bg, "FallbackChatClient", lambda primary_model_id="": _ScriptedChatClient(texto)
-    )
 
 
 @pytest.fixture
@@ -278,7 +233,12 @@ async def test_background_tasks_reject_deleted_session_runs(
     db: str, monkeypatch: pytest.MonkeyPatch, native_session_store: SessionStore
 ) -> None:
     """Runs órfãs não podem ser consultadas após a sessão ser removida."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
     await native_session_store.create_session("deleted-session", user_id=_UUID)
     await native_session_store.delete_session("deleted-session")
 
@@ -304,7 +264,12 @@ async def test_background_task_owner_boundary_uses_same_session(
     db: str, monkeypatch: pytest.MonkeyPatch, native_session_store: SessionStore
 ) -> None:
     """A posse da task continua obrigatória quando a session coincide."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
     await native_session_store.create_session("thread-owner", user_id=_UUID)
     task = await bg.create_task(
         session_id="thread-owner",
@@ -324,7 +289,12 @@ async def test_background_task_owner_can_list_owned_session(
     db: str, monkeypatch: pytest.MonkeyPatch, native_session_store: SessionStore
 ) -> None:
     """O dono pode listar tasks da própria session nativa."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
     await native_session_store.create_session("thread-owner-owned", user_id=_OUTRO_UUID)
     owned = await bg.create_task(
         session_id="thread-owner-owned",
@@ -344,7 +314,12 @@ async def test_native_session_keeps_access_after_deleted_task_run(
     native_session_store: SessionStore,
 ) -> None:
     """Runs órfãs não invalidam a sessão nativa nem aparecem na listagem."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
     session_id = "native-session-with-history"
     await native_session_store.create_session(session_id, user_id=_UUID)
     surviving = await bg.create_task(
@@ -395,7 +370,12 @@ async def test_missing_session_rejects_orphan_run_even_with_owned_task(
     native_session_store: SessionStore,
 ) -> None:
     """Tasks não podem reabrir acesso a runs cujo card já foi apagado."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
 
     class _MissingSessionStore:
         async def get_session(self, thread_id: str) -> None:
@@ -444,7 +424,12 @@ async def test_post_task_registers_missing_native_session(
     db: str, monkeypatch: pytest.MonkeyPatch, native_session_store: SessionStore
 ) -> None:
     """A primeira task persiste a session gerada antes do primeiro chat."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
     thread_id = "thread-first-task"
     assert await native_session_store.get_session(thread_id) is None
 
@@ -470,7 +455,12 @@ async def test_first_workspace_task_persists_workspace_on_session(
     db: str, monkeypatch: pytest.MonkeyPatch, native_session_store: SessionStore
 ) -> None:
     """A task can be the first operation without losing its workspace scope."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
 
     def _allow_workspace_access(workspace_id: str, request: Request) -> None:
         del workspace_id, request
@@ -504,22 +494,19 @@ async def test_post_task_cannot_recreate_tombstoned_session(
     db: str, monkeypatch: pytest.MonkeyPatch, native_session_store: SessionStore
 ) -> None:
     """A deleted ID cannot be reclaimed to reach retained task history."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
     thread_id = "thread-deleted-tombstone"
     import aiosqlite
 
     async def _connect_checkpoints() -> aiosqlite.Connection:
         conn: aiosqlite.Connection = await aiosqlite.connect(db)
 
-        def _row_factory(
-            cursor: sqlite3.Cursor, row: tuple[object, ...]
-        ) -> dict[str, object]:
-            return dict(zip([col[0] for col in cursor.description], row, strict=False))
-
-        conn.row_factory = cast(
-            "type",
-            _row_factory,
-        )
+        conn.row_factory = aiosqlite.Row
         return conn
 
     monkeypatch.setattr(thread_handler, "_get_db", _connect_checkpoints)
@@ -830,7 +817,12 @@ async def test_get_board_comment_count_e_progress_batelados_nao_por_card(db) -> 
 async def test_manual_run_creates_run_and_registers_thread(
     db, monkeypatch, native_session_store
 ) -> None:
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
     await native_session_store.create_session("thread-run", user_id=_UUID)
 
     upserts: list[str] = []
@@ -881,7 +873,12 @@ async def test_manual_run_com_subagent_type_roda_a_soul_ate_o_fim(
     SOUL pedida até `status == "done"`, mesmo caminho que
     `test_manual_run_creates_run_and_registers_thread` já prova pro caso
     sem `subagent_type`."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
     await native_session_store.create_session("thread-run-soul", user_id=_UUID)
 
     created = await post_task(
@@ -914,7 +911,12 @@ async def test_resume_run_endpoint_cancel_and_approve(
     enfileira o resume (approve/reject) via BackgroundTasks — mesmo padrão do
     disparo manual. Erro/borda: run inexistente → 404; run que não está
     aguardando aprovação → 409."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store, texto="feito")
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]], repeat=True),
+    )
     await native_session_store.create_session("thread-resume", user_id=_UUID)
     created = await post_task(
         _req(),
@@ -976,8 +978,11 @@ async def test_resume_run_endpoint_cancel_and_approve(
     await bg._insert_run(run_id_2, task, "bg-thread-resume-2", "manual")
     await bg._mark_run_awaiting(run_id_2, "Aguardando aprovação: terminal")
 
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, texto="concluído"
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=ScriptedChatClient([[texto_chunk("concluído")]], repeat=True),
     )
     # `resume_conversation` só age se houver uma aprovação pendente real no
     # SessionStore pro `run_thread_id` — registra a mesma pendência que uma

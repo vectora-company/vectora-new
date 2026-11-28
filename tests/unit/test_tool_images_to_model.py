@@ -149,7 +149,7 @@ async def test_provider_que_recusa_imagem_de_ferramenta_recebe_o_turno_sem_ela(
                 )
             yield VMessageChunk(delta_text="ok")
 
-    async def candidates(*_args: object, **_kwargs: object) -> list[str]:
+    async def candidates[**P](*_args: P.args, **_kwargs: P.kwargs) -> list[str]:
         return ["openrouter:modelo"]
 
     monkeypatch.setattr("backend.llm.fallback_chat_client._candidates", candidates)

@@ -10,6 +10,7 @@ import pytest
 from fastapi import Request
 
 from backend.api.handlers.flags import get_prefs, update_prefs
+from backend.vtypes.contracts import JsonValue
 from backend.workspace.runtime_settings import RuntimeSettings
 
 
@@ -19,7 +20,7 @@ class _FakeRequest:
     def __init__(
         self,
         user_id: str | None,
-        body: Any = None,
+        body: JsonValue = None,
         query_params: dict[str, str] | None = None,
     ) -> None:
         user = SimpleNamespace(id=user_id) if user_id else None
@@ -27,13 +28,13 @@ class _FakeRequest:
         self._body = body
         self.query_params = query_params or {}
 
-    async def json(self) -> Any:
+    async def json(self) -> JsonValue:
         return self._body
 
 
 def _req(
     user_id: str | None,
-    body: Any = None,
+    body: JsonValue = None,
     query_params: dict[str, str] | None = None,
 ) -> Request:
     """`_FakeRequest` visto como `Request` — os handlers só tocam `.state.user`

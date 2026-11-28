@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from backend.services import tool_resolver
+from backend.vtypes.contracts import JsonObject
 
 
 class _FakeTool:
@@ -90,12 +91,14 @@ async def test_workspace_skill_resolution_usa_diretorio_autorizado(
 ) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 
-    async def _no_mcp(_uid: str, **_kwargs: object) -> list[_FakeTool]:
+    async def _no_mcp[**P](
+        _uid: str, *_args: P.args, **_kwargs: P.kwargs
+    ) -> list[_FakeTool]:
         return []
 
-    captured: dict[str, object] = {}
+    captured: dict[str, str | None] = {}
 
-    def _list_paths(_uid: str, **kwargs: object) -> list[object]:
+    def _list_paths(_uid: str, **kwargs: str | None) -> list[str]:
         captured.update(kwargs)
         return []
 

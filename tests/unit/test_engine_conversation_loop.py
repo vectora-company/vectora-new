@@ -11,7 +11,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, TypedDict, Unpack
 from unittest.mock import AsyncMock, Mock
 
 import aiosqlite
@@ -56,7 +56,7 @@ from backend.tools import media as _media_module
 from backend.tools import planning as _planning_module
 from backend.tools.context import ToolContext
 from backend.tools.registry import TOOL_REGISTRY, ToolExtras, ToolRegistry, vtool
-from backend.vtypes.contracts import JsonObject
+from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -65,6 +65,12 @@ from backend.vtypes.message import (
     VMessage,
     VMessageChunk,
 )
+from tests.chat_fakes import ScriptedChatClient, tool_call_chunk
+
+
+class _ScheduledTask(TypedDict):
+    instruction: str
+    trigger_config: JsonObject
 
 
 @pytest.mark.parametrize(
@@ -83,7 +89,7 @@ async def test_harness_telemetry_records_complete_turn_lifecycle(
     monkeypatch.setattr(telemetry, "turn_end", end)
     monkeypatch.setattr(telemetry, "record_error", record_error)
 
-    async def invoke(*, config: Any, thread_id: str) -> Any:
+    async def invoke(*, config: SimpleNamespace, thread_id: str) -> SimpleNamespace:
         if outcome == "error":
             raise ValueError("prompt and credential payload")
         if outcome == "cancel":
@@ -127,31 +133,6 @@ def _register(registry: ToolRegistry, nome: str) -> None:
     spec = TOOL_REGISTRY.get(nome)
     assert spec is not None
     registry.register(spec)
-
-
-class _ScriptedChatClient:
-    """`astream` devolve um turno por chamada, na ordem do script — cada
-    turno é a lista de `VMessageChunk` que o iteração daquela volta do loop
-    deve produzir."""
-
-    def __init__(self, turnos: list[list[VMessageChunk]]) -> None:
-        """Inicializa o estado da instância."""
-        self._turnos = turnos
-        self.chamadas = 0
-
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
-        """Executa a operação astream."""
-        turno = self._turnos[self.chamadas]
-        self.chamadas += 1
-        for chunk in turno:
-            yield chunk
-
-    async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
-        """Executa a operação agenerate."""
-        msg = "não usado pelo loop (astream-only)"
-        raise NotImplementedError(msg)
 
 
 @pytest.mark.parametrize(
@@ -296,15 +277,6 @@ async def test_load_persistent_context_memories_uses_memory_tool_namespace() -> 
     assert [record.id for record in records] == ["rule"]
     assert records[0].content == "Use testes determinísticos"
     assert records[0].metadata == {"domain": "project"}
-
-
-def _tool_call_chunk(*, index: int, id: str, name: str, args: str) -> VMessageChunk:  # noqa: A002
-    """Executa a operação  tool call chunk."""
-    return VMessageChunk(
-        tool_call_chunks=[
-            ToolCallChunk(index=index, id=id, name=name, args_fragment=args)
-        ]
-    )
 
 
 @pytest.mark.asyncio
@@ -473,10 +445,10 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
     try:
         result = await run_conversation(
             session_store=session_store,
-            chat_client=_ScriptedChatClient(
+            chat_client=ScriptedChatClient(
                 [
                     [
-                        _tool_call_chunk(
+                        tool_call_chunk(
                             index=0,
                             id="surface-call",
                             name=tool_name,
@@ -704,7 +676,7 @@ async def test_preapproval_never_overrides_revocation_or_human_decision(
     ctx: ToolContext,
     tmp_path,
     monkeypatch,
-    extra: dict[str, object],
+    extra: JsonObject,
     decision: str | None,
 ) -> None:
     from backend.engine.hitl import _risk_assessment_key
@@ -902,7 +874,7 @@ class TestParadaNormal:
 
         result = await run_conversation(
             session_store=session_store,
-            chat_client=_ScriptedChatClient([[_text_chunk("ok")]]),
+            chat_client=ScriptedChatClient([[_text_chunk("ok")]]),
             tool_registry=ToolRegistry(),
             ctx=ctx,
             thread_id="thread-1",
@@ -937,7 +909,7 @@ class TestParadaNormal:
 
         result = await run_conversation(
             session_store=session_store,
-            chat_client=_ScriptedChatClient([[_text_chunk("ok")]]),
+            chat_client=ScriptedChatClient([[_text_chunk("ok")]]),
             tool_registry=ToolRegistry(),
             ctx=ctx,
             thread_id="thread-1",
@@ -976,7 +948,7 @@ class TestParadaNormal:
                 },
             },
         )
-        client = _ScriptedChatClient([[_text_chunk("não deveria chamar")]])
+        client = ScriptedChatClient([[_text_chunk("não deveria chamar")]])
 
         result = await run_conversation(
             session_store=session_store,
@@ -998,7 +970,7 @@ class TestParadaNormal:
         self, session_store, ctx
     ) -> None:
         """Verifica o comportamento de sem tool calls para no primeiro turno."""
-        client = _ScriptedChatClient([[_text_chunk("olá!")]])
+        client = ScriptedChatClient([[_text_chunk("olá!")]])
         result = await run_conversation(
             session_store=session_store,
             chat_client=client,
@@ -1023,7 +995,7 @@ class TestParadaNormal:
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Verifica o comportamento de resposta vazia emite erro diagnosticavel."""
-        client = _ScriptedChatClient([[]])
+        client = ScriptedChatClient([[]])
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -1070,10 +1042,10 @@ class TestParadaNormal:
 
         registry = ToolRegistry()
         _register(registry, "lembrar")
-        turn = [_tool_call_chunk(index=0, id="", name="lembrar", args="{}")]
+        turn = [tool_call_chunk(index=0, id="", name="lembrar", args="{}")]
 
         for _ in range(2):
-            client = _ScriptedChatClient([turn, [_text_chunk("fim")]])
+            client = ScriptedChatClient([turn, [_text_chunk("fim")]])
             result = await run_conversation(
                 session_store=session_store,
                 chat_client=client,
@@ -1108,8 +1080,8 @@ class TestMaxIterations:
         registry = ToolRegistry()
         _register(registry, "loop_tool")
 
-        turno = [_tool_call_chunk(index=0, id="call_1", name="loop_tool", args="{}")]
-        client = _ScriptedChatClient([turno, turno, turno])
+        turno = [tool_call_chunk(index=0, id="call_1", name="loop_tool", args="{}")]
+        client = ScriptedChatClient([turno, turno, turno])
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -1151,9 +1123,9 @@ class TestGuardrailDeRepeticao:
 
         # Caminho feliz: 3 chamadas seguidas com args idênticos disparam o aviso.
         repeated_turn = [
-            _tool_call_chunk(index=0, id="call_1", name="buscar", args='{"query":"x"}')
+            tool_call_chunk(index=0, id="call_1", name="buscar", args='{"query":"x"}')
         ]
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [repeated_turn, repeated_turn, repeated_turn, [_text_chunk("fim")]]
         )
         events: list[EngineEvent] = []
@@ -1180,20 +1152,20 @@ class TestGuardrailDeRepeticao:
 
         # Borda: mesma tool, args diferentes a cada chamada — nunca dispara.
         await session_store.create_session("thread-2", user_id="alice")
-        client2 = _ScriptedChatClient(
+        client2 = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="c1", name="buscar", args='{"query":"a"}'
                     )
                 ],
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="c2", name="buscar", args='{"query":"b"}'
                     )
                 ],
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="c3", name="buscar", args='{"query":"c"}'
                     )
                 ],
@@ -1232,7 +1204,7 @@ class TestGuardrailDeRepeticao:
         _register(registry, "buscar")
         chamadas = [
             [
-                _tool_call_chunk(
+                tool_call_chunk(
                     index=0,
                     id=f"call_{i}",
                     name="buscar",
@@ -1241,7 +1213,7 @@ class TestGuardrailDeRepeticao:
             ]
             for i in range(6)
         ]
-        client = _ScriptedChatClient(chamadas)
+        client = ScriptedChatClient(chamadas)
         events: list[EngineEvent] = []
 
         await session_store.create_session(
@@ -1297,10 +1269,10 @@ class TestToolCallsSequenciais:
         registry = ToolRegistry()
         _register(registry, "somar")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="somar", args='{"a":1,"b":2}'
                     )
                 ],
@@ -1349,11 +1321,11 @@ class TestToolCallsParalelos:
         _register(registry, "ler_a")
         _register(registry, "ler_b")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(index=0, id="call_1", name="ler_a", args="{}"),
-                    _tool_call_chunk(index=1, id="call_2", name="ler_b", args="{}"),
+                    tool_call_chunk(index=0, id="call_1", name="ler_a", args="{}"),
+                    tool_call_chunk(index=1, id="call_2", name="ler_b", args="{}"),
                 ],
                 [_text_chunk("terminei")],
             ]
@@ -1394,13 +1366,13 @@ class TestHitl:
         _register(registry, "ler_arquivo")
         _register(registry, "escrever_arquivo")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="ler_arquivo", args="{}"
                     ),
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=1, id="call_2", name="escrever_arquivo", args="{}"
                     ),
                 ]
@@ -1441,9 +1413,9 @@ class TestHitl:
         registry = ToolRegistry()
         _register(registry, "deletar")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
-                [_tool_call_chunk(index=0, id="call_1", name="deletar", args="{}")],
+                [tool_call_chunk(index=0, id="call_1", name="deletar", args="{}")],
                 [_text_chunk("feito")],
             ]
         )
@@ -1466,7 +1438,7 @@ class TestEmissaoDeEventos:
         self, session_store, ctx
     ) -> None:
         """Verifica o comportamento de token e message break emitidos na ordem."""
-        client = _ScriptedChatClient([[_text_chunk("oi"), _text_chunk(" tudo bem")]])
+        client = ScriptedChatClient([[_text_chunk("oi"), _text_chunk(" tudo bem")]])
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -1504,10 +1476,10 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "adicionar")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="adicionar", args='{"a":1,"b":2}'
                     )
                 ],
@@ -1548,8 +1520,8 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "escrever")
 
-        client = _ScriptedChatClient(
-            [[_tool_call_chunk(index=0, id="call_1", name="escrever", args="{}")]]
+        client = ScriptedChatClient(
+            [[tool_call_chunk(index=0, id="call_1", name="escrever", args="{}")]]
         )
         events: list[EngineEvent] = []
 
@@ -1585,10 +1557,10 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "write_terminal")
         segredo = "sk-test ghp_secret AKIAEXAMPLE"
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call-terminal",
                         name="write_terminal",
@@ -1623,7 +1595,7 @@ class TestEmissaoDeEventos:
         assert segredo not in json.dumps([message.to_dict() for message in history])
         assert pending["args"]["input_preview"] == "<redacted>"
 
-        chamadas: list[dict[str, object]] = []
+        chamadas: list[JsonObject] = []
 
         async def fake_execute(
             tool_call: ToolCall,
@@ -1678,10 +1650,10 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "somar3")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="somar3", args='{"a":1,"b":2}'
                     )
                 ],
@@ -1738,9 +1710,9 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "escrever2")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
-                [_tool_call_chunk(index=0, id="call_1", name="escrever2", args="{}")],
+                [tool_call_chunk(index=0, id="call_1", name="escrever2", args="{}")],
                 [_text_chunk("pronto")],
             ]
         )
@@ -1783,10 +1755,10 @@ class TestArgsPreview:
         registry = ToolRegistry()
         _register(registry, "ler_arquivo")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="ler_arquivo",
@@ -1832,10 +1804,10 @@ class TestArgsPreview:
         _register(registry, "buscar")
 
         termo_longo = "x" * 120
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="buscar",
@@ -1882,10 +1854,10 @@ class TestArgsPreview:
         registry = ToolRegistry()
         _register(registry, "somar4")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="somar4", args='{"a":1,"b":2}'
                     )
                 ],
@@ -1925,10 +1897,10 @@ class TestTodosUpdated:
         ctx.permission_mode = "plan"
         registry = ToolRegistry()
         _register(registry, "write_todos")
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_plan",
                         name="write_todos",
@@ -1983,10 +1955,10 @@ class TestTodosUpdated:
         registry = ToolRegistry()
         _register(registry, "write_todos")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="write_todos",
@@ -2039,9 +2011,9 @@ class TestTodosUpdated:
         registry = ToolRegistry()
         _register(registry, "outra_tool")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
-                [_tool_call_chunk(index=0, id="call_1", name="outra_tool", args="{}")],
+                [tool_call_chunk(index=0, id="call_1", name="outra_tool", args="{}")],
                 [_text_chunk("pronto")],
             ]
         )
@@ -2072,10 +2044,10 @@ class TestTodosUpdated:
         registry = ToolRegistry()
         _register(registry, "write_todos")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="write_todos",
@@ -2206,7 +2178,7 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
                 message for message in messages if message.role is MessageRole.TOOL
             ]
             if call == 0:
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=0,
                     id="validate-before",
                     name="validate_godot_project",
@@ -2221,7 +2193,7 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
                 assert '"status": "error"' in validation.text()
                 assert "scripts/player.gd" in validation.text()
                 assert "scenes/bullet.tscn" in validation.text()
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=0,
                     id="repair-player",
                     name="file_edit",
@@ -2233,7 +2205,7 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
                         }
                     ),
                 )
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=1,
                     id="restore-bullet",
                     name="file_write",
@@ -2249,7 +2221,7 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
                 ]
                 assert len(edits) == 2
                 assert all("[OK]" in message.text() for message in edits)
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=0,
                     id="validate-after",
                     name="validate_godot_project",
@@ -2312,10 +2284,10 @@ class TestLoopCapGuardrail:
         # não confunde com o guardrail de repetição), mas o teto de volume
         # do turno é 2: a 3ª chamada já deveria encerrar o loop.
         turnos = [
-            [_tool_call_chunk(index=0, id=f"c{i}", name="contar", args=f'{{"n":{i}}}')]
+            [tool_call_chunk(index=0, id=f"c{i}", name="contar", args=f'{{"n":{i}}}')]
             for i in range(5)
         ]
-        client = _ScriptedChatClient(turnos)
+        client = ScriptedChatClient(turnos)
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -2358,10 +2330,10 @@ class TestLoopCapGuardrail:
         _register(registry, "contar2")
 
         turnos = [
-            [_tool_call_chunk(index=0, id=f"c{i}", name="contar2", args=f'{{"n":{i}}}')]
+            [tool_call_chunk(index=0, id=f"c{i}", name="contar2", args=f'{{"n":{i}}}')]
             for i in range(2)
         ] + [[_text_chunk("fim")]]
-        client = _ScriptedChatClient(turnos)
+        client = ScriptedChatClient(turnos)
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -2413,10 +2385,10 @@ class TestResumeConversation:
 
         registry = ToolRegistry()
         _register(registry, "browser_resume_failure")
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_browser",
                         name="browser_resume_failure",
@@ -2465,10 +2437,10 @@ class TestResumeConversation:
         registry = ToolRegistry()
         _register(registry, "escrever_arquivo2")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="escrever_arquivo2", args="{}"
                     )
                 ]
@@ -2552,8 +2524,8 @@ class TestResumeConversation:
 
         registry = ToolRegistry()
         _register(registry, "falhar_mcp")
-        client = _ScriptedChatClient(
-            [[_tool_call_chunk(index=0, id="call_mcp", name="falhar_mcp", args="{}")]]
+        client = ScriptedChatClient(
+            [[tool_call_chunk(index=0, id="call_mcp", name="falhar_mcp", args="{}")]]
         )
         gate = ApprovalGate(session_store)
         await run_conversation(
@@ -2600,8 +2572,8 @@ class TestResumeConversation:
         registry = ToolRegistry()
         _register(registry, "deletar_tudo")
 
-        client = _ScriptedChatClient(
-            [[_tool_call_chunk(index=0, id="call_1", name="deletar_tudo", args="{}")]]
+        client = ScriptedChatClient(
+            [[tool_call_chunk(index=0, id="call_1", name="deletar_tudo", args="{}")]]
         )
         gate = ApprovalGate(session_store)
         await run_conversation(
@@ -2665,18 +2637,18 @@ class TestResumeConversation:
         from backend.persistence.telemetry import telemetry
         from backend.services.media_quota import media_quota
 
-        chamadas: list[dict[str, object]] = []
-        eventos_quota: list[tuple[str, dict[str, object]]] = []
+        chamadas: list[JsonObject] = []
+        eventos_quota: list[tuple[str, JsonObject]] = []
 
         async def fake_summary(_user_id: str) -> dict[str, int]:
             """Executa a operação fake summary."""
             return {"remaining": 100, "used": 0, "limit": 100}
 
-        def record_quota(event: str, **fields: object) -> None:
+        def record_quota(event: str, **fields: JsonValue) -> None:
             """Executa a operação record quota."""
             eventos_quota.append((event, fields))
 
-        async def fake_media_handler(**kwargs: object) -> str:
+        async def fake_media_handler(**kwargs: JsonValue) -> str:
             """Executa a operação fake media handler."""
             chamadas.append(kwargs)
             return "mídia gerada"
@@ -2687,10 +2659,10 @@ class TestResumeConversation:
         assert spec is not None
         registry = ToolRegistry()
         registry.register(replace(spec, handler=fake_media_handler))
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="media-call", name=tool_name, args=json.dumps(args)
                     )
                 ]
@@ -2780,13 +2752,13 @@ class TestResumeConversation:
         """Após restart, a pendência continua segura e não reidrata o payload."""
         from backend.services.media_quota import media_quota
 
-        chamadas: list[dict[str, object]] = []
+        chamadas: list[JsonObject] = []
 
         async def fake_summary(_user_id: str) -> dict[str, int]:
             """Executa a operação fake summary."""
             return {"remaining": 100, "used": 0, "limit": 100}
 
-        async def fake_media_handler(**kwargs: object) -> str:
+        async def fake_media_handler(**kwargs: JsonValue) -> str:
             """Executa a operação fake media handler."""
             chamadas.append(kwargs)
             return "mídia gerada"
@@ -2797,10 +2769,10 @@ class TestResumeConversation:
         registry = ToolRegistry()
         registry.register(replace(spec, handler=fake_media_handler))
         gate = ApprovalGate(session_store)
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="media-restart",
                         name=tool_name,
@@ -2847,7 +2819,7 @@ class TestResumeConversation:
             )
         )
 
-        client = _ScriptedChatClient([[_text_chunk("olá")]])
+        client = ScriptedChatClient([[_text_chunk("olá")]])
         registry = ToolRegistry()
 
         assert "untrusted_content" not in ctx._extra
@@ -2981,14 +2953,10 @@ async def test_plan_sandbox_write_does_not_authorize_push_and_human_approval_sur
             content=[ContentBlock(kind="text", text="write then push")],
         ),
     )
-    client = _ScriptedChatClient(
+    client = ScriptedChatClient(
         [
-            [
-                _tool_call_chunk(
-                    index=0, id="write-exempt", name="file_write", args="{}"
-                )
-            ],
-            [_tool_call_chunk(index=0, id="push-approved", name="git_push", args="{}")],
+            [tool_call_chunk(index=0, id="write-exempt", name="file_write", args="{}")],
+            [tool_call_chunk(index=0, id="push-approved", name="git_push", args="{}")],
         ]
     )
     gate = ApprovalGate(session_store)
@@ -3028,9 +2996,9 @@ async def test_plan_sandbox_write_does_not_authorize_push_and_human_approval_sur
     )
     continued = await run_conversation(
         session_store=session_store,
-        chat_client=_ScriptedChatClient(
+        chat_client=ScriptedChatClient(
             [
-                [_tool_call_chunk(index=0, id="push-next", name="git_push", args="{}")],
+                [tool_call_chunk(index=0, id="push-next", name="git_push", args="{}")],
                 [_text_chunk("done")],
             ]
         ),
@@ -3141,10 +3109,10 @@ async def test_plan_proposal_approval_and_stages_complete_through_harness(
     ctx.permission_mode = "plan"
     registry = ToolRegistry()
     _register(registry, "write_todos")
-    client = _ScriptedChatClient(
+    client = ScriptedChatClient(
         [
             [
-                _tool_call_chunk(
+                tool_call_chunk(
                     index=0,
                     id="call_plan_integration",
                     name="write_todos",
@@ -3191,9 +3159,9 @@ async def test_plan_proposal_approval_and_stages_complete_through_harness(
         "backend.services.agent_factory.get_session_store", get_sessions
     )
 
-    scheduled: list[dict[str, Any]] = []
+    scheduled: list[_ScheduledTask] = []
 
-    async def create_task(**kwargs):
+    async def create_task(**kwargs: Unpack[_ScheduledTask]):
         scheduled.append(kwargs)
         return SimpleNamespace(id=f"task-{len(scheduled)}")
 
@@ -3340,7 +3308,7 @@ async def test_conversation_enforces_user_subagent_ban_before_and_during_dispatc
             self.offered_tool_names = {tool.name for tool in tools or []}
             assert "delegate_to_subagent" not in self.offered_tool_names
             if self.calls == 1:
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=0,
                     id="forbidden-delegation",
                     name="delegate_to_subagent",

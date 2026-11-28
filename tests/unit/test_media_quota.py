@@ -2,6 +2,7 @@ import asyncio
 import os
 import sqlite3
 from pathlib import Path
+from types import TracebackType
 
 import pytest
 
@@ -270,7 +271,9 @@ class _FakeConnection:
     def __init__(self, row: dict[str, int]) -> None:
         self.row = row
 
-    async def fetchrow(self, _query: str, *_args: object) -> dict[str, int]:
+    async def fetchrow[**P](
+        self, _query: str, *_args: P.args, **_kwargs: P.kwargs
+    ) -> dict[str, int]:
         return self.row
 
 
@@ -281,7 +284,12 @@ class _FakeAcquire:
     async def __aenter__(self) -> _FakeConnection:
         return self.connection
 
-    async def __aexit__(self, *_args: object) -> None:
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
         return None
 
 

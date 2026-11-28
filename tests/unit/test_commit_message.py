@@ -268,7 +268,7 @@ class TestGenerate:
     async def test_unavailable_model_falls_back_to_the_diff_heuristic(
         self, monkeypatch
     ) -> None:
-        def boom(*_args: object) -> None:
+        def boom[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
             raise RuntimeError("sem provider")
 
         monkeypatch.setattr("backend.services.utils.load_native_llm", boom)

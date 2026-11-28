@@ -20,6 +20,7 @@ from backend.api.schemas import (
     _max_base64_length,
 )
 from backend.llm.transcription import TranscriptionError
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 def test_transcreve_audio_com_sucesso() -> None:
@@ -174,13 +175,13 @@ def test_local_transcription_probe_runs_cached_model_without_network(
     )
     snapshot.mkdir(parents=True)
     (snapshot / "model.bin").write_bytes(b"weights")
-    calls: list[dict[str, object]] = []
+    calls: list[JsonObject] = []
 
     class FakeWhisperModel:
-        def __init__(self, model_path: str, **kwargs: object) -> None:
+        def __init__(self, model_path: str, **kwargs: JsonValue) -> None:
             calls.append({"model_path": model_path, **kwargs})
 
-        def transcribe(self, audio: object, **kwargs: object):
+        def transcribe(self, audio: str, **kwargs: JsonValue):
             calls.append({"audio": audio, **kwargs})
             return iter(()), object()
 

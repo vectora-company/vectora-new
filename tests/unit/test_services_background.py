@@ -18,15 +18,24 @@ import pytest
 
 import backend
 from backend.engine.hitl import ApprovalGate
+from backend.engine.subagents import SubagentSpec
 from backend.persistence.native.session_store import SessionStore
 from backend.scheduling import background_tasks as bg
+from backend.scheduling.background_tasks import BackgroundTask
 from backend.services import agent_factory
 from backend.services.agent_factory import NativeAgent
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
-from backend.tools.registry import ToolRegistry
-from backend.vtypes.contracts import JsonObject
+from backend.tools.registry import ToolRegistry, ToolSpec
+from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.vtypes.message import ToolCallChunk, VMessageChunk
+from tests.chat_fakes import (
+    ScriptedChatClient,
+    require_spec,
+    texto_chunk,
+    tool_call_chunk,
+)
+from tests.native_engine import patch_native_engine
 
 _SCHEMA = (
     Path(backend.__file__).parent / "storage" / "migrations" / "sqlite" / "schema.sql"
@@ -45,11 +54,9 @@ async def db(tmp_path, monkeypatch):
 
     import aiosqlite
 
-    async def _connect() -> Any:
-        conn: Any = await aiosqlite.connect(db_path)
-        conn.row_factory = lambda c, r: dict(
-            zip([col[0] for col in c.description], r, strict=False)
-        )
+    async def _connect() -> aiosqlite.Connection:
+        conn = await aiosqlite.connect(db_path)
+        conn.row_factory = aiosqlite.Row
         return conn
 
     setup = await _connect()
@@ -89,127 +96,6 @@ async def native_session_store(tmp_path):
 # ---------------------------------------------------------------------------
 # Fakes do motor nativo, usados pra simular run_conversation nos testes.
 # ---------------------------------------------------------------------------
-
-
-def _require_spec(name: str) -> Any:
-    """`TOOL_REGISTRY.get(name)` sem o `| None` — os testes deste arquivo só
-    chamam isto depois de garantir que a tool foi registrada (`@vtool`),
-    então um `None` aqui é bug do próprio teste, não caso de borda real."""
-    from backend.tools.registry import TOOL_REGISTRY
-
-    spec = TOOL_REGISTRY.get(name)
-    if spec is None:
-        msg = f"tool '{name}' não registrada — setup do teste está errado"
-        raise AssertionError(msg)
-    return spec
-
-
-def _texto_chunk(texto: str) -> VMessageChunk:
-    return VMessageChunk(delta_text=texto)
-
-
-def _tool_call_chunk(*, index: int, id: str, name: str, args: str) -> VMessageChunk:  # noqa: A002
-    return VMessageChunk(
-        tool_call_chunks=[
-            ToolCallChunk(index=index, id=id, name=name, args_fragment=args)
-        ]
-    )
-
-
-class _ScriptedChatClient:
-    """Cliente de chat fake — cada `astream` consome o próximo turno
-    pré-roteirizado. Com `exc`, toda chamada levanta a exceção dada em vez
-    de produzir chunks (simula o provider fora do ar)."""
-
-    def __init__(
-        self,
-        turnos: list[list[VMessageChunk]] | None = None,
-        *,
-        exc: Exception | None = None,
-    ) -> None:
-        self._turnos = turnos or []
-        self.chamadas = 0
-        self._exc = exc
-
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
-        self.chamadas += 1
-        if self._exc is not None:
-            raise self._exc
-        turno = self._turnos[self.chamadas - 1]
-        for chunk in turno:
-            yield chunk
-
-    async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
-        msg = "não usado (astream-only)"
-        raise NotImplementedError(msg)
-
-
-class _RecordingChatClientFactory:
-    """Substitui ``FallbackChatClient`` em ``background_tasks.py`` —
-    registra o ``primary_model_id`` de cada chamada e devolve o próximo
-    cliente roteirizado da lista (o último se a lista for mais curta que o
-    número de chamadas)."""
-
-    def __init__(self, clients: Any) -> None:
-        self._clients = clients if isinstance(clients, list) else [clients]
-        self.calls: list[str] = []
-
-    def __call__(self, primary_model_id: str = "") -> Any:
-        self.calls.append(primary_model_id)
-        idx = min(len(self.calls) - 1, len(self._clients) - 1)
-        return self._clients[idx]
-
-
-def _patch_native_engine(
-    monkeypatch,
-    *,
-    session_store: SessionStore,
-    tool_registry: ToolRegistry | None = None,
-    subagent_catalog: dict[str, Any] | None = None,
-    system_prompt: str = "system prompt de teste",
-    chat_client: Any = None,
-) -> _RecordingChatClientFactory:
-    """Substitui as dependências que `run_task`/`resume_background_run`
-    resolvem via `agent_factory` (motor nativo) + o construtor de
-    `FallbackChatClient`."""
-    native_agent = NativeAgent(
-        tool_registry=tool_registry or ToolRegistry(),
-        subagent_catalog=subagent_catalog or {},
-        system_prompt=system_prompt,
-    )
-
-    async def _fake_get_native_agent(
-        user_id: str | None = None,
-        chat_mode: bool = False,
-        workspace_id: str | None = None,
-    ) -> NativeAgent:
-        return native_agent
-
-    async def _fake_get_session_store() -> SessionStore:
-        return session_store
-
-    approval_gate = ApprovalGate(session_store)
-
-    async def _fake_get_approval_gate() -> ApprovalGate:
-        return approval_gate
-
-    async def _fake_get_store() -> None:
-        return None
-
-    monkeypatch.setattr(agent_factory, "get_native_agent", _fake_get_native_agent)
-    monkeypatch.setattr(agent_factory, "get_session_store", _fake_get_session_store)
-    monkeypatch.setattr(agent_factory, "get_approval_gate", _fake_get_approval_gate)
-    monkeypatch.setattr(agent_factory, "get_store", _fake_get_store)
-
-    factory = _RecordingChatClientFactory(
-        chat_client
-        if chat_client is not None
-        else _ScriptedChatClient([[_texto_chunk("ok")]])
-    )
-    monkeypatch.setattr(bg, "FallbackChatClient", factory)
-    return factory
 
 
 # ---------------------------------------------------------------------------
@@ -614,12 +500,12 @@ async def test_tick_pula_interval_atrasada_mas_executa_once_atrasada(
 async def test_run_task_invokes_agent_registers_session_and_records_run(
     db, native_session_store, monkeypatch
 ) -> None:
-    client = _ScriptedChatClient([[_texto_chunk("Tudo certo hoje.")]])
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, chat_client=client
+    client = ScriptedChatClient([[texto_chunk("Tudo certo hoje.")]])
+    patch_native_engine(
+        monkeypatch, module=bg, session_store=native_session_store, chat_client=client
     )
 
-    upserts: list[dict[str, Any]] = []
+    upserts: list[JsonObject] = []
 
     async def _fake_upsert(thread_id, title=None, workspace_id=None) -> None:
         upserts.append(
@@ -669,9 +555,9 @@ async def test_run_task_watchdog_cancela_ao_final_sem_deixar_task_pendente(
     `run_task`, cobrindo todo caminho de saída (aqui, sucesso). Sem o
     cancelamento, uma task asyncio ficaria viva pra sempre depois de cada
     run — vazamento silencioso a cada tarefa executada."""
-    client = _ScriptedChatClient([[_texto_chunk("ok")]])
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, chat_client=client
+    client = ScriptedChatClient([[texto_chunk("ok")]])
+    patch_native_engine(
+        monkeypatch, module=bg, session_store=native_session_store, chat_client=client
     )
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", AsyncMock())
 
@@ -713,13 +599,16 @@ async def test_run_task_heartbeat_e_chamado_periodicamente_durante_execucao_long
         ):
             _SlowChatClient.chamadas += 1
             await asyncio.sleep(0.3)
-            yield _texto_chunk("devagar mas certo")
+            yield texto_chunk("devagar mas certo")
 
         async def agenerate(self, *a, **kw):
             raise NotImplementedError
 
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, chat_client=_SlowChatClient()
+    patch_native_engine(
+        monkeypatch,
+        module=bg,
+        session_store=native_session_store,
+        chat_client=_SlowChatClient(),
     )
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", AsyncMock())
     # Watchdog dispara bem mais rápido que o real (60s) — só pra caber num
@@ -764,9 +653,9 @@ async def test_run_task_com_requires_review_termina_em_review_nao_done(
 ) -> None:
     """`trigger_config.requires_review` desvia o fim de
     uma run bem-sucedida pra `review` em vez de `done` direto."""
-    client = _ScriptedChatClient([[_texto_chunk("Pronto pra revisão.")]])
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, chat_client=client
+    client = ScriptedChatClient([[texto_chunk("Pronto pra revisão.")]])
+    patch_native_engine(
+        monkeypatch, module=bg, session_store=native_session_store, chat_client=client
     )
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", AsyncMock())
 
@@ -793,9 +682,9 @@ async def test_run_task_sem_requires_review_termina_em_done_como_antes(
     """Erro/borda: sem o campo (ou `False`), o comportamento pré-existente
     não muda — `done` direto, mesma regressão que quebraria qualquer task
     manual/webhook/once já em produção."""
-    client = _ScriptedChatClient([[_texto_chunk("Feito.")]])
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, chat_client=client
+    client = ScriptedChatClient([[texto_chunk("Feito.")]])
+    patch_native_engine(
+        monkeypatch, module=bg, session_store=native_session_store, chat_client=client
     )
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", AsyncMock())
 
@@ -823,9 +712,9 @@ async def test_run_task_subagent_type_usa_soul_tool_registry_com_o_usuario_da_ta
     `schedule_subagent_task`) precisa filtrar as tools da SOUL pelo
     `user_id` da task (`_soul_tool_registry`) — diferente da delegação
     síncrona, que já filtrava corretamente."""
-    client = _ScriptedChatClient([[_texto_chunk("feito")]])
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, chat_client=client
+    client = ScriptedChatClient([[texto_chunk("feito")]])
+    patch_native_engine(
+        monkeypatch, module=bg, session_store=native_session_store, chat_client=client
     )
 
     chamadas: list[tuple[str, str | None]] = []
@@ -880,9 +769,9 @@ async def test_run_task_isola_worktree_so_quando_a_soul_precisa_e_ha_workspace(
     =True`) precisa isolar num worktree quando a task tem `workspace_id`;
     uma SOUL read-only/sem filesystem (ex. `planner`, `False`) nunca deve
     chamar isso, mesmo com workspace_id setado."""
-    client = _ScriptedChatClient([[_texto_chunk("feito")], [_texto_chunk("feito")]])
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, chat_client=client
+    client = ScriptedChatClient([[texto_chunk("feito")], [texto_chunk("feito")]])
+    patch_native_engine(
+        monkeypatch, module=bg, session_store=native_session_store, chat_client=client
     )
 
     chamadas: list[tuple[str, str]] = []
@@ -927,12 +816,12 @@ async def test_run_task_isola_worktree_so_quando_a_soul_precisa_e_ha_workspace(
 async def test_run_task_error_path_records_error_and_skips_session(
     db, native_session_store, monkeypatch
 ) -> None:
-    client = _ScriptedChatClient(exc=RuntimeError("LLM caiu"))
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, chat_client=client
+    client = ScriptedChatClient(exc=RuntimeError("LLM caiu"))
+    patch_native_engine(
+        monkeypatch, module=bg, session_store=native_session_store, chat_client=client
     )
 
-    called: list[Any] = []
+    called: list[tuple[tuple[str, ...], dict[str, str]]] = []
 
     async def _fake_upsert(*a, **k) -> None:
         called.append((a, k))
@@ -972,10 +861,11 @@ async def test_run_task_incrementa_message_count_da_thread(
     Testa o wiring com mock (o caminho real de I/O de sessão publica eventos
     que não isolam por event-loop nos testes; ListThreads+increment reais têm
     cobertura própria em test_threads_*)."""
-    _patch_native_engine(
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
-        chat_client=_ScriptedChatClient([[_texto_chunk("feito")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("feito")]]),
     )
 
     upserts: list[str] = []
@@ -1013,10 +903,11 @@ async def test_run_task_incrementa_message_count_da_thread(
     # thread sem conteúdo não polui a sidebar.
     upserts.clear()
     increments.clear()
-    _patch_native_engine(
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
-        chat_client=_ScriptedChatClient(exc=RuntimeError("boom")),
+        chat_client=ScriptedChatClient(exc=RuntimeError("boom")),
     )
     task2 = await bg.create_task(
         session_id="sess-vis",
@@ -1043,10 +934,11 @@ async def test_run_task_reporta_conclusao_na_sessao_mae(
     """Ao concluir, a run posta uma mensagem ASSISTANT no histórico da sessão
     que criou a task (task.session_id) via SessionStore.append_message — o
     orquestrador principal fica sabendo que a tarefa terminou."""
-    _patch_native_engine(
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
-        chat_client=_ScriptedChatClient([[_texto_chunk("3 arquivos alterados")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("3 arquivos alterados")]]),
     )
 
     async def _noop(*a, **k):
@@ -1081,7 +973,7 @@ async def test_report_to_parent_session_pula_sem_sessao_mae(
 ) -> None:
     """Erro/borda: sem session_id (ou session_id == run_thread_id) não reporta
     — não há sessão-mãe distinta pra notificar."""
-    _patch_native_engine(monkeypatch, session_store=native_session_store)
+    patch_native_engine(monkeypatch, module=bg, session_store=native_session_store)
 
     task_sem = bg.BackgroundTask(
         id="t",
@@ -1152,22 +1044,17 @@ async def test_run_task_interrupt_marks_awaiting_and_resume_completes(
             return "arquivo escrito"
 
     registry = ToolRegistry()
-    registry.register(_require_spec("escrever_arquivo_bg"))
+    registry.register(require_spec("escrever_arquivo_bg"))
 
     monkeypatch.setattr(bg, "should_require_approval", lambda *_a, **_k: True)
 
-    client1 = _ScriptedChatClient(
-        [
-            [
-                _tool_call_chunk(
-                    index=0, id="call_1", name="escrever_arquivo_bg", args="{}"
-                )
-            ]
-        ]
+    client1 = ScriptedChatClient(
+        [[tool_call_chunk(index=0, id="call_1", name="escrever_arquivo_bg", args="{}")]]
     )
-    client2 = _ScriptedChatClient([[_texto_chunk("arquivo escrito")]])
-    _patch_native_engine(
+    client2 = ScriptedChatClient([[texto_chunk("arquivo escrito")]])
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry,
         chat_client=[client1, client2],
@@ -1371,10 +1258,11 @@ async def test_resume_background_run_rejects_unknown_or_finished_run(
 ) -> None:
     """Erro/borda: resume de run inexistente ou já concluída devolve None sem
     tocar no motor nativo."""
-    _patch_native_engine(
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
-        chat_client=_ScriptedChatClient([[_texto_chunk("x")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("x")]]),
     )
 
     async def _fake_upsert(*a, **k):
@@ -1403,7 +1291,7 @@ async def test_resume_background_run_rejects_unknown_or_finished_run(
 
 async def _run_task_ate_pausar(
     monkeypatch, native_session_store, *, tool_name: str, session_id: str
-) -> tuple[Any, str]:
+) -> tuple[BackgroundTask, str]:
     """Roda `run_task` até pausar em HITL (chamando `tool_name` sinalizada
     como destrutiva) e devolve `(task, run_id)` — helper compartilhado pelos
     testes de decision (reject/edit) de `resume_background_run`."""
@@ -1424,13 +1312,13 @@ async def _run_task_ate_pausar(
         vtool(extras=ToolExtras(destructive=True))(_anotar)
 
     registry = ToolRegistry()
-    registry.register(_require_spec(tool_name))
+    registry.register(require_spec(tool_name))
     monkeypatch.setattr(bg, "should_require_approval", lambda *_a, **_k: True)
 
-    client = _ScriptedChatClient(
+    client = ScriptedChatClient(
         [
             [
-                _tool_call_chunk(
+                tool_call_chunk(
                     index=0,
                     id="call_1",
                     name=tool_name,
@@ -1439,14 +1327,15 @@ async def _run_task_ate_pausar(
             ]
         ]
     )
-    _patch_native_engine(
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry,
         chat_client=client,
     )
 
-    async def _fake_upsert(*_a: Any, **_k: Any) -> None:
+    async def _fake_upsert(*_a: str, **_k: str) -> None:
         return None
 
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _fake_upsert)
@@ -1490,9 +1379,9 @@ async def test_resume_without_pending_approval_finishes_and_blocks(
     assert await kanban.claim_task(task.id, run_id)
     await bg._insert_run(run_id, task, "run-thread-missing", "manual")
     await bg._mark_run_awaiting(run_id, "aguardando aprovação")
-    _patch_native_engine(monkeypatch, session_store=native_session_store)
+    patch_native_engine(monkeypatch, module=bg, session_store=native_session_store)
 
-    async def _without_pending(**_kwargs: object) -> bool:
+    async def _without_pending(**_kwargs: str) -> bool:
         return False
 
     monkeypatch.setattr(bg, "resume_conversation", _without_pending)
@@ -1524,9 +1413,9 @@ async def test_resume_claim_error_finishes_and_blocks(
     assert await kanban.claim_task(task.id, run_id)
     await bg._insert_run(run_id, task, "run-thread-claim-error", "manual")
     await bg._mark_run_awaiting(run_id, "aguardando aprovação")
-    _patch_native_engine(monkeypatch, session_store=native_session_store)
+    patch_native_engine(monkeypatch, module=bg, session_store=native_session_store)
 
-    async def _claim_error(*_args: object, **_kwargs: object) -> bool:
+    async def _claim_error(*_args: str, **_kwargs: str) -> bool:
         raise RuntimeError("banco indisponível")
 
     monkeypatch.setattr(kanban, "ensure_task_claim", _claim_error)
@@ -1554,10 +1443,10 @@ async def test_resume_claim_cancellation_restores_awaiting_state(
     run_id = "run-claim-cancel"
     await bg._insert_run(run_id, task, "run-thread-claim-cancel", "manual")
     await bg._mark_run_awaiting(run_id, "aguardando aprovação")
-    _patch_native_engine(monkeypatch, session_store=native_session_store)
+    patch_native_engine(monkeypatch, module=bg, session_store=native_session_store)
     from backend.scheduling import kanban
 
-    async def _claim_cancelled(*_args: object, **_kwargs: object) -> bool:
+    async def _claim_cancelled(*_args: str, **_kwargs: str) -> bool:
         raise asyncio.CancelledError
 
     monkeypatch.setattr(kanban, "ensure_task_claim", _claim_cancelled)
@@ -1586,12 +1475,13 @@ async def test_resume_background_run_reject_and_edit_decisions(
     from backend.tools.registry import TOOL_REGISTRY
 
     registry_reject = ToolRegistry()
-    registry_reject.register(_require_spec("anotar_bg_reject"))
-    _patch_native_engine(
+    registry_reject.register(require_spec("anotar_bg_reject"))
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry_reject,
-        chat_client=_ScriptedChatClient([[_texto_chunk("rejeitado")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("rejeitado")]]),
     )
 
     status = await bg.resume_background_run(run_id_reject, "reject")
@@ -1608,12 +1498,13 @@ async def test_resume_background_run_reject_and_edit_decisions(
         session_id="sess-edit",
     )
     registry_edit = ToolRegistry()
-    registry_edit.register(_require_spec("anotar_bg_edit"))
-    _patch_native_engine(
+    registry_edit.register(require_spec("anotar_bg_edit"))
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry_edit,
-        chat_client=_ScriptedChatClient([[_texto_chunk("editado")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("editado")]]),
     )
 
     status2 = await bg.resume_background_run(run_id_edit, 'edit:{"valor": "editado"}')
@@ -1666,16 +1557,17 @@ async def test_resume_background_run_repauses_same_turn(
     from backend.tools.registry import TOOL_REGISTRY
 
     registry = ToolRegistry()
-    registry.register(_require_spec("anotar_bg_repause"))
+    registry.register(require_spec("anotar_bg_repause"))
     # 2º turno também pede a mesma tool destrutiva → pausa de novo.
-    _patch_native_engine(
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry,
-        chat_client=_ScriptedChatClient(
+        chat_client=ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_2",
                         name="anotar_bg_repause",
@@ -1710,12 +1602,13 @@ async def test_resume_background_run_run_conversation_exception_marks_error(
     from backend.tools.registry import TOOL_REGISTRY
 
     registry = ToolRegistry()
-    registry.register(_require_spec("anotar_bg_resume_exc"))
-    _patch_native_engine(
+    registry.register(require_spec("anotar_bg_resume_exc"))
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry,
-        chat_client=_ScriptedChatClient(exc=RuntimeError("modelo indisponível")),
+        chat_client=ScriptedChatClient(exc=RuntimeError("modelo indisponível")),
     )
 
     status = await bg.resume_background_run(run_id, "approve")
@@ -1742,12 +1635,13 @@ async def test_resume_background_run_reporta_conclusao_na_sessao_mae(
     from backend.tools.registry import TOOL_REGISTRY
 
     registry = ToolRegistry()
-    registry.register(_require_spec("anotar_bg_report_resume"))
-    _patch_native_engine(
+    registry.register(require_spec("anotar_bg_report_resume"))
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry,
-        chat_client=_ScriptedChatClient([[_texto_chunk("ação concluída")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("ação concluída")]]),
     )
 
     status = await bg.resume_background_run(run_id, "approve")
@@ -2032,12 +1926,13 @@ async def test_approve_task_action_approve_reject_edit(
     from backend.tools.registry import TOOL_REGISTRY
 
     registry = ToolRegistry()
-    registry.register(_require_spec("anotar_bg_tool_approve"))
-    _patch_native_engine(
+    registry.register(require_spec("anotar_bg_tool_approve"))
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry,
-        chat_client=_ScriptedChatClient([[_texto_chunk("ok")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
     )
     ctx = ToolContext(thread_id="sess-approve-tool", user_id="u")
     out_approve = _json.loads(
@@ -2052,12 +1947,13 @@ async def test_approve_task_action_approve_reject_edit(
         session_id="sess-approve-tool",
     )
     registry_reject = ToolRegistry()
-    registry_reject.register(_require_spec("anotar_bg_tool_reject"))
-    _patch_native_engine(
+    registry_reject.register(require_spec("anotar_bg_tool_reject"))
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry_reject,
-        chat_client=_ScriptedChatClient([[_texto_chunk("recusado")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("recusado")]]),
     )
     out_reject = _json.loads(
         await approve_task_action(run_id=run_reject, decision="reject", ctx=ctx)
@@ -2071,12 +1967,13 @@ async def test_approve_task_action_approve_reject_edit(
         session_id="sess-approve-tool",
     )
     registry_edit = ToolRegistry()
-    registry_edit.register(_require_spec("anotar_bg_tool_edit"))
-    _patch_native_engine(
+    registry_edit.register(require_spec("anotar_bg_tool_edit"))
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
         tool_registry=registry_edit,
-        chat_client=_ScriptedChatClient([[_texto_chunk("editado")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("editado")]]),
     )
     out_edit = _json.loads(
         await approve_task_action(
@@ -2215,18 +2112,27 @@ async def test_dispatch_webhook_matches_provider_and_event(db, monkeypatch) -> N
 # ---------------------------------------------------------------------------
 
 
-async def _make_issue_sync_anchor(**overrides: Any) -> Any:
-    cfg: JsonObject = {"provider": "github", "events": ["issues"]}
-    cfg.update(overrides.pop("trigger_config", {}))
+async def _make_issue_sync_anchor(
+    *,
+    trigger_config: JsonObject | None = None,
+    session_id: str = "s-issues",
+    user_id: str = "u1",
+    workspace_id: str | None = "ws1",
+) -> BackgroundTask:
+    cfg: JsonObject = {
+        "provider": "github",
+        "events": ["issues"],
+        **(trigger_config or {}),
+    }
     return await bg.create_task(
-        session_id=overrides.pop("session_id", "s-issues"),
-        user_id=overrides.pop("user_id", "u1"),
+        session_id=session_id,
+        user_id=user_id,
         kind="heartbreak",
         name="sync issues",
         instruction="",
         trigger_type="webhook",
         trigger_config=cfg,
-        workspace_id=overrides.pop("workspace_id", "ws1"),
+        workspace_id=workspace_id,
     )
 
 
@@ -2295,7 +2201,7 @@ async def test_issue_opened_reentrega_atualiza_em_vez_de_duplicar(db) -> None:
 
 
 async def test_issue_closed_moves_card_to_done_without_llm(db, monkeypatch) -> None:
-    calls: list[Any] = []
+    calls: list[tuple[tuple[str, ...], dict[str, str]]] = []
     monkeypatch.setattr(
         agent_factory, "get_native_agent", lambda *a, **k: calls.append((a, k))
     )
@@ -2373,23 +2279,28 @@ async def test_issue_edited_updates_title_and_instruction_without_status_change(
 # ---------------------------------------------------------------------------
 
 
-async def _make_observability_sync_anchor(**overrides: Any) -> Any:
-    cfg = {"provider": "observability"}
-    cfg.update(overrides.pop("trigger_config", {}))
+async def _make_observability_sync_anchor(
+    *,
+    trigger_config: JsonObject | None = None,
+    session_id: str = "s-obs",
+    user_id: str = "u1",
+    workspace_id: str | None = "ws1",
+) -> BackgroundTask:
+    cfg: JsonObject = {"provider": "observability", **(trigger_config or {})}
     return await bg.create_task(
-        session_id=overrides.pop("session_id", "s-obs"),
-        user_id=overrides.pop("user_id", "u1"),
+        session_id=session_id,
+        user_id=user_id,
         kind="heartbreak",
         name="sync observabilidade",
         instruction="",
         trigger_type="webhook",
         trigger_config=cfg,
-        workspace_id=overrides.pop("workspace_id", "ws1"),
+        workspace_id=workspace_id,
     )
 
 
 async def test_alerta_critico_cria_card_em_triage_sem_llm(db, monkeypatch) -> None:
-    calls: list[Any] = []
+    calls: list[tuple[tuple[str, ...], dict[str, str]]] = []
     monkeypatch.setattr(
         agent_factory, "get_native_agent", lambda *a, **k: calls.append((a, k))
     )
@@ -2609,10 +2520,11 @@ async def test_run_task_recorrente_volta_pra_ready_ao_concluir(
     errado pra algo que roda de novo amanhã."""
     from backend.scheduling import kanban
 
-    _patch_native_engine(
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
-        chat_client=_ScriptedChatClient([[_texto_chunk("ok")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
     )
 
     async def _noop_upsert(*_a, **_k) -> None:
@@ -2642,10 +2554,11 @@ async def test_run_task_unica_vira_done_ao_concluir(
 ) -> None:
     from backend.scheduling import kanban
 
-    _patch_native_engine(
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
-        chat_client=_ScriptedChatClient([[_texto_chunk("ok")]]),
+        chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
     )
 
     async def _noop_upsert(*_a, **_k) -> None:
@@ -2677,10 +2590,11 @@ async def test_run_task_erro_vira_blocked_transient_em_vez_de_travar_em_running(
     `running` para sempre."""
     from backend.scheduling import kanban
 
-    _patch_native_engine(
+    patch_native_engine(
         monkeypatch,
+        module=bg,
         session_store=native_session_store,
-        chat_client=_ScriptedChatClient(exc=RuntimeError("LLM caiu")),
+        chat_client=ScriptedChatClient(exc=RuntimeError("LLM caiu")),
     )
 
     task = await bg.create_task(
@@ -2709,9 +2623,9 @@ async def test_run_task_nao_duplica_quando_claim_ja_foi_tomado(
     cria uma 2ª run."""
     from backend.scheduling import kanban
 
-    client = _ScriptedChatClient([[_texto_chunk("ok")]])
-    _patch_native_engine(
-        monkeypatch, session_store=native_session_store, chat_client=client
+    client = ScriptedChatClient([[texto_chunk("ok")]])
+    patch_native_engine(
+        monkeypatch, module=bg, session_store=native_session_store, chat_client=client
     )
 
     async def _noop_upsert(*_a, **_k) -> None:
@@ -2796,10 +2710,8 @@ class TestRunTaskComPerfilDeAgente:
         from backend.services import agent_profiles
 
         async def _connect_profiles():
-            conn: Any = await aiosqlite.connect(db)
-            conn.row_factory = lambda c, r: dict(
-                zip([col[0] for col in c.description], r, strict=False)
-            )
+            conn = await aiosqlite.connect(db)
+            conn.row_factory = aiosqlite.Row
             return conn
 
         monkeypatch.setattr(agent_profiles, "_get_db", _connect_profiles)
@@ -2810,10 +2722,11 @@ class TestRunTaskComPerfilDeAgente:
         profiles = await agent_profiles.list_profiles("u1")
         profile_id = profiles[0].id
 
-        factory = _patch_native_engine(
+        factory = patch_native_engine(
             monkeypatch,
+            module=bg,
             session_store=native_session_store,
-            chat_client=_ScriptedChatClient([[_texto_chunk("ok")]]),
+            chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
         )
 
         async def _noop(*a, **k):
@@ -2843,10 +2756,11 @@ class TestRunTaskComPerfilDeAgente:
     ) -> None:
         """Task sem agent_profile_id nunca chama get_profile nem altera o
         model passado."""
-        factory = _patch_native_engine(
+        factory = patch_native_engine(
             monkeypatch,
+            module=bg,
             session_store=native_session_store,
-            chat_client=_ScriptedChatClient([[_texto_chunk("ok")]]),
+            chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
         )
 
         async def _noop(*a, **k):
@@ -2879,18 +2793,17 @@ class TestRunTaskComPerfilDeAgente:
         from backend.services import agent_profiles
 
         async def _connect_profiles():
-            conn: Any = await aiosqlite.connect(db)
-            conn.row_factory = lambda c, r: dict(
-                zip([col[0] for col in c.description], r, strict=False)
-            )
+            conn = await aiosqlite.connect(db)
+            conn.row_factory = aiosqlite.Row
             return conn
 
         monkeypatch.setattr(agent_profiles, "_get_db", _connect_profiles)
 
-        _patch_native_engine(
+        patch_native_engine(
             monkeypatch,
+            module=bg,
             session_store=native_session_store,
-            chat_client=_ScriptedChatClient([[_texto_chunk("ok")]]),
+            chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
         )
 
         async def _noop(*a, **k):

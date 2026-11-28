@@ -9,10 +9,10 @@ Cobre:
 from __future__ import annotations
 
 import base64
-from contextlib import ExitStack
+from contextlib import AbstractContextManager, ExitStack
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, _patch, patch
 
 import pytest
 from pydantic import ValidationError
@@ -319,7 +319,7 @@ class TestBuildUserVMessage:
 
         called = False
 
-        def fail_create(**_kwargs: object) -> None:
+        def fail_create[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
             nonlocal called
             called = True
             raise ValueError("asset inválido")
@@ -400,7 +400,7 @@ class TestBuildUserVMessage:
 
         from backend.api.handlers.chat import _persist_image_attachment
 
-        def _boom(self, *_a: object, **_kw: object) -> None:
+        def _boom[**P](self, *_a: P.args, **_kw: P.kwargs) -> None:
             raise OSError("disco cheio")
 
         monkeypatch.setattr(PathCls, "mkdir", _boom)
@@ -637,7 +637,7 @@ async def _collect_sse_body(response) -> str:
     )
 
 
-def _native_dispatch_patches() -> list[Any]:
+def _native_dispatch_patches() -> list[_patch[MagicMock | AsyncMock]]:
     """Patches pro motor nativo (`agent_factory.get_native_agent`/
     `get_session_store`/`get_approval_gate`/`get_store` + `run_conversation`
     dentro de `backend.api.handlers.chat`) — usados pelos testes que

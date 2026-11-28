@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from types import TracebackType
 
 import httpx
 import pytest
@@ -494,10 +495,17 @@ async def test_fetch_catalog_descarta_cache_mcp_legado_e_atualiza(monkeypatch) -
         async def __aenter__(self) -> Client:
             return self
 
-        async def __aexit__(self, *_args: object) -> None:
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None:
             return None
 
-        async def get(self, _url: str, **_kwargs: object) -> Response:
+        async def get[**P](
+            self, _url: str, *_args: P.args, **_kwargs: P.kwargs
+        ) -> Response:
             return Response()
 
     monkeypatch.setattr(registry_client, "_read_cache", lambda _kind: legacy)

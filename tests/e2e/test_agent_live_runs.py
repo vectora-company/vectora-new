@@ -23,6 +23,8 @@ import httpx
 import pytest
 
 from backend.settings import settings
+from backend.vtypes.contracts import JsonObject
+from tests.json_values import as_str
 
 pytestmark = pytest.mark.live
 
@@ -44,7 +46,7 @@ async def _stream_chat(
     chat_mode: bool = True,
     workspace_id: str = "",
     timeout_s: float = 120.0,
-) -> list[dict[str, Any]]:
+) -> list[JsonObject]:
     """POST real em ``/vectora.chat.v1.ChatService/StreamChat``, devolve a
     lista de eventos SSE decodificados (``{"type": ..., ...}`` cada um)."""
     payload = {
@@ -52,7 +54,7 @@ async def _stream_chat(
         "content": content,
         "config": {"chat_mode": chat_mode, "workspace_id": workspace_id},
     }
-    events: list[dict[str, Any]] = []
+    events: list[JsonObject] = []
     async with (
         httpx.AsyncClient(base_url=base_url, timeout=timeout_s) as client,
         client.stream(
@@ -67,11 +69,13 @@ async def _stream_chat(
     return events
 
 
-def _assembled_text(events: list[dict[str, Any]]) -> str:
-    return "".join(e.get("content", "") for e in events if e.get("type") == "token")
+def _assembled_text(events: list[JsonObject]) -> str:
+    return "".join(
+        as_str(e.get("content", "")) for e in events if e.get("type") == "token"
+    )
 
 
-def _thread_id_of(events: list[dict[str, Any]]) -> str:
+def _thread_id_of(events: list[JsonObject]) -> str:
     for e in events:
         if e.get("type") == "thread":
             return str(e["thread_id"])

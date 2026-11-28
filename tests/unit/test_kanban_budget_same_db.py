@@ -93,10 +93,8 @@ async def test_kanban_no_checkpoints_db_falharia_com_tabela_ausente(
     checkpoints_like = tmp_path / "checkpoints.db"
 
     async def _get_db_errado():
-        conn: Any = await aiosqlite.connect(str(checkpoints_like))
-        conn.row_factory = lambda c, r: dict(
-            zip([col[0] for col in c.description], r, strict=False)
-        )
+        conn = await aiosqlite.connect(str(checkpoints_like))
+        conn.row_factory = aiosqlite.Row
         return conn
 
     monkeypatch.setattr(kanban, "_get_db", _get_db_errado)

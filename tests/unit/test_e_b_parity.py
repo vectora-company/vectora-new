@@ -15,6 +15,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from backend.vtypes.contracts import JsonObject
+
 # ---------------------------------------------------------------------------
 # VectoraContext
 # ---------------------------------------------------------------------------
@@ -30,7 +32,7 @@ class TestVectoraContext:
         class Preferences:
             def get_frontend_prefs(
                 self, user_id: str, workspace_id: str | None = None
-            ) -> dict[str, object]:
+            ) -> JsonObject:
                 assert user_id == "alice"
                 assert workspace_id is None
                 return {
@@ -65,7 +67,7 @@ class TestVectoraContext:
         class UnavailablePreferences:
             def get_frontend_prefs(
                 self, user_id: str, workspace_id: str | None = None
-            ) -> dict[str, object]:
+            ) -> JsonObject:
                 raise OSError("preferences database unavailable")
 
         monkeypatch.setattr(

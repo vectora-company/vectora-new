@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.engine.conversation_loop import LoopConfig, run_conversation
-from backend.engine.stream_events import VerificationFinished
+from backend.engine.stream_events import EngineEvent, VerificationFinished
 from backend.persistence.native.session_store import SessionStore
 from backend.services.verification.engine import VerificationResult
 from backend.storage.sqlite.pool import AsyncConnectionPool
@@ -64,9 +64,9 @@ async def _run_with_verification(session_store, monkeypatch, result):
     await session_store.append_message(
         "thread-v", text_message(MessageRole.USER, "faça")
     )
-    events: list[object] = []
+    events: list[EngineEvent] = []
 
-    async def on_event(event: object) -> None:
+    async def on_event(event: EngineEvent) -> None:
         events.append(event)
 
     await run_conversation(

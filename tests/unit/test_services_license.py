@@ -6,6 +6,7 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import TracebackType
 
 import pytest
 
@@ -140,14 +141,19 @@ def _patch_remote(
     monkeypatch: pytest.MonkeyPatch, payload: dict, status_code: int = 200
 ) -> None:
     class _FakeClient:
-        def __init__(self, *args: object, **kwargs: object) -> None: ...
+        def __init__[**P](self, *args: P.args, **kwargs: P.kwargs) -> None: ...
 
         async def __aenter__(self) -> _FakeClient:
             return self
 
-        async def __aexit__(self, *exc: object) -> None: ...
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None: ...
 
-        async def post(self, *args: object, **kwargs: object) -> _FakeResponse:
+        async def post[**P](self, *args: P.args, **kwargs: P.kwargs) -> _FakeResponse:
             return _FakeResponse(payload, status_code)
 
     monkeypatch.setattr(lic.httpx, "AsyncClient", _FakeClient)

@@ -90,7 +90,7 @@ class TestSettingField:
     def test_get_set_value_delegam_para_adapter(
         self: TestSettingField, clean_registry: None
     ) -> None:
-        calls: list[tuple[str, object, object | None]] = []
+        calls: list[tuple[str, str, JsonValue]] = []
 
         class _RecordingAdapter:
             def get(self, key: str) -> JsonValue:
@@ -137,7 +137,7 @@ class TestSettingField:
         assert fields_for_category("cat-vazia") == []
 
     def test_get_set_delegam_pro_adapter(self, clean_registry) -> None:
-        calls: list[tuple[str, object]] = []
+        calls: list[tuple[str, JsonValue]] = []
 
         class _RecordingAdapter:
             def get(self, key: str) -> JsonValue:

@@ -19,6 +19,7 @@ from backend.tools.terminal_sessions import (
     read_terminal,
     write_terminal,
 )
+from backend.vtypes.contracts import JsonObject
 
 
 def _fake_session(
@@ -264,7 +265,9 @@ class TestInteractiveTerminalTools:
         session = pty_registry.get("t1")
         assert session is not None
 
-        def read_since(_cursor: int, _limit: int) -> dict[str, object]:
+        def read_since(
+            _cursor: int, _limit: int
+        ) -> dict[str, bytes | int | bool | None]:
             return {
                 "data": b"ok",
                 "cursor": 2,

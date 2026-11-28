@@ -168,7 +168,7 @@ def test_enable_dark_mode_delegates_to_windows_module(
 # ---------------------------------------------------------------------------
 
 
-def _fake_server() -> Any:
+def _fake_server() -> MagicMock:
     srv = MagicMock()
     srv.should_exit = False
     srv.run = MagicMock()

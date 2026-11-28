@@ -14,13 +14,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import BaseModel
 from rich.console import Console as _Console
 
 from backend.cli import infra, keys, marketplace
 from backend.main import _build_parser
 
 
-def _null_console(*_a: object, **_kw: object) -> _Console:
+def _null_console[**P](*_a: P.args, **_kw: P.kwargs) -> _Console:
     return _Console(file=io.StringIO())
 
 
@@ -62,7 +63,7 @@ def test_sem_subcomando_e_help_imprimem_ajuda_sem_subir_servidor(
 ) -> None:
     from backend import main
 
-    def _nao_deve_subir(*_args: object, **_kwargs: object) -> None:
+    def _nao_deve_subir[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
         raise AssertionError("help não pode iniciar o Vectora")
 
     monkeypatch.setattr(main, "_run_start", _nao_deve_subir)
@@ -175,14 +176,14 @@ def test_marketplace_json_envelope_nao_vaza_caminho(
 def test_mcp_install_remove_reutiliza_handlers(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    async def _empty_registry() -> list[object]:
+    async def _empty_registry() -> list[str]:
         return []
 
-    async def _install(request: object, user_id: str) -> dict[str, str]:
+    async def _install(request: BaseModel, user_id: str) -> dict[str, str]:
         calls.append(f"install:{user_id}")
         return {"status": "installed", "mcp_id": "github"}
 
-    async def _remove(request: object, user_id: str) -> dict[str, str]:
+    async def _remove(request: BaseModel, user_id: str) -> dict[str, str]:
         calls.append(f"remove:{user_id}")
         return {"status": "removed", "mcp_id": "github"}
 

@@ -71,8 +71,8 @@ class TestTerminateGracefully:
         wait_for_timeouts: list[float] = []
 
         def _wait_for_with_timeout(
-            awaitable: Coroutine[Any, Any, None], *, timeout: float
-        ) -> Coroutine[Any, Any, None]:
+            awaitable: Coroutine[None, None, None], *, timeout: float
+        ) -> Coroutine[None, None, None]:
             wait_for_timeouts.append(timeout)
 
             async def _consume() -> None:

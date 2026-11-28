@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from backend.vtypes.contracts import JsonObject
+
 # Log de inicialização de cada backend de teste, para os testes anexarem o
 # diagnóstico do app instalado quando uma verificação falha.
 _STARTUP_LOGS: dict[str, Path] = {}
@@ -43,7 +45,7 @@ def _free_loopback_port() -> int:
         return int(listener.getsockname()[1])
 
 
-def _request_json(url: str, timeout: float = 3.0) -> tuple[int, dict[str, object]]:
+def _request_json(url: str, timeout: float = 3.0) -> tuple[int, JsonObject]:
     request = urllib.request.Request(  # noqa: S310
         url, headers={"Accept": "application/json"}
     )

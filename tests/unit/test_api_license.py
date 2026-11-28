@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Awaitable, Callable, Coroutine
 from pathlib import Path
-from types import SimpleNamespace
+from types import SimpleNamespace, TracebackType
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
+from starlette.requests import Request
 
 from backend.api.handlers import license as handler
 from backend.services import license as lic
@@ -53,14 +56,21 @@ def _patch_http(
     calls: list[tuple[str, dict]] = []
 
     class _FakeClient:
-        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+        def __init__[**P](self, *args: P.args, **kwargs: P.kwargs) -> None: ...
 
         async def __aenter__(self) -> _FakeClient:
             return self
 
-        async def __aexit__(self, *exc: object) -> None: ...
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None: ...
 
-        async def post(self, url: str, json: dict | None = None, **kw: Any) -> Any:
+        async def post[**P](
+            self, url: str, json: dict | None = None, *_args: P.args, **kw: P.kwargs
+        ) -> _FakeResponse:
             calls.append((url, json or {}))
             for fragment, (payload, status) in responses.items():
                 if fragment in url:
@@ -72,11 +82,13 @@ def _patch_http(
     return calls
 
 
-def _request_with_role(role: str | None) -> Any:
+def _request_with_role(role: str | None) -> MagicMock:
     """Request fake com request.state.user.role para _require_root."""
     user = SimpleNamespace(role=role) if role else None
     state = SimpleNamespace(user=user)
-    return SimpleNamespace(state=state)
+    request = MagicMock(spec=Request)
+    request.state = state
+    return request
 
 
 # ---------------------------------------------------------------------------
@@ -263,14 +275,14 @@ def test_validate_token_endpoint_exige_ausencia_de_usuarios(
     assert exc.value.status_code == 409
 
 
-def _async_true() -> Any:
+def _async_true() -> Coroutine[None, None, bool]:
     async def _inner() -> bool:
         return True
 
     return _inner()
 
 
-def _async_false() -> Any:
+def _async_false() -> Coroutine[None, None, bool]:
     async def _inner() -> bool:
         return False
 

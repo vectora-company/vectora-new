@@ -244,13 +244,13 @@ def test_whisper_embutido_recebe_audio_decodificado_pelo_ffmpeg(
 
     from backend.tools import media_native
 
-    received: list[object] = []
+    received: list[str] = []
 
     class _FakeModel:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
+        def __init__[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> None:
             pass
 
-        def transcribe(self, audio: object, language: object = None):
+        def transcribe(self, audio: str, language: str | None = None):
             received.append(audio)
             segment = types.SimpleNamespace(text=" olá ")
             info = types.SimpleNamespace(language="pt", language_probability=0.9)

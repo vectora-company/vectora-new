@@ -210,7 +210,7 @@ async def test_plan_mode_respeita_flag_de_decision_model(
         turnos=[_text_turn("feito")],
         judgments=[(True, "objetivo cumprido")],
     )
-    model_calls: list[object] = []
+    model_calls: list[SystemOneHarness] = []
 
     async def evaluate(harness, **kwargs):
         model_calls.append(harness)

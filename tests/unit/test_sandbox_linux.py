@@ -368,7 +368,7 @@ class _FakeSeccompFilter:
 
     def __init__(self, defaction) -> None:
         self.defaction = defaction
-        self.rules: list[tuple[object, str]] = []
+        self.rules: list[tuple[int | str, str]] = []
 
     def add_rule(self, action, name):
         if name == "syscall_inexistente":

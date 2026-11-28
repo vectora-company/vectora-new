@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from backend.engine.hitl import ApprovalGate
+from backend.engine.subagents import SubagentSpec
 from backend.persistence.native.session_store import SessionStore
 from backend.services import agent_factory
 from backend.services.agent_factory import NativeAgent
@@ -21,7 +22,15 @@ from backend.services.connect import runner
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolRegistry
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import ToolCallChunk, VMessageChunk
+from tests.chat_fakes import (
+    ScriptedChatClient,
+    require_spec,
+    texto_chunk,
+    tool_call_chunk,
+)
+from tests.native_engine import patch_native_engine
 
 
 @pytest.fixture
@@ -38,111 +47,16 @@ async def native_session_store(tmp_path):
         await pool.close()
 
 
-def _require_spec(name: str) -> Any:
-    """`TOOL_REGISTRY.get(name)` sem o `| None` — chamado só depois de
-    garantir que a tool foi registrada (`@vtool`) neste próprio teste."""
-    from backend.tools.registry import TOOL_REGISTRY
-
-    spec = TOOL_REGISTRY.get(name)
-    if spec is None:
-        msg = f"tool '{name}' não registrada — setup do teste está errado"
-        raise AssertionError(msg)
-    return spec
-
-
-def _texto_chunk(texto: str) -> VMessageChunk:
-    return VMessageChunk(delta_text=texto)
-
-
-def _tool_call_chunk(*, index: int, id: str, name: str, args: str) -> VMessageChunk:  # noqa: A002
-    return VMessageChunk(
-        tool_call_chunks=[
-            ToolCallChunk(index=index, id=id, name=name, args_fragment=args)
-        ]
-    )
-
-
-class _ScriptedChatClient:
-    """Cliente de chat fake — cada `astream` consome o próximo turno
-    pré-roteirizado. Com `exc`, toda chamada levanta a exceção dada."""
-
-    def __init__(
-        self,
-        turnos: list[list[VMessageChunk]] | None = None,
-        *,
-        exc: Exception | None = None,
-    ) -> None:
-        self._turnos = turnos or []
-        self.chamadas = 0
-        self._exc = exc
-
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
-        self.chamadas += 1
-        if self._exc is not None:
-            raise self._exc
-        turno = self._turnos[self.chamadas - 1]
-        for chunk in turno:
-            yield chunk
-
-    async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
-        msg = "não usado (astream-only)"
-        raise NotImplementedError(msg)
-
-
-def _patch_native_engine(
-    monkeypatch,
-    *,
-    session_store: SessionStore,
-    tool_registry: ToolRegistry | None = None,
-    subagent_catalog: dict[str, Any] | None = None,
-    chat_client: Any = None,
-) -> None:
-    native_agent = NativeAgent(
-        tool_registry=tool_registry or ToolRegistry(),
-        subagent_catalog=subagent_catalog or {},
-        system_prompt="system prompt de teste",
-    )
-
-    async def _fake_get_native_agent(
-        user_id: str | None = None,
-        chat_mode: bool = False,
-        workspace_id: str | None = None,
-    ) -> NativeAgent:
-        return native_agent
-
-    async def _fake_get_session_store() -> SessionStore:
-        return session_store
-
-    approval_gate = ApprovalGate(session_store)
-
-    async def _fake_get_approval_gate() -> ApprovalGate:
-        return approval_gate
-
-    async def _fake_get_store() -> None:
-        return None
-
-    monkeypatch.setattr(agent_factory, "get_native_agent", _fake_get_native_agent)
-    monkeypatch.setattr(agent_factory, "get_session_store", _fake_get_session_store)
-    monkeypatch.setattr(agent_factory, "get_approval_gate", _fake_get_approval_gate)
-    monkeypatch.setattr(agent_factory, "get_store", _fake_get_store)
-    monkeypatch.setattr(
-        runner,
-        "FallbackChatClient",
-        lambda primary_model_id="": (
-            chat_client or _ScriptedChatClient([[_texto_chunk("ok")]])
-        ),
-    )
-
-
 class TestRunAgentForThread:
     async def test_roda_o_turno_e_devolve_o_texto_final(
         self, native_session_store, monkeypatch
     ) -> None:
-        client = _ScriptedChatClient([[_texto_chunk("Olá! Como posso ajudar?")]])
-        _patch_native_engine(
-            monkeypatch, session_store=native_session_store, chat_client=client
+        client = ScriptedChatClient([[texto_chunk("Olá! Como posso ajudar?")]])
+        patch_native_engine(
+            monkeypatch,
+            module=runner,
+            session_store=native_session_store,
+            chat_client=client,
         )
 
         reply = await runner.run_agent_for_thread("connect-telegram-abc", "oi")
@@ -164,9 +78,12 @@ class TestRunAgentForThread:
         # Erro/borda: resposta maior que MAX_REPLY_CHARS é truncada (Telegram/
         # Discord rejeitam mensagem inteira acima do limite da plataforma).
         texto_longo = "x" * (runner.MAX_REPLY_CHARS + 500)
-        client2 = _ScriptedChatClient([[_texto_chunk(texto_longo)]])
-        _patch_native_engine(
-            monkeypatch, session_store=native_session_store, chat_client=client2
+        client2 = ScriptedChatClient([[texto_chunk(texto_longo)]])
+        patch_native_engine(
+            monkeypatch,
+            module=runner,
+            session_store=native_session_store,
+            chat_client=client2,
         )
         reply2 = await runner.run_agent_for_thread("connect-telegram-def", "oi de novo")
         assert len(reply2) == runner.MAX_REPLY_CHARS + 1  # +1 do "…" de corte
@@ -177,17 +94,19 @@ class TestRunAgentForThread:
     ) -> None:
         """Cada chamada relê o histórico persistido — a 2ª mensagem do mesmo
         `thread_id` não recria o system prompt nem perde o turno anterior."""
-        _patch_native_engine(
+        patch_native_engine(
             monkeypatch,
+            module=runner,
             session_store=native_session_store,
-            chat_client=_ScriptedChatClient([[_texto_chunk("primeira resposta")]]),
+            chat_client=ScriptedChatClient([[texto_chunk("primeira resposta")]]),
         )
         await runner.run_agent_for_thread("connect-discord-xyz", "primeira mensagem")
 
-        _patch_native_engine(
+        patch_native_engine(
             monkeypatch,
+            module=runner,
             session_store=native_session_store,
-            chat_client=_ScriptedChatClient([[_texto_chunk("segunda resposta")]]),
+            chat_client=ScriptedChatClient([[texto_chunk("segunda resposta")]]),
         )
         await runner.run_agent_for_thread("connect-discord-xyz", "segunda mensagem")
 
@@ -217,23 +136,24 @@ class TestRunAgentForThread:
                 return "escrito"
 
         registry = ToolRegistry()
-        registry.register(_require_spec("escrever_arquivo_connect"))
+        registry.register(require_spec("escrever_arquivo_connect"))
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="escrever_arquivo_connect",
                         args="{}",
                     )
                 ],
-                [_texto_chunk("arquivo escrito com sucesso")],
+                [texto_chunk("arquivo escrito com sucesso")],
             ]
         )
-        _patch_native_engine(
+        patch_native_engine(
             monkeypatch,
+            module=runner,
             session_store=native_session_store,
             tool_registry=registry,
             chat_client=client,
@@ -272,11 +192,11 @@ class TestRunAgentForThread:
                 return "executado"
 
         registry = ToolRegistry()
-        registry.register(_require_spec("escrever_arquivo_com_aprovacao_connect"))
-        client = _ScriptedChatClient(
+        registry.register(require_spec("escrever_arquivo_com_aprovacao_connect"))
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_requires_approval",
                         name="escrever_arquivo_com_aprovacao_connect",
@@ -285,8 +205,9 @@ class TestRunAgentForThread:
                 ]
             ]
         )
-        _patch_native_engine(
+        patch_native_engine(
             monkeypatch,
+            module=runner,
             session_store=native_session_store,
             tool_registry=registry,
             chat_client=client,
@@ -346,32 +267,32 @@ class TestRunAgentForThread:
         Telegram/Discord/Slack/Email conseguir de fato delegar a uma SOUL.
         Sem este teste, um bug nesse `if` (ex.: catálogo nunca chegando
         populado a partir de `get_native_agent`) passaria despercebido."""
-        from backend.engine.subagents import SubagentSpec
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_soul",
                         name="delegate_to_subagent",
                         args='{"subagent_type": "coder", "prompt": "implemente algo"}',
                     )
                 ],
-                [_texto_chunk("feito pela SOUL")],  # turno interno da SOUL
-                [_texto_chunk("SOUL concluiu: feito pela SOUL")],  # loop externo
+                [texto_chunk("feito pela SOUL")],  # turno interno da SOUL
+                [texto_chunk("SOUL concluiu: feito pela SOUL")],  # loop externo
             ]
         )
         registry = ToolRegistry()
-        registry.register(_require_spec("delegate_to_subagent"))
+        registry.register(require_spec("delegate_to_subagent"))
         soul = SubagentSpec(
             name="coder",
             description="agente de teste",
             system_prompt="você é um agente de teste",
             tools=[],
         )
-        _patch_native_engine(
+        patch_native_engine(
             monkeypatch,
+            module=runner,
             session_store=native_session_store,
             tool_registry=registry,
             subagent_catalog={"coder": soul},
@@ -398,10 +319,11 @@ class TestRunAgentForThread:
         `handle_incoming_message` (backend/services/gateway/messaging.py)
         quem converte falha em resposta amigável, então o interlocutor
         externo nunca fica sem resposta nenhuma."""
-        _patch_native_engine(
+        patch_native_engine(
             monkeypatch,
+            module=runner,
             session_store=native_session_store,
-            chat_client=_ScriptedChatClient(exc=RuntimeError("provider fora do ar")),
+            chat_client=ScriptedChatClient(exc=RuntimeError("provider fora do ar")),
         )
 
         with pytest.raises(RuntimeError, match="provider fora do ar"):
@@ -420,10 +342,11 @@ class TestProcessIncoming:
 
         monkeypatch.setattr(settings, "db_dsn", str(tmp_path / "connect-process.db"))
 
-        _patch_native_engine(
+        patch_native_engine(
             monkeypatch,
+            module=runner,
             session_store=native_session_store,
-            chat_client=_ScriptedChatClient([[_texto_chunk("resposta do agente")]]),
+            chat_client=ScriptedChatClient([[texto_chunk("resposta do agente")]]),
         )
 
         incoming = IncomingMessage(
@@ -438,10 +361,11 @@ class TestProcessIncoming:
         # Erro/borda: falha ao rodar o agente (ex.: provider fora do ar)
         # nunca deixa o interlocutor sem resposta — process_incoming devolve
         # uma mensagem amigável em vez de propagar a exceção.
-        _patch_native_engine(
+        patch_native_engine(
             monkeypatch,
+            module=runner,
             session_store=native_session_store,
-            chat_client=_ScriptedChatClient(exc=RuntimeError("boom")),
+            chat_client=ScriptedChatClient(exc=RuntimeError("boom")),
         )
         incoming2 = IncomingMessage(
             platform="telegram", platform_user_id="999", text="de novo"

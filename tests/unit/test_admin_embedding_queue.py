@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, NoReturn
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 from backend.api.handlers import admin
+from backend.vtypes.contracts import JsonObject
 
 
 class FakeQueue:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, Any]] = []
+        self.calls: list[tuple[str, int | tuple[str, str]]] = []
 
     async def get_stats(self) -> dict[str, int]:
         return {"pending": 2, "processing": 1, "success": 5, "failed": 1, "dlq": 1}
@@ -21,7 +24,7 @@ class FakeQueue:
     async def count_pending(self) -> int:
         return 3
 
-    async def list_failures(self, limit: int) -> list[dict[str, Any]]:
+    async def list_failures(self, limit: int) -> list[JsonObject]:
         self.calls.append(("list_failures", limit))
         return [
             {
@@ -45,9 +48,11 @@ class FakeQueue:
         self.calls.append(("dlq", (queue_id, reason)))
 
 
-def _request(role: str = "admin") -> Any:
+def _request(role: str = "admin") -> MagicMock:
     user = SimpleNamespace(id="u1", role=role)
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    request = MagicMock(spec=Request)
+    request.state = SimpleNamespace(user=user)
+    return request
 
 
 @pytest.fixture
@@ -99,7 +104,7 @@ async def test_non_admin_is_denied(queue: FakeQueue, role: str) -> None:
 
 
 async def test_unavailable_queue_returns_503(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _boom(_dsn: str | None) -> Any:
+    async def _boom(_dsn: str | None) -> NoReturn:
         raise RuntimeError("sem postgres")
 
     monkeypatch.setattr("backend.embedding.queue.get_configured_embedding_queue", _boom)

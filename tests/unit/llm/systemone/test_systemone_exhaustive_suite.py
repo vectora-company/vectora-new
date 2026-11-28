@@ -55,6 +55,7 @@ from backend.llm.systemone.types import (
     SystemOneResponse,
     SystemOneUsage,
 )
+from backend.vtypes.contracts import JsonValue
 
 # ---------------------------------------------------------------------------
 # 1. Noul (Boolean / Probabilistic) Exhaustive Tests (~40 testes)
@@ -297,7 +298,9 @@ async def test_clef_local_http_status_codes(
         questions={"q": NoulQuestion(criterion="crit")},
     )
 
-    async def fake_post(*args: object, **kwargs: object) -> httpx.Response:
+    async def fake_post(
+        *args: str | httpx.AsyncClient, **kwargs: JsonValue
+    ) -> httpx.Response:
         """Executa a operação fake post."""
         return httpx.Response(status_code, text="Erro simulado")
 
@@ -328,7 +331,9 @@ async def test_clef_local_network_errors(
         questions={"q": NoulQuestion(criterion="crit")},
     )
 
-    async def fake_post_err(*args: object, **kwargs: object) -> httpx.Response:
+    async def fake_post_err(
+        *args: str | httpx.AsyncClient, **kwargs: JsonValue
+    ) -> httpx.Response:
         """Executa a operação fake post err."""
         raise client_error
 
@@ -358,7 +363,9 @@ async def test_clef_local_health(
     """Verifica o comportamento de clef local health."""
     adapter = ClefLocalAdapter(base_url="http://127.0.0.1:8080")
 
-    async def fake_get(*args: object, **kwargs: object) -> httpx.Response:
+    async def fake_get(
+        *args: str | httpx.AsyncClient, **kwargs: JsonValue
+    ) -> httpx.Response:
         """Executa a operação fake get."""
         return httpx.Response(health_status, json={"status": "ok"} if is_ok else {})
 
@@ -425,7 +432,9 @@ async def test_clef_api_http_errors(
         questions={"q": NoulQuestion(criterion="c")},
     )
 
-    async def fake_post(*args: object, **kwargs: object) -> httpx.Response:
+    async def fake_post(
+        *args: str | httpx.AsyncClient, **kwargs: JsonValue
+    ) -> httpx.Response:
         """Executa a operação fake post."""
         return httpx.Response(status_code, text="Erro")
 
@@ -455,7 +464,9 @@ async def test_jev_api_http_errors(
         questions={"q": NoulQuestion(criterion="c")},
     )
 
-    async def fake_post(*args: object, **kwargs: object) -> httpx.Response:
+    async def fake_post(
+        *args: str | httpx.AsyncClient, **kwargs: JsonValue
+    ) -> httpx.Response:
         """Executa a operação fake post."""
         return httpx.Response(status_code, text="Erro")
 
@@ -630,7 +641,7 @@ def _isolate_systemone_app_settings(monkeypatch: pytest.MonkeyPatch) -> None:
         if hasattr(app_settings, attr):
             monkeypatch.setattr(app_settings, attr, getattr(app_settings, attr))
 
-    async def healthy(_: object) -> bool:
+    async def healthy(_: BaseSystemOneApiAdapter) -> bool:
         """Mantém os testes de configuração independentes de serviços externos."""
         return True
 
@@ -653,7 +664,7 @@ async def test_get_decision_models_status_exposes_complete_capability_matrix(
 ) -> None:
     """A matriz distingue capabilities declaradas de readiness do provider ativo."""
 
-    async def healthy(_: object) -> bool:
+    async def healthy(_: BaseSystemOneApiAdapter) -> bool:
         return True
 
     # The matrix is a pure readiness contract; never probe a local service
@@ -686,7 +697,7 @@ async def test_get_decision_models_status_exposes_complete_capability_matrix(
 async def test_get_decision_models_status_reports_selected_health_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def unhealthy(_: object) -> bool:
+    async def unhealthy(_: BaseSystemOneApiAdapter) -> bool:
         return False
 
     # Pin the selected provider: the patch below only affects the Clef local

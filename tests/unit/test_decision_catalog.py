@@ -1,5 +1,7 @@
 """Catálogo de Decision Models: cada modelo declara os providers que o servem."""
 
+from types import TracebackType
+
 import pytest
 
 from backend.llm.systemone import catalog as catalog_module
@@ -80,12 +82,17 @@ async def test_lista_ao_vivo_acrescenta_modelos_novos_e_cai_no_estatico(
             }
 
     class _Client:
-        def __init__(self, *_a: object, **_k: object) -> None: ...
+        def __init__[**P](self, *_a: P.args, **_k: P.kwargs) -> None: ...
 
         async def __aenter__(self) -> "_Client":
             return self
 
-        async def __aexit__(self, *_a: object) -> None: ...
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None: ...
 
         async def get(self, _url: str) -> _Resp:
             return _Resp()

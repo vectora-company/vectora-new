@@ -22,6 +22,7 @@ from backend.api.schemas import ChatConfig, ResumeChatRequest, StreamChatRequest
 from backend.engine.conversation_loop import LoopResult
 from backend.services.agent_factory import NativeAgent
 from backend.tools.registry import ToolRegistry
+from backend.vtypes.contracts import JsonObject
 
 
 def test_usage_token_count_excludes_non_integer_values() -> None:
@@ -103,7 +104,7 @@ class TestResumeChatUsesSameNativeAgentAsStreamChat:
     async def test_resume_chat_repassa_model_chat_mode_e_workspace_do_turno_original(
         self,
     ) -> None:
-        get_native_agent_calls: list[dict[str, object]] = []
+        get_native_agent_calls: list[JsonObject] = []
 
         async def _fake_get_native_agent(user_id, **kwargs):
             get_native_agent_calls.append({"user_id": user_id, **kwargs})
@@ -218,7 +219,7 @@ class TestResumeChatUsesSameNativeAgentAsStreamChat:
         entre o pedido de aprovação e a resposta, ou request malformada) não
         deve lançar — degrada pro NativeAgent default em vez de quebrar o
         resume."""
-        get_native_agent_calls: list[dict[str, object]] = []
+        get_native_agent_calls: list[JsonObject] = []
 
         async def _fake_get_native_agent(user_id, **kwargs):
             get_native_agent_calls.append({"user_id": user_id, **kwargs})

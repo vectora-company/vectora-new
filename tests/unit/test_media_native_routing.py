@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from backend.engine.stream_events import EngineEvent
 from backend.llm.media_parts import (
     downgrade_to_text,
     media_routing_evidence,
@@ -173,7 +174,7 @@ class TestHydration:
             attachment_size_bytes=3,
         )
 
-        def reader(*_args: object, **_kwargs: object) -> None:
+        def reader[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
             raise AssertionError("não deveria ler")
 
         [message] = hydrate_media_blocks(
@@ -183,7 +184,7 @@ class TestHydration:
 
 
 class _Script:
-    def __init__(self, *steps: object) -> None:
+    def __init__(self, *steps: str | Exception) -> None:
         self.steps = list(steps)
         self.received: list[list[VMessage]] = []
 
@@ -211,7 +212,7 @@ async def test_recusa_do_arquivo_repete_com_texto_no_mesmo_modelo(
 
     script = _Script(RuntimeError("400: document type not supported"), "ok")
 
-    async def candidates(*_args: object, **_kwargs: object) -> list[str]:
+    async def candidates[**P](*_args: P.args, **_kwargs: P.kwargs) -> list[str]:
         return ["anthropic:claude"]
 
     monkeypatch.setattr("backend.llm.fallback_chat_client._candidates", candidates)
@@ -234,7 +235,7 @@ async def test_erro_sem_relacao_com_anexo_nao_repete(
 
     script = _Script(ValueError("chave inválida"))
 
-    async def candidates(*_args: object, **_kwargs: object) -> list[str]:
+    async def candidates[**P](*_args: P.args, **_kwargs: P.kwargs) -> list[str]:
         return ["anthropic:claude"]
 
     monkeypatch.setattr("backend.llm.fallback_chat_client._candidates", candidates)
@@ -282,9 +283,9 @@ async def test_loop_registra_e_emite_o_envio_dos_anexos(
                 received.append(list(messages))
                 yield VMessageChunk(delta_text="resumo")
 
-        events: list[object] = []
+        events: list[EngineEvent] = []
 
-        async def on_event(event: object) -> None:
+        async def on_event(event: EngineEvent) -> None:
             events.append(event)
 
         await run_conversation(

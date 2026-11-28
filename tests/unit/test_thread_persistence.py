@@ -11,14 +11,19 @@ from __future__ import annotations
 import json
 import logging
 import os
-from contextlib import ExitStack
+from collections.abc import Awaitable, Callable
+from contextlib import AbstractContextManager, ExitStack
+from types import ModuleType, TracebackType
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, _patch, patch
 
+import aiosqlite
 import pytest
+from fastapi import FastAPI
+from starlette.routing import BaseRoute
 
 
-def _native_dispatch_patches() -> list[Any]:
+def _native_dispatch_patches() -> list[_patch[MagicMock | AsyncMock]]:
     """Patches pro motor nativo — mesmo objetivo do helper equivalente em
     `tests/unit/test_file_attachments.py`. `chat.py` faz `from
     backend.engine.conversation_loop import run_conversation` (nome direto,
@@ -67,16 +72,17 @@ def _native_dispatch_patches() -> list[Any]:
     ]
 
 
-def _collect_route_paths(routes: list[Any]) -> list[str]:
+def _collect_route_paths(routes: list[BaseRoute]) -> list[str]:
     paths: list[str] = []
     for r in routes:
-        if hasattr(r, "path") and r.path is not None:
-            paths.append(r.path)
+        path = getattr(r, "path", None)
+        if isinstance(path, str):
+            paths.append(path)
         orig = getattr(r, "original_router", None)
         if orig is not None and hasattr(orig, "routes"):
             paths.extend(_collect_route_paths(orig.routes))
-        elif hasattr(r, "routes") and r.routes:
-            paths.extend(_collect_route_paths(r.routes))
+        else:
+            paths.extend(_collect_route_paths(getattr(r, "routes", None) or []))
     return paths
 
 
@@ -105,7 +111,12 @@ class _CursorProxy:
     async def __aenter__(self) -> FakeCursor:
         return self._cursor
 
-    async def __aexit__(self, *_: object) -> None:
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
         pass
 
 
@@ -604,7 +615,14 @@ class TestStreamChatRegistersThread:
 # ---------------------------------------------------------------------------
 
 
-def _make_app_with_db(tmp_db: Any) -> tuple:
+def _make_app_with_db(
+    tmp_db: FakeDB | aiosqlite.Connection,
+) -> tuple[
+    FastAPI,
+    Callable[[], Awaitable[aiosqlite.Connection]],
+    aiosqlite.Connection | None,
+    ModuleType,
+]:
     """Cria app FastAPI com um banco (FakeDB ou aiosqlite real) injetado em
     threads._get_db."""
     import backend.api.handlers.threads as t_mod

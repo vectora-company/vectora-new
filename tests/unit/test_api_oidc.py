@@ -18,6 +18,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.vtypes.contracts import JsonObject
+
 
 @pytest.fixture
 def app_and_db(tmp_path, monkeypatch):
@@ -241,7 +243,7 @@ class TestOidcCallback:
             token_endpoint="https://idp.test/token",
             jwks_uri="https://idp.test/jwks",
         )
-        claims: dict[str, object] = {
+        claims: JsonObject = {
             "sub": "u1",
             "email": "sso@example.com",
             "name": "SSO User",

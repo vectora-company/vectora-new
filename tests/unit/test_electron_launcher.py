@@ -195,7 +195,7 @@ class _HealthHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+    def log_message[**P](self, format: str, *args: P.args, **_kwargs: P.kwargs) -> None:  # noqa: A002
         pass  # silencia o log padrão do BaseHTTPRequestHandler
 
 

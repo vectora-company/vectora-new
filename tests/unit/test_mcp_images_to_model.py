@@ -16,6 +16,7 @@ from backend.services.tool_media import tool_image_blocks
 from backend.settings import settings
 from backend.tools.context import ToolContext
 from backend.tools.mcp import VectoraMCPClient, _render_call_result
+from backend.vtypes.contracts import JsonObject
 from tests.json_values import as_object
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 16
@@ -116,7 +117,7 @@ async def test_tool_de_plugin_repassa_o_contexto(
 ) -> None:
     from backend.workspace import plugins
 
-    received: list[object] = []
+    received: list[tuple[str, JsonObject, ToolContext | None]] = []
 
     async def fake_call(self, tool_name, arguments, ctx=None) -> str:
         received.append((tool_name, arguments, ctx))

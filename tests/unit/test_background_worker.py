@@ -137,7 +137,7 @@ async def test_get_queue_uses_shared_configured_resolver(
     worker = BackgroundEmbeddingWorker()
     expected = _FakeQueue()
 
-    async def resolve(_dsn: str | None) -> object:
+    async def resolve(_dsn: str | None) -> _FakeQueue:
         return expected
 
     monkeypatch.setattr(_bg_mod, "get_embedding_queue", resolve)

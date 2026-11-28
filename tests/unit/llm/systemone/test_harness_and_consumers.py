@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal, cast
 
 import pytest
@@ -61,6 +62,8 @@ from backend.tools.systemone_tools import (
 from backend.vtypes.contracts import JsonObject
 from backend.vtypes.documents import Document
 
+type _Answers = dict[str, NoulAnswer | ChoiceAnswer | ScoreAnswer]
+
 
 class FakeDecisionProvider(SystemOneProvider):
     """Provedor falso determinístico para testes de contrato e resiliência do harness."""
@@ -84,8 +87,10 @@ class FakeDecisionProvider(SystemOneProvider):
         self._delay_s = delay_s
         self.calls: list[SystemOneRequest] = []
         self.error_to_raise: Exception | None = None
-        self.custom_answers: dict[str, Any] | None = None
-        self.custom_decide_fn: Any = None
+        self.custom_answers: _Answers | None = None
+        self.custom_decide_fn: (
+            Callable[[SystemOneRequest], Awaitable[SystemOneResponse]] | None
+        ) = None
         self.usage_tokens: int = 40
 
     @property
@@ -119,7 +124,7 @@ class FakeDecisionProvider(SystemOneProvider):
         if self.custom_decide_fn is not None:
             return await self.custom_decide_fn(request)
 
-        answers: dict[str, Any] = {}
+        answers: _Answers = {}
         if self.custom_answers is not None:
             answers = dict(self.custom_answers)
         else:
@@ -615,7 +620,7 @@ async def test_kanban_proposal_respects_card_version_and_manual_transitions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Verifica o comportamento de kanban proposal respects card version and manual transitions."""
-    card_state: dict[str, Any] = {
+    card_state: JsonObject = {
         "id": "card-1",
         "status": "blocked",
         "block_kind": "needs_input",
@@ -628,12 +633,12 @@ async def test_kanban_proposal_respects_card_version_and_manual_transitions(
         "card_version": "blocked|2026-10-19T12:00:00Z|run-1|1",
     }
 
-    async def fake_snapshot(task_id: str) -> dict[str, Any]:
+    async def fake_snapshot(task_id: str) -> JsonObject:
         """Executa a operação fake snapshot."""
         assert task_id == "card-1"
         return dict(card_state)
 
-    async def fake_deps(task_id: str) -> list[dict[str, Any]]:
+    async def fake_deps(task_id: str) -> list[JsonObject]:
         """Executa a operação fake deps."""
         return []
 
@@ -1157,7 +1162,7 @@ def test_decision_model_requires_provenance_and_capability_flags(
 async def test_disabled_decision_surface_combination_never_probes_provider(
     tool_name: str,
     permission_mode: Literal["auto", "plan"],
-    extra: dict[str, object],
+    extra: JsonObject,
     background_task_id: str,
     surfaces: dict[str, bool],
 ) -> None:

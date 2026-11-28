@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import os
 import signal
+from collections.abc import Callable
+from contextlib import AbstractContextManager
+from types import FrameType
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
@@ -31,7 +34,7 @@ class _FakeTimer:
 
     instances: list[_FakeTimer] = []
 
-    def __init__(self, interval: float, function: Any) -> None:
+    def __init__(self, interval: float, function: Callable[[], None]) -> None:
         self.interval = interval
         self.function = function
         self.daemon = False
@@ -52,12 +55,14 @@ class _FakeServer:
     def install_signal_handlers(self) -> None:
         pass
 
-    def capture_signals(self) -> Any:
+    def capture_signals(self) -> AbstractContextManager[None]:
         return MagicMock()
 
 
-def _get_handler(signum: int) -> Any:
-    return signal.getsignal(signum)
+def _get_handler(signum: int) -> Callable[[int, FrameType | None], None]:
+    handler = signal.getsignal(signum)
+    assert callable(handler) and not isinstance(handler, int)
+    return handler
 
 
 def test_shutdown_sets_should_exit_on_sigint() -> None:
@@ -65,7 +70,7 @@ def test_shutdown_sets_should_exit_on_sigint() -> None:
     from backend.main import _install_terminal_signals
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
 
     orig = {}
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -88,7 +93,7 @@ def test_shutdown_calls_icon_stop_when_present() -> None:
 
     server = _FakeServer()
     icon = MagicMock()
-    icon_ref: list[Any] = [icon]
+    icon_ref: list[MagicMock | None] = [icon]
 
     orig_int = signal.getsignal(signal.SIGINT)
     orig_term = signal.getsignal(signal.SIGTERM)
@@ -109,7 +114,7 @@ def test_shutdown_handler_is_idempotent_when_console_repeats_signal() -> None:
 
     server = _FakeServer()
     icon = MagicMock()
-    icon_ref: list[Any] = [icon]
+    icon_ref: list[MagicMock | None] = [icon]
     original = signal.getsignal(signal.SIGINT)
     try:
         _install_terminal_signals(server, icon_ref)
@@ -127,7 +132,7 @@ def test_shutdown_no_error_when_icon_is_none() -> None:
     from backend.main import _install_terminal_signals
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
 
     orig_int = signal.getsignal(signal.SIGINT)
     orig_term = signal.getsignal(signal.SIGTERM)
@@ -149,7 +154,7 @@ def test_shutdown_sighup_handling() -> None:
     from backend.main import _install_terminal_signals
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
 
     orig_int = signal.getsignal(signal.SIGINT)
     orig_term = signal.getsignal(signal.SIGTERM)
@@ -181,7 +186,7 @@ def test_shutdown_sigbreak_handling_when_available() -> None:
     from backend.main import _install_terminal_signals
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
     original = signal.getsignal(sigbreak)
     try:
         _install_terminal_signals(server, icon_ref)
@@ -231,7 +236,7 @@ def test_tray_exposes_icon_via_icon_ref() -> None:
     pystray_mock.MenuItem = MagicMock()
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
 
     with (
         patch.dict("sys.modules", {"pystray": pystray_mock}),

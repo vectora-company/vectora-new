@@ -143,7 +143,7 @@ def test_ditado_local_usa_o_idioma_configurado(
 ) -> None:
     from backend.llm import transcription
 
-    received: list[object] = []
+    received: list[str] = []
     monkeypatch.setattr(
         stt, "_setting", lambda key: "es" if key == "stt_language" else ""
     )

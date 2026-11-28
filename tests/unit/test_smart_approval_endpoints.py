@@ -24,7 +24,7 @@ from backend.vtypes.workspace import Workspace
 
 class _FakeRequestImpl:
     class _State:
-        user: object | None = None
+        user: SimpleNamespace | None = None
 
     def __init__(self) -> None:
         self.state = self._State()
@@ -57,7 +57,7 @@ def _install_pending(monkeypatch, body: SmartApprovalAllowlistRequest) -> None:
     from backend.api.handlers import threads
 
     class Store:
-        async def get_pending_approval(self, _thread_id: str) -> dict[str, object]:
+        async def get_pending_approval(self, _thread_id: str) -> JsonObject:
             return {
                 "interrupt_id": body.interrupt_id,
                 "run_id": body.run_id,
@@ -189,7 +189,7 @@ async def test_persistence_failure_returns_503_and_rolls_back(
 
     class FailingConnection:
         def execute(
-            self, sql: str, parameters: tuple[object, ...] = ()
+            self, sql: str, parameters: tuple[str | int | None, ...] = ()
         ) -> sqlite3.Cursor:
             if failure == "write" and sql.startswith("INSERT INTO app_settings"):
                 raise sqlite3.OperationalError("simulated write failure")
@@ -338,7 +338,7 @@ async def test_auditoria_de_mutacao_nao_expoe_assinatura(monkeypatch) -> None:
         "backend.api.handlers.workspaces.require_workspace_access",
         lambda _workspace_id, _request: SimpleNamespace(id="workspace"),
     )
-    eventos: list[dict[str, object]] = []
+    eventos: list[JsonObject] = []
 
     async def fake_db():
         return object()

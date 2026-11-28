@@ -18,6 +18,7 @@ Tool nativa (`@vtool`) — chamada como função async direta com
 
 from __future__ import annotations
 
+import io
 import json
 import sys
 import time
@@ -36,6 +37,7 @@ from backend.services.desktop_windows import (
 )
 from backend.tools import computer_use as cu
 from backend.tools.context import ToolContext
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 def _ctx(workspace_id: str = "ws1") -> ToolContext:
@@ -189,7 +191,7 @@ class TestApisWindowsSimuladas:
     def test_clique_converte_coordenadas_e_publica_na_hwnd_validada(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        calls: list[tuple[object, ...]] = []
+        calls: list[tuple[int, ...]] = []
         win32api = types.SimpleNamespace(MAKELONG=lambda x, y: (x, y))
         win32con = types.SimpleNamespace(WM_LBUTTONDOWN=1, WM_LBUTTONUP=2, MK_LBUTTON=4)
         win32gui = types.SimpleNamespace(
@@ -210,7 +212,7 @@ class TestApisWindowsSimuladas:
     def test_texto_publica_cada_caractere_somente_na_hwnd(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        calls: list[tuple[object, ...]] = []
+        calls: list[tuple[int, ...]] = []
         win32con = types.SimpleNamespace(WM_CHAR=3)
         win32gui = types.SimpleNamespace(PostMessage=lambda *args: calls.append(args))
         monkeypatch.setattr(
@@ -230,10 +232,10 @@ class TestApisWindowsSimuladas:
     def test_captura_passes_a_hwnd_validada_ao_imagegrab(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        chamadas: list[dict[str, object]] = []
+        chamadas: list[JsonObject] = []
 
         class FakeImage:
-            def save(self, buffer: object, **kwargs: object) -> None:
+            def save(self, buffer: io.BytesIO, **kwargs: str) -> None:
                 assert kwargs["format"] == "PNG"
 
         image_grab = types.SimpleNamespace(
@@ -336,19 +338,19 @@ class TestJanelaSelecionada:
         monkeypatch.setattr(
             cu.desktop_window_registry, "allow_action", lambda **_: True
         )
-        auditorias: list[dict[str, object]] = []
+        auditorias: list[JsonObject] = []
         monkeypatch.setattr(
             cu.desktop_window_registry,
             "require_focus",
             lambda _selection: (_ for _ in ()).throw(PermissionError("foco perdido")),
         )
 
-        async def _capture_audit(*args: object, **kwargs: object) -> None:
+        async def _capture_audit(*args: str, **kwargs: JsonValue) -> None:
             del args
             auditorias.append(kwargs)
 
         monkeypatch.setattr(cu, "_audit_event", _capture_audit)
-        entrada: list[tuple[object, ...]] = []
+        entrada: list[tuple[int | str, ...]] = []
         monkeypatch.setattr(cu, "_click_sync", lambda *args: entrada.append(args))
 
         result = json.loads(await cu.computer_use(action="click", x=2, y=3, ctx=_ctx()))

@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from backend.vtypes.contracts import JsonObject
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "utils"))
 
@@ -72,7 +74,7 @@ def _prepare(
     return work
 
 
-def _context(*, release_token: str = "") -> dict[str, object]:
+def _context(*, release_token: str = "") -> JsonObject:
     return {
         "github": {
             "sha": SHA,

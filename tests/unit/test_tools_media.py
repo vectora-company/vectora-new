@@ -9,7 +9,8 @@ Cada caminho feliz tem o par de erro/borda no mesmo teste.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -44,10 +45,12 @@ async def test_byok_nao_reserva_quota_nem_altera_uso(
     called = False
     summary_called = False
 
-    async def _reserve(**_kwargs: object) -> object:
+    async def _reserve[**P](
+        *_args: P.args, **_kwargs: P.kwargs
+    ) -> SimpleNamespace | None:
         nonlocal called
         called = True
-        return object()
+        return SimpleNamespace()
 
     async def _summary(_user_id: str) -> dict[str, int | str]:
         nonlocal summary_called
@@ -72,7 +75,9 @@ async def test_credencial_ausente_nao_recebe_isencao(
     ctx = _quota_ctx("openai:gpt-5")
     called = False
 
-    async def _reserve(**_kwargs: object) -> object:
+    async def _reserve[**P](
+        *_args: P.args, **_kwargs: P.kwargs
+    ) -> SimpleNamespace | None:
         nonlocal called
         called = True
         return None
@@ -119,18 +124,18 @@ async def _summary_zero() -> dict[str, int | str]:
 )
 async def test_quota_esgotada_devolve_resumo_sem_chamar_provider(
     operation: str,
-    call: Callable[[], Coroutine[Any, Any, str]],
+    call: Callable[[], Awaitable[str]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """O bloqueio de quota informa saldo e renovação sem enviar o payload."""
 
-    async def reject_reservation(**_kwargs: object) -> None:
+    async def reject_reservation[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
         return None
 
     async def quota_summary(_user_id: str) -> dict[str, int | str]:
         return {"remaining": 0, "limit": 10, "period": "2026-09", "used": 10}
 
-    async def provider_called(*_args: object, **_kwargs: object) -> bytes:
+    async def provider_called[**P](*_args: P.args, **_kwargs: P.kwargs) -> bytes:
         raise AssertionError(f"provider chamado para {operation}")
 
     monkeypatch.setattr(media_quota, "reserve", reject_reservation)

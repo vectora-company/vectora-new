@@ -23,9 +23,9 @@ from backend.vtypes.message import ToolCall
 def mock_dns(monkeypatch: pytest.MonkeyPatch) -> None:
     """Executa a operação mock dns."""
 
-    def _fake_getaddrinfo(
-        host: str, port: int, *args: object, **kwargs: object
-    ) -> list[tuple[object, ...]]:
+    def _fake_getaddrinfo[**P](
+        host: str, port: int, *args: P.args, **kwargs: P.kwargs
+    ) -> list[tuple[int, int, int, str, tuple[str, int]]]:
         """Executa a operação fake getaddrinfo."""
         return [
             (

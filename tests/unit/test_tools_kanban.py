@@ -47,12 +47,10 @@ async def db(tmp_path, monkeypatch):
 
     import aiosqlite
 
-    async def _connect() -> Any:
+    async def _connect() -> aiosqlite.Connection:
         """Executa a operação connect."""
-        conn: Any = await aiosqlite.connect(db_path)
-        conn.row_factory = lambda c, r: dict(
-            zip([col[0] for col in c.description], r, strict=False)
-        )
+        conn = await aiosqlite.connect(db_path)
+        conn.row_factory = aiosqlite.Row
         return conn
 
     setup = await _connect()

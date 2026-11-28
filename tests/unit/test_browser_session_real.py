@@ -24,7 +24,7 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"<html><body>ok</body></html>")
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+    def log_message[**P](self, format: str, *args: P.args, **_kwargs: P.kwargs) -> None:  # noqa: A002
         pass  # silencia o log padrão do BaseHTTPRequestHandler nos testes
 
 

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import aiosqlite
 import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
@@ -193,7 +194,7 @@ class TestShareDelete:
         return db
 
     @staticmethod
-    def _request(user: object | None = None) -> Request:
+    def _request(user: SimpleNamespace | None = None) -> Request:
         request = Request(
             {
                 "type": "http",
@@ -317,7 +318,7 @@ class TestShareList:
     """GET /threads/{id}/shares: os links ainda válidos de uma conversa."""
 
     @staticmethod
-    async def _database() -> Any:
+    async def _database() -> aiosqlite.Connection:
         import aiosqlite
 
         db = await aiosqlite.connect(":memory:")
@@ -363,7 +364,7 @@ class TestShareList:
         return db
 
     @staticmethod
-    def _request(user: object | None) -> Request:
+    def _request(user: SimpleNamespace | None) -> Request:
         request = Request(
             {
                 "type": "http",

@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import aiosqlite
 import pytest
 
 import backend
@@ -30,11 +31,9 @@ async def db(tmp_path, monkeypatch):
     db_path = str(tmp_path / "boards.db")
     up_sql = _SCHEMA.read_text(encoding="utf-8")
 
-    async def _connect() -> Any:
-        conn: Any = await aiosqlite.connect(db_path)
-        conn.row_factory = lambda c, r: dict(
-            zip([col[0] for col in c.description], r, strict=False)
-        )
+    async def _connect() -> aiosqlite.Connection:
+        conn = await aiosqlite.connect(db_path)
+        conn.row_factory = aiosqlite.Row
         return conn
 
     setup = await _connect()

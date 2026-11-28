@@ -17,11 +17,14 @@ from starlette.requests import Request
 
 from backend.api.handlers import threads as threads_handlers
 from backend.persistence.native.agent_run import AgentRun, AgentRunTimelineEntry
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.history import ThreadHistoryEntry
+from backend.vtypes.message import VMessage
 
 os.environ.setdefault("VECTORA_AUTH_REQUIRED", "false")
 
 
-def _make_app() -> Any:
+def _make_app() -> FastAPI:
     from backend.api.server import create_app
 
     return create_app()
@@ -52,7 +55,7 @@ def _pairs(n: int, start: int = 0) -> list[tuple[str, str, str, list]]:
 
 def _history_entries(
     pairs: list[tuple[str, str, str, list]],
-) -> list[object]:
+) -> list[ThreadHistoryEntry]:
     """Converte fixtures legadas no contrato atual de histórico com arquivos."""
     from backend.vtypes.history import ThreadHistoryEntry
 
@@ -337,7 +340,7 @@ async def test_history_interleaving_preserva_evento_para_replay_sse() -> None:
     from backend.api.schemas import GetHistoryRequest
     from backend.vtypes.history import ThreadHistoryEntry
 
-    replayed: list[dict[str, object]] = []
+    replayed: list[JsonObject] = []
     store = SimpleNamespace(
         get_thread_summaries=AsyncMock(
             return_value=[SimpleNamespace(status="running", last_seq=1)]
@@ -355,11 +358,13 @@ async def test_history_interleaving_preserva_evento_para_replay_sse() -> None:
         )
     ]
 
-    async def _read_messages(*_args: object, **_kwargs: object) -> list[object]:
+    async def _read_messages[**P](
+        *_args: P.args, **_kwargs: P.kwargs
+    ) -> list[ThreadHistoryEntry]:
         # This models a commit that occurs after the summary snapshot but
         # before the message query.  The new event has no message in this page.
         replayed.extend(await store.list_events("t1", after_seq=1))
-        return cast("list[object]", messages)
+        return messages
 
     with (
         patch(
@@ -983,7 +988,7 @@ async def test_safe_history_cursor_without_message_ids_or_lookup() -> None:
 
 class _TimelineStore:
     def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
+        self.calls: list[JsonObject] = []
 
     async def get_agent_run(self, run_id: str) -> AgentRun:
         return AgentRun(run_id=run_id, thread_id="t1")
@@ -1004,7 +1009,7 @@ def timeline_client_and_store(
     async def _get_store() -> _TimelineStore:
         return store
 
-    async def _owns(thread_id: str, request: object) -> None:
+    async def _owns(thread_id: str, request: Request) -> None:
         return None
 
     monkeypatch.setattr(threads_handlers, "_get_session_store", _get_store)

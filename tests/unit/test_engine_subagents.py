@@ -1,7 +1,7 @@
 """``run_subagent``/``spawn_subagent_background`` — delegação de
 subagentes nativa. Cada subagente é uma instância nova do motor
 (`run_conversation`) numa sub-thread isolada com `parent_thread_id`
-gravado — testado com o mesmo `_ScriptedChatClient` de
+gravado — testado com o mesmo `ScriptedChatClient` de
 `test_engine_conversation_loop.py`.
 """
 
@@ -30,6 +30,7 @@ from backend.tools.context import ToolContext
 from backend.tools.registry import TOOL_REGISTRY, ToolExtras, vtool
 from backend.vtypes.ids import CapabilityToken, CorrelationId
 from backend.vtypes.message import ToolCallChunk, VMessageChunk
+from tests.chat_fakes import ScriptedChatClient, texto_chunk, tool_call_chunk
 
 
 async def _aguarda_task_ativa(correlation_id: str, prazo_s: float = 2.0):
@@ -59,36 +60,6 @@ class _HangingChatClient:
     ):
         msg = "não usado (astream-only)"
         raise NotImplementedError(msg)
-
-
-class _ScriptedChatClient:
-    def __init__(self, turnos: list[list[VMessageChunk]]) -> None:
-        self._turnos = turnos
-        self.chamadas = 0
-
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
-        turno = self._turnos[self.chamadas]
-        self.chamadas += 1
-        for chunk in turno:
-            yield chunk
-
-    async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
-        msg = "não usado (astream-only)"
-        raise NotImplementedError(msg)
-
-
-def _texto_chunk(texto: str) -> VMessageChunk:
-    return VMessageChunk(delta_text=texto)
-
-
-def _tool_call_chunk(*, index: int, id: str, name: str, args: str) -> VMessageChunk:  # noqa: A002
-    return VMessageChunk(
-        tool_call_chunks=[
-            ToolCallChunk(index=index, id=id, name=name, args_fragment=args)
-        ]
-    )
 
 
 @pytest.fixture
@@ -125,7 +96,7 @@ def _spec(nome: str = "coder", tools=None) -> SubagentSpec:
 
 class TestRunSubagentSincrono:
     async def test_devolve_o_texto_final_do_subagente(self, session_store, ctx) -> None:
-        client = _ScriptedChatClient([[_texto_chunk("resultado do subagente")]])
+        client = ScriptedChatClient([[texto_chunk("resultado do subagente")]])
 
         resultado = await run_subagent(
             _spec(),
@@ -162,7 +133,7 @@ class TestRunSubagentSincrono:
             _spec(nome="planner"),
             "monte um plano",
             session_store=session_store,
-            chat_client=_ScriptedChatClient([]),
+            chat_client=ScriptedChatClient([]),
             ctx=ctx,
             parent_thread_id="thread-pai",
             should_require_approval=None,
@@ -175,7 +146,7 @@ class TestRunSubagentSincrono:
     async def test_sub_thread_isolada_com_parent_thread_id_gravado(
         self, session_store, ctx
     ) -> None:
-        client = _ScriptedChatClient([[_texto_chunk("ok")]])
+        client = ScriptedChatClient([[texto_chunk("ok")]])
 
         await run_subagent(
             _spec(nome="search"),
@@ -211,7 +182,7 @@ class TestRunSubagentSincrono:
         await session_store.append_message(
             "thread-pai", text_message(MessageRole.USER, "mensagem do pai")
         )
-        client = _ScriptedChatClient([[_texto_chunk("resposta isolada")]])
+        client = ScriptedChatClient([[texto_chunk("resposta isolada")]])
 
         await run_subagent(
             _spec(),
@@ -229,7 +200,7 @@ class TestRunSubagentSincrono:
     async def test_emite_subagent_output_running_e_complete(
         self, session_store, ctx
     ) -> None:
-        client = _ScriptedChatClient([[_texto_chunk("feito")]])
+        client = ScriptedChatClient([[texto_chunk("feito")]])
         eventos: list[SubagentOutput] = []
 
         async def on_event(event) -> None:
@@ -264,10 +235,10 @@ class TestRunSubagentSincrono:
         spec = TOOL_REGISTRY.get("escrever_no_subagente")
         assert spec is not None
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="escrever_no_subagente",
@@ -301,7 +272,7 @@ class TestSpawnSubagentBackground:
     async def test_roda_em_background_e_pode_ser_esperada_depois(
         self, session_store, ctx
     ) -> None:
-        client = _ScriptedChatClient([[_texto_chunk("resultado em background")]])
+        client = ScriptedChatClient([[texto_chunk("resultado em background")]])
 
         task = spawn_subagent_background(
             _spec(),
@@ -327,7 +298,7 @@ class TestTurnBudgetDoTurnoPai:
         nenhum recurso: nenhuma sessão criada, nenhuma chamada ao chat
         client."""
         budget = TurnBudget(config=LoopCapConfig(max_subagent_spawns_per_turn=0))
-        client = _ScriptedChatClient([[_texto_chunk("nunca deveria rodar")]])
+        client = ScriptedChatClient([[texto_chunk("nunca deveria rodar")]])
 
         resultado = await run_subagent(
             _spec(),
@@ -348,7 +319,7 @@ class TestTurnBudgetDoTurnoPai:
         self, session_store, ctx
     ) -> None:
         budget = TurnBudget(config=LoopCapConfig(max_subagent_spawns_per_turn=2))
-        client = _ScriptedChatClient([[_texto_chunk("ok")]])
+        client = ScriptedChatClient([[texto_chunk("ok")]])
 
         resultado = await run_subagent(
             _spec(),
@@ -370,7 +341,7 @@ class TestLivenessAtiva:
     async def test_sem_liveness_config_roda_ate_completar_normalmente(
         self, session_store, ctx
     ) -> None:
-        client = _ScriptedChatClient([[_texto_chunk("completou sem watchdog")]])
+        client = ScriptedChatClient([[texto_chunk("completou sem watchdog")]])
 
         resultado = await run_subagent(
             _spec(),
@@ -389,7 +360,7 @@ class TestLivenessAtiva:
     ) -> None:
         """Happy path: watchdog ativo, mas o subagente termina rápido —
         nunca chega a competir com o watchdog."""
-        client = _ScriptedChatClient([[_texto_chunk("terminei rápido")]])
+        client = ScriptedChatClient([[texto_chunk("terminei rápido")]])
 
         resultado = await run_subagent(
             _spec(),
@@ -450,7 +421,7 @@ class TestEscopoRBACDoSubagente:
         assert spec is not None
         monkeypatch.setattr(tool_policy, "effective_disabled", lambda _uid: set())
 
-        client = _ScriptedChatClient([[_texto_chunk("delegado")]])
+        client = ScriptedChatClient([[texto_chunk("delegado")]])
 
         resultado = await run_subagent(
             _spec(tools=[spec]),
@@ -483,7 +454,7 @@ class TestEscopoRBACDoSubagente:
             tool_policy, "effective_disabled", lambda _uid: {"tool_fora_do_escopo"}
         )
 
-        client = _ScriptedChatClient([[_texto_chunk("nunca deveria rodar")]])
+        client = ScriptedChatClient([[texto_chunk("nunca deveria rodar")]])
 
         resultado = await run_subagent(
             _spec(tools=[spec]),
@@ -509,7 +480,7 @@ class TestDedupPorCorrelationId:
         o resultado da primeira, já em andamento. Erro/borda coberto por
         `TestHardInterruptRealNaoPassivo` (correlation_id sem delegação
         ativa nunca cancela nada)."""
-        client = _ScriptedChatClient([[_texto_chunk("resultado único")]])
+        client = ScriptedChatClient([[texto_chunk("resultado único")]])
         spec = replace(_spec(), correlation_id=CorrelationId("corr-dedup-1"))
 
         resultados = await asyncio.gather(
@@ -542,8 +513,8 @@ class TestDedupPorCorrelationId:
         """Par de erro: o mesmo `correlation_id` vindo de usuários diferentes
         não reaproveita a execução um do outro; cada identidade recebe o
         próprio resultado e o chat client é chamado duas vezes."""
-        client = _ScriptedChatClient(
-            [[_texto_chunk("para alice")], [_texto_chunk("para bob")]]
+        client = ScriptedChatClient(
+            [[texto_chunk("para alice")], [texto_chunk("para bob")]]
         )
         spec = replace(_spec(), correlation_id=CorrelationId("corr-multi-tenant"))
         ctx_bob = ToolContext(
@@ -582,8 +553,8 @@ class TestDedupPorCorrelationId:
     ) -> None:
         """Erro/borda simétrico: ids diferentes nunca deduplicam — cada
         delegação roda e chama o chat client separadamente."""
-        client = _ScriptedChatClient(
-            [[_texto_chunk("resultado 1")], [_texto_chunk("resultado 2")]]
+        client = ScriptedChatClient(
+            [[texto_chunk("resultado 1")], [texto_chunk("resultado 2")]]
         )
         spec_a = replace(_spec(), correlation_id=CorrelationId("corr-a"))
         spec_b = replace(_spec(), correlation_id=CorrelationId("corr-b"))
@@ -681,7 +652,7 @@ class TestShouldRequireApprovalObrigatorio:
     async def test_run_subagent_sem_should_require_approval_estoura_typeerror(
         self, session_store, ctx
     ) -> None:
-        client = _ScriptedChatClient([[_texto_chunk("nunca deveria rodar")]])
+        client = ScriptedChatClient([[texto_chunk("nunca deveria rodar")]])
         with pytest.raises(TypeError, match="should_require_approval"):
             await run_subagent(  # type: ignore[call-arg]  # ty: ignore[missing-argument]
                 _spec(),

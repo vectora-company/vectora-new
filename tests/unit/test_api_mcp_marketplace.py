@@ -22,11 +22,12 @@ from backend.api.handlers.mcp_marketplace import (
     list_registry,
     uninstall_mcp,
 )
+from backend.vtypes.contracts import JsonObject
 
 
 def _entry(
     identifier: str, name: str, *, stars: int = 0, downloads: int = 0
-) -> dict[str, object]:
+) -> JsonObject:
     return {
         "id": identifier,
         "name": name,
@@ -48,7 +49,7 @@ def _entry(
 
 
 @pytest.fixture
-def _catalog(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
+def _catalog(monkeypatch: pytest.MonkeyPatch) -> list[JsonObject]:
     from backend.api.handlers import mcp_marketplace
 
     entries = [_entry("alpha", "Alpha", stars=10), _entry("beta", "Beta", stars=20)]
@@ -64,7 +65,7 @@ def _catalog(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
 def _functional_store(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    _catalog: list[dict[str, object]],
+    _catalog: list[JsonObject],
 ) -> ModuleType:
     from backend.workspace import plugins
 
@@ -77,7 +78,7 @@ def _functional_store(
 
 @pytest.mark.asyncio
 async def test_list_registry_uses_only_canonical_catalog(
-    _catalog: list[dict[str, object]], monkeypatch: pytest.MonkeyPatch
+    _catalog: list[JsonObject], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.api.handlers import mcp_marketplace
 

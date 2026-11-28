@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 
-def _request(user: object | None) -> Request:
+def _request(user: SimpleNamespace | None) -> Request:
     request = Request({"type": "http", "method": "GET", "path": "/auth/secrets/keys"})
     request.state.user = user
     return request

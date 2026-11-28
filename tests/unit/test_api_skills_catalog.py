@@ -255,12 +255,13 @@ class TestCatalogSkillInstall:
         )
         monkeypatch.setattr(skills_handler, "list_wellknown_catalog", list)
 
-        def install_spy(
+        def install_spy[**P](
             user_id: str,
             source: str,
             scope: SkillScope,
             target: str | None,
-            **kwargs: object,
+            *_args: P.args,
+            **kwargs: P.kwargs,
         ) -> SimpleNamespace:
             def model_dump() -> dict[str, str]:
                 return {"id": "remote-skill-1", "source": source}
@@ -333,12 +334,13 @@ class TestCatalogSkillInstall:
         )
         monkeypatch.setattr(skills_handler, "list_wellknown_catalog", list)
 
-        def install_spy(
+        def install_spy[**P](
             user_id: str,
             source: str,
             scope: SkillScope,
             target: str | None,
-            **kwargs: object,
+            *_args: P.args,
+            **kwargs: P.kwargs,
         ) -> SimpleNamespace:
             def model_dump() -> dict[str, str]:
                 return {"id": "remote-skill-2", "source": source}

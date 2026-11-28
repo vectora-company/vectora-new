@@ -8,19 +8,21 @@ from typing import Any
 import pytest
 
 from backend.embedding import rag_ingest
+from backend.vtypes.contracts import JsonObject
+from tests.json_values import dig
 
 
 class _FakeQueue:
     """Captura chamadas de enqueue para inspeção."""
 
     def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
+        self.calls: list[JsonObject] = []
 
     async def enqueue(
         self,
         text: str,
         collection: str = "articles",
-        metadata: dict[str, Any] | None = None,
+        metadata: JsonObject | None = None,
         job_id: str | None = None,
     ) -> str:
         self.calls.append(
@@ -220,7 +222,7 @@ async def test_ingest_markdown_only(tmp_path: Path, _patched: _FakeQueue) -> Non
     # Todos os chunks compartilham o mesmo job_id e carregam o workspace_id.
     job_ids = {c["job_id"] for c in _patched.calls}
     assert job_ids == {result["job_id"]}
-    assert all(c["metadata"]["workspace_id"] == "ws-1" for c in _patched.calls)
+    assert all(dig(c, "metadata", "workspace_id") == "ws-1" for c in _patched.calls)
 
 
 @pytest.mark.asyncio
@@ -274,10 +276,15 @@ async def test_ingest_reports_enqueue_failure_without_hiding_already_queued_chun
     queue = _FakeQueue()
     original = queue.enqueue
 
-    async def enqueue(*args: Any, **kwargs: Any) -> str:
+    async def enqueue(
+        text: str,
+        collection: str = "articles",
+        metadata: JsonObject | None = None,
+        job_id: str | None = None,
+    ) -> str:
         if queue.calls:
             raise ConnectionError("database unavailable")
-        return await original(*args, **kwargs)
+        return await original(text, collection, metadata, job_id)
 
     monkeypatch.setattr(queue, "enqueue", enqueue)
 

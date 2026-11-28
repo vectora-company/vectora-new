@@ -151,7 +151,7 @@ async def test_falha_do_banco_mantem_ultima_versao_lida(
     await tool_policy.set_disabled("u1", ["terminal"])
     assert tool_policy.policy_version("u1") == 1
 
-    async def _indisponivel(*_args: object) -> dict[str, int]:
+    async def _indisponivel[**P](*_args: P.args, **_kwargs: P.kwargs) -> dict[str, int]:
         msg = "banco fora do ar"
         raise ConnectionError(msg)
 
@@ -163,7 +163,7 @@ async def test_falha_do_banco_mantem_ultima_versao_lida(
 async def test_set_disabled_com_banco_fora_ainda_grava_arquivo_e_avanca_local(
     version_store: SessionStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _indisponivel(*_args: object) -> int:
+    async def _indisponivel[**P](*_args: P.args, **_kwargs: P.kwargs) -> int:
         msg = "banco fora do ar"
         raise ConnectionError(msg)
 

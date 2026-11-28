@@ -136,7 +136,7 @@ def test_url_inline_e_remota_nao_sao_alteradas() -> None:
     remote = ContentBlock(kind="image_url", image_url="https://example.com/a.png")
     message = VMessage(role=MessageRole.USER, content=[remote])
 
-    def _fail(*_a: object, **_k: object) -> None:
+    def _fail[**P](*_a: P.args, **_k: P.kwargs) -> None:
         raise AssertionError("não deveria ler asset")
 
     assert hydrate_media_blocks(

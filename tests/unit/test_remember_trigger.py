@@ -12,6 +12,7 @@ from backend.services.remember_trigger import (
     maybe_trigger_remember,
 )
 from backend.settings import Settings
+from backend.tools.context import ToolContext
 
 
 @pytest.fixture
@@ -100,7 +101,7 @@ async def test_multiple_of_n_without_pending_distills_and_writes_proposal(
     artifact_calls: list[dict] = []
 
     async def _fake_create_artifact(
-        *, artifact_type: str, title: str, content: str, ctx: object
+        *, artifact_type: str, title: str, content: str, ctx: ToolContext
     ) -> str:
         artifact_calls.append(
             {
@@ -217,7 +218,7 @@ async def test_fato_ja_salvo_nao_e_proposto_de_novo(monkeypatch, _no_pending) ->
     artifact_calls: list[dict] = []
 
     async def _fake_create_artifact(
-        *, artifact_type: str, title: str, content: str, ctx: object
+        *, artifact_type: str, title: str, content: str, ctx: ToolContext
     ) -> str:
         artifact_calls.append(
             {

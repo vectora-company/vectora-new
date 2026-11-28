@@ -13,14 +13,15 @@ from backend.services.egress_policy import (
     is_url_allowed,
     validate_backend_egress_support,
 )
+from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture(autouse=True)
 def mock_dns(monkeypatch: pytest.MonkeyPatch) -> None:
     """Garante resolução simulada e rápida de DNS sem depender de rede externa."""
 
-    def _mock_getaddrinfo(
-        host: str, port: int, *args: object, **kwargs: object
+    def _mock_getaddrinfo[**P](
+        host: str, port: int, *args: P.args, **kwargs: P.kwargs
     ) -> list[
         tuple[socket.AddressFamily, socket.SocketKind, int, str, tuple[str, int]]
     ]:
@@ -129,8 +130,8 @@ def test_validate_backend_egress_support() -> None:
 def test_is_url_allowed_non_global_ip_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verifica o comportamento de is url allowed non global ip blocked."""
 
-    def _mock_cgnat(
-        host: str, port: int, *args: object, **kwargs: object
+    def _mock_cgnat[**P](
+        host: str, port: int, *args: P.args, **kwargs: P.kwargs
     ) -> list[
         tuple[socket.AddressFamily, socket.SocketKind, int, str, tuple[str, int]]
     ]:
@@ -257,7 +258,7 @@ def test_workspace_policy_requires_workspace_key(
     """O objeto direto usa a chave específica; a chave comum exige um mapa."""
     from backend.workspace.runtime_settings import runtime_settings
 
-    values: dict[str, object] = {"egress_policy": {"allowed_hosts": ["example.com"]}}
+    values: JsonObject = {"egress_policy": {"allowed_hosts": ["example.com"]}}
     monkeypatch.setattr(
         runtime_settings, "get", lambda key, default=None: values.get(key, default)
     )

@@ -13,11 +13,13 @@ from uuid import uuid4
 
 import pytest
 
+from backend.vtypes.contracts import JsonObject
+
 if TYPE_CHECKING:
     import asyncpg
 
 
-async def _resolved(value: object) -> object:
+async def _resolved[T](value: T) -> T:
     return value
 
 
@@ -99,7 +101,7 @@ class TestMediaQuotaPostgres:
         user_id = f"quota-{uuid4().hex}"
         key = f"retry-{uuid4().hex}"
         quota = MediaQuota()
-        events: list[dict[str, object]] = []
+        events: list[JsonObject] = []
         monkeypatch.setattr(quota, "_postgres_pool", lambda: _resolved(pg_pool))
         monkeypatch.setattr(quota, "_current_tier", lambda _user_id: "pro")
         monkeypatch.setattr(quota, "_postgres_enabled", lambda: True)

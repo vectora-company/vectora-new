@@ -13,8 +13,8 @@ from backend.transport.base import RunResult
 from backend.transport.codespace import CodespaceTransport
 
 
-async def _timed_out(
-    awaitable: Coroutine[Any, Any, Any],
+async def _timed_out[T](
+    awaitable: Coroutine[None, None, T],
     timeout: float,  # noqa: ASYNC109
 ) -> None:
     awaitable.close()

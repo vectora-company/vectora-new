@@ -11,6 +11,8 @@ Três naturezas diferentes:
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import httpx
 import pytest
 
@@ -101,7 +103,9 @@ class TestCrawlEMapExigemAprovacao:
 
 class TestResearchAssincrono:
     @staticmethod
-    def _handler(estados: list[str], *, com_resultado: bool = True) -> object:
+    def _handler(
+        estados: list[str], *, com_resultado: bool = True
+    ) -> Callable[[httpx.Request], httpx.Response]:
         it = iter(estados)
 
         def handler(req: httpx.Request) -> httpx.Response:

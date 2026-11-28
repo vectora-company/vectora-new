@@ -43,12 +43,12 @@ from backend.vtypes.contracts import JsonValue
 )
 async def test_adapters_reject_invalid_responses(
     adapter: ClefLocalAdapter | ClefApiAdapter | JevApiAdapter,
-    answers: object,
+    answers: JsonValue,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """All adapters reject malformed, extra, mismatched and out-of-range answers."""
 
-    async def post(*args: object, **kwargs: object) -> httpx.Response:
+    async def post[**P](*args: P.args, **kwargs: P.kwargs) -> httpx.Response:
         """Executa a operação post."""
         return httpx.Response(200, json={"answers": answers})
 
@@ -174,7 +174,7 @@ async def test_http_errors_do_not_expose_response_body(
 ) -> None:
     """Provider bodies must not appear in returned policy reasons or logs."""
 
-    async def post(*args: object, **kwargs: object) -> httpx.Response:
+    async def post[**P](*args: P.args, **kwargs: P.kwargs) -> httpx.Response:
         """Executa a operação post."""
         return httpx.Response(400, text="secret-state-and-credential")
 

@@ -42,7 +42,7 @@ def mock_ws(tmp_path, monkeypatch):
     return ws
 
 
-def _make_config(ws_id: str) -> Any:
+def _make_config(ws_id: str) -> dict[str, dict[str, str]]:
     return {"configurable": {"workspace_id": ws_id, "thread_id": "t1"}}
 
 

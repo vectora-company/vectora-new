@@ -1,6 +1,6 @@
 """``delegate_to_subagent`` — tool nativa registrada em ``TOOL_REGISTRY``
 que o loop nativo chama pra invocar uma SOUL, consumindo ``run_subagent``
-(``backend/engine/subagents.py``) por baixo. Mesmo ``_ScriptedChatClient``/
+(``backend/engine/subagents.py``) por baixo. Mesmo ``ScriptedChatClient``/
 ``_HangingChatClient`` de ``test_engine_subagents.py``.
 """
 
@@ -17,6 +17,7 @@ from backend.tools.context import ToolContext
 from backend.tools.registry import TOOL_REGISTRY
 from backend.tools.subagent_delegate import SubagentDeps
 from backend.vtypes.message import ToolCallChunk, VMessageChunk
+from tests.chat_fakes import ScriptedChatClient, texto_chunk
 
 
 class _HangingChatClient:
@@ -29,28 +30,6 @@ class _HangingChatClient:
     ):
         msg = "não usado (astream-only)"
         raise NotImplementedError(msg)
-
-
-class _ScriptedChatClient:
-    def __init__(self, turnos: list[list[VMessageChunk]]) -> None:
-        self._turnos = turnos
-        self.chamadas = 0
-
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
-        turno = self._turnos[self.chamadas]
-        self.chamadas += 1
-        for chunk in turno:
-            yield chunk
-
-    async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
-        msg = "não usado (astream-only)"
-        raise NotImplementedError(msg)
-
-
-def _texto_chunk(texto: str) -> VMessageChunk:
-    return VMessageChunk(delta_text=texto)
 
 
 @pytest.fixture
@@ -94,7 +73,7 @@ class TestDelegateToSubagent:
     async def test_solicitacao_trivial_nao_inicia_subagente(
         self, session_store: SessionStore
     ) -> None:
-        client = _ScriptedChatClient([[_texto_chunk("não deveria ser chamado")]])
+        client = ScriptedChatClient([[texto_chunk("não deveria ser chamado")]])
         deps = SubagentDeps(
             catalog={"coder": _spec("coder")},
             session_store=session_store,
@@ -119,7 +98,7 @@ class TestDelegateToSubagent:
     async def test_delegacao_bem_sucedida_devolve_texto_do_subagente(
         self, session_store
     ) -> None:
-        client = _ScriptedChatClient([[_texto_chunk("respondido pela SOUL")]])
+        client = ScriptedChatClient([[texto_chunk("respondido pela SOUL")]])
         deps = SubagentDeps(
             catalog={"coder": _spec("coder")},
             session_store=session_store,
@@ -149,7 +128,7 @@ class TestDelegateToSubagent:
         deps_sem_soul = SubagentDeps(
             catalog={},
             session_store=session_store,
-            chat_client=_ScriptedChatClient([[_texto_chunk("nunca chamado")]]),
+            chat_client=ScriptedChatClient([[texto_chunk("nunca chamado")]]),
             should_require_approval=None,
         )
         resultado_inexistente = await handler(
@@ -221,7 +200,7 @@ async def test_actionable_requests_do_not_require_execution_markers(
     prompt: str, session_store: SessionStore
 ) -> None:
     """Valid task descriptions must reach the selected subagent."""
-    client = _ScriptedChatClient([[_texto_chunk("feito")]])
+    client = ScriptedChatClient([[texto_chunk("feito")]])
     deps = SubagentDeps(
         catalog={"coder": _spec()},
         session_store=session_store,

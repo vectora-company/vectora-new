@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import TracebackType
 
 import aiosqlite
 import pytest
 
 from backend.services import tool_usage
+from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture
@@ -107,13 +109,18 @@ async def test_sqlite_pool_initialization_is_serialized_per_path(
         async def __aenter__(self) -> FakeConnection:
             return FakeConnection()
 
-        async def __aexit__(self, *_args: object) -> None:
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None:
             return None
 
     class FakePool:
         created = 0
 
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
+        def __init__[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> None:
             type(self).created += 1
 
         async def open(self) -> None:
@@ -147,8 +154,8 @@ async def test_record_postgres_usa_datetime_para_timestamptz(
 ) -> None:
     class FakeConnection:
         def __init__(self) -> None:
-            self.calls: list[tuple[str, tuple[object, ...]]] = []
-            self.rows: list[dict[str, object]] = [
+            self.calls: list[tuple[str, tuple[str | int | datetime, ...]]] = []
+            self.rows: list[dict[str, str | int | datetime]] = [
                 {
                     "tool_name": "expired",
                     "user_id": "alice",
@@ -157,7 +164,7 @@ async def test_record_postgres_usa_datetime_para_timestamptz(
                 }
             ]
 
-        async def execute(self, query: str, *args: object) -> None:
+        async def execute(self, query: str, *args: str | int | datetime) -> None:
             self.calls.append((query, args))
             if query.startswith("DELETE"):
                 cutoff = args[0]
@@ -180,7 +187,7 @@ async def test_record_postgres_usa_datetime_para_timestamptz(
 
         async def fetch(
             self, _query: str, user_id: str, cutoff: datetime
-        ) -> list[dict[str, object]]:
+        ) -> list[JsonObject]:
             active = [
                 row
                 for row in self.rows
@@ -202,7 +209,12 @@ async def test_record_postgres_usa_datetime_para_timestamptz(
         async def __aenter__(self) -> FakeConnection:
             return self.connection
 
-        async def __aexit__(self, *_args: object) -> None:
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None:
             return None
 
     class FakePool:

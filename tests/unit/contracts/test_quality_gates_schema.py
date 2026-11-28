@@ -12,6 +12,7 @@ from backend.contracts.models import (
     QualityGateSpec,
     WorkspaceVerificationProfile,
 )
+from backend.vtypes.contracts import JsonValue
 
 
 def test_quality_gate_spec_and_profile_instantiation() -> None:
@@ -125,7 +126,7 @@ def test_quality_gates_bundle_all_refs_resolve() -> None:
 
     refs_found: list[str] = []
 
-    def _find_refs(obj: object) -> None:
+    def _find_refs(obj: JsonValue) -> None:
         """Executa a operação find refs."""
         if isinstance(obj, dict):
             if "$ref" in obj:

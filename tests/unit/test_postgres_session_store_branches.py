@@ -37,7 +37,7 @@ class _AsyncContext:
 
 
 class _Connection:
-    def __init__(self, fetchval_results: list[object] | None = None) -> None:
+    def __init__(self, fetchval_results: list[int | str | None] | None = None) -> None:
         """Inicializa o estado da instância."""
         self.fetchval_results = list(fetchval_results or [])
         self.fetchval = AsyncMock(side_effect=self.fetchval_results)

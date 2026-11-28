@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from types import TracebackType
 
 import pytest
 
@@ -264,10 +265,15 @@ class TestHttpRequest:
             async def __aenter__(self) -> _FakeClient:
                 return self
 
-            async def __aexit__(self, *_: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 pass
 
-            async def request(self, *_: object, **__: object) -> _FakeResponse:
+            async def request[**P](self, *_: P.args, **__: P.kwargs) -> _FakeResponse:
                 return _FakeResponse()
 
         monkeypatch.setattr(httpx, "AsyncClient", lambda **_kw: _FakeClient())
@@ -284,10 +290,15 @@ class TestHttpRequest:
             async def __aenter__(self) -> _ErrorClient:
                 return self
 
-            async def __aexit__(self, *_: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 pass
 
-            async def request(self, *_: object, **__: object) -> None:
+            async def request[**P](self, *_: P.args, **__: P.kwargs) -> None:
                 raise httpx.ConnectError("connection refused")
 
         monkeypatch.setattr(httpx, "AsyncClient", lambda **_kw: _ErrorClient())

@@ -317,12 +317,8 @@ async def test_serve_pipe_proxies_http() -> None:
         def data_received(self, data: bytes) -> None:
             received.append(data)
 
-    from typing import Any
-
-    _loop_proactor: Any = (
-        loop  # ProactorEventLoop only — não declarado em AbstractEventLoop
-    )
-    _create_pipe = _loop_proactor.create_pipe_connection
+    # Só o ProactorEventLoop tem este método; AbstractEventLoop não o declara.
+    _create_pipe = getattr(loop, "create_pipe_connection")  # noqa: B009
     _dummy_tr, _ = await _create_pipe(asyncio.Protocol, _pipe)
     transport2, _ = await _create_pipe(_ClientProto, _pipe)
 

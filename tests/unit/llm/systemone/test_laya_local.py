@@ -15,6 +15,8 @@ from backend.llm.systemone.types import (
     ScoreQuestion,
     SystemOneRequest,
 )
+from backend.vtypes.contracts import JsonObject
+from tests.json_values import dig
 
 
 def _request() -> SystemOneRequest:
@@ -45,7 +47,7 @@ def _request() -> SystemOneRequest:
 @pytest.mark.asyncio
 async def test_laya_serializes_typed_questions_and_normalizes_response() -> None:
     """Verifica o comportamento de laya serializes typed questions and normalizes response."""
-    seen: dict[str, object] = {}
+    seen: JsonObject = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
         """Executa a operação handler."""
@@ -71,12 +73,11 @@ async def test_laya_serializes_typed_questions_and_normalizes_response() -> None
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         response = await LayaLocalAdapter(client=client).decide(_request())
 
-    payload = seen["payload"]
-    assert isinstance(payload, dict)
-    assert payload["questions"]["department"]["criteria"]["infra"] == (
+    questions = dig(seen["payload"], "questions")
+    assert dig(questions, "department", "criteria", "infra") == (
         "incidentes e indisponibilidade"
     )
-    assert payload["questions"]["urgency"]["criteria"] == ["baixa", "média", "crítica"]
+    assert dig(questions, "urgency", "criteria") == ["baixa", "média", "crítica"]
     assert isinstance(response.answers["department"], ChoiceAnswer)
     assert response.answers["department"].selection == "infra"
     assert isinstance(response.answers["urgency"], ScoreAnswer)

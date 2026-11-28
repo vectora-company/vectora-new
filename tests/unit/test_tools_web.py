@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+from types import TracebackType
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from backend.tools.web import _fetch_via_http, fetch_url, web_search
@@ -286,22 +288,34 @@ class TestFetchUrlSsrfGuard:
             async def __aenter__(self) -> _Response:
                 return _Response()
 
-            async def __aexit__(self, *args: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 return None
 
-        transports: list[object] = []
+        transports: list[httpx.AsyncBaseTransport] = []
 
         class _Client:
-            def __init__(self, *, transport: object, **_: object) -> None:
+            def __init__(
+                self, *, transport: httpx.AsyncBaseTransport, **_: float
+            ) -> None:
                 transports.append(transport)
 
             async def __aenter__(self) -> _Client:
                 return self
 
-            async def __aexit__(self, *args: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 return None
 
-            def stream(self, *_args: object, **_kwargs: object) -> _Stream:
+            def stream[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> _Stream:
                 return _Stream()
 
         with (

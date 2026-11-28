@@ -8,7 +8,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 from unittest.mock import patch
 
 import pytest
@@ -25,6 +25,7 @@ from backend.services.media_previews import (
 from backend.settings import settings
 from backend.tools.context import ToolContext
 from backend.tools.media_native import pdf_to_images, video_to_frames
+from backend.vtypes.contracts import JsonObject
 
 requires_ffmpeg = pytest.mark.skipif(
     shutil.which("ffmpeg") is None, reason="ffmpeg necessário"
@@ -61,9 +62,9 @@ def _make_video(path: Path, seconds: int) -> None:
 
 
 @pytest.fixture
-def values(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+def values(monkeypatch: pytest.MonkeyPatch) -> JsonObject:
     """Configurações do app em memória (as chaves ``media_*``)."""
-    store: dict[str, object] = {}
+    store: JsonObject = {}
     monkeypatch.setattr(media_limits, "_setting", store.get)
     return store
 
@@ -80,14 +81,12 @@ def _ctx() -> ToolContext:
 
 
 class TestLimites:
-    def test_padroes_sao_bem_maiores_que_antes(self, values: dict[str, object]) -> None:
+    def test_padroes_sao_bem_maiores_que_antes(self, values: JsonObject) -> None:
         limits = media_limits.media_limits()
         assert (limits.pdf_pages, limits.video_frames) == (20, 12)
         assert (limits.max_side, limits.quality, limits.max_images) == (1280, 80, 60)
 
-    def test_configuracao_vence_e_respeita_os_tetos(
-        self, values: dict[str, object]
-    ) -> None:
+    def test_configuracao_vence_e_respeita_os_tetos(self, values: JsonObject) -> None:
         values.update(
             media_pdf_max_pages="120",
             media_video_max_frames=40,
@@ -102,9 +101,7 @@ class TestLimites:
         assert limits.quality == 30
         assert limits.max_images == 60
 
-    def test_opcoes_da_chamada_ficam_dentro_dos_tetos(
-        self, values: dict[str, object]
-    ) -> None:
+    def test_opcoes_da_chamada_ficam_dentro_dos_tetos(self, values: JsonObject) -> None:
         options = image_options(max_side=99999, quality=5, image_format="PNG")
         assert (options.max_side, options.quality) == (4096, 30)
         assert options.image_format == "png"
@@ -148,15 +145,32 @@ class TestPaginasDoPdf:
         assert png.startswith(b"\x89PNG")
 
 
+class _ToolResult(TypedDict, total=False):
+    """Campos que os testes leem da resposta JSON das ferramentas."""
+
+    error: str
+    pages: list[dict[str, int]]
+    next_page: int | None
+    total_pages: int
+    frames: list[dict[str, int]]
+    duration_ms: int
+    truncated: bool
+    returned: int
+    next_start_ms: int | None
+    model_images: list[dict[str, str]]
+
+
 class TestFerramentaPdfToImages:
-    async def _run(self, home: Path, pdf_bytes: bytes, **kwargs: Any) -> dict:
+    async def _run(
+        self, home: Path, pdf_bytes: bytes, **kwargs: int | str
+    ) -> _ToolResult:
         pdf = home / "doc.pdf"
         pdf.write_bytes(pdf_bytes)
         with patch("backend.tools.fs._confine", return_value=(pdf, "")):
             return json.loads(await pdf_to_images(ctx=_ctx(), path="doc.pdf", **kwargs))
 
     async def test_padrao_vem_da_configuracao(
-        self, home: Path, values: dict[str, object]
+        self, home: Path, values: JsonObject
     ) -> None:
         values["media_pdf_max_pages"] = 7
         result = await self._run(home, _pdf(30))
@@ -164,7 +178,7 @@ class TestFerramentaPdfToImages:
         assert result["next_page"] == 8
 
     async def test_faixa_resolucao_e_formato(
-        self, home: Path, values: dict[str, object]
+        self, home: Path, values: JsonObject
     ) -> None:
         result = await self._run(
             home,
@@ -180,7 +194,7 @@ class TestFerramentaPdfToImages:
         assert all(ref["mime_type"] == "image/png" for ref in result["model_images"])
 
     async def test_teto_por_chamada_e_ultima_pagina(
-        self, home: Path, values: dict[str, object]
+        self, home: Path, values: JsonObject
     ) -> None:
         values["media_max_images"] = 8
         result = await self._run(home, _pdf(30), max_pages=500)
@@ -188,14 +202,14 @@ class TestFerramentaPdfToImages:
         tail = await self._run(home, _pdf(30), first_page=29, max_pages=10)
         assert (tail["returned"], tail["next_page"]) == (2, None)
 
-    async def test_erros(self, home: Path, values: dict[str, object]) -> None:
+    async def test_erros(self, home: Path, values: JsonObject) -> None:
         assert "error" in await self._run(home, _pdf(3), first_page=9)
         assert "error" in await self._run(home, b"%PDF-quebrado")
 
 
 @requires_ffmpeg
 class TestFerramentaVideoToFrames:
-    async def _run(self, home: Path, seconds: int = 3, **kwargs: Any) -> dict:
+    async def _run(self, home: Path, seconds: int = 3, **kwargs: int) -> _ToolResult:
         video = home / "clip.mp4"
         _make_video(video, seconds)
         with patch("backend.tools.fs._confine", return_value=(video, "")):
@@ -204,7 +218,7 @@ class TestFerramentaVideoToFrames:
             )
 
     async def test_um_quadro_por_intervalo_em_ms(
-        self, home: Path, values: dict[str, object]
+        self, home: Path, values: JsonObject
     ) -> None:
         result = await self._run(home, interval_ms=1000)
         assert [frame["time_ms"] for frame in result["frames"]] == [0, 1000, 2000]
@@ -213,16 +227,14 @@ class TestFerramentaVideoToFrames:
         assert len(result["model_images"]) == 3
 
     async def test_limite_de_quadros_avisa_onde_continuar(
-        self, home: Path, values: dict[str, object]
+        self, home: Path, values: JsonObject
     ) -> None:
         result = await self._run(home, interval_ms=500, max_frames=3)
         assert result["returned"] == 3
         assert result["truncated"] is True
         assert result["next_start_ms"] == 1500
 
-    async def test_trecho_e_resolucao(
-        self, home: Path, values: dict[str, object]
-    ) -> None:
+    async def test_trecho_e_resolucao(self, home: Path, values: JsonObject) -> None:
         result = await self._run(
             home, start_ms=1000, end_ms=2000, max_frames=2, max_side=256
         )
@@ -230,16 +242,14 @@ class TestFerramentaVideoToFrames:
         assert all(1000 <= moment < 2000 for moment in times)
         assert len(times) == 2
 
-    async def test_trecho_fora_do_video(
-        self, home: Path, values: dict[str, object]
-    ) -> None:
+    async def test_trecho_fora_do_video(self, home: Path, values: JsonObject) -> None:
         result = await self._run(home, start_ms=900_000)
         assert "error" in result
 
 
 @requires_ffmpeg
 async def test_anexo_respeita_os_limites_configurados(
-    home: Path, values: dict[str, object]
+    home: Path, values: JsonObject
 ) -> None:
     from backend.api.handlers.chat import _build_user_vmessage
     from backend.api.schemas import Attachment, AttachmentKind

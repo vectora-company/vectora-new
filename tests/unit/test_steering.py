@@ -8,7 +8,7 @@ import pytest
 
 from backend.engine import steering
 from backend.engine.conversation_loop import LoopConfig, run_conversation
-from backend.engine.stream_events import SteerApplied
+from backend.engine.stream_events import EngineEvent, SteerApplied
 from backend.persistence.native.session_store import SessionStore
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
@@ -101,9 +101,9 @@ async def test_loop_applies_a_steer_that_arrives_during_the_answer(
         "thread-s", text_message(MessageRole.USER, "explique o projeto")
     )
     client = _RecordingClient()
-    events: list[object] = []
+    events: list[EngineEvent] = []
 
-    async def on_event(event: object) -> None:
+    async def on_event(event: EngineEvent) -> None:
         events.append(event)
 
     await run_conversation(

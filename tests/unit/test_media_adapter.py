@@ -6,6 +6,7 @@ from backend.services import media_adapter, media_billing
 from backend.services.media_quota import media_quota
 from backend.tools import media
 from backend.tools.context import ToolContext
+from backend.vtypes.contracts import JsonObject
 
 
 def test_media_specs_hides_tools_blocked_for_principal(
@@ -27,13 +28,13 @@ async def test_invoke_media_applies_byok_before_media_tool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """MCP/media adapter must bypass internal quota only for a user key."""
-    observed: dict[str, object] = {}
+    observed: JsonObject = {}
 
     async def get_overrides(user_id: str) -> dict[str, str]:
         assert user_id == "user-1"
         return {"OPENAI_API_KEY": "user-key"}
 
-    async def invoke(_arguments: dict[str, object], context: ToolContext) -> str:
+    async def invoke(_arguments: JsonObject, context: ToolContext) -> str:
         observed.update(context._extra)
         reservation, error = await media._reserve_media(context, "generate_image")
         assert reservation is None
@@ -41,9 +42,7 @@ async def test_invoke_media_applies_byok_before_media_tool(
         return "ok"
 
     class FakeSpec:
-        async def ainvoke(
-            self, arguments: dict[str, object], context: ToolContext
-        ) -> str:
+        async def ainvoke(self, arguments: JsonObject, context: ToolContext) -> str:
             return await invoke(arguments, context)
 
     monkeypatch.setattr(

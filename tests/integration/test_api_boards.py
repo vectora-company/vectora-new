@@ -11,9 +11,13 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
+import aiosqlite
+import aiosqlite.context
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 import backend
 from backend.api.handlers.background import CreateTaskRequest, post_task
@@ -34,9 +38,11 @@ _SCHEMA = (
 )
 
 
-def _req(uid: str | None = _UUID) -> Any:
+def _req(uid: str | None = _UUID) -> MagicMock:
     user = SimpleNamespace(id=uid) if uid is not None else None
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    request = MagicMock(spec=Request)
+    request.state = SimpleNamespace(user=user)
+    return request
 
 
 @pytest.fixture
@@ -48,11 +54,9 @@ async def db(tmp_path, monkeypatch):
 
     import aiosqlite
 
-    async def _connect() -> Any:
-        conn: Any = await aiosqlite.connect(db_path)
-        conn.row_factory = lambda c, r: dict(
-            zip([col[0] for col in c.description], r, strict=False)
-        )
+    async def _connect() -> aiosqlite.Connection:
+        conn = await aiosqlite.connect(db_path)
+        conn.row_factory = aiosqlite.Row
         return conn
 
     setup = await _connect()
@@ -220,18 +224,20 @@ async def test_board_batch_queries_treatem_ids_como_dados(db, monkeypatch) -> No
     )
 
     ids = ["id-inexistente'); DROP TABLE vectora_background_tasks; --"]
-    queries: list[tuple[str, tuple[Any, ...]]] = []
+    queries: list[tuple[str, tuple[str, ...]]] = []
     connection = await bg._get_db()
 
     class RecordingConnection:
-        def execute(self, query: str, parameters: tuple[Any, ...] = ()) -> Any:
+        def execute(
+            self, query: str, parameters: tuple[str, ...] = ()
+        ) -> aiosqlite.context.Result[aiosqlite.Cursor]:
             queries.append((query, parameters))
             return connection.execute(query, parameters)
 
     async def get_recording_connection() -> RecordingConnection:
         return RecordingConnection()
 
-    async def skip_legacy_upgrade(_connection: Any) -> None:
+    async def skip_legacy_upgrade(_connection: aiosqlite.Connection) -> None:
         return None
 
     monkeypatch.setattr(kanban, "_get_db", get_recording_connection)

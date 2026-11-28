@@ -12,8 +12,10 @@ from fastapi import HTTPException, Request
 
 import backend.api.handlers.terminal as terminal_handler
 from backend.api.handlers.terminal import CloseBody, close_terminal, list_terminals
+from backend.services.policy_compiler import EgressPolicy
 from backend.services.pty_registry import pty_registry
 from backend.services.pty_session import PtySession
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 def _request(user_id: str) -> Request:
@@ -270,14 +272,14 @@ async def test_terminal_websocket_creates_interactive_pty_for_trusted_local_work
         transport="local",
         owner_id=None,
     )
-    created: dict[str, object] = {}
+    created: JsonObject = {}
     session = _FakeInteractiveSession("terminal-1", workspace.id)
 
-    def create_pty(**kwargs: object) -> _FakeInteractiveSession:
+    def create_pty(**kwargs: JsonValue) -> _FakeInteractiveSession:
         created.update(kwargs)
         return session
 
-    async def no_egress(_workspace_id: str, _policy: object) -> None:
+    async def no_egress(_workspace_id: str, _policy: EgressPolicy) -> None:
         return None
 
     monkeypatch.setattr(terminal_handler, "_auth_enabled", lambda: False)
@@ -322,10 +324,10 @@ async def test_terminal_websocket_returns_pty_creation_error_to_client(
         owner_id=None,
     )
 
-    def fail_to_create(**_kwargs: object) -> None:
+    def fail_to_create[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
         raise RuntimeError("PTY backend unavailable")
 
-    async def no_egress(_workspace_id: str, _policy: object) -> None:
+    async def no_egress(_workspace_id: str, _policy: EgressPolicy) -> None:
         return None
 
     monkeypatch.setattr(terminal_handler, "_auth_enabled", lambda: False)

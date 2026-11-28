@@ -76,7 +76,7 @@ async def test_revoke_propagates_falha_de_persistencia(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FailingConnection:
-        async def execute(self, *_args: object) -> None:
+        async def execute[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> None:
             raise RuntimeError("falha no banco")
 
         async def close(self) -> None:

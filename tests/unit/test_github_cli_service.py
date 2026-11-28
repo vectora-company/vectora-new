@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable
 from unittest.mock import AsyncMock
 
 import pytest
 
 from backend.services import github_cli
+from backend.vtypes.contracts import JsonObject
 
 
 class _Process:
@@ -37,9 +39,9 @@ async def test_run_gh_uses_safe_environment_and_redacts_credentials(
         stdout=b"https://user:ghp_12345678901234567890@github.com/a/b",
         stderr=b"github_pat_12345678901234567890",
     )
-    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    calls: list[tuple[tuple[str, ...], dict[str, int | str | None]]] = []
 
-    async def create_process(*args: object, **kwargs: object) -> _Process:
+    async def create_process(*args: str, **kwargs: int | str | None) -> _Process:
         calls.append((args, kwargs))
         return process
 
@@ -84,7 +86,7 @@ async def test_run_gh_sends_write_body_only_over_stdin(
         github_cli.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/gh"
     )
 
-    async def create_process(*_args: object, **_kwargs: object) -> _Process:
+    async def create_process(*_args: str, **_kwargs: int | str | None) -> _Process:
         return process
 
     monkeypatch.setattr(github_cli.asyncio, "create_subprocess_exec", create_process)
@@ -134,7 +136,7 @@ async def test_run_gh_classifies_unauthenticated_process(
         github_cli.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/gh"
     )
 
-    async def create_process(*_args: object, **_kwargs: object) -> _Process:
+    async def create_process(*_args: str, **_kwargs: int | str | None) -> _Process:
         return process
 
     monkeypatch.setattr(github_cli.asyncio, "create_subprocess_exec", create_process)
@@ -178,11 +180,13 @@ async def test_run_gh_uses_separate_read_and_write_timeouts(
 ) -> None:
     seen: list[float] = []
 
-    async def wait_for(_awaitable: object, **kwargs: float) -> tuple[bytes, bytes]:
+    async def wait_for(
+        _awaitable: Awaitable[tuple[bytes, bytes]], **kwargs: float
+    ) -> tuple[bytes, bytes]:
         seen.append(kwargs["timeout"])
         return b"", b""
 
-    async def create_process(*_args: object, **_kwargs: object) -> _Process:
+    async def create_process(*_args: str, **_kwargs: int | str | None) -> _Process:
         return _Process()
 
     monkeypatch.setattr(
@@ -205,10 +209,12 @@ async def test_run_gh_kills_process_after_timeout(
 ) -> None:
     process = _Process()
 
-    async def create_process(*_args: object, **_kwargs: object) -> _Process:
+    async def create_process(*_args: str, **_kwargs: int | str | None) -> _Process:
         return process
 
-    async def timeout(_awaitable: object, **_kwargs: float) -> tuple[bytes, bytes]:
+    async def timeout(
+        _awaitable: Awaitable[tuple[bytes, bytes]], **_kwargs: float
+    ) -> tuple[bytes, bytes]:
         raise TimeoutError
 
     monkeypatch.setattr(

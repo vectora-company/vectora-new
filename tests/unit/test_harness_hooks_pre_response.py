@@ -23,6 +23,7 @@ from backend.workspace.workspace_config import (
     hook_rules_digest,
     load_workspace_config,
 )
+from tests.chat_fakes import ScriptedChatClient, texto_chunk
 
 PY = json.dumps(sys.executable)
 
@@ -35,18 +36,8 @@ DENY_SEM_REVISADO = (
 )
 
 
-class _Client:
-    def __init__(self, turnos: list[str]) -> None:
-        self._turnos = turnos
-        self.chamadas = 0
-
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
-        texto = self._turnos[min(self.chamadas, len(self._turnos) - 1)]
-        self.chamadas += 1
-        yield VMessageChunk(delta_text=texto)
-
-    async def agenerate(self, *args: Any, **kwargs: Any):
-        raise NotImplementedError
+def _client(turnos: list[str]) -> ScriptedChatClient:
+    return ScriptedChatClient([[texto_chunk(t)] for t in turnos], repeat=True)
 
 
 @pytest.fixture
@@ -87,7 +78,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-async def _run(session_store: SessionStore, client: _Client, run_id: str):
+async def _run(session_store: SessionStore, client: ScriptedChatClient, run_id: str):
     await session_store.upsert_agent_run(
         AgentRun(run_id=run_id, thread_id="thread-1", status="running")
     )
@@ -111,7 +102,7 @@ async def _run(session_store: SessionStore, client: _Client, run_id: str):
 async def test_resposta_negada_volta_ao_modelo_e_a_revisada_passa(
     session_store: SessionStore, workspace: Path
 ) -> None:
-    client = _Client(["rascunho", "REVISADO: resposta final"])
+    client = _client(["rascunho", "REVISADO: resposta final"])
     result, events = await _run(session_store, client, "run-revisa")
 
     assert client.chamadas == 2
@@ -134,7 +125,7 @@ async def test_resposta_negada_volta_ao_modelo_e_a_revisada_passa(
 async def test_negacao_persistente_para_no_limite_e_avisa(
     session_store: SessionStore, workspace: Path
 ) -> None:
-    client = _Client(["sempre sem o selo"])
+    client = _client(["sempre sem o selo"])
     result, events = await _run(session_store, client, "run-limite")
 
     assert client.chamadas == 1 + hooks.MAX_RESPONSE_REVISIONS
@@ -147,7 +138,7 @@ async def test_sem_regra_pre_response_o_fluxo_nao_muda(
     session_store: SessionStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(hooks, "_workspace_for", lambda _ctx: None)
-    client = _Client(["resposta qualquer"])
+    client = _client(["resposta qualquer"])
     result, _ = await _run(session_store, client, "run-livre")
     assert client.chamadas == 1
     assert result.stopped_reason == "stop"

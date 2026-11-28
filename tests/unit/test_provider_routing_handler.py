@@ -39,6 +39,7 @@ from backend.api.handlers.provider_routing import (
     llamacpp_runtime_status,
     remove_llamacpp_runtime,
 )
+from backend.vtypes.contracts import JsonObject
 from tests.json_values import as_list, as_object
 
 if TYPE_CHECKING:
@@ -188,8 +189,8 @@ async def test_decision_model_readiness_distinguishes_rejected_key_from_outage(
     )
 
     class ProbeAdapter:
-        async def capabilities(self) -> object:
-            return object()
+        async def capabilities(self) -> SimpleNamespace:
+            return SimpleNamespace()
 
         async def health(self) -> bool:
             if failure == "auth":
@@ -1817,7 +1818,7 @@ class TestLlamaCppAndHuggingFace:
             json.dumps({"files": [{"filename": "weights.gguf", "role": "model"}]}),
             encoding="utf-8",
         )
-        started: dict[str, object] = {}
+        started: JsonObject = {}
         stop = AsyncMock()
 
         async def fake_start(executable_arg, model_arg, **options) -> None:
@@ -3275,7 +3276,9 @@ def test_decision_model_status_with_empty_local_model(
         health=AsyncMock(return_value=False),
     )
 
-    def provider(sys_settings: SystemOneSettings, **kwargs: object) -> SimpleNamespace:
+    def provider[**P](
+        sys_settings: SystemOneSettings, *_args: P.args, **kwargs: P.kwargs
+    ) -> SimpleNamespace:
         return (
             broken
             if sys_settings.provider == "clef-local" and capabilities_fail

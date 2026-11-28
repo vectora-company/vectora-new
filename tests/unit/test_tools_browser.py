@@ -10,6 +10,7 @@ nestes testes (não depende de Chromium instalado).
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
@@ -20,6 +21,9 @@ from backend.services.egress_policy import EgressPolicy
 from backend.services.policy_compiler import PolicySnapshot
 from backend.tools import browser as browser_tools
 from backend.tools.context import ToolContext
+from backend.vtypes.contracts import JsonObject
+
+type _RouteHandler = Callable[..., Awaitable[None]]
 
 
 def _ctx(workspace_id: str = "ws1") -> ToolContext:
@@ -127,7 +131,7 @@ async def test_browser_navigate_exercita_guard_e_remove_handler_em_falha(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The public navigation tool aborts blocked routes and keeps the guard."""
-    registered: dict[str, object] = {}
+    registered: dict[str, _RouteHandler] = {}
     abort = AsyncMock()
     continue_ = AsyncMock()
 
@@ -135,14 +139,14 @@ async def test_browser_navigate_exercita_guard_e_remove_handler_em_falha(
         url = "https://example.com"
         title = AsyncMock(return_value="Example")
 
-        async def route(self, pattern: str, handler: object) -> None:
+        async def route(self, pattern: str, handler: _RouteHandler) -> None:
             registered[pattern] = handler
 
-        async def unroute(self, pattern: str, handler: object) -> None:
+        async def unroute(self, pattern: str, handler: _RouteHandler) -> None:
             assert registered[pattern] is handler
 
-        async def goto(self, url: str, **_kwargs: object) -> None:
-            route_handler = cast("Any", registered["**/*"])
+        async def goto(self, url: str, **_kwargs: str | float) -> None:
+            route_handler = registered["**/*"]
             route = SimpleNamespace(
                 request=SimpleNamespace(url="http://127.0.0.1/private"),
                 abort=abort,
@@ -166,7 +170,7 @@ async def test_browser_navigate_guard_continua_rota_permitida(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The public navigation tool continues an allowed route and keeps its guard."""
-    registered: dict[str, object] = {}
+    registered: dict[str, _RouteHandler] = {}
     abort = AsyncMock()
     continue_ = AsyncMock()
 
@@ -174,14 +178,14 @@ async def test_browser_navigate_guard_continua_rota_permitida(
         url = "https://example.com/docs"
         title = AsyncMock(return_value="Example")
 
-        async def route(self, pattern: str, handler: object) -> None:
+        async def route(self, pattern: str, handler: _RouteHandler) -> None:
             registered[pattern] = handler
 
-        async def unroute(self, pattern: str, handler: object) -> None:
+        async def unroute(self, pattern: str, handler: _RouteHandler) -> None:
             assert registered[pattern] is handler
 
-        async def goto(self, url: str, **_kwargs: object) -> None:
-            route_handler = cast("Any", registered["**/*"])
+        async def goto(self, url: str, **_kwargs: str | float) -> None:
+            route_handler = registered["**/*"]
             route = SimpleNamespace(
                 request=SimpleNamespace(url=url),
                 abort=abort,
@@ -246,7 +250,7 @@ async def test_browser_navigate_reusa_snapshot_e_bloqueia_redirect(
 
     monkeypatch.setattr(browser_tools, "compile_policy_snapshot", _must_not_compile)
 
-    async def _goto(url: str, **_kwargs: object) -> None:
+    async def _goto(url: str, **_kwargs: str | float) -> None:
         """Record a permitted page navigation in the fake browser."""
         fake_page.url = (
             "http://127.0.0.1/private" if url == "https://example.com" else url
@@ -290,7 +294,7 @@ async def test_browser_navigate_bloqueia_redirect_para_destino_privado(
 ) -> None:
     """Erro/regressão: o destino final também passa pelo perímetro SSRF."""
 
-    async def _goto(url: str, **_kwargs: object) -> None:
+    async def _goto(url: str, **_kwargs: str | float) -> None:
         """Record a navigation request for the redirect fixture."""
         fake_page.url = (
             "http://127.0.0.1:8080/private" if url == "https://example.com" else url
@@ -993,7 +997,7 @@ async def test_navigation_failure_does_not_reuse_previous_block_reason(
     # A numeric public URL keeps this regression independent of DNS.
     url = "https://93.184.216.34"
 
-    async def blocked_navigation(*args: object, **kwargs: object) -> None:
+    async def blocked_navigation(*args: str, **kwargs: str | float) -> None:
         call = fake_page.route.await_args
         assert call is not None
         handler = call.args[1]

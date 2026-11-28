@@ -15,6 +15,7 @@ testa especificamente o caminho COM Tavily configurado.
 from __future__ import annotations
 
 import json
+from typing import NoReturn
 from urllib.parse import urlsplit
 
 import pytest
@@ -129,7 +130,7 @@ async def test_fetch_url_github_publico_real(
 ) -> None:
     """A URL pública do GitHub deve usar o fallback HTTP."""
 
-    async def raise_attribute_error(*args: object, **kwargs: object) -> object:
+    async def raise_attribute_error[**P](*args: P.args, **kwargs: P.kwargs) -> NoReturn:
         raise AttributeError("extração indisponível")
 
     monkeypatch.setattr(web_tools, "_invoke_backend", raise_attribute_error)

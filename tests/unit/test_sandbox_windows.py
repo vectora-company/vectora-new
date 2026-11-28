@@ -14,6 +14,7 @@ import ctypes as _real_ctypes
 import pytest
 
 from backend.sandbox import windows as win
+from backend.vtypes.contracts import JsonObject
 
 
 class TestBuildSoftEnv:
@@ -67,8 +68,8 @@ class TestAssignJobObject:
         assert win.assign_job_object_kill_on_close(999) is None
 
     def test_associa_processo_quando_tudo_disponivel(self, monkeypatch) -> None:
-        calls: dict[str, object] = {}
-        closed_handles: list[object] = []
+        calls: dict[str, bool | tuple[int, ...]] = {}
+        closed_handles: list[int] = []
 
         class _FakeKernel32:
             def CreateJobObjectW(self, _a, _b) -> int:

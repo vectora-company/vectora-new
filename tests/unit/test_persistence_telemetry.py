@@ -21,9 +21,11 @@ from backend.persistence.telemetry import (
     _truncate,
     telemetry,
 )
+from backend.vtypes.contracts import JsonValue
+from tests.json_values import as_str
 
 
-def _field(record: logging.LogRecord, name: str) -> Any:
+def _field(record: logging.LogRecord, name: str) -> JsonValue:
     """Lê um campo dinâmico gravado via ``extra=`` (não capturado pelo
     type-checker estático, que só conhece os atributos fixos de LogRecord)."""
     return getattr(record, name)
@@ -174,7 +176,7 @@ class TestRecordToolCall:
         assert _field(err_record, "tool_name") == "fetch_url"
         assert _field(err_record, "success") is False
         assert _field(err_record, "error_type") == "ValueError"
-        assert "timeout" in _field(err_record, "error_message")
+        assert "timeout" in as_str(_field(err_record, "error_message"))
 
     async def test_disabled_telemetry_is_noop(self, captured: _ListHandler) -> None:
         """Com ``telemetry_enabled=False`` nenhum evento é gravado — sem erro."""
@@ -462,14 +464,14 @@ class TestRecordErrorEdgeCases:
 
         record = captured.records[0]
         assert _field(record, "turn_id") == "turn-9"
-        assert "payload" in _field(record, "error_message")
+        assert "payload" in as_str(_field(record, "error_message"))
 
     def test_long_error_message_is_truncated(self, captured: _ListHandler) -> None:
         """Verifica o comportamento de long error message is truncated."""
         telemetry_instance = VectoraTelemetry()
         telemetry_instance.record_error("agent_turn", RuntimeError("x" * 300))
 
-        message = _field(captured.records[0], "error_message")
+        message = as_str(_field(captured.records[0], "error_message"))
         assert len(message) == 201
         assert message.endswith("…")
 

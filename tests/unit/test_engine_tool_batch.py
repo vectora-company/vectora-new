@@ -36,6 +36,7 @@ from backend.tools.registry import (
     _result_is_error,
     vtool,
 )
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import ToolCall
 
 
@@ -241,10 +242,12 @@ class TestDespachoParaleloSequencial:
             async def is_ready(self) -> bool:
                 return failure != "unhealthy"
 
-            def set_mode(self, *_args: object, **_kwargs: object) -> None:
+            def set_mode[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> None:
                 pass
 
-            async def assess_tool_risk(self, **_kwargs: object) -> object:
+            async def assess_tool_risk[**P](
+                self, *_args: P.args, **_kwargs: P.kwargs
+            ) -> SimpleNamespace:
                 if failure == "timeout":
                     await asyncio.sleep(0.05)
                 if failure == "rate_limit":
@@ -416,7 +419,7 @@ class TestDespachoParaleloSequencial:
         from backend.services.policy_compiler import compile_policy_snapshot
         from backend.settings import settings
 
-        preferences: dict[str, object] = {
+        preferences: JsonObject = {
             "decisionModelsEnabled": True,
             "decisionModelProvider": "clef-local",
             "decisionModelSurfaces": {"hitl": True},
@@ -443,10 +446,12 @@ class TestDespachoParaleloSequencial:
             async def is_ready(self) -> bool:
                 return True
 
-            def set_mode(self, *_args: object, **_kwargs: object) -> None:
+            def set_mode[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> None:
                 pass
 
-            async def assess_tool_risk(self, **_kwargs: object) -> object:
+            async def assess_tool_risk[**P](
+                self, *_args: P.args, **_kwargs: P.kwargs
+            ) -> SimpleNamespace:
                 preferences["decisionModelsEnabled"] = False
                 return SimpleNamespace(
                     mode="enforced",
@@ -740,7 +745,7 @@ class TestDespachoParaleloSequencial:
         from backend.services.policy_compiler import compile_policy_snapshot
         from backend.settings import settings
 
-        current_preferences: dict[str, object] = {
+        current_preferences: JsonObject = {
             "decisionModelsEnabled": True,
             "decisionModelProvider": "clef-local",
             "decisionModelSurfaces": {"hitl": True},
@@ -749,7 +754,7 @@ class TestDespachoParaleloSequencial:
         class PreferenceStore:
             def get_frontend_prefs(
                 self, _user_id: str, _workspace_id: str | None
-            ) -> dict[str, object]:
+            ) -> JsonObject:
                 return dict(current_preferences)
 
         monkeypatch.setattr(
@@ -1222,7 +1227,7 @@ class TestRedacaoDeSegredosPosExecucao:
         self, ctx
     ) -> None:
         """A tool recebe o snapshot do run, sem recompilar settings mutáveis."""
-        seen: list[object] = []
+        seen: list[PolicySnapshot | None] = []
 
         @vtool(extras=ToolExtras(destructive=False))
         async def snapshot_probe(ctx: ToolContext) -> str:

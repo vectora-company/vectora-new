@@ -7,9 +7,10 @@ from collections.abc import AsyncGenerator
 
 from backend.api.schemas import DoneEvent, ThreadEvent, TokenEvent, encode_event
 from backend.api.sse_sequence import sequence_stream, stamp_event
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
-def _payload(chunk: str) -> dict[str, object]:
+def _payload(chunk: str) -> JsonObject:
     return json.loads(chunk[len("data: ") :])
 
 
@@ -120,7 +121,7 @@ async def test_replay_acompanha_o_run_em_andamento_ate_o_fim() -> None:
 
     log = RunEventLog("t1")
     log.add(_thread("run-b"))
-    got: list[object] = []
+    got: list[JsonValue] = []
 
     async def reader() -> None:
         got.extend([_payload(line)["seq"] async for line in log.replay(0)])

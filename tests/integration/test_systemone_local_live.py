@@ -74,7 +74,7 @@ class _ToolArgs(BaseModel):
     path: str
 
 
-async def _read_fixture(**_: object) -> str:
+async def _read_fixture[**P](*_args: P.args, **_: P.kwargs) -> str:
     """Executa a operação read fixture."""
     return "fixture"
 

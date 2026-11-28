@@ -17,6 +17,7 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiosqlite
 import pytest
 from fastapi.testclient import TestClient
 
@@ -517,11 +518,9 @@ class TestObservabilityWebhookEndpoint:
         )
         db_path = str(tmp_path / "obs.db")
 
-        async def _connect() -> Any:
-            conn: Any = await aiosqlite.connect(db_path)
-            conn.row_factory = lambda c, r: dict(
-                zip([col[0] for col in c.description], r, strict=False)
-            )
+        async def _connect() -> aiosqlite.Connection:
+            conn = await aiosqlite.connect(db_path)
+            conn.row_factory = aiosqlite.Row
             return conn
 
         async def _setup() -> None:

@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from starlette.requests import Request
 
 from backend.services import git_people as gp
+from backend.vtypes.contracts import JsonObject
 
 SHORTLOG = (
     "    42\tAna Souza <ana@example.com>\n"
@@ -196,7 +198,7 @@ def ws_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return repo
 
 
-def _request() -> Any:
+def _request() -> Request:
     from types import SimpleNamespace
 
     from starlette.requests import Request
@@ -208,12 +210,12 @@ def _request() -> Any:
 
 @pytest.mark.asyncio
 async def test_route_lists_committers_without_the_current_user(
-    ws_repo: Any, monkeypatch: pytest.MonkeyPatch
+    ws_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.api.handlers.workspaces import git_contributors
     from backend.services import github_cli
 
-    async def no_gh(*_a: object, **_k: object) -> dict[str, object]:
+    async def no_gh(*_a: list[str], **_k: str) -> JsonObject:
         return {"status": "error", "message": "gh not found in PATH"}
 
     monkeypatch.setattr(github_cli, "run_gh_command", no_gh)
@@ -225,14 +227,14 @@ async def test_route_lists_committers_without_the_current_user(
 
 @pytest.mark.asyncio
 async def test_route_adds_github_collaborators_and_filters(
-    ws_repo: Any, monkeypatch: pytest.MonkeyPatch
+    ws_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.api.handlers.workspaces import git_contributors
     from backend.services import github_cli
 
     calls: list[list[str]] = []
 
-    async def fake_gh(args: list[str], **_k: object) -> dict[str, object]:
+    async def fake_gh(args: list[str], **_k: str) -> JsonObject:
         calls.append(args)
         return {
             "status": "ok",
@@ -251,12 +253,12 @@ async def test_route_adds_github_collaborators_and_filters(
 
 @pytest.mark.asyncio
 async def test_route_finds_an_unknown_github_user_by_username(
-    ws_repo: Any, monkeypatch: pytest.MonkeyPatch
+    ws_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.api.handlers.workspaces import git_contributors
     from backend.services import github_cli
 
-    async def fake_gh(args: list[str], **_k: object) -> dict[str, object]:
+    async def fake_gh(args: list[str], **_k: str) -> JsonObject:
         if args[1].startswith("users/"):
             return {
                 "status": "ok",
@@ -274,14 +276,14 @@ async def test_route_finds_an_unknown_github_user_by_username(
 
 @pytest.mark.asyncio
 async def test_route_never_runs_gh_for_a_malicious_username(
-    ws_repo: Any, monkeypatch: pytest.MonkeyPatch
+    ws_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.api.handlers.workspaces import git_contributors
     from backend.services import github_cli
 
     seen: list[list[str]] = []
 
-    async def fake_gh(args: list[str], **_k: object) -> dict[str, object]:
+    async def fake_gh(args: list[str], **_k: str) -> JsonObject:
         seen.append(args)
         return {"status": "ok", "output": "[]"}
 
