@@ -206,7 +206,7 @@ def _row_to_task(row: aiosqlite.Row | SqlRow) -> BackgroundTask:
 
 
 async def _get_db() -> aiosqlite.Connection:
-    """Conexão aiosqlite com row_factory de dict (injetável em testes)."""
+    """Conexão aiosqlite com ``aiosqlite.Row`` (injetável em testes)."""
     import aiosqlite
 
     from backend.settings import settings
@@ -806,7 +806,7 @@ async def list_runs_for_user(
     finally:
         with contextlib.suppress(Exception):
             await conn.close()
-    return [cast("BackgroundRunRow", row) for row in rows]
+    return [cast("BackgroundRunRow", dict(row)) for row in rows]
 
 
 async def runs_have_owned_tasks(session_id: str, user_id: str) -> bool:
