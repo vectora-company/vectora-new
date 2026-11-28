@@ -207,7 +207,7 @@ async def _set_pins(fake_db, thread_id: str, pins: list[str]) -> None:
         await threads._set_session_pins(thread_id, pins)
 
 
-async def _build(fake_db, thread_id: str, cwd, **kw) -> str:
+async def _build(fake_db, thread_id: str, cwd: Path | str | None, **kw) -> str:
     with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
         return await threads.build_pinned_context(thread_id, cwd, **kw)
 

@@ -1080,7 +1080,7 @@ class TestSandboxStatus:
         assert resp.diagnostic == "no_workspace"
 
 
-def _async_return(value):
+def _async_return(value: str | None):
     async def _fn(*_args, **_kwargs):
         return value
 

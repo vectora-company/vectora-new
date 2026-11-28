@@ -18,7 +18,7 @@ import pytest
 
 
 class TestGetClientIp:
-    def _make_request(self, headers=None, client_host="127.0.0.1") -> MagicMock:
+    def _make_request(self, headers=None, client_host: str = "127.0.0.1") -> MagicMock:
         from unittest.mock import MagicMock
 
         from fastapi import Request

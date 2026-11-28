@@ -36,7 +36,7 @@ def headless_app():
 
 
 @pytest.fixture(scope="module")
-def client(headless_app):
+def client(headless_app) -> TestClient:
     """Executa a operação client."""
     return TestClient(headless_app, raise_server_exceptions=False)
 
@@ -151,7 +151,7 @@ class TestLifespan:
 
 
 class TestHealth:
-    def test_health_ok(self, client) -> None:
+    def test_health_ok(self, client: TestClient) -> None:
         """Verifica o comportamento de health ok."""
         response = client.get("/health")
         assert response.status_code == 200
@@ -159,14 +159,14 @@ class TestHealth:
         assert body["status"] == "ok"
         assert "version" in body
 
-    def test_health_version_non_empty(self, client) -> None:
+    def test_health_version_non_empty(self, client: TestClient) -> None:
         """Verifica o comportamento de health version non empty."""
         response = client.get("/health")
         assert response.json()["version"] != ""
 
 
 class TestUpdateChangelog:
-    def test_returns_latest_packaged_release_notes(self, client) -> None:
+    def test_returns_latest_packaged_release_notes(self, client: TestClient) -> None:
         """Verifica o comportamento de returns latest packaged release notes."""
         response = client.get("/api/updates/changelog")
         assert response.status_code == 200
@@ -181,7 +181,7 @@ class TestUpdateChangelog:
 
 
 class TestMetrics:
-    def test_metrics_returns_list(self, client) -> None:
+    def test_metrics_returns_list(self, client: TestClient) -> None:
         """Verifica o comportamento de metrics returns list."""
         response = client.get("/metrics")
         assert response.status_code == 200
@@ -271,12 +271,12 @@ class TestRoutes:
 
 
 class TestWorkspacesActive:
-    def test_returns_200(self, client) -> None:
+    def test_returns_200(self, client: TestClient) -> None:
         """Verifica o comportamento de returns 200."""
         res = client.get("/workspaces/active")
         assert res.status_code == 200
 
-    def test_response_has_workspace_key(self, client) -> None:
+    def test_response_has_workspace_key(self, client: TestClient) -> None:
         """Verifica o comportamento de response has workspace key."""
         body = client.get("/workspaces/active").json()
         assert "workspace" in body, (
@@ -284,7 +284,7 @@ class TestWorkspacesActive:
             "'data.workspace?.git_current_branch'."
         )
 
-    def test_workspace_is_none_or_object(self, client) -> None:
+    def test_workspace_is_none_or_object(self, client: TestClient) -> None:
         """Verifica o comportamento de workspace is none or object."""
         body = client.get("/workspaces/active").json()
         ws = body["workspace"]
@@ -311,19 +311,19 @@ class TestApiToolsSchema:
 
 
 class TestGetTools:
-    def test_get_tools_returns_200(self, client) -> None:
+    def test_get_tools_returns_200(self, client: TestClient) -> None:
         """Verifica o comportamento de get tools returns 200."""
         response = client.get("/vectora.chat.v1.ChatService/GetTools")
         assert response.status_code == 200
 
-    def test_get_tools_has_tools_key(self, client) -> None:
+    def test_get_tools_has_tools_key(self, client: TestClient) -> None:
         """Verifica o comportamento de get tools has tools key."""
         response = client.get("/vectora.chat.v1.ChatService/GetTools")
         body = response.json()
         assert "tools" in body
         assert isinstance(body["tools"], list)
 
-    def test_get_tools_each_has_name(self, client) -> None:
+    def test_get_tools_each_has_name(self, client: TestClient) -> None:
         """Verifica o comportamento de get tools each has name."""
         response = client.get("/vectora.chat.v1.ChatService/GetTools")
         tools = response.json()["tools"]

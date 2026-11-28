@@ -16,7 +16,9 @@ from backend.sandbox import runner
 from backend.sandbox.policy import trusted_policy_path
 
 
-def _fake_proc(stdout=b"ok\n", stderr=b"", returncode=0) -> MagicMock:
+def _fake_proc(
+    stdout: bytes = b"ok\n", stderr: bytes = b"", returncode: int = 0
+) -> MagicMock:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(stdout, stderr))
     proc.returncode = returncode

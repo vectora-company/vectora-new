@@ -6,7 +6,7 @@ import json
 from collections.abc import AsyncGenerator
 
 from backend.api.schemas import DoneEvent, ThreadEvent, TokenEvent, encode_event
-from backend.api.sse_sequence import sequence_stream, stamp_event
+from backend.api.sse_sequence import RunEventLog, sequence_stream, stamp_event
 from backend.vtypes.contracts import JsonObject, JsonValue
 
 
@@ -87,7 +87,7 @@ async def test_sem_evento_thread_o_event_id_fica_sem_run() -> None:
 # --------------------------------------------------------------------------
 
 
-async def _alimenta(log, chunks: list[str]) -> list[str]:
+async def _alimenta(log: RunEventLog, chunks: list[str]) -> list[str]:
     return [line async for line in sequence_stream(_stream(chunks), log)]
 
 

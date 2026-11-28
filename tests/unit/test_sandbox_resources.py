@@ -17,7 +17,9 @@ real_bwrap = pytest.mark.skipif(
 )
 
 
-async def _com_worker(tmp_path: Path, policy, *comandos: str) -> list[dict]:
+async def _com_worker(
+    tmp_path: Path, policy: SandboxPolicy, *comandos: str
+) -> list[dict]:
     manager = workspace_jail.WorkspaceJailManager()
     try:
         worker = await manager.get_or_spawn("ws-rec", str(tmp_path), policy)

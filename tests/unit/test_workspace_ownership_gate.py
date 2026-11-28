@@ -24,13 +24,15 @@ Verifica:
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def gate_client(monkeypatch: pytest.MonkeyPatch):
+def gate_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """App com auth habilitada; `_extract_user` lê `X-Test-User-*` em vez
     de decodificar JWT — foca o teste no gate de ownership, não no
     subsistema de auth (já coberto em test_api_middleware_auth.py)."""

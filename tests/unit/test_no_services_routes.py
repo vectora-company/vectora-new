@@ -19,7 +19,7 @@ class _NetworkTouchedError(AssertionError):
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
     """App completo, sem Services e com qualquer saída de rede proibida."""
     monkeypatch.setenv("VECTORA_NO_SERVICES", "1")
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
@@ -51,7 +51,7 @@ SEM_SERVICES = "Services desabilitado nesta execução"
     ],
 )
 def test_rota_do_services_responde_503_sem_tocar_a_rede(
-    client, method: str, path: str, body
+    client: TestClient, method: str, path: str, body
 ) -> None:
     resposta = client.request(method, path, json=body)
 
@@ -59,7 +59,9 @@ def test_rota_do_services_responde_503_sem_tocar_a_rede(
     assert SEM_SERVICES in resposta.json()["detail"]
 
 
-def test_status_do_gateway_diz_que_esta_desligado_pela_opcao(client) -> None:
+def test_status_do_gateway_diz_que_esta_desligado_pela_opcao(
+    client: TestClient,
+) -> None:
     resposta = client.get("/gateway/status")
 
     assert resposta.status_code == 200
@@ -70,7 +72,9 @@ def test_status_do_gateway_diz_que_esta_desligado_pela_opcao(client) -> None:
     }
 
 
-def test_status_da_licenca_informa_que_o_services_esta_desligado(client) -> None:
+def test_status_da_licenca_informa_que_o_services_esta_desligado(
+    client: TestClient,
+) -> None:
     resposta = client.get("/license/status")
 
     assert resposta.status_code == 200
@@ -78,7 +82,7 @@ def test_status_da_licenca_informa_que_o_services_esta_desligado(client) -> None
 
 
 def test_validar_a_licenca_usa_so_o_cache_local_sem_rede(
-    client, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("VECTORA_TOKEN", "um-token-configurado")
 
@@ -90,7 +94,7 @@ def test_validar_a_licenca_usa_so_o_cache_local_sem_rede(
 
 
 def test_login_social_nao_consulta_o_broker_do_services(
-    client, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.api.handlers import oauth
 

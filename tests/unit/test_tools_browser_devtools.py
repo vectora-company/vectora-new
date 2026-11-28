@@ -315,7 +315,9 @@ async def test_browser_get_network_request_nao_encontrada_retorna_erro(
 # ---------------------------------------------------------------------------
 
 
-def _fake_tab_with_page(evaluate_result=None, evaluate_error=None) -> SimpleNamespace:
+def _fake_tab_with_page(
+    evaluate_result: int | None = None, evaluate_error=None
+) -> SimpleNamespace:
     async def _evaluate(script):
         if evaluate_error is not None:
             raise evaluate_error

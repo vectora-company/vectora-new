@@ -279,13 +279,13 @@ def app(tmp_path_factory: pytest.TempPathFactory):
 
 
 @pytest.fixture(scope="module")
-def client(app):
+def client(app) -> TestClient:
     """Executa a operação client."""
     return TestClient(app, raise_server_exceptions=False)
 
 
 def test_ollama_config_api_persists_validated_endpoint(
-    client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.api.handlers import provider_routing
     from backend.settings import settings
@@ -318,7 +318,9 @@ def test_ollama_config_api_persists_validated_endpoint(
     "base_url",
     ["", "file:///tmp/ollama", "https://user:pass@example.com", "http://host/path?q=x"],
 )
-def test_ollama_config_api_rejects_invalid_endpoint(client, base_url: str) -> None:
+def test_ollama_config_api_rejects_invalid_endpoint(
+    client: TestClient, base_url: str
+) -> None:
     response = client.post(
         "/provider-routing/ollama/config", json={"base_url": base_url}
     )
@@ -326,7 +328,7 @@ def test_ollama_config_api_rejects_invalid_endpoint(client, base_url: str) -> No
 
 
 def test_ollama_test_endpoint_reports_model_catalog(
-    client, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.api.handlers import provider_routing
 
@@ -473,7 +475,9 @@ class TestOllamaDiscovery:
 
         assert provider_routing._trusted_cli_executable("winget") == executable
 
-    def test_host_unreachable_returns_reachable_false_not_500(self, client) -> None:
+    def test_host_unreachable_returns_reachable_false_not_500(
+        self, client: TestClient
+    ) -> None:
         # Mocka a falha de conexão explicitamente — não depende da ausência
         # de um Ollama real rodando na máquina de dev (ver memória
         # test-hermeticity-ambient-binary.md: contar com a ausência de um
@@ -1055,7 +1059,7 @@ class TestOllamaDiscovery:
             status_code = 200
             headers: dict[str, str] = {}
 
-            def __init__(self, payload=None, text="") -> None:
+            def __init__(self, payload=None, text: str = "") -> None:
                 """Inicializa o estado da instância."""
                 self._payload = payload
                 self.text = text
@@ -1142,7 +1146,7 @@ class TestOllamaDiscovery:
         ).exists()
         object.__setattr__(settings, "vectora_home", original_home)
 
-    def test_host_reachable_returns_models(self, client) -> None:
+    def test_host_reachable_returns_models(self, client: TestClient) -> None:
         """Verifica o comportamento de host reachable returns models."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1220,7 +1224,7 @@ class TestOllamaDiscovery:
 
 class TestOllamaRegisteredModels:
     def test_registered_model_mutation_requires_authentication(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de registered model mutation requires authentication."""
         monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "true")
@@ -1230,7 +1234,7 @@ class TestOllamaRegisteredModels:
         assert response.status_code == 401
         monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
 
-    def test_register_list_and_delete(self, client) -> None:
+    def test_register_list_and_delete(self, client: TestClient) -> None:
         """Verifica o comportamento de register list and delete."""
         create = client.post(
             "/provider-routing/ollama/registered", json={"tag": "qwen3:8b"}
@@ -1248,12 +1252,12 @@ class TestOllamaRegisteredModels:
         listing_after = client.get("/provider-routing/ollama/registered")
         assert all(m["id"] != model_id for m in listing_after.json())
 
-    def test_register_empty_tag_returns_400(self, client) -> None:
+    def test_register_empty_tag_returns_400(self, client: TestClient) -> None:
         """Verifica o comportamento de register empty tag returns 400."""
         resp = client.post("/provider-routing/ollama/registered", json={"tag": "   "})
         assert resp.status_code == 400
 
-    def test_register_duplicate_tag_returns_409(self, client) -> None:
+    def test_register_duplicate_tag_returns_409(self, client: TestClient) -> None:
         """Verifica o comportamento de register duplicate tag returns 409."""
         client.post("/provider-routing/ollama/registered", json={"tag": "dup-model"})
         resp = client.post(
@@ -1285,7 +1289,7 @@ class TestLlamaCppAndHuggingFace:
         assert changed != evidence
 
     def test_llamacpp_status_uses_suggested_endpoint_without_configuring_provider(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de llamacpp status uses suggested endpoint without configuring provider."""
         from backend.settings import settings
@@ -1297,7 +1301,9 @@ class TestLlamaCppAndHuggingFace:
         assert response.json()["configured"] is False
         assert response.json()["base_url"] == "http://127.0.0.1:18080/v1"
 
-    def test_llamacpp_connection_test_reports_empty_catalog(self, client) -> None:
+    def test_llamacpp_connection_test_reports_empty_catalog(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de llamacpp connection test reports empty catalog."""
         response = MagicMock()
         response.status_code = 200
@@ -1312,7 +1318,9 @@ class TestLlamaCppAndHuggingFace:
         assert result.status_code == 200
         assert result.json() == {"status": "empty", "models": [], "detail": None}
 
-    def test_llamacpp_discovery_uses_openai_models_endpoint(self, client) -> None:
+    def test_llamacpp_discovery_uses_openai_models_endpoint(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de llamacpp discovery uses openai models endpoint."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -1336,7 +1344,9 @@ class TestLlamaCppAndHuggingFace:
         assert mock_ctx.get.await_args is not None
         assert mock_ctx.get.await_args.args[0].endswith("/v1/models")
 
-    def test_huggingface_catalog_is_shared_by_runtimes(self, client) -> None:
+    def test_huggingface_catalog_is_shared_by_runtimes(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de huggingface catalog is shared by runtimes."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -1365,17 +1375,23 @@ class TestLlamaCppAndHuggingFace:
         assert mock_ctx.get.await_count == 3
         assert "filter" not in (mock_ctx.get.await_args_list[2].kwargs["params"])
 
-    def test_huggingface_catalog_rejects_unknown_runtime(self, client) -> None:
+    def test_huggingface_catalog_rejects_unknown_runtime(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de huggingface catalog rejects unknown runtime."""
         response = client.get("/provider-routing/huggingface/models?provider=unknown")
         assert response.status_code == 400
 
-    def test_huggingface_metadata_rejects_invalid_repo(self, client) -> None:
+    def test_huggingface_metadata_rejects_invalid_repo(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de huggingface metadata rejects invalid repo."""
         response = client.get("/provider-routing/huggingface/models/not-a-repo")
         assert response.status_code == 400
 
-    def test_huggingface_metadata_exposes_compatibility_fields(self, client) -> None:
+    def test_huggingface_metadata_exposes_compatibility_fields(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de huggingface metadata exposes compatibility fields."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -1455,7 +1471,9 @@ class TestLlamaCppAndHuggingFace:
             _require_desktop_bridge(None)
         assert error.value.status_code == 403
 
-    def test_huggingface_download_rejects_path_traversal(self, client) -> None:
+    def test_huggingface_download_rejects_path_traversal(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de huggingface download rejects path traversal."""
         response = client.post(
             "/provider-routing/huggingface/download",
@@ -1467,7 +1485,7 @@ class TestLlamaCppAndHuggingFace:
         "filename", ["/tmp/model.gguf", "C:/model.gguf", "./model.gguf"]
     )
     def test_huggingface_download_rejects_absolute_or_ambiguous_paths(
-        self, client, filename: str
+        self, client: TestClient, filename: str
     ) -> None:
         """Verifica o comportamento de huggingface download rejects absolute or ambiguous paths."""
         response = client.post(
@@ -1476,7 +1494,9 @@ class TestLlamaCppAndHuggingFace:
         )
         assert response.status_code == 400
 
-    def test_huggingface_download_cancel_rejects_path_traversal(self, client) -> None:
+    def test_huggingface_download_cancel_rejects_path_traversal(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de huggingface download cancel rejects path traversal."""
         response = client.delete(
             "/provider-routing/huggingface/download",
@@ -1986,7 +2006,9 @@ class TestLlamaCppAndHuggingFace:
         assert stop.await_count == 1
         assert not (tmp_path / ".env").exists()
 
-    def test_llamacpp_install_rejects_non_official_url(self, client) -> None:
+    def test_llamacpp_install_rejects_non_official_url(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de llamacpp install rejects non official url."""
         response = client.post(
             "/provider-routing/llamacpp/install",
@@ -1994,7 +2016,9 @@ class TestLlamaCppAndHuggingFace:
         )
         assert response.status_code == 400
 
-    def test_llamacpp_install_rejects_invalid_checksum(self, client) -> None:
+    def test_llamacpp_install_rejects_invalid_checksum(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de llamacpp install rejects invalid checksum."""
         response = client.post(
             "/provider-routing/llamacpp/install",
@@ -2005,7 +2029,7 @@ class TestLlamaCppAndHuggingFace:
         )
         assert response.status_code == 400
 
-    def test_llamacpp_install_requires_checksum(self, client) -> None:
+    def test_llamacpp_install_requires_checksum(self, client: TestClient) -> None:
         response = client.post(
             "/provider-routing/llamacpp/install",
             json={
@@ -2014,7 +2038,9 @@ class TestLlamaCppAndHuggingFace:
         )
         assert response.status_code == 400
 
-    def test_llamacpp_runtime_test_rejects_unknown_binary(self, client) -> None:
+    def test_llamacpp_runtime_test_rejects_unknown_binary(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de llamacpp runtime test rejects unknown binary."""
         response = client.post(
             "/provider-routing/llamacpp/runtime/test",
@@ -2022,7 +2048,9 @@ class TestLlamaCppAndHuggingFace:
         )
         assert response.status_code == 400
 
-    def test_llamacpp_model_confirmation_rejects_unmanaged_path(self, client) -> None:
+    def test_llamacpp_model_confirmation_rejects_unmanaged_path(
+        self, client: TestClient
+    ) -> None:
         """Verifica o comportamento de llamacpp model confirmation rejects unmanaged path."""
         response = client.post(
             "/provider-routing/llamacpp/models/confirm",
@@ -2129,7 +2157,7 @@ class TestLlamaCppAndHuggingFace:
 
 class TestOpenRouterKey:
     def test_status_not_configured_by_default(
-        self, client, clean_openrouter_key: None
+        self, client: TestClient, clean_openrouter_key: None
     ) -> None:
         """Verifica o comportamento de status not configured by default."""
         os.environ.pop("OPENROUTER_API_KEY", None)
@@ -2138,7 +2166,7 @@ class TestOpenRouterKey:
         assert resp.json() == {"configured": False, "masked": ""}
 
     def test_set_key_valid_persists_and_masks(
-        self, client, clean_openrouter_key: None, tmp_path: Path
+        self, client: TestClient, clean_openrouter_key: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set key valid persists and masks."""
         mock_response = MagicMock()
@@ -2170,7 +2198,7 @@ class TestOpenRouterKey:
         assert os.environ["OPENROUTER_API_KEY"] == "sk-or-v1-abcdef123456"
 
     def test_set_key_rejected_by_openrouter_returns_400(
-        self, client, clean_openrouter_key: None, tmp_path: Path
+        self, client: TestClient, clean_openrouter_key: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set key rejected by openrouter returns 400."""
         mock_response = MagicMock()
@@ -2197,7 +2225,7 @@ class TestOpenRouterKey:
         assert "OPENROUTER_API_KEY" not in os.environ
 
     def test_set_key_empty_returns_400_without_network_call(
-        self, client, clean_openrouter_key: None
+        self, client: TestClient, clean_openrouter_key: None
     ) -> None:
         """Verifica o comportamento de set key empty returns 400 without network call."""
         with patch("httpx.AsyncClient") as mock_httpx:
@@ -2208,7 +2236,7 @@ class TestOpenRouterKey:
         mock_httpx.assert_not_called()
 
     def test_clear_key_removes_env(
-        self, client, clean_openrouter_key: None, tmp_path: Path
+        self, client: TestClient, clean_openrouter_key: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de clear key removes env."""
         os.environ["OPENROUTER_API_KEY"] = "sk-or-v1-should-be-removed"
@@ -2269,7 +2297,7 @@ class TestOpenRouterCatalog:
         finally:
             app.dependency_overrides.pop(_get_http_client, None)
 
-    def test_catalog_returns_models(self, app, client) -> None:
+    def test_catalog_returns_models(self, app, client: TestClient) -> None:
         """Verifica o comportamento de catalog returns models."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -2298,7 +2326,7 @@ class TestOpenRouterCatalog:
         ids = [m["id"] for m in resp.json()["models"]]
         assert ids == ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"]
 
-    def test_catalog_filters_by_q(self, app, client) -> None:
+    def test_catalog_filters_by_q(self, app, client: TestClient) -> None:
         """Verifica o comportamento de catalog filters by q."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -2325,7 +2353,9 @@ class TestOpenRouterCatalog:
         ids = [m["id"] for m in resp.json()["models"]]
         assert ids == ["anthropic/claude-3.5-sonnet"]
 
-    def test_catalog_network_error_cai_no_fallback_e_nao_500(self, app, client) -> None:
+    def test_catalog_network_error_cai_no_fallback_e_nao_500(
+        self, app, client: TestClient
+    ) -> None:
         """Erro de rede nunca vira 500 — e, desde o cliente nativo, também
         não vira lista vazia: cai na lista embutida (ver
         `OPENROUTER_FALLBACK_MODELS`), senão o seletor de modelo aparece sem
@@ -2341,7 +2371,7 @@ class TestOpenRouterCatalog:
         assert resp.json()["models"], "catálogo vazio com a rede fora"
 
     def test_catalog_stale_sentinel_survives_low_monotonic_clock(
-        self, app, client, monkeypatch: pytest.MonkeyPatch
+        self, app, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Bug real reproduzido só em CI (Linux, VM efêmera recém-bootada),
         nunca localmente: `time.monotonic()` não conta a partir de zero —
@@ -2372,7 +2402,7 @@ class TestOpenRouterCatalog:
 
 
 class TestOpenRouterRegisteredModels:
-    def test_register_list_and_delete(self, client) -> None:
+    def test_register_list_and_delete(self, client: TestClient) -> None:
         """Verifica o comportamento de register list and delete."""
         create = client.post(
             "/provider-routing/openrouter/registered", json={"tag": "openai/gpt-4o"}
@@ -2390,14 +2420,14 @@ class TestOpenRouterRegisteredModels:
         listing_after = client.get("/provider-routing/openrouter/registered")
         assert all(m["id"] != model_id for m in listing_after.json())
 
-    def test_register_empty_tag_returns_400(self, client) -> None:
+    def test_register_empty_tag_returns_400(self, client: TestClient) -> None:
         """Verifica o comportamento de register empty tag returns 400."""
         resp = client.post(
             "/provider-routing/openrouter/registered", json={"tag": "   "}
         )
         assert resp.status_code == 400
 
-    def test_register_duplicate_tag_returns_409(self, client) -> None:
+    def test_register_duplicate_tag_returns_409(self, client: TestClient) -> None:
         """Verifica o comportamento de register duplicate tag returns 409."""
         client.post(
             "/provider-routing/openrouter/registered", json={"tag": "dup/model"}
@@ -2680,7 +2710,7 @@ class TestOpenRouterModelSupportsImage:
 
 class TestNineRouterConfig:
     def test_status_not_configured_by_default(
-        self, client, clean_nine_router_config: None
+        self, client: TestClient, clean_nine_router_config: None
     ) -> None:
         """Verifica o comportamento de status not configured by default."""
         resp = client.get("/provider-routing/nine-router/status")
@@ -2690,7 +2720,7 @@ class TestNineRouterConfig:
         assert body["masked"] == ""
 
     def test_set_config_persists_both_fields(
-        self, client, clean_nine_router_config: None, tmp_path: Path
+        self, client: TestClient, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set config persists both fields."""
         with patch(
@@ -2714,7 +2744,7 @@ class TestNineRouterConfig:
         assert os.environ["NINE_ROUTER_API_KEY"] == "9r-abcdef123456"
 
     def test_set_config_empty_base_url_returns_400(
-        self, client, clean_nine_router_config: None, tmp_path: Path
+        self, client: TestClient, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set config empty base url returns 400."""
         with patch(
@@ -2729,7 +2759,7 @@ class TestNineRouterConfig:
         assert "NINE_ROUTER_BASE_URL" not in os.environ
 
     def test_set_config_empty_api_key_returns_400(
-        self, client, clean_nine_router_config: None, tmp_path: Path
+        self, client: TestClient, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set config empty api key returns 400."""
         with patch(
@@ -2744,7 +2774,7 @@ class TestNineRouterConfig:
         assert "NINE_ROUTER_API_KEY" not in os.environ
 
     def test_clear_config_removes_both(
-        self, client, clean_nine_router_config: None, tmp_path: Path
+        self, client: TestClient, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de clear config removes both."""
         with patch(
@@ -2764,7 +2794,7 @@ class TestNineRouterConfig:
 
 class TestNineRouterDiscovery:
     def test_not_configured_returns_reachable_false_not_500(
-        self, client, clean_nine_router_config: None
+        self, client: TestClient, clean_nine_router_config: None
     ) -> None:
         """Verifica o comportamento de not configured returns reachable false not 500."""
         resp = client.get("/provider-routing/nine-router/models")
@@ -2774,7 +2804,7 @@ class TestNineRouterDiscovery:
         assert body["models"] == []
 
     def test_host_unreachable_returns_reachable_false_not_500(
-        self, client, clean_nine_router_config: None, tmp_path: Path
+        self, client: TestClient, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de host unreachable returns reachable false not 500."""
         with patch(
@@ -2800,7 +2830,7 @@ class TestNineRouterDiscovery:
         assert body["models"] == []
 
     def test_host_reachable_returns_models(
-        self, client, clean_nine_router_config: None, tmp_path: Path
+        self, client: TestClient, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de host reachable returns models."""
         with patch(
@@ -2837,7 +2867,7 @@ class TestNineRouterDiscovery:
         ]
 
     def test_only_chat_models_are_listed_with_their_provider(
-        self, client, clean_nine_router_config: None, tmp_path: Path
+        self, client: TestClient, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """O OmniRoute lista imagem, áudio e embedding junto: só chat sai, e o
         provider de origem acompanha cada modelo. Pede `kind=chat` ao roteador."""
@@ -2936,7 +2966,7 @@ async def test_nine_router_explicit_text_modality_is_unsupported(
 
 
 class TestNineRouterRegisteredModels:
-    def test_register_list_and_delete(self, client) -> None:
+    def test_register_list_and_delete(self, client: TestClient) -> None:
         """Verifica o comportamento de register list and delete."""
         create = client.post(
             "/provider-routing/nine-router/registered",
@@ -2955,14 +2985,14 @@ class TestNineRouterRegisteredModels:
         listing_after = client.get("/provider-routing/nine-router/registered")
         assert all(m["id"] != model_id for m in listing_after.json())
 
-    def test_register_empty_tag_returns_400(self, client) -> None:
+    def test_register_empty_tag_returns_400(self, client: TestClient) -> None:
         """Verifica o comportamento de register empty tag returns 400."""
         resp = client.post(
             "/provider-routing/nine-router/registered", json={"tag": "   "}
         )
         assert resp.status_code == 400
 
-    def test_register_duplicate_tag_returns_409(self, client) -> None:
+    def test_register_duplicate_tag_returns_409(self, client: TestClient) -> None:
         """Verifica o comportamento de register duplicate tag returns 409."""
         client.post(
             "/provider-routing/nine-router/registered", json={"tag": "dup/nine-model"}
@@ -2975,7 +3005,7 @@ class TestNineRouterRegisteredModels:
 
 class TestLlamaCppConfiguration:
     def test_managed_mode_requires_ready_sidecar(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de managed mode requires ready sidecar."""
         monkeypatch.delenv("LLAMACPP_MODE", raising=False)
@@ -2990,7 +3020,7 @@ class TestLlamaCppConfiguration:
 
     def test_external_mode_is_persisted_without_copying_credentials(
         self,
-        client,
+        client: TestClient,
         clean_llamacpp_config: None,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -3009,7 +3039,7 @@ class TestLlamaCppConfiguration:
 
     def test_config_syncs_model_environment(
         self,
-        client,
+        client: TestClient,
         clean_llamacpp_config: None,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,

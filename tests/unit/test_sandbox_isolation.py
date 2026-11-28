@@ -21,7 +21,7 @@ real_bwrap = pytest.mark.skipif(
 _TUDO = {"seccomp": True, "landlock": True, "no_new_privs": True, "rlimits": True}
 
 
-def _estado(report, nome):
+def _estado(report, nome: str):
     return next(d.state for d in report.dimensions if d.name == nome)
 
 

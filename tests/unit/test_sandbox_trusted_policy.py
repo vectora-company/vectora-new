@@ -24,11 +24,11 @@ def _sem_deteccao_do_ambiente(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(policy_module, "_native_sandbox_available_sync", lambda: False)
 
 
-def _user(root, toml: str) -> None:
+def _user(root: Path, toml: str) -> None:
     trusted_policy_path(root).write_text(toml, encoding="utf-8")
 
 
-def _repo(root, toml: str) -> None:
+def _repo(root: Path, toml: str) -> None:
     (root / "vectora.toml").write_text(toml, encoding="utf-8")
 
 

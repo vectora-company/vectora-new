@@ -1305,7 +1305,7 @@ async def test_resume_background_run_rejects_unknown_or_finished_run(
 
 async def _run_task_ate_pausar(
     monkeypatch: pytest.MonkeyPatch,
-    native_session_store,
+    native_session_store: SessionStore,
     *,
     tool_name: str,
     session_id: str,

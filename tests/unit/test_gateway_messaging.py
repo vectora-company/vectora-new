@@ -20,7 +20,7 @@ from backend.services.gateway.messaging import (
 
 
 def _incoming(
-    platform="telegram", platform_user_id="123", text="oi"
+    platform: str = "telegram", platform_user_id: str = "123", text="oi"
 ) -> IncomingMessage:
     return IncomingMessage(
         platform=platform, platform_user_id=platform_user_id, text=text

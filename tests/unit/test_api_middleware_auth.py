@@ -10,6 +10,7 @@ Cobre:
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -230,7 +231,9 @@ class TestGetVirtualLocalUser:
 
 
 @pytest.fixture
-def auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def auth_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[TestClient]:
     """App com auth habilitada e banco temporário."""
     os.environ["VECTORA_AUTH_REQUIRED"] = "true"
 
@@ -278,15 +281,17 @@ def auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 class TestAuthMiddlewareIntegration:
-    def test_public_route_passes_without_token(self, auth_client) -> None:
+    def test_public_route_passes_without_token(self, auth_client: TestClient) -> None:
         r = auth_client.get("/health")
         assert r.status_code == 200
 
-    def test_auth_route_passes_without_token(self, auth_client) -> None:
+    def test_auth_route_passes_without_token(self, auth_client: TestClient) -> None:
         r = auth_client.get("/auth/has-users")
         assert r.status_code == 200
 
-    def test_private_route_without_token_returns_401(self, auth_client) -> None:
+    def test_private_route_without_token_returns_401(
+        self, auth_client: TestClient
+    ) -> None:
         r = auth_client.get("/auth/me")
         assert r.status_code == 401
 
@@ -294,17 +299,23 @@ class TestAuthMiddlewareIntegration:
         r = auth_client.post("/feedback", json={"kind": "bug", "description": "falha"})
         assert r.status_code == 401
 
-    def test_update_changelog_without_token_returns_401(self, auth_client) -> None:
+    def test_update_changelog_without_token_returns_401(
+        self, auth_client: TestClient
+    ) -> None:
         r = auth_client.get("/api/updates/changelog")
         assert r.status_code == 401
 
-    def test_private_route_with_invalid_bearer_returns_401(self, auth_client) -> None:
+    def test_private_route_with_invalid_bearer_returns_401(
+        self, auth_client: TestClient
+    ) -> None:
         r = auth_client.get(
             "/auth/me", headers={"Authorization": "Bearer token-invalido"}
         )
         assert r.status_code == 401
 
-    def test_private_route_with_valid_token_passes(self, auth_client) -> None:
+    def test_private_route_with_valid_token_passes(
+        self, auth_client: TestClient
+    ) -> None:
         # Cria usuário e obtém token
         r_signup = auth_client.post(
             "/auth/signup",
@@ -317,7 +328,7 @@ class TestAuthMiddlewareIntegration:
         assert r.status_code == 200
         assert r.json()["email"] == "mw@test.com"
 
-    def test_tool_usage_requires_authentication(self, auth_client) -> None:
+    def test_tool_usage_requires_authentication(self, auth_client: TestClient) -> None:
         response = auth_client.get("/tools/usage")
 
         assert response.status_code == 401
@@ -337,7 +348,7 @@ class TestAuthMiddlewareIntegration:
         assert response.status_code == 401
 
     def test_tool_usage_contract_is_user_scoped_and_redacted(
-        self, auth_client, monkeypatch: pytest.MonkeyPatch
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The HTTP contract exposes only per-user counts for available tools."""
         signup = auth_client.post(
@@ -382,7 +393,7 @@ class TestAuthMiddlewareIntegration:
         )
 
     def test_tool_usage_returns_zero_for_tools_without_events(
-        self, auth_client, monkeypatch: pytest.MonkeyPatch
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         signup = auth_client.post(
             "/auth/signup",
@@ -416,7 +427,9 @@ class TestAuthMiddlewareIntegration:
             "usage": {"file_read": 0, "terminal": 0},
         }
 
-    def test_private_route_with_cookie_token_passes(self, auth_client) -> None:
+    def test_private_route_with_cookie_token_passes(
+        self, auth_client: TestClient
+    ) -> None:
         # Signup para ter cookies definidos
         r = auth_client.post(
             "/auth/signup",
@@ -433,7 +446,9 @@ class TestAuthMiddlewareIntegration:
         r_me = auth_client.get("/auth/me")
         assert r_me.status_code == 200
 
-    def test_private_route_with_valid_service_token_passes(self, auth_client) -> None:
+    def test_private_route_with_valid_service_token_passes(
+        self, auth_client: TestClient
+    ) -> None:
         """Erro/borda (feliz + inválido no mesmo teste): um
         token de serviço válido (`vst_...`) autentica como um JWT normal
         autenticaria; revogado é rejeitado com 401, igual a um JWT
@@ -466,7 +481,9 @@ class TestAuthMiddlewareIntegration:
         )
         assert r_revogado.status_code == 401
 
-    def test_service_token_scopes_are_preserved_and_enforced(self, auth_client) -> None:
+    def test_service_token_scopes_are_preserved_and_enforced(
+        self, auth_client: TestClient
+    ) -> None:
         import asyncio
 
         import backend.rbac.auth as auth_mod
@@ -499,7 +516,7 @@ class TestAuthMiddlewareIntegration:
         assert response.json()["id"].startswith("service:")
 
     def test_service_token_unknown_route_is_denied_by_default(
-        self, auth_client
+        self, auth_client: TestClient
     ) -> None:
         import asyncio
 

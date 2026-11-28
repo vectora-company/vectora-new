@@ -1409,7 +1409,7 @@ class TestHitl:
             ]
         )
 
-        def should_require_approval(nome, _ctx, _args, _history):
+        def should_require_approval(nome: str, _ctx: ToolContext, _args, _history):
             """Executa a operação should require approval."""
             return nome == "escrever_arquivo"
 

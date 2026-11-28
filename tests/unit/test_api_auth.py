@@ -87,13 +87,13 @@ def app_and_db(tmp_path_factory: pytest.TempPathFactory):
 
 
 @pytest.fixture(scope="module")
-def client(app_and_db):
+def client(app_and_db) -> TestClient:
     app, _ = app_and_db
     return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture(scope="module")
-def root_tokens(client):
+def root_tokens(client: TestClient):
     """Cria o primeiro usuário (root) e retorna seus tokens."""
     # Verifica se ainda não há usuários
     r = client.get("/auth/has-users")
@@ -119,7 +119,7 @@ def root_tokens(client):
 
 
 class TestHasUsers:
-    def test_has_users_returns_bool(self, client) -> None:
+    def test_has_users_returns_bool(self, client: TestClient) -> None:
         r = client.get("/auth/has-users")
         assert r.status_code == 200
         assert "exists" in r.json()
@@ -131,7 +131,7 @@ class TestHasUsers:
 
 
 class TestSignupEndpoint:
-    def test_first_user_signup_succeeds(self, client) -> None:
+    def test_first_user_signup_succeeds(self, client: TestClient) -> None:
         # Se já há usuários (root_tokens fixture rodou antes), verifica bloqueio
         r_check = client.get("/auth/has-users")
         if r_check.json()["exists"]:
@@ -151,13 +151,13 @@ class TestSignupEndpoint:
             assert "access_token" in data
             assert data["user"]["role"] == "root"
 
-    def test_signup_sets_cookies(self, client, root_tokens) -> None:
+    def test_signup_sets_cookies(self, client: TestClient, root_tokens) -> None:
         # Após signup do root, tentar novo signup é bloqueado — verificamos cookies no signin
         access, _, _ = root_tokens
         r = client.get("/auth/me", headers={"Authorization": f"Bearer {access}"})
         assert r.status_code == 200
 
-    def test_signup_short_password_returns_400(self, client) -> None:
+    def test_signup_short_password_returns_400(self, client: TestClient) -> None:
         r = client.post(
             "/auth/signup",
             json={"email": "any@test.com", "password": "curta"},
@@ -172,7 +172,7 @@ class TestSignupEndpoint:
 
 
 class TestSigninEndpoint:
-    def test_valid_signin_returns_tokens(self, client, root_tokens) -> None:
+    def test_valid_signin_returns_tokens(self, client: TestClient, root_tokens) -> None:
         r = client.post(
             "/auth/signin",
             json={"email": "root@test.com", "password": "rootpassword1234"},
@@ -183,21 +183,25 @@ class TestSigninEndpoint:
         assert "refresh_token" in data
         assert data["user"]["email"] == "root@test.com"
 
-    def test_invalid_password_returns_401(self, client, root_tokens) -> None:
+    def test_invalid_password_returns_401(
+        self, client: TestClient, root_tokens
+    ) -> None:
         r = client.post(
             "/auth/signin",
             json={"email": "root@test.com", "password": "senhaerrada9999"},
         )
         assert r.status_code == 401
 
-    def test_unknown_email_returns_401(self, client) -> None:
+    def test_unknown_email_returns_401(self, client: TestClient) -> None:
         r = client.post(
             "/auth/signin",
             json={"email": "ghost@test.com", "password": "ghostpassword1234"},
         )
         assert r.status_code == 401
 
-    def test_signin_sets_httponly_cookies(self, client, root_tokens) -> None:
+    def test_signin_sets_httponly_cookies(
+        self, client: TestClient, root_tokens
+    ) -> None:
         r = client.post(
             "/auth/signin",
             json={"email": "root@test.com", "password": "rootpassword1234"},
@@ -213,7 +217,7 @@ class TestSigninEndpoint:
 
 
 class TestMeEndpoint:
-    def test_me_with_valid_bearer_token(self, client, root_tokens) -> None:
+    def test_me_with_valid_bearer_token(self, client: TestClient, root_tokens) -> None:
         access, _, _ = root_tokens
         r = client.get("/auth/me", headers={"Authorization": f"Bearer {access}"})
         assert r.status_code == 200
@@ -245,7 +249,7 @@ class TestMeEndpoint:
 
 class TestUpdateMeEndpoint:
     def test_patch_name_updates_and_returns_new_value(
-        self, client, root_tokens
+        self, client: TestClient, root_tokens
     ) -> None:
         access, _, _ = root_tokens
         r = client.patch(
@@ -256,7 +260,9 @@ class TestUpdateMeEndpoint:
         assert r.status_code == 200
         assert r.json()["name"] == "Bruno Soares"
 
-    def test_patch_name_persists_visible_in_get_me(self, client, root_tokens) -> None:
+    def test_patch_name_persists_visible_in_get_me(
+        self, client: TestClient, root_tokens
+    ) -> None:
         """Após PATCH, GET /me devolve o name novo (não cache stale)."""
         access, _, _ = root_tokens
         client.patch(
@@ -268,7 +274,7 @@ class TestUpdateMeEndpoint:
         assert r.status_code == 200
         assert r.json()["name"] == "Persistente"
 
-    def test_patch_name_accepts_utf8(self, client, root_tokens) -> None:
+    def test_patch_name_accepts_utf8(self, client: TestClient, root_tokens) -> None:
         """UTF-8 livre — acentos, apóstrofo, espaços."""
         access, _, _ = root_tokens
         r = client.patch(
@@ -279,7 +285,9 @@ class TestUpdateMeEndpoint:
         assert r.status_code == 200
         assert r.json()["name"] == "João D'Ávila"
 
-    def test_patch_name_sanitizes_whitespace(self, client, root_tokens) -> None:
+    def test_patch_name_sanitizes_whitespace(
+        self, client: TestClient, root_tokens
+    ) -> None:
         """Trim e collapse de espaços internos via service layer."""
         access, _, _ = root_tokens
         r = client.patch(
@@ -290,7 +298,7 @@ class TestUpdateMeEndpoint:
         assert r.status_code == 200
         assert r.json()["name"] == "Bruno de Souza"
 
-    def test_patch_name_caps_at_100(self, client, root_tokens) -> None:
+    def test_patch_name_caps_at_100(self, client: TestClient, root_tokens) -> None:
         access, _, _ = root_tokens
         r = client.patch(
             "/auth/me",
@@ -300,7 +308,9 @@ class TestUpdateMeEndpoint:
         assert r.status_code == 200
         assert len(r.json()["name"]) == 100
 
-    def test_patch_empty_body_does_nothing(self, client, root_tokens) -> None:
+    def test_patch_empty_body_does_nothing(
+        self, client: TestClient, root_tokens
+    ) -> None:
         """Body sem 'name' (None) — endpoint não mexe e devolve user atual."""
         access, _, _ = root_tokens
         # Garante um estado conhecido
@@ -332,7 +342,7 @@ class TestUpdateMeEndpoint:
 
 
 class TestUsageEndpoint:
-    def test_usage_with_valid_token(self, client, root_tokens) -> None:
+    def test_usage_with_valid_token(self, client: TestClient, root_tokens) -> None:
         access, _, _ = root_tokens
         r = client.get("/auth/usage", headers={"Authorization": f"Bearer {access}"})
         assert r.status_code == 200
@@ -356,7 +366,11 @@ class TestUsageEndpoint:
 
 class TestToolsPolicy:
     def test_get_and_put_policy(
-        self, client, root_tokens, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        client: TestClient,
+        root_tokens,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from backend.rbac import tool_policy
 
@@ -380,7 +394,11 @@ class TestToolsPolicy:
         assert r.json()["disabled"] == ["terminal"]
 
     def test_put_unknown_tool_rejected(
-        self, client, root_tokens, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        client: TestClient,
+        root_tokens,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from backend.rbac import tool_policy
 
@@ -407,7 +425,7 @@ class TestToolsPolicy:
 
 
 class TestRefreshEndpoint:
-    def test_refresh_via_body_returns_new_tokens(self, client) -> None:
+    def test_refresh_via_body_returns_new_tokens(self, client: TestClient) -> None:
         r_sign = client.post(
             "/auth/signin",
             json={"email": "root@test.com", "password": "rootpassword1234"},
@@ -420,11 +438,13 @@ class TestRefreshEndpoint:
         assert data["refresh_token"] != old_refresh
         assert "access_token" in data
 
-    def test_refresh_with_invalid_token_returns_401(self, client) -> None:
+    def test_refresh_with_invalid_token_returns_401(self, client: TestClient) -> None:
         r = client.post("/auth/refresh", json={"refresh_token": "token-invalido"})
         assert r.status_code == 401
 
-    def test_double_refresh_with_same_token_returns_401(self, client) -> None:
+    def test_double_refresh_with_same_token_returns_401(
+        self, client: TestClient
+    ) -> None:
         r_sign = client.post(
             "/auth/signin",
             json={"email": "root@test.com", "password": "rootpassword1234"},
@@ -442,7 +462,7 @@ class TestRefreshEndpoint:
 
 
 class TestSignoutEndpoint:
-    def test_signout_clears_cookies(self, client) -> None:
+    def test_signout_clears_cookies(self, client: TestClient) -> None:
         r_sign = client.post(
             "/auth/signin",
             json={"email": "root@test.com", "password": "rootpassword1234"},
@@ -452,7 +472,7 @@ class TestSignoutEndpoint:
         r = client.post("/auth/signout", json={"refresh_token": refresh})
         assert r.status_code == 200
 
-    def test_after_signout_refresh_token_is_invalid(self, client) -> None:
+    def test_after_signout_refresh_token_is_invalid(self, client: TestClient) -> None:
         r_sign = client.post(
             "/auth/signin",
             json={"email": "root@test.com", "password": "rootpassword1234"},
@@ -463,7 +483,7 @@ class TestSignoutEndpoint:
         r = client.post("/auth/refresh", json={"refresh_token": refresh})
         assert r.status_code == 401
 
-    def test_signout_without_token_returns_200(self, client) -> None:
+    def test_signout_without_token_returns_200(self, client: TestClient) -> None:
         r = client.post("/auth/signout", json={})
         assert r.status_code == 200
 
@@ -474,7 +494,7 @@ class TestSignoutEndpoint:
 
 
 class TestChangePasswordEndpoint:
-    def test_change_password_success(self, client, root_tokens) -> None:
+    def test_change_password_success(self, client: TestClient, root_tokens) -> None:
         access, _, _ = root_tokens
         r = client.post(
             "/auth/change-password",
@@ -484,7 +504,7 @@ class TestChangePasswordEndpoint:
         # Pode ser 200 ou falha se a senha já foi trocada por outro teste
         assert r.status_code in (200, 400)
 
-    def test_change_password_without_auth_returns_401(self, client) -> None:
+    def test_change_password_without_auth_returns_401(self, client: TestClient) -> None:
         r = client.post(
             "/auth/change-password",
             json={"old_password": "qualquer", "new_password": "outrasenha1234"},
@@ -493,7 +513,7 @@ class TestChangePasswordEndpoint:
 
 
 class TestPasswordResetEndpoints:
-    def test_fluxo_completo_via_http(self, client) -> None:
+    def test_fluxo_completo_via_http(self, client: TestClient) -> None:
         r_signup = client.post(
             "/auth/signup",
             json={
@@ -531,7 +551,9 @@ class TestPasswordResetEndpoints:
         )
         assert r_signin.status_code == 200
 
-    def test_email_inexistente_devolve_200_sem_revelar_nada(self, client) -> None:
+    def test_email_inexistente_devolve_200_sem_revelar_nada(
+        self, client: TestClient
+    ) -> None:
         """Erro/borda: mesmo resposta 200 pra email que não existe — evita
         enumeração de conta via diferença de status HTTP."""
         r = client.post(
@@ -541,7 +563,7 @@ class TestPasswordResetEndpoints:
         assert r.status_code == 200
         assert r.json() == {"ok": True}
 
-    def test_token_invalido_devolve_400(self, client) -> None:
+    def test_token_invalido_devolve_400(self, client: TestClient) -> None:
         r = client.post(
             "/auth/password-reset/confirm",
             json={"token": "token-que-nao-existe", "new_password": "senhanova12345"},
@@ -560,7 +582,7 @@ class TestEnvOverridesEndpoints:
         """Garante que o usuário root existe e guarda o token cacheado."""
         self._cached_access, *_ = root_tokens
 
-    def _get_fresh_token(self, client) -> str:
+    def _get_fresh_token(self, client: TestClient) -> str:
         """Obtém token válido, lidando com senha que pode ter sido trocada."""
         for pwd in ("rootpassword1234", "novasenha5678!"):
             r = client.post(
@@ -578,7 +600,7 @@ class TestEnvOverridesEndpoints:
             return self._cached_access
         pytest.fail("Não foi possível obter token válido para teste de envs")
 
-    def test_get_envs_empty_initially(self, client) -> None:
+    def test_get_envs_empty_initially(self, client: TestClient) -> None:
         access = self._get_fresh_token(client)
         r = client.get("/auth/envs", headers={"Authorization": f"Bearer {access}"})
         assert r.status_code == 200
@@ -586,7 +608,7 @@ class TestEnvOverridesEndpoints:
         assert "envs" in data
         assert "keys" in data
 
-    def test_set_and_get_env(self, client) -> None:
+    def test_set_and_get_env(self, client: TestClient) -> None:
         access = self._get_fresh_token(client)
         headers = {"Authorization": f"Bearer {access}"}
 
@@ -603,7 +625,7 @@ class TestEnvOverridesEndpoints:
         # Valor deve estar mascarado
         assert data["envs"]["TEST_KEY"] == "••••••••"
 
-    def test_delete_env(self, client) -> None:
+    def test_delete_env(self, client: TestClient) -> None:
         access = self._get_fresh_token(client)
         headers = {"Authorization": f"Bearer {access}"}
 
@@ -619,7 +641,7 @@ class TestEnvOverridesEndpoints:
         assert "DEL_KEY" not in r.json()["keys"]
 
     def test_set_connect_key_without_pro_returns_402(
-        self, client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Telegram/Discord/Slack/Email (Connect) exigem tier pro."""
         from backend.services import license as lic
@@ -637,7 +659,7 @@ class TestEnvOverridesEndpoints:
         assert r.status_code == 402
 
     def test_set_connect_key_with_pro_succeeds(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("VECTORA_LICENSE_BYPASS", "1")
         # sync_adapters tentaria conectar de verdade com um token falso —
@@ -657,7 +679,7 @@ class TestEnvOverridesEndpoints:
         assert r.status_code == 200
 
     def test_delete_connect_key_never_gated(
-        self, client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Remover a própria credencial nunca é bloqueado — mesmo caído pra
         Free depois de ter salvo com Pro, o usuário sempre pode limpar."""
@@ -682,7 +704,7 @@ class TestEnvOverridesEndpoints:
         assert r.status_code == 200
 
     def test_set_non_connect_key_never_gated(
-        self, client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Erro/borda inverso: uma key fora de CONNECT_ENV_KEYS (ex. token do
         GitHub, usado por git tools/RAG) nunca passa por require_pro."""
@@ -701,7 +723,7 @@ class TestEnvOverridesEndpoints:
         assert r.status_code == 200
 
     def test_set_env_llm_key_applies_to_os_environ_and_settings(
-        self, client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Regressão do bug real: colar uma key de LLM (GOOGLE_API_KEY) na
         aba Envs precisa valer na PRÓXIMA chamada ao provider — antes só
@@ -752,7 +774,7 @@ class TestEnvOverridesEndpoints:
             object.__setattr__(settings, "google_api_key", original_setting)
 
     def test_set_env_unknown_key_stays_override_only(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: chave desconhecida (não é key de LLM/search, ex.
         token OAuth de integração) preserva o comportamento antigo — só vai
@@ -791,7 +813,7 @@ class TestAdminEndpoints:
         """Garante que o usuário root existe e guarda o token cacheado."""
         self._cached_access, *_ = root_tokens
 
-    def _get_root_token(self, client) -> str:
+    def _get_root_token(self, client: TestClient) -> str:
         for pwd in ("rootpassword1234", "novasenha5678!"):
             r = client.post(
                 "/auth/signin",
@@ -808,7 +830,7 @@ class TestAdminEndpoints:
             return self._cached_access
         pytest.fail("Não foi possível obter token root")
 
-    def test_list_users_as_root(self, client) -> None:
+    def test_list_users_as_root(self, client: TestClient) -> None:
         token = self._get_root_token(client)
         r = client.get("/auth/users", headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 200
@@ -824,13 +846,13 @@ class TestAdminEndpoints:
         r = fresh.get("/auth/users")
         assert r.status_code in (401, 403)
 
-    def test_get_audit_log_as_root(self, client) -> None:
+    def test_get_audit_log_as_root(self, client: TestClient) -> None:
         token = self._get_root_token(client)
         r = client.get("/auth/audit", headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 200
         assert isinstance(r.json(), list)
 
-    def test_audit_log_contains_signin_events(self, client) -> None:
+    def test_audit_log_contains_signin_events(self, client: TestClient) -> None:
         token = self._get_root_token(client)
         r = client.get(
             "/auth/audit?action=signin",

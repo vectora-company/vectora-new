@@ -24,7 +24,7 @@ from backend.rbac.auth import _write_audit
 
 
 @pytest.fixture(scope="module")
-def client():
+def client() -> TestClient:
     os.environ["VECTORA_AUTH_REQUIRED"] = "false"
     from backend.api.server import create_app
 
@@ -33,11 +33,11 @@ def client():
 
 
 class TestShareGetNotFound:
-    def test_unknown_token_returns_404(self, client) -> None:
+    def test_unknown_token_returns_404(self, client: TestClient) -> None:
         resp = client.get("/threads/share/token-que-nao-existe")
         assert resp.status_code == 404
 
-    def test_404_body_has_detail(self, client) -> None:
+    def test_404_body_has_detail(self, client: TestClient) -> None:
         resp = client.get("/threads/share/token-invalido-xyz")
         body = resp.json()
         assert "detail" in body
@@ -70,7 +70,7 @@ class TestShareGetNotFound:
 
 
 class TestShareCreate:
-    def test_create_share_returns_token_and_url(self, client) -> None:
+    def test_create_share_returns_token_and_url(self, client: TestClient) -> None:
         resp = client.post(
             "/threads/share",
             json={"thread_id": "test-thread-abc", "ttl_hours": 1},
@@ -79,7 +79,7 @@ class TestShareCreate:
         assert resp.status_code == 404
         assert resp.status_code != 405
 
-    def test_create_share_response_schema(self, client) -> None:
+    def test_create_share_response_schema(self, client: TestClient) -> None:
         resp = client.post(
             "/threads/share",
             json={"thread_id": "schema-test-thread", "ttl_hours": 2},

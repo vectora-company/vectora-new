@@ -65,7 +65,7 @@ def _df(rows: list[tuple[int, dict]]) -> MagicMock:
     return df
 
 
-def _search_table(db, df: MagicMock) -> MagicMock:
+def _search_table(db: AsyncMock, df: MagicMock) -> MagicMock:
     # vector_search().limit().to_pandas() é encadeamento SÍNCRONO terminando num
     # await — table precisa ser MagicMock (não AsyncMock) com to_pandas async.
     table = MagicMock()

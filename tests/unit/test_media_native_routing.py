@@ -10,6 +10,7 @@ from typing import NoReturn
 import pytest
 
 from backend.engine.stream_events import EngineEvent
+from backend.llm.fallback_chat_client import FallbackChatClient
 from backend.llm.media_parts import (
     downgrade_to_text,
     media_routing_evidence,
@@ -216,7 +217,7 @@ class _Script:
         yield VMessageChunk(delta_text=str(step))
 
 
-async def _collect(client, messages):
+async def _collect(client: FallbackChatClient, messages):
     return [chunk async for chunk in client.astream(messages)]
 
 

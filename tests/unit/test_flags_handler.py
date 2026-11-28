@@ -33,7 +33,7 @@ def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch, _isolated_runtime_settings):
+def client(monkeypatch: pytest.MonkeyPatch, _isolated_runtime_settings) -> TestClient:
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
     from backend.api.server import create_app
 
@@ -45,7 +45,7 @@ class TestGetFlags:
     @pytest.mark.parametrize("operation", ["read", "write"])
     def test_preferences_storage_failure_is_503(
         self,
-        client,
+        client: TestClient,
         _isolated_runtime_settings,
         monkeypatch: pytest.MonkeyPatch,
         operation: str,
@@ -64,7 +64,7 @@ class TestGetFlags:
         assert "private database path" not in response.text
 
     def test_invalid_provider_shape_does_not_break_preference_storage(
-        self, client
+        self, client: TestClient
     ) -> None:
         response = client.patch(
             "/settings/prefs", json={"decisionModelProvider": [], "theme": "dark"}
@@ -74,7 +74,7 @@ class TestGetFlags:
         assert client.get("/settings/prefs").json() == {"theme": "dark"}
 
     def test_always_enabled_by_default(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Features beta agora são estáveis e habilitadas por padrão."""
         monkeypatch.delenv("VECTORA_DEV", raising=False)
@@ -83,7 +83,7 @@ class TestGetFlags:
         assert resp.json()["enable_features_beta"] is True
 
     def test_vectora_dev_does_not_affect_it(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Independente de VECTORA_DEV, agora é sempre True."""
         for value in ("1", "0", "true", ""):
@@ -94,7 +94,7 @@ class TestGetFlags:
 
 class TestLocalConfigured:
     def test_false_quando_wizard_nunca_rodou(
-        self, client, _isolated_runtime_settings
+        self, client: TestClient, _isolated_runtime_settings
     ) -> None:
         """auth_required=false sem local_user_name persistido (bug real:
         VECTORA_AUTH_REQUIRED=false esquecido num .env externo) — o guard do
@@ -102,7 +102,9 @@ class TestLocalConfigured:
         resp = client.get("/settings/flags")
         assert resp.json()["local_configured"] is False
 
-    def test_true_apos_setup_local(self, client, _isolated_runtime_settings) -> None:
+    def test_true_apos_setup_local(
+        self, client: TestClient, _isolated_runtime_settings
+    ) -> None:
         _isolated_runtime_settings.set_local_user("Bruno", "Vectora")
         resp = client.get("/settings/flags")
         assert resp.json()["local_configured"] is True

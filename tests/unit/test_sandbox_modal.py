@@ -84,7 +84,7 @@ async def test_sdk_failure_returns_clear_error_offering_other_backends(
     assert "outro backend" in result.stderr
 
 
-def _fake_modal_module(*, exec_side_effect=None, wait_return=0):
+def _fake_modal_module(*, exec_side_effect=None, wait_return: int = 0):
     fake_process = MagicMock()
     if exec_side_effect is not None:
         fake_process.wait.side_effect = exec_side_effect

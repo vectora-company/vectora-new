@@ -29,7 +29,7 @@ def _ensure_linux_os_constants(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _fake_libc(create_rc=3, add_rule_rc=0, restrict_rc=0) -> MagicMock:
+def _fake_libc(create_rc=3, add_rule_rc: int = 0, restrict_rc: int = 0) -> MagicMock:
     """`syscall()` mockado — dispatcha pelo primeiro arg (número da
     syscall) igual ao `_SYSCALL_NUMBERS["x86_64"]` real."""
     create_nr, add_rule_nr, restrict_nr = landlock._SYSCALL_NUMBERS["x86_64"]
@@ -175,7 +175,7 @@ def test_access_fs_v1_all_inclui_todos_os_13_direitos() -> None:
 
 
 def _fake_libc_fs_and_net(
-    fs_create_rc=3, net_create_rc=4, add_rule_rc=0, restrict_rc=0
+    fs_create_rc: int = 3, net_create_rc=4, add_rule_rc: int = 0, restrict_rc: int = 0
 ) -> MagicMock:
     """Como `_fake_libc`, mas distingue a 1ª chamada de `create_ruleset`
     (FS) da 2ª (rede) — `apply_landlock` com `allow_tcp_ports` faz dois

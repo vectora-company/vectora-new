@@ -69,7 +69,9 @@ async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
 
 
 async def _run_with_verification(
-    session_store, monkeypatch: pytest.MonkeyPatch, result
+    session_store: SessionStore,
+    monkeypatch: pytest.MonkeyPatch,
+    result: VerificationResult,
 ):
     async def fake_run_verification(*_args, **_kwargs):
         return result

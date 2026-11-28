@@ -708,7 +708,7 @@ class TestPostBuild:
 
         registry, _ = _make_registry(tmp_path)
 
-        async def pipeline_ok(*_a, resume=False, **_k) -> MagicMock:
+        async def pipeline_ok(*_a, resume: bool = False, **_k) -> MagicMock:
             return MagicMock(error=None, node_count=0, edge_count=0)
 
         mock_pipeline = AsyncMock(side_effect=pipeline_ok)

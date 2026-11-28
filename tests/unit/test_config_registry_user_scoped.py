@@ -102,7 +102,7 @@ class TestMemoryAdapter:
                 self.score = None
 
         class _FakeStore:
-            async def asearch(self, ns, *, query=None, limit=100):
+            async def asearch(self, ns, *, query=None, limit: int = 100):
                 return [_Item(key, val["content"]) for key, val in store_rows.items()]
 
         monkeypatch.setattr("backend.tools.memory._get_store", lambda ctx: _FakeStore())

@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture(scope="module")
-def client():
+def client() -> TestClient:
     os.environ["VECTORA_AUTH_REQUIRED"] = "false"
     from backend.api.server import create_app
 
@@ -31,7 +31,9 @@ def client():
 
 
 class TestModelsProviders:
-    def test_returns_providers_and_empty_dynamic_models(self, client) -> None:
+    def test_returns_providers_and_empty_dynamic_models(
+        self, client: TestClient
+    ) -> None:
         resp = client.get("/models/providers")
         assert resp.status_code == 200
         body = resp.json()
@@ -39,7 +41,7 @@ class TestModelsProviders:
         assert isinstance(body["dynamic_models"], list)
 
     def test_tool_incompatible_models_includes_cohere_command_a_plus(
-        self, client
+        self, client: TestClient
     ) -> None:
         from backend.settings import TOOL_CALLING_INCOMPATIBLE_MODELS
 
@@ -99,7 +101,7 @@ async def test_ollama_runtime_status_reports_active_install(
     assert status.phase == "download"
 
 
-def test_registered_ollama_model_appears_in_dynamic_models(client) -> None:
+def test_registered_ollama_model_appears_in_dynamic_models(client: TestClient) -> None:
     tag = "providers-test-tag"
     # DB real compartilhada entre execuções (ver threads.py::_get_db) —
     # limpa resíduo de uma execução anterior antes de registrar de novo.
@@ -119,7 +121,9 @@ def test_registered_ollama_model_appears_in_dynamic_models(client) -> None:
     client.delete(f"/provider-routing/ollama/registered/{model_id}")
 
 
-def test_registered_openrouter_model_appears_alongside_ollama(client) -> None:
+def test_registered_openrouter_model_appears_alongside_ollama(
+    client: TestClient,
+) -> None:
     ollama_tag = "providers-test-ollama-tag"
     openrouter_tag = "providers-test-openrouter/model"
     for existing in client.get("/provider-routing/ollama/registered").json():
@@ -146,7 +150,9 @@ def test_registered_openrouter_model_appears_alongside_ollama(client) -> None:
     client.delete(f"/provider-routing/openrouter/registered/{openrouter_id}")
 
 
-def test_registered_nine_router_model_appears_in_dynamic_models(client) -> None:
+def test_registered_nine_router_model_appears_in_dynamic_models(
+    client: TestClient,
+) -> None:
     tag = "cc/providers-test-model"
     for existing in client.get("/provider-routing/nine-router/registered").json():
         if existing["tag"] == tag:

@@ -14,6 +14,7 @@ Usa FastAPI TestClient com um ``NativeInMemoryStore`` real (mesmo Protocol
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from typing import NoReturn
 
 import pytest
@@ -32,7 +33,9 @@ def store() -> NativeInMemoryStore:
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch, store: NativeInMemoryStore):
+def client(
+    monkeypatch: pytest.MonkeyPatch, store: NativeInMemoryStore
+) -> Iterator[TestClient]:
     """TestClient com o `store` acima injetado no lugar do store real."""
     os.environ["VECTORA_AUTH_REQUIRED"] = "false"
 
@@ -52,7 +55,7 @@ def client(monkeypatch: pytest.MonkeyPatch, store: NativeInMemoryStore):
 
 
 class TestMemoryList:
-    def test_list_empty(self, client) -> None:
+    def test_list_empty(self, client: TestClient) -> None:
         """GET /memory retorna lista vazia inicialmente."""
         resp = client.get("/memory")
         assert resp.status_code == 200
@@ -60,7 +63,7 @@ class TestMemoryList:
         assert data["memories"] == []
         assert data["total"] == 0
 
-    def test_list_with_items(self, client) -> None:
+    def test_list_with_items(self, client: TestClient) -> None:
         """Lista retorna itens após POST."""
         client.post(
             "/memory",
@@ -72,7 +75,9 @@ class TestMemoryList:
         assert len(data["memories"]) >= 1
         assert any(m["key"] == "test1" for m in data["memories"])
 
-    def test_list_hides_expired_items(self, client, store: NativeInMemoryStore) -> None:
+    def test_list_hides_expired_items(
+        self, client: TestClient, store: NativeInMemoryStore
+    ) -> None:
         """Verifica o comportamento de list hides expired items."""
         import asyncio
 
@@ -88,7 +93,7 @@ class TestMemoryList:
         assert resp.json()["total"] == 0
 
     def test_get_expired_item_returns_not_found(
-        self, client, store: NativeInMemoryStore
+        self, client: TestClient, store: NativeInMemoryStore
     ) -> None:
         """Verifica o comportamento de get expired item returns not found."""
         import asyncio
@@ -103,7 +108,7 @@ class TestMemoryList:
         assert client.get("/memory/old").status_code == 404
 
     def test_journey_hides_expired_fact(
-        self, client, store: NativeInMemoryStore
+        self, client: TestClient, store: NativeInMemoryStore
     ) -> None:
         """Verifica o comportamento de journey hides expired fact."""
         import asyncio
@@ -135,7 +140,7 @@ class TestMemoryList:
 
 
 class TestMemoryCreate:
-    def test_create_happy(self, client) -> None:
+    def test_create_happy(self, client: TestClient) -> None:
         """POST /memory cria nova memória."""
         resp = client.post(
             "/memory",
@@ -155,7 +160,7 @@ class TestMemoryCreate:
         mem = get_resp.json()
         assert mem["content"] == "my content"
 
-    def test_create_duplicate_409(self, client) -> None:
+    def test_create_duplicate_409(self, client: TestClient) -> None:
         """POST duplicada retorna 409 Conflict."""
         client.post("/memory", json={"key": "dup_key", "content": "first"})
         resp = client.post("/memory", json={"key": "dup_key", "content": "second"})
@@ -163,7 +168,7 @@ class TestMemoryCreate:
 
 
 class TestMemoryUpdate:
-    def test_update_happy(self, client) -> None:
+    def test_update_happy(self, client: TestClient) -> None:
         """PUT /memory/{key} edita conteúdo."""
         client.post("/memory", json={"key": "edit_key", "content": "original"})
 
@@ -177,14 +182,14 @@ class TestMemoryUpdate:
         get_resp = client.get("/memory/edit_key")
         assert get_resp.json()["content"] == "updated"
 
-    def test_update_nonexistent_404(self, client) -> None:
+    def test_update_nonexistent_404(self, client: TestClient) -> None:
         """PUT em chave inexistente retorna 404."""
         resp = client.put("/memory/nonexistent", json={"content": "should fail"})
         assert resp.status_code == 404
 
 
 class TestMemoryDelete:
-    def test_delete_happy(self, client) -> None:
+    def test_delete_happy(self, client: TestClient) -> None:
         """DELETE /memory/{key} remove."""
         client.post("/memory", json={"key": "del_key", "content": "to delete"})
         resp = client.delete("/memory/del_key")
@@ -194,7 +199,7 @@ class TestMemoryDelete:
         get_resp = client.get("/memory/del_key")
         assert get_resp.status_code == 404
 
-    def test_delete_nonexistent_404(self, client) -> None:
+    def test_delete_nonexistent_404(self, client: TestClient) -> None:
         """DELETE inexistente retorna 404."""
         resp = client.delete("/memory/nonexistent")
         assert resp.status_code == 404
@@ -214,7 +219,10 @@ class TestMemorySharedStoreWithAgent:
 
     @pytest.mark.asyncio
     async def test_memory_saved_via_agent_tool_appears_in_api(
-        self, client, store: NativeInMemoryStore, monkeypatch: pytest.MonkeyPatch
+        self,
+        client: TestClient,
+        store: NativeInMemoryStore,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Verifica o comportamento de memory saved via agent tool appears in api."""
         from backend.tools.context import ToolContext
@@ -234,7 +242,10 @@ class TestMemorySharedStoreWithAgent:
 
     @pytest.mark.asyncio
     async def test_memory_saved_in_workspace_appears_in_panel_list(
-        self, client, store: NativeInMemoryStore, monkeypatch: pytest.MonkeyPatch
+        self,
+        client: TestClient,
+        store: NativeInMemoryStore,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Sem usuário autenticado, a tool grava sob ``workspace_<id>``; o
         painel, ao informar o workspace ativo, precisa listar essa memória
@@ -264,7 +275,10 @@ class TestMemorySharedStoreWithAgent:
 
     @pytest.mark.asyncio
     async def test_memory_created_via_api_is_visible_to_agent_tool(
-        self, client, store: NativeInMemoryStore, monkeypatch: pytest.MonkeyPatch
+        self,
+        client: TestClient,
+        store: NativeInMemoryStore,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Verifica o comportamento de memory created via api is visible to agent tool."""
         from backend.tools.context import ToolContext
@@ -304,7 +318,7 @@ class TestJourney:
     """GET /memory/journey — o que o Remember aprendeu sobre o usuário."""
 
     def test_usuario_sem_nada_aprendido_retorna_listas_vazias(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de usuario sem nada aprendido retorna listas vazias."""
         monkeypatch.setattr("backend.workspace.skills.list_skills", lambda _u: [])
@@ -317,7 +331,7 @@ class TestJourney:
         assert resp.json() == {"facts": [], "skills": []}
 
     def test_lista_fatos_user_model_e_skills_do_learning_loop(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de lista fatos user model e skills do learning loop."""
         from backend.vtypes.skill import Skill
@@ -369,7 +383,7 @@ class TestJourney:
         assert [s["id"] for s in data["skills"]] == ["revisar-pr"]
 
     def test_falha_ao_listar_skills_nao_derruba_o_painel(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de falha ao listar skills nao derruba o painel."""
 
@@ -395,7 +409,7 @@ class TestJourney:
         assert resp.json()["skills"] == []
 
     def test_journey_nao_e_capturado_pela_rota_de_chave(
-        self, client, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Regressão de ordem de rota: se `/{key}` for declarada antes,
         "journey" vira uma busca por chave e devolve 404."""

@@ -33,7 +33,7 @@ def reg(monkeypatch: pytest.MonkeyPatch) -> WorkspaceRegistry:
     return r
 
 
-def _req(user=None) -> MagicMock:
+def _req(user: SimpleNamespace | None = None) -> MagicMock:
     """Request fake com .state.user, suficiente para os handlers."""
     return fake_request(state=SimpleNamespace(user=user))
 
