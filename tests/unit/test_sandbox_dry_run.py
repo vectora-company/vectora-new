@@ -3,6 +3,8 @@ instalado (CI-friendly)."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.sandbox.dry_run import DENIED_SYSCALLS, build_bwrap_command
@@ -36,7 +38,7 @@ def test_rw_and_ro_paths_are_mounted() -> None:
     ]
 
 
-def test_mask_de_arquivo_literal_vira_ro_bind_dev_null(tmp_path) -> None:
+def test_mask_de_arquivo_literal_vira_ro_bind_dev_null(tmp_path: Path) -> None:
     # Arquivo (existente ou não) mascarado: --ro-bind /dev/null <path> —
     # esconde conteúdo sem impedir o path de existir, não --tmpfs (que
     # mascararia um diretório inteiro, não um arquivo específico).
@@ -50,7 +52,7 @@ def test_mask_de_arquivo_literal_vira_ro_bind_dev_null(tmp_path) -> None:
     assert argv[idx - 2 : idx] == ["--ro-bind", "/dev/null"]
 
 
-def test_mask_de_diretorio_via_glob_vira_tmpfs(tmp_path) -> None:
+def test_mask_de_diretorio_via_glob_vira_tmpfs(tmp_path: Path) -> None:
     (tmp_path / "secrets").mkdir()
     (tmp_path / "secrets" / "key.pem").write_text("x", encoding="utf-8")
     policy = SandboxPolicy(enabled=True, mask=("secrets",))
@@ -62,7 +64,7 @@ def test_mask_de_diretorio_via_glob_vira_tmpfs(tmp_path) -> None:
     assert argv[idx - 1] == "--tmpfs"
 
 
-def test_mask_glob_expande_contra_arquivos_reais(tmp_path) -> None:
+def test_mask_glob_expande_contra_arquivos_reais(tmp_path: Path) -> None:
     (tmp_path / "a.pem").write_text("x", encoding="utf-8")
     nested = tmp_path / "sub"
     nested.mkdir()
@@ -75,7 +77,7 @@ def test_mask_glob_expande_contra_arquivos_reais(tmp_path) -> None:
     assert str(nested / "b.pem") in argv
 
 
-def test_mask_glob_sem_match_nao_quebra(tmp_path) -> None:
+def test_mask_glob_sem_match_nao_quebra(tmp_path: Path) -> None:
     # Erro/borda: padrão glob sem nenhum arquivo correspondente é ignorado,
     # nunca fatal.
     policy = SandboxPolicy(enabled=True, mask=("**/*.pem",))
@@ -85,7 +87,7 @@ def test_mask_glob_sem_match_nao_quebra(tmp_path) -> None:
     assert "--" in argv  # comando montou normalmente até o fim
 
 
-def test_vectora_toml_sempre_mascarado_mesmo_sem_declarar(tmp_path) -> None:
+def test_vectora_toml_sempre_mascarado_mesmo_sem_declarar(tmp_path: Path) -> None:
     # 4.5 — o worker nunca vê sua própria política, mesmo se o usuário não
     # incluir vectora.toml em [sandbox].mask explicitamente.
     policy = SandboxPolicy(enabled=True, mask=())
@@ -143,7 +145,7 @@ def test_allow_tcp_ports_propagado_como_env_var_json() -> None:
     assert argv[idx + 1] == "[443, 8080]"
 
 
-def test_allow_tcp_ports_vazio_ainda_seta_a_env_var(tmp_path) -> None:
+def test_allow_tcp_ports_vazio_ainda_seta_a_env_var(tmp_path: Path) -> None:
     # Erro/borda: sem allow_tcp_ports configurado, a env var ainda existe
     # (lista vazia) — o worker sempre sabe ler `VECTORA_SANDBOX_ALLOW_TCP_PORTS`,
     # nunca precisa tratar a ausência da chave como um caso à parte.
@@ -268,7 +270,9 @@ def test_sem_limite_de_memoria_a_variavel_nao_existe() -> None:
     assert "VECTORA_SANDBOX_MEMORY_MB" not in argv
 
 
-def test_tmpfs_do_jail_tem_teto_quando_o_bwrap_suporta(monkeypatch) -> None:
+def test_tmpfs_do_jail_tem_teto_quando_o_bwrap_suporta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.sandbox import dry_run
 
     monkeypatch.setattr(dry_run, "bwrap_supports_size", lambda: True)
@@ -283,7 +287,9 @@ def test_tmpfs_do_jail_tem_teto_quando_o_bwrap_suporta(monkeypatch) -> None:
         assert argv[i - 3 : i - 1] == ["--size", tamanho]
 
 
-def test_bwrap_antigo_sem_size_nao_impede_o_jail(monkeypatch) -> None:
+def test_bwrap_antigo_sem_size_nao_impede_o_jail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.sandbox import dry_run
 
     monkeypatch.setattr(dry_run, "bwrap_supports_size", lambda: False)

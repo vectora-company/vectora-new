@@ -192,7 +192,7 @@ class TestStartAndCompleteLogin:
                 await oidc.complete_login(_DISCOVERY, _CONFIG, state=state, code="abc")
 
     def test_state_expirado_e_limpo_e_tratado_como_desconhecido(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: TTL de 10min — state velho nunca completa login,
         mesmo com code/state corretos."""

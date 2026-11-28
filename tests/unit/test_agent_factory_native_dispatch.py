@@ -6,6 +6,7 @@ consome no dispatch de produção (StreamChat/ResumeChat).
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -30,7 +31,7 @@ def _limpa_cache_native_agent():
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     pool = AsyncConnectionPool(str(tmp_path / "native.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -194,7 +195,9 @@ class TestNativeSubagentCatalogAbac:
         assert resultado.startswith("Error:")
         assert "amend" in resultado
 
-    def test_disabled_tools_filtradas_do_catalogo(self, monkeypatch) -> None:
+    def test_disabled_tools_filtradas_do_catalogo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """ABAC/kill-switch: tools desabilitadas saem das specs nativas de
         subagente (substitui a cobertura do antigo _subagent_specs legado)."""
         from backend.rbac import tool_policy
@@ -211,7 +214,7 @@ class TestNativeSubagentCatalogAbac:
         assert "ask_parent_agent" in coder_tools
 
     def test_soul_readonly_nunca_ganha_tool_de_escrita_mesmo_sem_kill_switch(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Gap real (revisão de 2026-08-30): o teste acima só provava ABAC
         pra `coder` — não prova que uma SOUL genuinamente read-only

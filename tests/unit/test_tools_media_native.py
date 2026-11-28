@@ -39,7 +39,7 @@ requires_ffmpeg = pytest.mark.skipif(
 @pytest.mark.asyncio
 @requires_ffmpeg
 class TestProbeMedia:
-    async def test_video_real_devolve_duracao_e_streams(self, tmp_path) -> None:
+    async def test_video_real_devolve_duracao_e_streams(self, tmp_path: Path) -> None:
         video = tmp_path / "sample.mp4"
         video.write_bytes((_ASSETS / "sample.mp4").read_bytes())
 
@@ -50,7 +50,9 @@ class TestProbeMedia:
         codec_types = {s["codec_type"] for s in result["streams"]}
         assert codec_types == {"video", "audio"}
 
-    async def test_arquivo_invalido_devolve_erro_sem_derrubar(self, tmp_path) -> None:
+    async def test_arquivo_invalido_devolve_erro_sem_derrubar(
+        self, tmp_path: Path
+    ) -> None:
         """Erro/borda: arquivo que não é mídia nenhuma — ffprobe falha,
         vira erro tipado, nunca uma exceção crua."""
         fake = tmp_path / "nao-e-video.mp4"
@@ -77,7 +79,7 @@ class TestProbeMedia:
         ],
     )
     async def test_formatos_variados_sao_reconhecidos_sem_erro(
-        self, tmp_path, filename, expected_codec_types
+        self, tmp_path: Path, filename: str, expected_codec_types
     ) -> None:
         """Diversidade de container/codec que o ffmpeg embutido precisa
         suportar na prática — não só o mp4/wav já cobertos acima."""
@@ -95,7 +97,7 @@ class TestProbeMedia:
 @pytest.mark.asyncio
 @requires_ffmpeg
 class TestExtractFrame:
-    async def test_extrai_frame_real_do_video(self, tmp_path) -> None:
+    async def test_extrai_frame_real_do_video(self, tmp_path: Path) -> None:
         video = tmp_path / "sample.mp4"
         video.write_bytes((_ASSETS / "sample.mp4").read_bytes())
 
@@ -114,7 +116,7 @@ class TestExtractFrame:
         )  # assinatura PNG real
 
     async def test_timestamp_negativo_e_erro_de_validacao_sem_chamar_ffmpeg(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         """Erro/borda: timestamp inválido rejeitado ANTES de qualquer
         subprocess — não é o ffmpeg que precisa validar isso."""
@@ -130,7 +132,7 @@ class TestExtractFrame:
 
         assert "error" in result
 
-    async def test_extrai_frame_do_gif_animado(self, tmp_path) -> None:
+    async def test_extrai_frame_do_gif_animado(self, tmp_path: Path) -> None:
         """ffprobe lê GIF animado como stream de vídeo — prova que
         extract_frame funciona igual a um container de vídeo comum."""
         gif = tmp_path / "sample.gif"
@@ -154,7 +156,7 @@ class TestExtractFrame:
 @pytest.mark.asyncio
 @requires_ffmpeg
 class TestExtractAudio:
-    async def test_extrai_audio_real_do_video(self, tmp_path) -> None:
+    async def test_extrai_audio_real_do_video(self, tmp_path: Path) -> None:
         video = tmp_path / "sample.mp4"
         video.write_bytes((_ASSETS / "sample.mp4").read_bytes())
 
@@ -172,7 +174,7 @@ class TestExtractAudio:
 @pytest.mark.asyncio
 class TestTranscribeLocal:
     @pytest.mark.live
-    async def test_audio_real_via_faster_whisper(self, tmp_path) -> None:
+    async def test_audio_real_via_faster_whisper(self, tmp_path: Path) -> None:
         """Sem mock de faster-whisper — roda o modelo de verdade (baixado
         sob demanda da Hugging Face na primeira execução, cacheado em
         ~/.vectora/models/whisper/). Toca rede real — marcado `live`

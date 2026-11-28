@@ -15,6 +15,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from backend.vtypes.contracts import JsonObject
 
 # ---------------------------------------------------------------------------
@@ -24,7 +26,7 @@ from backend.vtypes.contracts import JsonObject
 
 class TestVectoraContext:
     def test_decision_preferences_come_from_the_authenticated_user_store(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Runtime prefs are trusted; caller config cannot forge a decision model opt-in."""
         from backend.vtypes.context import ctx_from_config
@@ -59,7 +61,7 @@ class TestVectoraContext:
         }
 
     def test_decision_preferences_fail_closed_with_shared_empty_surface_default(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Store failures must match the frontend's disabled, empty defaults."""
         from backend.vtypes.context import ctx_from_config
@@ -319,7 +321,7 @@ class TestBuildStore:
 
 
 class TestAgentsMdPaths:
-    def test_returns_none_when_no_file(self, tmp_path) -> None:
+    def test_returns_none_when_no_file(self, tmp_path: Path) -> None:
         """Sem AGENTS.md retorna None."""
         from backend.services.agent_factory import _agents_md_paths
 

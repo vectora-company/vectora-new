@@ -11,6 +11,7 @@ nestes testes (não depende de Chromium instalado).
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
@@ -310,7 +311,7 @@ async def test_browser_navigate_bloqueia_redirect_para_destino_privado(
 
 @pytest.mark.asyncio
 async def test_browser_screenshot_salva_imagem_e_pede_envio_ao_modelo(
-    monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock, tmp_path
+    monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock, tmp_path: Path
 ) -> None:
     """Preview ativo → screenshot salvo como asset da sessão; o resultado traz
     a URL para a interface e a referência que leva a imagem ao modelo, sem
@@ -536,7 +537,7 @@ async def test_browser_fill_por_uid_falha_retorna_erro(
 
 @pytest.mark.asyncio
 async def test_browser_read_dom_returns_text_and_empty_on_missing_selector(
-    monkeypatch, fake_page
+    monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
 ) -> None:
     monkeypatch.setattr(
         browser_tools,
@@ -555,7 +556,7 @@ async def test_browser_read_dom_returns_text_and_empty_on_missing_selector(
 
 @pytest.mark.asyncio
 async def test_browser_scroll_accepts_down_up_and_rejects_invalid_direction(
-    monkeypatch, fake_page
+    monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
 ) -> None:
     monkeypatch.setattr(
         browser_tools,
@@ -595,7 +596,7 @@ def _launch_json(names: list[str]):
 class TestResolvePreviewName:
     @pytest.mark.asyncio
     async def test_single_config_auto_resolves_when_name_omitted(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
@@ -610,7 +611,7 @@ class TestResolvePreviewName:
 
     @pytest.mark.asyncio
     async def test_multiple_configs_without_name_returns_error(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
@@ -626,7 +627,9 @@ class TestResolvePreviewName:
         assert "web" in err and "api" in err
 
     @pytest.mark.asyncio
-    async def test_unknown_name_returns_error(self, monkeypatch) -> None:
+    async def test_unknown_name_returns_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
         monkeypatch.setattr(
@@ -639,7 +642,9 @@ class TestResolvePreviewName:
         assert "ghost" in err
 
     @pytest.mark.asyncio
-    async def test_empty_launch_json_returns_clear_error(self, monkeypatch) -> None:
+    async def test_empty_launch_json_returns_clear_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
         monkeypatch.setattr(
@@ -654,7 +659,9 @@ class TestResolvePreviewName:
 
 class TestPreviewStartStopRestartTools:
     @pytest.mark.asyncio
-    async def test_preview_start_delegates_to_http_handler(self, monkeypatch) -> None:
+    async def test_preview_start_delegates_to_http_handler(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
         monkeypatch.setattr(
@@ -675,7 +682,7 @@ class TestPreviewStartStopRestartTools:
 
     @pytest.mark.asyncio
     async def test_preview_start_with_ambiguous_name_returns_error_without_calling_http(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
@@ -693,7 +700,9 @@ class TestPreviewStartStopRestartTools:
         http_start.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_preview_stop_delegates_to_http_handler(self, monkeypatch) -> None:
+    async def test_preview_stop_delegates_to_http_handler(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
         monkeypatch.setattr(
@@ -713,7 +722,9 @@ class TestPreviewStartStopRestartTools:
         assert "parado" in result
 
     @pytest.mark.asyncio
-    async def test_preview_restart_stops_then_starts(self, monkeypatch) -> None:
+    async def test_preview_restart_stops_then_starts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
         monkeypatch.setattr(
@@ -741,7 +752,9 @@ class TestPreviewStartStopRestartTools:
 
 class TestPreviewLogsTool:
     @pytest.mark.asyncio
-    async def test_returns_joined_lines_from_buffer(self, monkeypatch) -> None:
+    async def test_returns_joined_lines_from_buffer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
         monkeypatch.setattr(
@@ -761,7 +774,7 @@ class TestPreviewLogsTool:
 
     @pytest.mark.asyncio
     async def test_never_started_returns_clear_message_not_empty_string(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
@@ -784,7 +797,7 @@ class TestPreviewLogsTool:
 class TestBrowserWaitFor:
     @pytest.mark.asyncio
     async def test_estado_invalido_retorna_erro_sem_chamar_playwright(
-        self, monkeypatch, fake_page
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
     ) -> None:
         result = await browser_tools.browser_wait_for(
             selector="#x", state="invalido", ctx=_ctx()
@@ -795,7 +808,7 @@ class TestBrowserWaitFor:
 
     @pytest.mark.asyncio
     async def test_sucesso_confirma_estado_atingido(
-        self, monkeypatch, fake_page
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
     ) -> None:
         monkeypatch.setattr(
             browser_tools,
@@ -814,7 +827,7 @@ class TestBrowserWaitFor:
 
     @pytest.mark.asyncio
     async def test_timeout_devolve_erro_tipado_nao_excecao(
-        self, monkeypatch, fake_page
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
     ) -> None:
         monkeypatch.setattr(
             browser_tools,
@@ -833,7 +846,9 @@ class TestBrowserWaitFor:
 
 class TestBrowserDrag:
     @pytest.mark.asyncio
-    async def test_arrasta_com_sucesso(self, monkeypatch, fake_page) -> None:
+    async def test_arrasta_com_sucesso(
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
+    ) -> None:
         monkeypatch.setattr(
             browser_tools,
             "resolve_dev_server_url",
@@ -851,7 +866,7 @@ class TestBrowserDrag:
 
     @pytest.mark.asyncio
     async def test_elemento_nao_encontrado_retorna_erro(
-        self, monkeypatch, fake_page
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
     ) -> None:
         monkeypatch.setattr(
             browser_tools,
@@ -870,7 +885,7 @@ class TestBrowserDrag:
 class TestBrowserUploadFile:
     @pytest.mark.asyncio
     async def test_arquivo_inexistente_no_host_retorna_erro_sem_chamar_playwright(
-        self, monkeypatch, fake_page, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock, tmp_path: Path
     ) -> None:
         result = await browser_tools.browser_upload_file(
             selector="input[type=file]",
@@ -883,7 +898,7 @@ class TestBrowserUploadFile:
 
     @pytest.mark.asyncio
     async def test_anexa_arquivo_existente_com_sucesso(
-        self, monkeypatch, fake_page, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
             browser_tools,
@@ -905,7 +920,9 @@ class TestBrowserUploadFile:
 
 class TestBrowserFillForm:
     @pytest.mark.asyncio
-    async def test_campos_vazios_retorna_erro(self, monkeypatch, fake_page) -> None:
+    async def test_campos_vazios_retorna_erro(
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
+    ) -> None:
         monkeypatch.setattr(
             browser_tools,
             "resolve_dev_server_url",
@@ -920,7 +937,7 @@ class TestBrowserFillForm:
 
     @pytest.mark.asyncio
     async def test_todos_os_campos_preenchidos_com_sucesso(
-        self, monkeypatch, fake_page
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
     ) -> None:
         monkeypatch.setattr(
             browser_tools,
@@ -941,7 +958,7 @@ class TestBrowserFillForm:
 
     @pytest.mark.asyncio
     async def test_falha_parcial_continua_pros_demais_campos_e_reporta_status_partial(
-        self, monkeypatch, fake_page
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
     ) -> None:
         monkeypatch.setattr(
             browser_tools,
@@ -969,7 +986,7 @@ class TestBrowserFillForm:
 
     @pytest.mark.asyncio
     async def test_todos_os_campos_falham_reporta_status_error(
-        self, monkeypatch, fake_page
+        self, monkeypatch: pytest.MonkeyPatch, fake_page: MagicMock
     ) -> None:
         monkeypatch.setattr(
             browser_tools,

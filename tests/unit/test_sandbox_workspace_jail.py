@@ -15,7 +15,7 @@ from backend.sandbox.policy import SandboxPolicy
 
 
 @pytest.fixture(autouse=True)
-def _force_linux_platform(monkeypatch) -> None:
+def _force_linux_platform(monkeypatch: pytest.MonkeyPatch) -> None:
     # Testes abaixo exercitam o caminho bwrap nativo (Linux) — forçar a
     # plataforma torna isso determinístico independente do SO onde os
     # testes rodam de verdade (esta máquina de dev é Windows). Monkeypatcha
@@ -40,7 +40,9 @@ def _fake_proc(returncode: int | None = None) -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_disabled_policy_raises_without_spawning(tmp_path, monkeypatch) -> None:
+async def test_disabled_policy_raises_without_spawning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     spawn_mock = AsyncMock()
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
     manager = wj.WorkspaceJailManager()
@@ -52,7 +54,9 @@ async def test_disabled_policy_raises_without_spawning(tmp_path, monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_reuses_same_worker_for_same_workspace(tmp_path, monkeypatch) -> None:
+async def test_reuses_same_worker_for_same_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -67,7 +71,9 @@ async def test_reuses_same_worker_for_same_workspace(tmp_path, monkeypatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_missing_bwrap_raises_clear_error(tmp_path, monkeypatch) -> None:
+async def test_missing_bwrap_raises_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     async def _raise_not_found(*_args, **_kwargs):
         raise FileNotFoundError("bwrap")
 
@@ -80,7 +86,7 @@ async def test_missing_bwrap_raises_clear_error(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_request_writes_json_line_and_parses_response(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     proc = _fake_proc()
     response = json.dumps({"id": 1, "stdout": "ok\n", "stderr": "", "exit_code": 0})
@@ -104,7 +110,9 @@ async def test_request_writes_json_line_and_parses_response(
 
 
 @pytest.mark.asyncio
-async def test_request_raises_when_worker_closes_stdout(tmp_path, monkeypatch) -> None:
+async def test_request_raises_when_worker_closes_stdout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     proc.stdout.readline = AsyncMock(return_value=b"")
     monkeypatch.setattr(
@@ -121,7 +129,7 @@ async def test_request_raises_when_worker_closes_stdout(tmp_path, monkeypatch) -
 
 @pytest.mark.asyncio
 async def test_close_idle_terminates_stale_workers_and_respawns(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
@@ -140,7 +148,9 @@ async def test_close_idle_terminates_stale_workers_and_respawns(
 
 
 @pytest.mark.asyncio
-async def test_close_idle_keeps_recently_used_workers(tmp_path, monkeypatch) -> None:
+async def test_close_idle_keeps_recently_used_workers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -157,7 +167,7 @@ async def test_close_idle_keeps_recently_used_workers(tmp_path, monkeypatch) -> 
 
 @pytest.mark.asyncio
 async def test_spawn_aplica_seccomp_fd_quando_filtro_disponivel(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
@@ -177,7 +187,7 @@ async def test_spawn_aplica_seccomp_fd_quando_filtro_disponivel(
 
 @pytest.mark.asyncio
 async def test_spawn_degrada_sem_seccomp_quando_libseccomp_ausente(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
@@ -195,7 +205,9 @@ async def test_spawn_degrada_sem_seccomp_quando_libseccomp_ausente(
 
 
 @pytest.mark.asyncio
-async def test_is_alive_reflects_returncode(tmp_path, monkeypatch) -> None:
+async def test_is_alive_reflects_returncode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     dead_proc = _fake_proc(returncode=1)
     spawn_mock = AsyncMock(return_value=dead_proc)
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -224,12 +236,12 @@ class TestWsl2Spawn:
     worker é roteado inteiro por dentro de uma distro WSL2 via `wsl.exe`."""
 
     @pytest.fixture(autouse=True)
-    def _win32(self, monkeypatch) -> None:
+    def _win32(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(wj, "_is_windows", lambda: True)
 
     @pytest.mark.asyncio
     async def test_roteia_via_wsl_exe_e_traduz_o_workspace_dir(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         proc = _fake_proc()
         spawn_mock = AsyncMock(return_value=proc)
@@ -255,7 +267,9 @@ class TestWsl2Spawn:
         assert wj.sys.executable not in argv
 
     @pytest.mark.asyncio
-    async def test_sem_wsl2_faz_fallback_pro_sandbox_soft(self, monkeypatch) -> None:
+    async def test_sem_wsl2_faz_fallback_pro_sandbox_soft(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Sem WSL2 elegível: não bloqueia — degrada pro sandbox soft nativo
         do Windows (worker em subprocess puro, env limpo, cwd no workspace).
         Com `lockdown`, o modo soft só propaga o perfil de rlimits: não há
@@ -349,7 +363,7 @@ async def test_request_normal_responde_sem_ser_afetado_por_timeout() -> None:
 
 @pytest.mark.asyncio
 async def test_worker_travado_e_morto_no_timeout_e_respawna_depois(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Erro/borda: worker que trava sem morrer deixaria o workspace inteiro
     inacessível (é singleton). O timeout precisa matar o processo — depois

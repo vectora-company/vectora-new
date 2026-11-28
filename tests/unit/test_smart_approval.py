@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 
@@ -22,7 +23,7 @@ from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture(autouse=True)
-def _runtime_settings_isolado(tmp_path, monkeypatch):
+def _runtime_settings_isolado(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Evita que os testes leiam/gravem no `app_settings` real do usuário."""
     from backend.workspace.runtime_settings import RuntimeSettings
 
@@ -62,7 +63,7 @@ class TestAllowlist:
         assert sa.get_allowlist("ws1") == []
 
     def test_grant_de_uso_unico_e_atomico_entre_instancias_sqlite(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Caches stale de processos distintos não podem consumir a mesma grant."""
         from backend.workspace.runtime_settings import RuntimeSettings

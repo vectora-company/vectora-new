@@ -10,6 +10,7 @@ conversa fantasma (ou um laço infinito de auto-resposta).
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -46,7 +47,9 @@ def test_telegram_traduz_texto_e_recusa_update_sem_conversa() -> None:
 
 
 @pytest.mark.asyncio
-async def test_telegram_handler_responde_e_nao_propaga_excecao(monkeypatch) -> None:
+async def test_telegram_handler_responde_e_nao_propaga_excecao(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     enviados: list[str] = []
 
     async def _reply(text: str) -> None:
@@ -167,7 +170,9 @@ def test_email_traduz_assunto_e_corpo_e_recusa_sem_remetente() -> None:
 
 
 @pytest.mark.asyncio
-async def test_email_poll_once_continua_apos_falha_numa_mensagem(monkeypatch) -> None:
+async def test_email_poll_once_continua_apos_falha_numa_mensagem(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     config = email.EmailConfig(
         imap_host="imap.example.com",
         imap_user="eu@example.com",
@@ -203,7 +208,9 @@ async def test_email_poll_once_continua_apos_falha_numa_mensagem(monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_email_caixa_inacessivel_nao_derruba_o_loop(monkeypatch) -> None:
+async def test_email_caixa_inacessivel_nao_derruba_o_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     config = email.EmailConfig(
         imap_host="imap.invalido",
         imap_user="eu@example.com",
@@ -231,7 +238,9 @@ def _manager_limpo():
     manager._running.clear()
 
 
-def test_configured_platforms_exige_credencial_completa(monkeypatch) -> None:
+def test_configured_platforms_exige_credencial_completa(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("VECTORA_LICENSE_BYPASS", "1")
     for var in (
         "TELEGRAM_BOT_TOKEN",
@@ -267,7 +276,9 @@ def test_configured_platforms_exige_credencial_completa(monkeypatch) -> None:
     assert "telegram" not in manager.configured_platforms()
 
 
-def test_configured_platforms_vazio_sem_tier_pro(monkeypatch) -> None:
+def test_configured_platforms_vazio_sem_tier_pro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Sem Pro, nenhuma plataforma sobe mesmo com credencial completa salva."""
     for var in ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "EMAIL_IMAP_HOST"):
         monkeypatch.delenv(var, raising=False)
@@ -284,7 +295,9 @@ def test_configured_platforms_vazio_sem_tier_pro(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sync_adapters_desliga_tudo_no_downgrade_de_tier(monkeypatch) -> None:
+async def test_sync_adapters_desliga_tudo_no_downgrade_de_tier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Downgrade pro->free: sync_adapters reconcilia contra vazio e desliga."""
     for var in (
         "DISCORD_BOT_TOKEN",
@@ -326,7 +339,7 @@ async def test_sync_adapters_desliga_tudo_no_downgrade_de_tier(monkeypatch) -> N
 
 
 @pytest.fixture
-def _isolated_runtime_settings(tmp_path, monkeypatch):
+def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Isola cada teste com um RuntimeSettings próprio — sem isso, o
     override de `connect_enabled_platforms` de um teste vazaria pros
     seguintes (é um singleton de processo)."""
@@ -339,7 +352,7 @@ def _isolated_runtime_settings(tmp_path, monkeypatch):
 
 
 def test_is_enabled_antes_do_primeiro_toggle_espelha_credencial(
-    _isolated_runtime_settings, monkeypatch
+    _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Achado ao vivo (2026-08-20): antes desta feature, credencial salva
     já ligava a plataforma pra sempre. Sem nenhum toggle usado ainda, o
@@ -353,7 +366,7 @@ def test_is_enabled_antes_do_primeiro_toggle_espelha_credencial(
 
 
 def test_configured_platforms_respeita_toggle_desligado(
-    _isolated_runtime_settings, monkeypatch
+    _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """O caso do bug real: credencial presente, mas o usuário desligou o
     toggle — a plataforma não pode aparecer como configurada."""
@@ -371,7 +384,7 @@ def test_configured_platforms_respeita_toggle_desligado(
 
 
 def test_primeiro_toggle_preserva_outras_plataformas_ja_credenciadas(
-    _isolated_runtime_settings, monkeypatch
+    _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Desligar UMA plataforma pela primeira vez não pode desligar
     silenciosamente outra que já estava rodando de propósito."""
@@ -387,7 +400,9 @@ def test_primeiro_toggle_preserva_outras_plataformas_ja_credenciadas(
 
 
 @pytest.mark.asyncio
-async def test_sync_adapters_falha_de_um_nao_impede_os_outros(monkeypatch) -> None:
+async def test_sync_adapters_falha_de_um_nao_impede_os_outros(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         manager, "configured_platforms", lambda: {"telegram", "discord"}
     )
@@ -409,7 +424,9 @@ async def test_sync_adapters_falha_de_um_nao_impede_os_outros(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_sync_adapters_desliga_quem_perdeu_a_credencial(monkeypatch) -> None:
+async def test_sync_adapters_desliga_quem_perdeu_a_credencial(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     parados: list[str] = []
 
     async def _stop(platform, _handle) -> None:
@@ -444,7 +461,7 @@ async def test_sync_adapters_desliga_quem_perdeu_a_credencial(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_stop_all_e_idempotente(monkeypatch) -> None:
+async def test_stop_all_e_idempotente(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _stop(_platform, _handle):
         return None
 
@@ -469,7 +486,7 @@ async def test_start_platform_rejeita_plataforma_desconhecida() -> None:
 
 
 @pytest.fixture
-def _db_isolado(tmp_path, monkeypatch) -> None:
+def _db_isolado(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.settings import settings
 
     monkeypatch.setattr(settings, "db_dsn", str(tmp_path / "connect.db"))
@@ -477,7 +494,7 @@ def _db_isolado(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_mapeamento_reusa_o_mesmo_thread_e_isola_por_plataforma(
-    _db_isolado,
+    _db_isolado: None,
 ) -> None:
     from backend.services.connect import store
 

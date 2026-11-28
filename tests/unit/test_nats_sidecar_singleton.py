@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 import pytest
 
@@ -19,7 +20,7 @@ from backend.scheduling import nats_sidecar as ns
 
 
 @pytest.fixture(autouse=True)
-def _sidecar_limpo(monkeypatch, tmp_path) -> None:
+def _sidecar_limpo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ns, "_proc", None)
     monkeypatch.setattr(ns, "_url", None)
     from backend.settings import settings
@@ -37,7 +38,7 @@ def _registra(store_dir, pid: int, url: str = "") -> None:
 
 @pytest.mark.asyncio
 async def test_sidecar_vivo_e_respondendo_e_reusado_nunca_morto(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     store = tmp_path / "nats"
     _registra(store, 1144, "nats://127.0.0.1:4222")
@@ -70,7 +71,9 @@ async def test_sidecar_vivo_e_respondendo_e_reusado_nunca_morto(
 
 
 @pytest.mark.asyncio
-async def test_pid_vivo_mas_mudo_e_descartado(monkeypatch, tmp_path) -> None:
+async def test_pid_vivo_mas_mudo_e_descartado(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Erro/borda: processo no `tasklist` mas sem aceitar conexão (zumbi) — aí
     sim precisa ser descartado, senão o backend ficaria preso a um sidecar
     que nunca responde."""
@@ -100,7 +103,7 @@ async def test_pid_vivo_mas_mudo_e_descartado(monkeypatch, tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_pid_file_legado_sem_url_nao_reusa_as_cegas(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Erro/borda: pid file de versão antiga não tem `url`. Sem URL não dá pra
     confirmar que o processo é utilizável, então não pode ser reusado às
@@ -128,7 +131,7 @@ async def test_pid_file_legado_sem_url_nao_reusa_as_cegas(
     assert mortos == [777]
 
 
-def test_url_e_persistida_no_pid_file(tmp_path) -> None:
+def test_url_e_persistida_no_pid_file(tmp_path: Path) -> None:
     store = tmp_path / "nats"
     store.mkdir(parents=True)
     ns._write_pid_list(store, [42], url="nats://127.0.0.1:5555")

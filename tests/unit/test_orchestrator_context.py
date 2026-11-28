@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from backend.services import agent_factory as orchestrator
 
 
@@ -15,7 +17,9 @@ def _ws(ws_id: str, name: str, cwd: str, *, git: bool = False) -> SimpleNamespac
     return SimpleNamespace(id=ws_id, name=name, cwd=cwd, is_git_repo=git)
 
 
-def test_overview_lists_workspaces_and_marks_active(monkeypatch) -> None:
+def test_overview_lists_workspaces_and_marks_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Lista os workspaces e marca o ativo com ◀; flag git aparece."""
     from backend.workspace import workspace as ws_mod
 
@@ -46,7 +50,7 @@ def test_overview_lists_workspaces_and_marks_active(monkeypatch) -> None:
     assert "· git" not in line_b
 
 
-def test_overview_returns_none_when_empty(monkeypatch) -> None:
+def test_overview_returns_none_when_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """Erro/borda: sem workspaces registrados → None (nada a injetar)."""
     from backend.workspace import workspace as ws_mod
 
@@ -54,7 +58,9 @@ def test_overview_returns_none_when_empty(monkeypatch) -> None:
     assert orchestrator._load_workspaces_overview() is None
 
 
-def test_overview_returns_none_on_registry_error(monkeypatch) -> None:
+def test_overview_returns_none_on_registry_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: falha no registry degrada para None, nunca propaga."""
     from backend.workspace import workspace as ws_mod
 
@@ -65,7 +71,7 @@ def test_overview_returns_none_on_registry_error(monkeypatch) -> None:
     assert orchestrator._load_workspaces_overview(active_id="x") is None
 
 
-def test_overview_truncates_above_30(monkeypatch) -> None:
+def test_overview_truncates_above_30(monkeypatch: pytest.MonkeyPatch) -> None:
     """Acima de 30 workspaces, trunca e aponta para workspace_list."""
     from backend.workspace import workspace as ws_mod
 

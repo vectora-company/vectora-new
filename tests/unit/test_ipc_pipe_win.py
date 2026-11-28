@@ -68,7 +68,7 @@ def test_pipe_env_var_constante() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_buffers_antes_do_tcp(monkeypatch) -> None:
+async def test_pipe_side_buffers_antes_do_tcp(monkeypatch: pytest.MonkeyPatch) -> None:
     """Dados recebidos antes do TCP conectar ficam no _pending e são enviados depois."""
     tcp_transport = _FakeWriteTransport()
 
@@ -99,7 +99,9 @@ async def test_pipe_side_buffers_antes_do_tcp(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_encaminha_dados_apos_tcp(monkeypatch) -> None:
+async def test_pipe_side_encaminha_dados_apos_tcp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Dados recebidos após TCP conectar são repassados diretamente."""
     tcp_transport = _FakeWriteTransport()
 
@@ -125,7 +127,9 @@ async def test_pipe_side_encaminha_dados_apos_tcp(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_retries_until_uvicorn_accepts(monkeypatch) -> None:
+async def test_pipe_side_retries_until_uvicorn_accepts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A pipe aberta antes do uvicorn não perde a primeira requisição."""
     tcp_transport = _FakeWriteTransport()
     attempts = 0
@@ -155,7 +159,9 @@ async def test_pipe_side_retries_until_uvicorn_accepts(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_fecha_quando_tcp_falha(monkeypatch) -> None:
+async def test_pipe_side_fecha_quando_tcp_falha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Se o uvicorn TCP não estiver acessível, a pipe fecha graciosamente."""
 
     async def fail_create_conn(proto_factory, host, port):
@@ -177,7 +183,9 @@ async def test_pipe_side_fecha_quando_tcp_falha(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_fecha_tcp_ao_desconectar(monkeypatch) -> None:
+async def test_pipe_side_fecha_tcp_ao_desconectar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Quando a pipe fecha, a conexão TCP correspondente também é fechada."""
     tcp_transport = _FakeWriteTransport()
 

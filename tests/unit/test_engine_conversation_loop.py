@@ -10,6 +10,7 @@ import asyncio
 import json
 from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, TypedDict, Unpack
 from unittest.mock import AsyncMock, Mock
@@ -78,7 +79,7 @@ class _ScheduledTask(TypedDict):
     [("success", "completed"), ("error", "error"), ("cancel", "cancelled")],
 )
 async def test_harness_telemetry_records_complete_turn_lifecycle(
-    monkeypatch, outcome: str, expected_status: str
+    monkeypatch: pytest.MonkeyPatch, outcome: str, expected_status: str
 ) -> None:
     start = AsyncMock()
     end = AsyncMock()
@@ -154,7 +155,7 @@ def test_reported_cost_requires_finite_nonnegative_usd(
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     """Executa a operação session store."""
     pool = AsyncConnectionPool(str(tmp_path / "loop.db"), min_size=1, max_size=2)
     await pool.open()
@@ -354,7 +355,13 @@ async def test_decision_snapshot_survives_preference_change_without_duplicate_ev
     ],
 )
 async def test_disabled_decision_surface_reaches_executor_without_model_call(
-    session_store, ctx, tmp_path, monkeypatch, tool_name, disabled, provenance
+    session_store,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tool_name: str,
+    disabled: str,
+    provenance,
 ) -> None:
     from pydantic import create_model
 
@@ -541,7 +548,10 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
 
 @pytest.mark.asyncio
 async def test_snapshot_revocation_survives_aba_and_independent_connection(
-    session_store: SessionStore, ctx: ToolContext, tmp_path, monkeypatch
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.engine.hitl import _decision_snapshot_matches_runtime
     from backend.persistence.native.agent_run import AgentRun
@@ -597,7 +607,10 @@ async def test_snapshot_revocation_survives_aba_and_independent_connection(
 
 @pytest.mark.asyncio
 async def test_preapproval_grant_is_consumed_once_and_audited_before_execution(
-    session_store: SessionStore, ctx: ToolContext, tmp_path, monkeypatch
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.persistence.native.agent_run import AgentRun
     from backend.services import smart_approval
@@ -674,8 +687,8 @@ async def test_preapproval_grant_is_consumed_once_and_audited_before_execution(
 async def test_preapproval_never_overrides_revocation_or_human_decision(
     session_store: SessionStore,
     ctx: ToolContext,
-    tmp_path,
-    monkeypatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     extra: JsonObject,
     decision: str | None,
 ) -> None:
@@ -717,7 +730,10 @@ async def test_preapproval_never_overrides_revocation_or_human_decision(
 
 @pytest.mark.asyncio
 async def test_preapproval_fails_closed_when_run_is_not_in_the_same_workspace(
-    session_store: SessionStore, ctx: ToolContext, tmp_path, monkeypatch
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.persistence.native.agent_run import AgentRun
     from backend.services import smart_approval
@@ -835,7 +851,7 @@ async def test_decision_model_audit_persists_redacted_agent_run_and_ledger(
 
 class TestParadaNormal:
     async def test_quality_gate_persiste_evidencia_antes_do_status_terminal(
-        self, session_store, ctx, monkeypatch
+        self, session_store, ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A evidência fica durável enquanto o run ainda está em verifying.
 
@@ -889,7 +905,11 @@ class TestParadaNormal:
         assert stored.evidence[-1]["snapshot_sha256"] == "snapshot"
 
     async def test_run_sem_gates_termina_nao_verificado(
-        self, session_store, ctx, monkeypatch, tmp_path
+        self,
+        session_store,
+        ctx: ToolContext,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
     ) -> None:
         """Sem quality gates, o motor real devolve ``not_run`` e o loop grava o
         run como ``degraded``, sem a mensagem de verificação bem-sucedida."""
@@ -926,7 +946,7 @@ class TestParadaNormal:
         assert stored.evidence[-1]["gates_evaluated"] == 0
 
     async def test_checkpoint_de_tool_impede_reexecucao_cego(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de checkpoint de tool impede reexecucao cego."""
         from backend.persistence.native.agent_run import AgentRun
@@ -967,7 +987,7 @@ class TestParadaNormal:
         assert stored.error_code == "CHECKPOINT_TOOL_RECONCILIATION_REQUIRED"
 
     async def test_sem_tool_calls_para_no_primeiro_turno(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de sem tool calls para no primeiro turno."""
         client = ScriptedChatClient([[_text_chunk("olá!")]])
@@ -1068,7 +1088,7 @@ class TestParadaNormal:
 
 class TestMaxIterations:
     async def test_estoura_o_teto_sem_nunca_parar_naturalmente(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de estoura o teto sem nunca parar naturalmente."""
 
@@ -1106,7 +1126,7 @@ class TestMaxIterations:
 
 class TestGuardrailDeRepeticao:
     async def test_chamadas_identicas_disparam_aviso_diferentes_nao(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de chamadas identicas disparam aviso diferentes nao."""
 
@@ -1253,7 +1273,7 @@ class TestGuardrailDeRepeticao:
 
 class TestToolCallsSequenciais:
     async def test_chama_tool_depois_para_no_turno_seguinte(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de chama tool depois para no turno seguinte."""
 
@@ -1303,7 +1323,7 @@ class TestToolCallsSequenciais:
 
 class TestToolCallsParalelos:
     async def test_duas_tools_nao_destrutivas_executam_e_retornam(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de duas tools nao destrutivas executam e retornam."""
 
@@ -1348,7 +1368,7 @@ class TestToolCallsParalelos:
 
 class TestHitl:
     async def test_lote_misto_com_uma_tool_sensivel_pausa_sem_executar_nenhuma(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de lote misto com uma tool sensivel pausa sem executar nenhuma."""
 
@@ -1401,7 +1421,7 @@ class TestHitl:
         assert len(historico[0].tool_calls) == 2
 
     async def test_sem_should_require_approval_nunca_pausa(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de sem should require approval nunca pausa."""
 
@@ -1435,7 +1455,7 @@ class TestHitl:
 
 class TestEmissaoDeEventos:
     async def test_token_e_message_break_emitidos_na_ordem(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de token e message break emitidos na ordem."""
         client = ScriptedChatClient([[_text_chunk("oi"), _text_chunk(" tudo bem")]])
@@ -1461,7 +1481,9 @@ class TestEmissaoDeEventos:
             MessageBreak(),
         ]
 
-    async def test_tool_result_emitido_apos_execucao(self, session_store, ctx) -> None:
+    async def test_tool_result_emitido_apos_execucao(
+        self, session_store, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de tool result emitido apos execucao."""
 
         @vtool(extras=ToolExtras())
@@ -1508,7 +1530,7 @@ class TestEmissaoDeEventos:
         ]
 
     async def test_hitl_requested_emitido_com_argumentos_da_tool(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de hitl requested emitido com argumentos da tool."""
 
@@ -1549,7 +1571,7 @@ class TestEmissaoDeEventos:
         assert hitl_eventos[0].interrupt_id  # gerado, não vazio
 
     async def test_write_terminal_preserva_entrada_bruta_ao_aprovar(
-        self, session_store, ctx, monkeypatch
+        self, session_store, ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de write terminal preserva entrada bruta ao aprovar."""
         import backend.tools.terminal_sessions
@@ -1634,7 +1656,7 @@ class TestEmissaoDeEventos:
         ]
 
     async def test_tool_call_started_e_activity_emitidos_antes_e_depois(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de tool call started e activity emitidos antes e depois."""
 
@@ -1698,7 +1720,7 @@ class TestEmissaoDeEventos:
         assert not [e for e in events if isinstance(e, WorkbenchInvalidate)]
 
     async def test_tool_com_invalidates_emite_workbench_invalidate(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de tool com invalidates emite workbench invalidate."""
 
@@ -1740,7 +1762,7 @@ class TestEmissaoDeEventos:
 
 class TestArgsPreview:
     async def test_campo_semantico_vira_preview_no_inicio_e_no_fim(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de campo semantico vira preview no inicio e no fim."""
 
@@ -1789,7 +1811,9 @@ class TestArgsPreview:
         assert activities[0].args_preview == "backend/auth.py"
         assert activities[1].args_preview == "backend/auth.py"
 
-    async def test_preview_trunca_em_80_chars(self, session_store, ctx) -> None:
+    async def test_preview_trunca_em_80_chars(
+        self, session_store, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de preview trunca em 80 chars."""
 
         @vtool(extras=ToolExtras())
@@ -1838,7 +1862,7 @@ class TestArgsPreview:
         assert activities[0].args_preview == "x" * 80
 
     async def test_sem_campo_semantico_usa_fallback_k_igual_v(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de sem campo semantico usa fallback k igual v."""
 
@@ -1886,7 +1910,11 @@ class TestArgsPreview:
 
 class TestTodosUpdated:
     async def test_plan_mode_persists_a_proposal_bound_to_run(
-        self, session_store, ctx, tmp_path, monkeypatch
+        self,
+        session_store,
+        ctx: ToolContext,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         database = tmp_path / "plan-dag.db"
 
@@ -1949,7 +1977,7 @@ class TestTodosUpdated:
         await db.close()
 
     async def test_write_todos_emite_todos_updated_com_lista_completa(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de write todos emite todos updated com lista completa."""
         registry = ToolRegistry()
@@ -1999,7 +2027,7 @@ class TestTodosUpdated:
         ]
 
     async def test_tool_diferente_de_write_todos_nunca_emite_todos_updated(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de tool diferente de write todos nunca emite todos updated."""
 
@@ -2036,7 +2064,7 @@ class TestTodosUpdated:
         assert not [e for e in events if isinstance(e, TodosUpdated)]
 
     async def test_write_todos_com_args_invalidos_nao_emite_todos_updated(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Borda: status fora da taxonomia é rejeitado na validação de args
         (Error: argumentos inválidos) antes mesmo do handler rodar — o loop
@@ -2082,7 +2110,7 @@ class TestTodosUpdated:
 
 @pytest.mark.asyncio
 async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
-    session_store, ctx, tmp_path, monkeypatch
+    session_store, ctx: ToolContext, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """O resultado da validação volta ao modelo antes de editar e concluir."""
     import shutil
@@ -2265,7 +2293,7 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
 
 class TestLoopCapGuardrail:
     async def test_estoura_teto_de_tool_calls_encerra_turno_sem_esgotar_max_iterations(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de estoura teto de tool calls encerra turno sem esgotar max iterations."""
 
@@ -2314,7 +2342,7 @@ class TestLoopCapGuardrail:
         assert any(e.code == "LOOP_CAP_EXCEEDED" for e in sinais)
 
     async def test_dentro_do_teto_nunca_dispara_o_guardrail(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de dentro do teto nunca dispara o guardrail."""
 
@@ -2425,7 +2453,7 @@ class TestResumeConversation:
         usage.assert_awaited_once_with(ctx.user_id, "browser_resume_failure", "error")
 
     async def test_aprovar_executa_a_tool_sinalizada_e_libera_a_pendencia(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de aprovar executa a tool sinalizada e libera a pendencia."""
 
@@ -2506,7 +2534,7 @@ class TestResumeConversation:
         assert {event.tool_call_id for event in tool_events} == {"call_1"}
 
     async def test_aprovar_classifica_erro_mcp_localizado_e_registra_uso(
-        self, session_store, ctx, monkeypatch
+        self, session_store, ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de aprovar classifica erro mcp localizado e registra uso."""
         chamadas: list[tuple[str, str, str]] = []
@@ -2560,7 +2588,7 @@ class TestResumeConversation:
         assert chamadas == [(ctx.user_id, "falhar_mcp", "error")]
 
     async def test_rejeitar_nao_executa_a_tool_e_persiste_mensagem_de_erro(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de rejeitar nao executa a tool e persiste mensagem de erro."""
 
@@ -2603,7 +2631,7 @@ class TestResumeConversation:
         assert "rejeitou" in historico[-1].text().lower()
 
     async def test_sem_pendencia_nao_faz_nada_e_devolve_false(
-        self, session_store, ctx
+        self, session_store, ctx: ToolContext
     ) -> None:
         """Verifica o comportamento de sem pendencia nao faz nada e devolve false."""
         resumiu = await resume_conversation(
@@ -2839,7 +2867,7 @@ class TestResumeConversation:
 
 @pytest.mark.asyncio
 async def test_decision_snapshot_requires_durable_evidence(
-    session_store, ctx, monkeypatch
+    session_store, ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from unittest.mock import AsyncMock
 
@@ -2860,7 +2888,11 @@ async def test_decision_snapshot_requires_durable_evidence(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["evidence", "ledger", "missing_evidence"])
 async def test_preapproval_audit_failure_does_not_authorize_or_reuse_grant(
-    session_store, ctx, tmp_path, monkeypatch, failure
+    session_store,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
 ) -> None:
     from unittest.mock import AsyncMock
 
@@ -3082,7 +3114,7 @@ async def test_plan_approval_reload_discards_stale_or_untrusted_proof(
 
 @pytest.mark.asyncio
 async def test_plan_proposal_approval_and_stages_complete_through_harness(
-    session_store, ctx, tmp_path, monkeypatch
+    session_store, ctx: ToolContext, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Percorre proposta do harness, aprovação HTTP e execução persistida das etapas."""
     from backend.api.handlers import dag as dag_api
@@ -3254,7 +3286,7 @@ def test_drop_terminal_notices_merges_consecutive_users() -> None:
 
 
 @pytest.mark.asyncio
-async def test_memories_stay_frozen_per_thread(monkeypatch) -> None:
+async def test_memories_stay_frozen_per_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.engine import conversation_loop as cl
     from backend.tools.context import ToolContext
 
@@ -3275,7 +3307,7 @@ async def test_memories_stay_frozen_per_thread(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_conversation_enforces_user_subagent_ban_before_and_during_dispatch(
-    session_store, ctx
+    session_store, ctx: ToolContext
 ) -> None:
     """A restrição do usuário remove a tool e também bloqueia chamada forçada."""
     import backend.tools.subagent_delegate  # registra a tool nativa

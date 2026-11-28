@@ -15,7 +15,7 @@ from backend.tools.web import _fetch_via_http, fetch_url, web_search
 @pytest.mark.asyncio
 class TestWebSearchFallback:
     async def test_sem_tavily_api_key_usa_fallback_via_chromium(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Sem chave nenhuma o roteador elege o DuckDuckGo. O patch vai em
         `backend.settings.settings`, a fonte que o roteador lê: mockar só o
@@ -37,7 +37,7 @@ class TestWebSearchFallback:
         assert data == [{"title": "t", "content": "c", "url": "u"}]
 
     async def test_sem_tavily_e_fallback_tambem_falha_retorna_erro_textual(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Par de erro: nem Tavily nem o fallback disponíveis — a tool nunca
         # propaga a exceção, sempre devolve JSON de erro pro agente.
@@ -58,7 +58,9 @@ class TestWebSearchFallback:
         data = json.loads(result)
         assert data["status"] == "error"
 
-    async def test_tavily_configurado_nao_usa_fallback(self, monkeypatch) -> None:
+    async def test_tavily_configurado_nao_usa_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Com key válida a busca vai pelo cliente nativo, e o contrato de
         saída (`json.dumps(results)`) continua o mesmo — é o contrato com o
         LLM, não muda com a troca de backend."""

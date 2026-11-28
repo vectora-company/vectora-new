@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -82,7 +83,7 @@ class _RecordingClient:
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     pool = AsyncConnectionPool(str(tmp_path / "steer.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -124,7 +125,9 @@ async def test_loop_applies_a_steer_that_arrives_during_the_answer(
     ]
 
 
-async def test_steer_endpoint_queues_only_when_a_run_is_active(monkeypatch) -> None:
+async def test_steer_endpoint_queues_only_when_a_run_is_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import chat as chat_handlers
     from backend.api.handlers import threads as thread_handlers
 

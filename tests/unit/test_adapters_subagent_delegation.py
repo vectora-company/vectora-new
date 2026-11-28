@@ -20,7 +20,7 @@ from backend.engine.stream_events import SubagentOutput, ToolCallStarted, ToolRe
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence) -> None:
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 
@@ -73,7 +73,9 @@ def _non_subagent_tool_run():
 
 
 @pytest.mark.asyncio
-async def test_delegation_recorded_with_user_id(monkeypatch) -> None:
+async def test_delegation_recorded_with_user_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """``SubagentOutput`` final (status != running) com user_id registra a
     delegação."""
     mock_record = AsyncMock()
@@ -100,7 +102,9 @@ async def test_delegation_recorded_with_user_id(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_delegation_marks_error_status_on_failure(monkeypatch) -> None:
+async def test_delegation_marks_error_status_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: ``SubagentOutput`` final com status='error' vira
     status='error' no registro."""
     mock_record = AsyncMock()
@@ -122,7 +126,9 @@ async def test_delegation_marks_error_status_on_failure(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_delegation_skipped_without_user_id(monkeypatch) -> None:
+async def test_delegation_skipped_without_user_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: sem user_id (sessão anônima/CLI), não tenta persistir."""
     mock_record = AsyncMock()
     monkeypatch.setattr(
@@ -136,7 +142,9 @@ async def test_delegation_skipped_without_user_id(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_delegation_failure_never_breaks_the_stream(monkeypatch) -> None:
+async def test_delegation_failure_never_breaks_the_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: falha ao registrar não deve impedir o stream de completar."""
     monkeypatch.setattr(
         "backend.scheduling.background_tasks.record_subagent_delegation",
@@ -155,7 +163,9 @@ async def test_delegation_failure_never_breaks_the_stream(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_non_subagent_tools_do_not_trigger_delegation(monkeypatch) -> None:
+async def test_non_subagent_tools_do_not_trigger_delegation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Tools normais (``ToolCallStarted``/``ToolResult``, não
     ``SubagentOutput``) não devem disparar o registro de subagente."""
     mock_record = AsyncMock()

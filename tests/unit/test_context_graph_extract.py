@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.vtypes.context_graph import ExtractionResult
 
 
@@ -368,7 +370,7 @@ class TestExtractGdscriptFile:
         assert isinstance(result.get("nodes"), list)
 
     def test_missing_dependency_degrades_gracefully(
-        self, tmp_path: Path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import sys
 
@@ -507,7 +509,7 @@ class TestStripJsonc:
         assert json.loads(result) == {"url": "https://example.com"}
 
 
-def test_utf16_project_keeps_valid_input_and_rejects_entities(tmp_path) -> None:
+def test_utf16_project_keeps_valid_input_and_rejects_entities(tmp_path: Path) -> None:
     from backend.context_graph.extract import extract_csproj
 
     path = tmp_path / "project.csproj"

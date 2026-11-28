@@ -1,5 +1,8 @@
 """O modo sem Services bloqueia integrações antes do acesso à rede."""
 
+from __future__ import annotations
+
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -14,7 +17,9 @@ def test_cli_accepts_no_services(command: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_no_services_never_validates_or_overwrites_license(monkeypatch) -> None:
+async def test_no_services_never_validates_or_overwrites_license(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import license
 
     monkeypatch.setenv("VECTORA_NO_SERVICES", "1")
@@ -31,7 +36,9 @@ async def test_no_services_never_validates_or_overwrites_license(monkeypatch) ->
     write.assert_not_called()
 
 
-def test_gateway_does_not_schedule_connection(monkeypatch, tmp_path) -> None:
+def test_gateway_does_not_schedule_connection(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from backend.services.gateway import GatewayClient
 
     monkeypatch.setenv("VECTORA_NO_SERVICES", "1")
@@ -41,7 +48,9 @@ def test_gateway_does_not_schedule_connection(monkeypatch, tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_hosted_catalogs_do_not_construct_http_client(monkeypatch) -> None:
+async def test_hosted_catalogs_do_not_construct_http_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import registry_client
 
     monkeypatch.setenv("VECTORA_NO_SERVICES", "1")
@@ -57,7 +66,9 @@ async def test_hosted_catalogs_do_not_construct_http_client(monkeypatch) -> None
     ).status == "unavailable"
 
 
-def test_oauth_broker_is_disabled_despite_configured_credentials(monkeypatch) -> None:
+def test_oauth_broker_is_disabled_despite_configured_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import oauth
 
     monkeypatch.setenv("VECTORA_NO_SERVICES", "1")

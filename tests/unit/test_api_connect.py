@@ -5,6 +5,7 @@ mais isolado, sem competir por conexões SQLite com outros testes."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
@@ -31,7 +32,7 @@ def _req(user_id: str | None = "u1") -> Request:
 
 
 @pytest.fixture(autouse=True)
-def _isolated_runtime_settings(tmp_path, monkeypatch) -> None:
+def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.workspace import runtime_settings as rs_module
 
     fresh = RuntimeSettings(path=tmp_path / "settings.json")
@@ -39,7 +40,7 @@ def _isolated_runtime_settings(tmp_path, monkeypatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _sem_sync_de_verdade(monkeypatch):
+def _sem_sync_de_verdade(monkeypatch: pytest.MonkeyPatch):
     """`sync_adapters()` real chamaria _start_platform/_stop_platform, que
     tentam conectar em serviços externos de verdade — substitui por um
     espião que só registra a chamada."""
@@ -54,7 +55,9 @@ def _sem_sync_de_verdade(monkeypatch):
 
 
 class TestGetStatus:
-    async def test_lista_as_4_plataformas_com_estado_correto(self, monkeypatch) -> None:
+    async def test_lista_as_4_plataformas_com_estado_correto(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("VECTORA_LICENSE_BYPASS", "1")
         monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:abc")
         for var in (
@@ -83,7 +86,7 @@ class TestGetStatus:
 
 class TestSetPlatformEnabled:
     async def test_liga_plataforma_configurada_e_reconcilia(
-        self, monkeypatch, _sem_sync_de_verdade
+        self, monkeypatch: pytest.MonkeyPatch, _sem_sync_de_verdade
     ) -> None:
         monkeypatch.setenv("VECTORA_LICENSE_BYPASS", "1")
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
@@ -97,7 +100,7 @@ class TestSetPlatformEnabled:
         assert len(_sem_sync_de_verdade) == 1
 
     async def test_liga_plataforma_sem_credencial_persiste_sem_erro(
-        self, monkeypatch, _sem_sync_de_verdade
+        self, monkeypatch: pytest.MonkeyPatch, _sem_sync_de_verdade
     ) -> None:
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
         monkeypatch.delenv("SLACK_APP_TOKEN", raising=False)

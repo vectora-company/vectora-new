@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -27,7 +28,9 @@ async def test_learn_from_session_missing_thread_id_returns_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_learn_from_session_returns_deduped_proposal(monkeypatch) -> None:
+async def test_learn_from_session_returns_deduped_proposal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import agent_factory
 
     monkeypatch.setattr(
@@ -78,7 +81,7 @@ async def test_learn_from_session_returns_deduped_proposal(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_learn_from_session_no_signal_returns_empty_lists_not_error(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.services import agent_factory
 
@@ -100,7 +103,7 @@ async def test_learn_from_session_no_signal_returns_empty_lists_not_error(
 
 @pytest.mark.asyncio
 async def test_install_learned_skill_calls_workspace_skills(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.workspace import skills as skills_module
 
@@ -126,7 +129,7 @@ async def test_install_learned_skill_calls_workspace_skills(
 
 @pytest.mark.asyncio
 async def test_install_learned_skill_duplicate_returns_error_not_exception(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.workspace import skills as skills_module
 
@@ -153,7 +156,7 @@ async def test_install_learned_skill_duplicate_returns_error_not_exception(
 
 @pytest.mark.asyncio
 async def test_install_learned_skill_mirrors_artifact_and_resolves_pending(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Instalar uma skill aprovada espelha um artifact na aba Plan e limpa
     a proposta pendente do gatilho automático."""
@@ -207,7 +210,9 @@ async def test_install_learned_skill_mirrors_artifact_and_resolves_pending(
 
 
 @pytest.mark.asyncio
-async def test_save_learned_fact_persists_via_save_memory(monkeypatch) -> None:
+async def test_save_learned_fact_persists_via_save_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     save_memory_calls: list[dict] = []
 
     async def _fake_save_memory(**kwargs: str) -> str:
@@ -243,7 +248,7 @@ async def test_save_learned_fact_persists_via_save_memory(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_save_learned_fact_error_returns_status_error_not_raised(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _boom_save_memory[**P](*_args: P.args, **kwargs: P.kwargs) -> str:
         raise RuntimeError("store indisponível")
@@ -267,7 +272,9 @@ async def test_save_learned_fact_error_returns_status_error_not_raised(
 
 
 @pytest.mark.asyncio
-async def test_apply_memory_consolidation_writes_section(monkeypatch, tmp_path) -> None:
+async def test_apply_memory_consolidation_writes_section(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from backend.scheduling import memory_consolidation
 
     monkeypatch.setattr(memory_consolidation, "memory_dir", lambda: tmp_path)
@@ -296,7 +303,7 @@ async def test_apply_memory_consolidation_writes_section(monkeypatch, tmp_path) 
 
 @pytest.mark.asyncio
 async def test_apply_memory_consolidation_invalid_category_returns_error_not_raised(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.scheduling import memory_consolidation
 
@@ -317,7 +324,7 @@ async def test_apply_memory_consolidation_invalid_category_returns_error_not_rai
 
 @pytest.mark.asyncio
 async def test_apply_memory_consolidation_unchanged_content_returns_unchanged(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.scheduling import memory_consolidation
 

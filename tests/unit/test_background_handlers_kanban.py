@@ -23,7 +23,7 @@ _SCHEMA = (
 
 
 @pytest.fixture
-async def db(tmp_path, monkeypatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import aiosqlite
 
     db_path = str(tmp_path / "bg.db")

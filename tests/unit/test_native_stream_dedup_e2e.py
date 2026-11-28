@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from itertools import pairwise
+from pathlib import Path
 
 import pytest
 
@@ -29,7 +30,7 @@ from backend.vtypes.message import MessageRole, VMessageChunk, text_message
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     pool = AsyncConnectionPool(str(tmp_path / "dedup.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)

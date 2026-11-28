@@ -72,7 +72,7 @@ def _process_memory_contains(pid: int, needle: bytes) -> bool:
 
 
 @pytest.fixture(autouse=True)
-def _sem_deteccao_do_ambiente(monkeypatch) -> None:
+def _sem_deteccao_do_ambiente(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.sandbox import policy as policy_module
 
     monkeypatch.setattr(policy_module, "_native_sandbox_available_sync", lambda: False)
@@ -115,7 +115,7 @@ def test_sem_registries_so_os_destinos_declarados() -> None:
     assert effective_allow_hosts(policy) == ("a.com",)
 
 
-def test_parse_le_rede_e_destinos(tmp_path) -> None:
+def test_parse_le_rede_e_destinos(tmp_path: Path) -> None:
     arquivo = tmp_path / "p.toml"
     arquivo.write_text(
         '[sandbox]\nnetwork = "open"\nallow_hosts = ["a.com"]\nregistry_hosts = false\n'
@@ -130,7 +130,7 @@ def test_parse_le_rede_e_destinos(tmp_path) -> None:
     )
 
 
-def test_modo_de_rede_desconhecido_falha_fechado(tmp_path) -> None:
+def test_modo_de_rede_desconhecido_falha_fechado(tmp_path: Path) -> None:
     arquivo = tmp_path / "p.toml"
     arquivo.write_text('[sandbox]\nnetwork = "tudo"\n')
 
@@ -139,7 +139,7 @@ def test_modo_de_rede_desconhecido_falha_fechado(tmp_path) -> None:
     assert policy.lockdown is True
 
 
-def test_repositorio_nao_abre_a_rede(tmp_path) -> None:
+def test_repositorio_nao_abre_a_rede(tmp_path: Path) -> None:
     (tmp_path / "vectora.toml").write_text('[sandbox]\nnetwork = "open"\n')
 
     policy = resolve_policy(tmp_path)
@@ -148,13 +148,13 @@ def test_repositorio_nao_abre_a_rede(tmp_path) -> None:
     assert "network" in policy.ignored_repo_keys
 
 
-def test_repositorio_pode_cortar_a_rede(tmp_path) -> None:
+def test_repositorio_pode_cortar_a_rede(tmp_path: Path) -> None:
     (tmp_path / "vectora.toml").write_text('[sandbox]\nnetwork = "off"\n')
 
     assert resolve_policy(tmp_path).network == "off"
 
 
-def test_repositorio_nao_amplia_destinos(tmp_path) -> None:
+def test_repositorio_nao_amplia_destinos(tmp_path: Path) -> None:
     trusted_policy_path(tmp_path).write_text('[sandbox]\nallow_hosts = ["a.com"]\n')
     (tmp_path / "vectora.toml").write_text(
         '[sandbox]\nallow_hosts = ["a.com", "evil.com"]\nregistry_hosts = true\n'
@@ -166,7 +166,9 @@ def test_repositorio_nao_amplia_destinos(tmp_path) -> None:
     assert "allow_hosts" in policy.ignored_repo_keys
 
 
-def test_politica_recusa_binding_com_variavel_de_ambiente_reservada(tmp_path) -> None:
+def test_politica_recusa_binding_com_variavel_de_ambiente_reservada(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "policy.toml"
     path.write_text(
         '[sandbox]\ncredential_bindings = [{name = "PATH", '
@@ -176,7 +178,7 @@ def test_politica_recusa_binding_com_variavel_de_ambiente_reservada(tmp_path) ->
     assert parse_policy(path).lockdown is True
 
 
-def test_repositorio_pode_tirar_os_registries(tmp_path) -> None:
+def test_repositorio_pode_tirar_os_registries(tmp_path: Path) -> None:
     trusted_policy_path(tmp_path).write_text("[sandbox]\nregistry_hosts = true\n")
     (tmp_path / "vectora.toml").write_text("[sandbox]\nregistry_hosts = false\n")
 
@@ -212,7 +214,7 @@ def test_filtrada_sem_proxy_nunca_abre_por_omissao() -> None:
 
 
 def test_filtrada_com_proxy_monta_o_socket_aponta_o_ambiente_e_liga_a_ponte(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     argv = build_bwrap_command(
         SandboxPolicy(enabled=True), "/ws", ["echo", "oi"], egress_dir=str(tmp_path)
@@ -274,7 +276,9 @@ async def test_connect_para_destino_fora_da_allowlist_e_bloqueado_e_registrado()
 @pytest.mark.parametrize(
     "destino", ["127.0.0.1:443", "169.254.169.254:80", "10.0.0.5:443", "[::1]:443"]
 )
-async def test_connect_para_ip_privado_ou_de_metadados_e_bloqueado(destino) -> None:
+async def test_connect_para_ip_privado_ou_de_metadados_e_bloqueado(
+    destino: str,
+) -> None:
     proxy = EgressProxy(SandboxPolicy(enabled=True, allow_hosts=("*",)))
     # Mesmo com o destino na allowlist, o IP privado é recusado.
     proxy._egress.allowed_hosts = []
@@ -313,7 +317,7 @@ async def test_porta_fora_de_80_e_443_e_bloqueada() -> None:
         b"lixo\r\n\r\n",
     ],
 )
-async def test_so_aceita_connect_bem_formado(requisicao) -> None:
+async def test_so_aceita_connect_bem_formado(requisicao: bytes) -> None:
     proxy = EgressProxy(SandboxPolicy(enabled=True))
     directory = await proxy.start()
     try:
@@ -326,7 +330,9 @@ async def test_so_aceita_connect_bem_formado(requisicao) -> None:
 
 
 @pytest.mark.asyncio
-async def test_destino_permitido_abre_o_tunel_ate_o_ip_validado(monkeypatch) -> None:
+async def test_destino_permitido_abre_o_tunel_ate_o_ip_validado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def eco(reader, writer) -> None:
         writer.write(b"eco:" + await reader.read(100))
         await writer.drain()
@@ -364,7 +370,7 @@ async def test_destino_permitido_abre_o_tunel_ate_o_ip_validado(monkeypatch) -> 
 
 @pytest.mark.asyncio
 async def test_credencial_so_e_injetada_no_host_vinculado(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.sandbox.tls_interception import WorkspaceTLSAuthority
 
@@ -456,7 +462,7 @@ async def test_credencial_so_e_injetada_no_host_vinculado(
 
 @pytest.mark.asyncio
 async def test_host_sem_binding_permanece_tunel_tls_sem_credencial(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.sandbox.tls_interception import WorkspaceTLSAuthority
 
@@ -530,7 +536,7 @@ async def test_host_sem_binding_permanece_tunel_tls_sem_credencial(
 @real_bwrap
 @pytest.mark.asyncio
 async def test_jail_real_usa_placeholder_e_proxy_injeta_segredo_no_destino(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.sandbox.tls_interception import WorkspaceTLSAuthority
     from backend.vtypes import Workspace
@@ -703,7 +709,7 @@ def test_authority_de_connect() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ponte_liga_o_loopback_ao_socket_unix(tmp_path) -> None:
+async def test_ponte_liga_o_loopback_ao_socket_unix(tmp_path: Path) -> None:
     async def eco(reader, writer) -> None:
         writer.write(b"unix:" + await reader.read(100))
         await writer.drain()
@@ -747,7 +753,9 @@ _TUNEL = (
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_jail_real_so_alcanca_a_rede_pelo_proxy(tmp_path, monkeypatch) -> None:
+async def test_jail_real_so_alcanca_a_rede_pelo_proxy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     async def eco(reader, writer) -> None:
         writer.write(b"eco:" + await reader.read(100))
         await writer.drain()

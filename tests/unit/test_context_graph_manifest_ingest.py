@@ -238,7 +238,7 @@ class TestExtractPackageManifestEdgeCases:
             assert e["source"] != e["target"]
 
 
-def test_maven_manifest_rejects_entity_expansion(tmp_path) -> None:
+def test_maven_manifest_rejects_entity_expansion(tmp_path: Path) -> None:
     from backend.context_graph.manifest_ingest import extract_package_manifest
 
     path = tmp_path / "pom.xml"

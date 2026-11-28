@@ -43,7 +43,7 @@ def _mocked_client(handler):
 
 
 @pytest.fixture(autouse=True)
-def _credenciais(monkeypatch) -> None:
+def _credenciais(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.settings import settings
 
     monkeypatch.setattr(settings, "home_assistant_url", "http://ha.local:8123")
@@ -58,7 +58,9 @@ _ESTADOS = [
 
 class TestCredenciais:
     @pytest.mark.asyncio
-    async def test_sem_credencial_avisa_e_nao_faz_chamada(self, monkeypatch) -> None:
+    async def test_sem_credencial_avisa_e_nao_faz_chamada(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: sem URL/token o certo é dizer o que configurar. Tentar
         a chamada daria `ConnectError` cru, que não ensina nada."""
         from backend.settings import settings

@@ -92,7 +92,7 @@ def test_settings_ssl_defaults_none() -> None:
     assert s.ssl_keyfile is None
 
 
-def test_settings_ssl_from_env(monkeypatch) -> None:
+def test_settings_ssl_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SSL_CERTFILE", "/certs/fullchain.pem")
     monkeypatch.setenv("SSL_KEYFILE", "/certs/key.pem")
     s = Settings()
@@ -136,7 +136,9 @@ def test_cohere_chat_model_default() -> None:
     assert s.cohere_chat_model == "command-a-03-2025"
 
 
-def test_cohere_in_get_llm_model_when_provider_set(monkeypatch) -> None:
+def test_cohere_in_get_llm_model_when_provider_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "cohere")
     s = Settings()
     # Sem chave configurada, get_llm_model ainda retorna o campo correto
@@ -144,14 +146,14 @@ def test_cohere_in_get_llm_model_when_provider_set(monkeypatch) -> None:
     assert isinstance(s.cohere_chat_model, str)
 
 
-def test_cohere_available_when_api_key_set(monkeypatch) -> None:
+def test_cohere_available_when_api_key_set(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("COHERE_API_KEY", "cohere_test_key_fake")
     s = Settings()
     providers = s.get_available_providers()
     assert "cohere" in providers
 
 
-def test_cohere_not_available_without_api_key(monkeypatch) -> None:
+def test_cohere_not_available_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("COHERE_API_KEY", raising=False)
     s = Settings()
     # Só aparece se a chave estiver configurada
@@ -247,7 +249,7 @@ def test_llm_provider_literal_accepts_cohere() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_voyage_api_key_default_none(monkeypatch) -> None:
+def test_voyage_api_key_default_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
     s = Settings()
     assert s.voyage_api_key is None
@@ -263,25 +265,25 @@ def test_voyage_rerank_model_default() -> None:
     assert s.voyage_rerank_model == "rerank-2"
 
 
-def test_voyage_api_key_from_env(monkeypatch) -> None:
+def test_voyage_api_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VOYAGE_API_KEY", "voy-secret-123")
     s = Settings()
     assert s.voyage_api_key == "voy-secret-123"
 
 
-def test_voyage_embedding_model_from_env(monkeypatch) -> None:
+def test_voyage_embedding_model_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VOYAGE_EMBEDDING_MODEL", "voyage-3-large")
     s = Settings()
     assert s.voyage_embedding_model == "voyage-3-large"
 
 
-def test_voyage_rerank_model_from_env(monkeypatch) -> None:
+def test_voyage_rerank_model_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VOYAGE_RERANK_MODEL", "rerank-2-lite")
     s = Settings()
     assert s.voyage_rerank_model == "rerank-2-lite"
 
 
-def test_voyage_key_independent_from_cohere(monkeypatch) -> None:
+def test_voyage_key_independent_from_cohere(monkeypatch: pytest.MonkeyPatch) -> None:
     # voyage_api_key e cohere_api_key são campos separados — setar um não muda o outro.
     monkeypatch.setenv("VOYAGE_API_KEY", "voy-1")
     s = Settings()
@@ -293,7 +295,9 @@ class TestConfiguredLlmProviders:
     """configured_llm_providers: só providers com credencial (model selector)."""
 
     @pytest.fixture(autouse=True)
-    def isolate_local_provider_environment(self, monkeypatch) -> None:
+    def isolate_local_provider_environment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Não deixe runtimes locais do host vazarem para estes contratos."""
         for key in (
             "LLAMACPP_BASE_URL",
@@ -387,7 +391,10 @@ class TestConfiguredLlmProviders:
 
 class TestLlmKeyPrecedence:
     def test_user_env_llm_key_wins_over_project_env(
-        self, monkeypatch, tmp_path, caplog
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         home_dir = tmp_path / "home"
         project_dir = tmp_path / "project"
@@ -418,7 +425,10 @@ class TestLlmKeyPrecedence:
         assert any("GOOGLE_API_KEY" in record.message for record in caplog.records)
 
     def test_no_warning_when_project_env_agrees_with_user_env(
-        self, monkeypatch, tmp_path, caplog
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         home_dir = tmp_path / "home"
         project_dir = tmp_path / "project"

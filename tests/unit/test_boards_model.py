@@ -21,7 +21,7 @@ _SCHEMA = (
 
 
 @pytest.fixture
-async def db(tmp_path, monkeypatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Banco SQLite isolado com o schema real (não uma cópia reduzida) —
     ``boards.py`` depende de colunas/tabelas que só o schema.sql real tem."""
     import aiosqlite

@@ -8,6 +8,7 @@ usuários específico (livre vs. em uso).
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -15,7 +16,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     db_file = str(tmp_path / "test_api_auth_username.db")
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "true")
 
@@ -93,7 +94,9 @@ def test_signup_persiste_username_explicito(client) -> None:
     assert r.json()["user"]["username"] == "brunocoder"
 
 
-def test_signup_username_em_uso_retorna_409(client, monkeypatch) -> None:
+def test_signup_username_em_uso_retorna_409(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Par de erro: username já em uso no signup → 409 (não 400 nem 200)."""
     import backend.rbac.auth as auth_mod
 

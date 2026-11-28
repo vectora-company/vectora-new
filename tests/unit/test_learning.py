@@ -36,7 +36,7 @@ def _distill_json(skills: list | None = None, facts: list | None = None) -> str:
 
 @pytest.mark.asyncio
 async def test_distill_transcript_empty_input_returns_empty_result_without_llm_call(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     load_llm_mock = MagicMock()
     monkeypatch.setattr("backend.services.utils.load_native_llm", load_llm_mock)
@@ -49,7 +49,7 @@ async def test_distill_transcript_empty_input_returns_empty_result_without_llm_c
 
 @pytest.mark.asyncio
 async def test_distill_transcript_happy_path_returns_skills_and_facts(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     expected = DistillationResult(
         skills=[
@@ -83,7 +83,7 @@ async def test_distill_transcript_happy_path_returns_skills_and_facts(
 
 @pytest.mark.asyncio
 async def test_distill_transcript_llm_failure_degrades_to_empty_result(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     llm = MagicMock()
     llm.agenerate = AsyncMock(side_effect=RuntimeError("modelo indisponível"))
@@ -158,7 +158,7 @@ def test_dedupe_skill_drafts_preserves_order_of_kept_drafts() -> None:
 
 @pytest.mark.asyncio
 async def test_distill_transcript_whitespace_only_never_touches_llm(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Borda adicional: transcript só com quebras de linha/tabs — mesmo
     # tratamento de vazio, sem chamar load_llm.
@@ -173,7 +173,7 @@ async def test_distill_transcript_whitespace_only_never_touches_llm(
 
 @pytest.mark.asyncio
 async def test_distill_transcript_llm_returns_no_reusable_pattern_yields_empty_lists(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # "Se o transcript não tiver nenhum padrão reutilizável... devolva
     # listas vazias — isso é um resultado válido, não uma falha."
@@ -190,7 +190,7 @@ async def test_distill_transcript_llm_returns_no_reusable_pattern_yields_empty_l
 
 @pytest.mark.asyncio
 async def test_distill_transcript_llm_returns_dict_is_validated_into_result(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Nem todo provider devolve JSON limpo — dict bruto deve validar via
     # model_validate, não rejeitado.
@@ -211,7 +211,7 @@ async def test_distill_transcript_llm_returns_dict_is_validated_into_result(
 
 @pytest.mark.asyncio
 async def test_distill_transcript_llm_returns_malformed_payload_degrades_to_empty(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Payload malformado (JSON com shape errado) — não propaga
     # ValidationError, degrada como qualquer outra falha de LLM.
@@ -227,7 +227,7 @@ async def test_distill_transcript_llm_returns_malformed_payload_degrades_to_empt
 
 @pytest.mark.asyncio
 async def test_distill_transcript_truncates_input_beyond_20000_chars(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     huge_transcript = "a" * 25000
     captured_messages: list = []
@@ -251,7 +251,7 @@ async def test_distill_transcript_truncates_input_beyond_20000_chars(
 
 @pytest.mark.asyncio
 async def test_distill_transcript_llm_timeout_degrades_to_empty_result(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     llm = MagicMock()
     llm.agenerate = AsyncMock(side_effect=TimeoutError("llm demorou demais"))
@@ -302,7 +302,7 @@ def test_dedupe_skill_drafts_muitos_drafts_e_muitos_existentes_ordem_trocada() -
 
 @pytest.mark.asyncio
 async def test_distill_transcript_transcript_so_com_um_caractere_ainda_chama_llm(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Borda: um único caractere não-vazio passa pela checagem `.strip()`
     # e chega a chamar o LLM — só string vazia/whitespace pula a chamada.

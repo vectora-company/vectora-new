@@ -26,13 +26,15 @@ def _client(handler) -> httpx.AsyncClient:
 
 
 class TestDisponibilidade:
-    def test_sem_api_key_a_capacidade_nao_esta_disponivel(self, monkeypatch) -> None:
+    def test_sem_api_key_a_capacidade_nao_esta_disponivel(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import settings as _s
 
         monkeypatch.setattr(_s, "ollama_api_key", "", raising=False)
         assert web_search_available() is False
 
-    def test_com_api_key_fica_disponivel(self, monkeypatch) -> None:
+    def test_com_api_key_fica_disponivel(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from backend.settings import settings as _s
 
         monkeypatch.setattr(_s, "ollama_api_key", "oll-test", raising=False)

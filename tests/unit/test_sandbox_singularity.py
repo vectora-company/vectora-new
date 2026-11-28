@@ -4,6 +4,7 @@ test_sandbox_docker.py."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -81,13 +82,15 @@ def test_build_command_lockdown_false_omits_net_flag() -> None:
 
 
 class TestResolveBinary:
-    def test_prefers_singularity_over_apptainer(self, monkeypatch) -> None:
+    def test_prefers_singularity_over_apptainer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             singularity_mod.shutil, "which", lambda name: f"/usr/bin/{name}"
         )
         assert _resolve_binary() == "singularity"
 
-    def test_falls_back_to_apptainer(self, monkeypatch) -> None:
+    def test_falls_back_to_apptainer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             singularity_mod.shutil,
             "which",
@@ -95,11 +98,11 @@ class TestResolveBinary:
         )
         assert _resolve_binary() == "apptainer"
 
-    def test_none_when_neither_installed(self, monkeypatch) -> None:
+    def test_none_when_neither_installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(singularity_mod.shutil, "which", lambda _name: None)
         assert _resolve_binary() is None
 
-    def test_result_is_cached(self, monkeypatch) -> None:
+    def test_result_is_cached(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls = []
 
         def _which(name: str) -> str | None:
@@ -115,7 +118,7 @@ class TestResolveBinary:
 
 @pytest.mark.asyncio
 async def test_neither_binary_installed_returns_clear_error(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(singularity_mod.shutil, "which", lambda _name: None)
 
@@ -130,7 +133,9 @@ async def test_neither_binary_installed_returns_clear_error(
 
 
 @pytest.mark.asyncio
-async def test_successful_run_returns_output(tmp_path, monkeypatch) -> None:
+async def test_successful_run_returns_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(
         singularity_mod.shutil,
         "which",
@@ -154,7 +159,7 @@ async def test_successful_run_returns_output(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_timeout_kills_process_and_reports_timed_out(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         singularity_mod.shutil,
@@ -187,7 +192,7 @@ async def test_timeout_kills_process_and_reports_timed_out(
 
 @pytest.mark.asyncio
 async def test_permission_denied_returns_clear_error_not_exception(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         singularity_mod.shutil,

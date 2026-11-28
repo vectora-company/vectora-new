@@ -17,7 +17,7 @@ class TestMigrationRunner:
     """Schema migration runner — arquivo único (sqlite/schema.sql)."""
 
     @pytest.fixture
-    async def runner_conn(self, tmp_path):
+    async def runner_conn(self, tmp_path: Path):
         import aiosqlite
 
         db_path = str(tmp_path / "test_migrations.db")
@@ -27,7 +27,7 @@ class TestMigrationRunner:
         await conn.close()
 
     @pytest.fixture
-    async def raw_conn(self, tmp_path):
+    async def raw_conn(self, tmp_path: Path):
         """Conexão sem row_factory — simula o contexto de produção (server.py)."""
         import aiosqlite
 
@@ -105,7 +105,7 @@ class TestMigrationRunner:
 
     @pytest.mark.asyncio
     async def test_colunas_do_kanban_chegam_em_banco_ja_populado(
-        self, runner_conn, monkeypatch
+        self, runner_conn, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """`CREATE TABLE IF NOT EXISTS` é no-op quando a tabela já existe sem
         as colunas `status`/`block_kind`/`claim_lock`/`budget_cents` etc —
@@ -201,7 +201,7 @@ class TestMigrationRunner:
 
     @pytest.mark.asyncio
     async def test_reapply_after_content_change_updates_checksum(
-        self, runner_conn, tmp_path
+        self, runner_conn, tmp_path: Path
     ) -> None:
         """Editar o schema.sql muda o checksum: upgrade() reaplica e status() reflete."""
         from backend.storage.migrations.runner import MigrationRunner
@@ -322,7 +322,7 @@ class TestReadSchemaPermissionRetry:
     em vez de derrubar o boot inteiro nessa janela."""
 
     @pytest.fixture
-    async def runner_conn(self, tmp_path):
+    async def runner_conn(self, tmp_path: Path):
         import aiosqlite
 
         db_path = str(tmp_path / "test_migrations.db")
@@ -338,7 +338,7 @@ class TestReadSchemaPermissionRetry:
         "S0-4 (AV/indexador escaneando schema.sql) é um cenário Windows-only",
     )
     async def test_retry_ate_sucesso_quando_lock_solta_antes_do_teto(
-        self, runner_conn, tmp_path, monkeypatch
+        self, runner_conn, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Lock (simulado por abrir o arquivo em modo exclusivo) solta antes
         do teto de tentativas — `apply()` retenta e conclui normalmente."""
@@ -386,7 +386,7 @@ class TestReadSchemaPermissionRetry:
 
     @pytest.mark.asyncio
     async def test_permission_error_persistente_propaga_apos_esgotar_tentativas(
-        self, runner_conn, tmp_path, monkeypatch
+        self, runner_conn, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: lock que NUNCA solta (permissão genuinamente negada)
         continua falhando após as tentativas — sem mascarar um erro real."""
@@ -413,7 +413,7 @@ class TestDataMigrationDryRun:
     """Migrações de dados — apenas dry-run para não precisar de infra."""
 
     @pytest.mark.asyncio
-    async def test_to_postgres_dry_run(self, tmp_path) -> None:
+    async def test_to_postgres_dry_run(self, tmp_path: Path) -> None:
         """dry-run retorna contagem sem conectar ao Postgres."""
         import aiosqlite
 
@@ -438,7 +438,7 @@ class TestDataMigrationDryRun:
         assert "vectora_users" in result["tables"]
 
     @pytest.mark.asyncio
-    async def test_to_postgres_dry_run_missing_table(self, tmp_path) -> None:
+    async def test_to_postgres_dry_run_missing_table(self, tmp_path: Path) -> None:
         """Tabela ausente não levanta erro no dry-run."""
         import aiosqlite
 
@@ -456,7 +456,7 @@ class TestDataMigrationDryRun:
         assert result["total_rows"] == 0
 
     @pytest.mark.asyncio
-    async def test_memory_to_native_store_missing_table(self, tmp_path) -> None:
+    async def test_memory_to_native_store_missing_table(self, tmp_path: Path) -> None:
         """Banco sem tabela 'memories' retorna total=0 sem erro."""
         import aiosqlite
 
@@ -476,7 +476,7 @@ class TestDataMigrationDryRun:
         assert result["total"] == 0
 
     @pytest.mark.asyncio
-    async def test_memory_to_native_store_dry_run(self, tmp_path) -> None:
+    async def test_memory_to_native_store_dry_run(self, tmp_path: Path) -> None:
         """dry-run conta registros sem chamar store."""
         import aiosqlite
 
@@ -515,7 +515,7 @@ class TestDataMigrationLanceDBSource:
     pytestmark = pytest.mark.real_lancedb
 
     @pytest.fixture
-    async def source_table(self, tmp_path):
+    async def source_table(self, tmp_path: Path):
         import lancedb
 
         db = await lancedb.connect_async(str(tmp_path / "lancedb"))
@@ -534,7 +534,7 @@ class TestDataMigrationLanceDBSource:
 
     @pytest.mark.asyncio
     async def test_to_qdrant_colecao_ausente_retorna_erro_sem_lancar(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         import lancedb
 
@@ -594,7 +594,9 @@ class TestDataMigrationLanceDBSource:
         assert all_point_ids == {f"doc-{i}" for i in range(5)}
 
     @pytest.mark.asyncio
-    async def test_to_qdrant_pula_linhas_sem_vetor_sem_lancar(self, tmp_path) -> None:
+    async def test_to_qdrant_pula_linhas_sem_vetor_sem_lancar(
+        self, tmp_path: Path
+    ) -> None:
         """Borda: linha com `vector` nulo (registro corrompido ou legado sem
         embedding gerado) é pulada, não vira `PointStruct` com
         `vector=None` (o que o Qdrant rejeitaria)."""
@@ -631,7 +633,7 @@ class TestDataMigrationLanceDBSource:
 
     @pytest.mark.asyncio
     async def test_to_pgvector_colecao_ausente_retorna_erro_sem_lancar(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         import lancedb
 
@@ -695,7 +697,9 @@ class TestDataMigrationLanceDBSource:
         assert all("ON CONFLICT (id) DO NOTHING" in c.args[0] for c in insert_calls)
 
     @pytest.mark.asyncio
-    async def test_to_pgvector_pula_linhas_sem_vetor_sem_lancar(self, tmp_path) -> None:
+    async def test_to_pgvector_pula_linhas_sem_vetor_sem_lancar(
+        self, tmp_path: Path
+    ) -> None:
         from unittest.mock import AsyncMock, patch
 
         import lancedb

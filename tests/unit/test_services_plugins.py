@@ -6,6 +6,8 @@ CRUD por usuário, persistido em disco, isolado entre usuários. O diretório ba
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.workspace.plugins import (
@@ -19,7 +21,7 @@ from backend.workspace.plugins import (
 
 
 @pytest.fixture(autouse=True)
-def iso_dir(tmp_path, monkeypatch) -> None:
+def iso_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "backend.workspace.plugins._plugins_dir", lambda: tmp_path / "mcp"
     )

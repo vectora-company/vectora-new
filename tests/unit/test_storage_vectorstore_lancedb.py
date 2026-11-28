@@ -5,6 +5,7 @@ resposta errada) sem depender de um banco LanceDB real em disco."""
 from __future__ import annotations
 
 from collections.abc import Generator
+from pathlib import Path
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -26,7 +27,7 @@ def backend() -> LanceDBBackend:
 
 
 @pytest.fixture
-def mock_db() -> Generator[lancedb.AsyncConnection]:
+def mock_db() -> Generator[MagicMock]:
     """Executa a operação mock db."""
     db = fake_async_connection()
     with patch(
@@ -49,7 +50,7 @@ def _fts_query(df: pd.DataFrame) -> MagicMock:
 class TestLanceDBBackendSearchText:
     @pytest.mark.asyncio
     async def test_search_text_retorna_hits_do_indice_fts(
-        self, backend, mock_db
+        self, backend: LanceDBBackend, mock_db: MagicMock
     ) -> None:
         """Verifica o comportamento de search text retorna hits do indice fts."""
         table = fake_async_table()
@@ -77,7 +78,7 @@ class TestLanceDBBackendSearchText:
 
     @pytest.mark.asyncio
     async def test_search_text_colecao_inexistente_retorna_vazio_sem_propagar(
-        self, backend, mock_db
+        self, backend: LanceDBBackend, mock_db: MagicMock
     ) -> None:
         """Verifica o comportamento de search text colecao inexistente retorna vazio sem propagar."""
         mock_db.open_table.side_effect = RuntimeError("tabela não existe")
@@ -88,7 +89,7 @@ class TestLanceDBBackendSearchText:
 
     @pytest.mark.asyncio
     async def test_search_text_create_index_falhando_ainda_tenta_buscar(
-        self, backend, mock_db
+        self, backend: LanceDBBackend, mock_db: MagicMock
     ) -> None:
         """`create_index` falha quando o índice já existe (comportamento
         normal em rodadas subsequentes) — não pode impedir a busca."""
@@ -106,7 +107,7 @@ class TestLanceDBBackendSearchText:
 
     @pytest.mark.asyncio
     async def test_search_text_fts_indisponivel_retorna_vazio_sem_propagar(
-        self, backend, mock_db
+        self, backend: LanceDBBackend, mock_db: MagicMock
     ) -> None:
         """Verifica o comportamento de search text fts indisponivel retorna vazio sem propagar."""
         table = fake_async_table()
@@ -133,7 +134,7 @@ class TestLanceDBBackendSearchTextRealTable:
     pytestmark = pytest.mark.real_lancedb
 
     async def test_busca_fts_retorna_hits_reais_por_termo_textual(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de busca fts retorna hits reais por termo textual."""
         backend = LanceDBBackend(lancedb_dir=str(tmp_path))
@@ -170,7 +171,7 @@ class TestLanceDBBackendListRows:
 
     @pytest.mark.asyncio
     async def test_linha_com_vetor_multi_elemento_nao_lanca(
-        self, backend, mock_db
+        self, backend: LanceDBBackend, mock_db: MagicMock
     ) -> None:
         """Verifica o comportamento de linha com vetor multi elemento nao lanca."""
         table = fake_async_table()
@@ -193,7 +194,9 @@ class TestLanceDBBackendListRows:
         assert rows[0].vector == pytest.approx([0.1, 0.2, 0.3])
 
     @pytest.mark.asyncio
-    async def test_linha_sem_vetor_vira_lista_vazia(self, backend, mock_db) -> None:
+    async def test_linha_sem_vetor_vira_lista_vazia(
+        self, backend: LanceDBBackend, mock_db: MagicMock
+    ) -> None:
         """Coluna `vector` ausente na linha vem como escalar `NaN` (float)
         do pandas, não `None` — `list(NaN)` também lançaria sem o guard."""
         table = fake_async_table()
@@ -216,7 +219,7 @@ class TestLanceDBBackendListRows:
 
     @pytest.mark.asyncio
     async def test_colecao_inexistente_retorna_vazio_sem_propagar(
-        self, backend, mock_db
+        self, backend: LanceDBBackend, mock_db: MagicMock
     ) -> None:
         """Verifica o comportamento de colecao inexistente retorna vazio sem propagar."""
         mock_db.open_table = AsyncMock(side_effect=RuntimeError("tabela não existe"))
@@ -229,7 +232,7 @@ class TestLanceDBBackendListRows:
 class TestLanceDBBackendUpsert:
     @pytest.mark.asyncio
     async def test_upsert_remove_ids_duplicados_legados_antes_do_merge(
-        self, backend: LanceDBBackend, mock_db: lancedb.AsyncConnection
+        self, backend: LanceDBBackend, mock_db: MagicMock
     ) -> None:
         """Verifica o comportamento de upsert remove ids duplicados legados antes do merge."""
         table = fake_async_table()

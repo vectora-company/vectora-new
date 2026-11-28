@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -461,7 +462,7 @@ class TestPurgeGraphIndexRealTable:
 
     @pytest.mark.asyncio
     async def test_purge_remove_apenas_nos_do_workspace_em_tabela_real(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         import lancedb
 
@@ -497,7 +498,7 @@ class TestPurgeGraphIndexRealTable:
 
     @pytest.mark.asyncio
     async def test_purge_nao_casa_workspace_que_e_prefixo_de_outro(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         """Borda: "ws-1" não pode casar com "ws-10" por substring parcial —
         o filtro precisa delimitar o valor exato (aspas de fechamento do

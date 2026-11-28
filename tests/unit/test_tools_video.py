@@ -72,7 +72,9 @@ def test_capacidade_video_so_existe_onde_ha_geracao_de_verdade() -> None:
     assert provider_supports("cohere", "video") is False
 
 
-def test_capacidade_video_em_gateway_depende_do_modelo_configurado(monkeypatch) -> None:
+def test_capacidade_video_em_gateway_depende_do_modelo_configurado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.settings import settings
 
     # Erro/borda primeiro: sem modelo escolhido, a capacidade não existe.
@@ -103,7 +105,7 @@ def test_analise_de_video_e_mais_restrita_que_visao() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_video_provider_sem_suporte_avisa_sem_chamar_sdk(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     chamou = {"sdk": False}
 
@@ -126,7 +128,7 @@ async def test_generate_video_provider_sem_suporte_avisa_sem_chamar_sdk(
 
 @pytest.mark.asyncio
 async def test_generate_video_grava_mp4_e_prompt_vazio_e_recusado(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     async def _fake(*_a, **_k) -> bytes:
         return b"\x00\x00\x00\x18ftypmp42"
@@ -159,7 +161,7 @@ async def test_generate_video_grava_mp4_e_prompt_vazio_e_recusado(
 
 @pytest.mark.asyncio
 async def test_generate_video_vazio_nao_grava_arquivo_de_zero_byte(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Erro/borda: gravar 0 byte criaria um artifact que a UI mostra como
     vídeo e nenhum player consegue abrir."""
@@ -181,7 +183,9 @@ async def test_generate_video_vazio_nao_grava_arquivo_de_zero_byte(
 
 
 @pytest.mark.asyncio
-async def test_generate_video_timeout_vira_erro_legivel(monkeypatch, tmp_path) -> None:
+async def test_generate_video_timeout_vira_erro_legivel(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """O job pode continuar rodando no provider — a mensagem precisa dizer
     isso, senão o usuário regera (e paga) achando que falhou."""
 
@@ -297,7 +301,7 @@ async def test_polling_do_veo_respeita_o_teto_em_vez_de_girar_pra_sempre() -> No
 
 @pytest.mark.asyncio
 async def test_analyze_video_provider_sem_entrada_de_video_avisa(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Anthropic passa em `VISION_CAPABLE_PROVIDERS` — este teste é o que
     impede a análise de vídeo de herdar aquela lista por engano."""
@@ -325,7 +329,7 @@ async def test_analyze_video_provider_sem_entrada_de_video_avisa(
 
 @pytest.mark.asyncio
 async def test_analyze_video_responde_e_arquivo_inexistente_e_recusado(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.settings import settings
 
@@ -361,7 +365,7 @@ async def test_analyze_video_responde_e_arquivo_inexistente_e_recusado(
 
 @pytest.mark.asyncio
 async def test_analyze_video_falha_do_sdk_vira_erro_tipado(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Tool nunca propaga exceção — vira observação pro LLM."""
     from backend.settings import settings

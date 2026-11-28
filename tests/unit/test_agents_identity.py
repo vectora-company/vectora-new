@@ -80,7 +80,7 @@ def test_identity_describes_agents() -> None:
 
 
 @pytest.fixture
-def clean_locale_env(monkeypatch):
+def clean_locale_env(monkeypatch: pytest.MonkeyPatch):
     """Remove LC_ALL / LC_MESSAGES / LANG do ambiente do teste."""
     for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
         monkeypatch.delenv(var, raising=False)

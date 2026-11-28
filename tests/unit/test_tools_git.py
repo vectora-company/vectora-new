@@ -1,6 +1,9 @@
 """Testes para git_stage / git_unstage e metadados de invalidação das tools git."""
 
+from __future__ import annotations
+
 import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -22,7 +25,7 @@ from backend.tools.registry import TOOL_REGISTRY
 
 
 @pytest.fixture
-def mock_ws(tmp_path, monkeypatch):
+def mock_ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Workspace fake apontando para tmp_path com repo git inicializado."""
     from backend.vtypes import Workspace
     from backend.workspace import workspace as ws_mod
@@ -172,7 +175,7 @@ async def test_git_unstage_git_error(mock_ws) -> None:
 
 
 @pytest.fixture
-def real_repo_ws(tmp_path, monkeypatch):
+def real_repo_ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Workspace apontando pra um repo git real com um commit inicial."""
     import git as gitpy
 

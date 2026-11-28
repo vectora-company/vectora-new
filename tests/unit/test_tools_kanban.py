@@ -36,7 +36,7 @@ _SCHEMA = (
 
 
 @pytest.fixture
-async def db(tmp_path, monkeypatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Banco SQLite temporário com o schema real aplicado.
 
     `_get_db` abre uma conexão nova por chamada; todas apontam pro mesmo

@@ -23,7 +23,7 @@ class _FakeLLM:
 
 
 @pytest.mark.asyncio
-async def test_ai_title_happy(monkeypatch) -> None:
+async def test_ai_title_happy(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "backend.services.utils.load_native_llm",
         lambda: _FakeLLM("Plano de migração do banco"),
@@ -33,7 +33,9 @@ async def test_ai_title_happy(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ai_title_trims_to_six_words_and_strips(monkeypatch) -> None:
+async def test_ai_title_trims_to_six_words_and_strips(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "backend.services.utils.load_native_llm",
         lambda: _FakeLLM('"Uma sete oito nove dez onze doze".'),
@@ -44,7 +46,9 @@ async def test_ai_title_trims_to_six_words_and_strips(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ai_title_fallback_on_llm_failure(monkeypatch) -> None:
+async def test_ai_title_fallback_on_llm_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def _boom():
         raise RuntimeError("provider down")
 
@@ -54,7 +58,7 @@ async def test_ai_title_fallback_on_llm_failure(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ai_title_fallback_empty_user(monkeypatch) -> None:
+async def test_ai_title_fallback_empty_user(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom():
         raise RuntimeError("provider down")
 

@@ -16,7 +16,7 @@ from backend.tools.search_registry import (
 )
 
 
-def _escolhe(monkeypatch, valor: str) -> None:
+def _escolhe(monkeypatch: pytest.MonkeyPatch, valor: str) -> None:
     """`rag_settings` é property — o patch vai na classe, pra exercitar o
     mesmo caminho de leitura que roda em produção."""
     from backend.workspace.runtime_settings import runtime_settings
@@ -29,7 +29,7 @@ def _escolhe(monkeypatch, valor: str) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _sem_credenciais(monkeypatch) -> None:
+def _sem_credenciais(monkeypatch: pytest.MonkeyPatch) -> None:
     """Nenhum backend com credencial, salvo o que cada teste ligar."""
     from backend.settings import settings as _s
 
@@ -38,13 +38,13 @@ def _sem_credenciais(monkeypatch) -> None:
     _escolhe(monkeypatch, "")
 
 
-def _liga_tavily(monkeypatch) -> None:
+def _liga_tavily(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.settings import settings as _s
 
     monkeypatch.setattr(_s, "tavily_api_key", "tvly-test", raising=False)
 
 
-def _liga_ollama_cloud(monkeypatch) -> None:
+def _liga_ollama_cloud(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.settings import settings as _s
 
     monkeypatch.setattr(_s, "ollama_api_key", "oll-test", raising=False)
@@ -61,7 +61,9 @@ class TestDisponibilidade:
         assert "tavily" not in nomes
         assert "ollama-web" not in nomes
 
-    def test_credencial_configurada_habilita_o_backend(self, monkeypatch) -> None:
+    def test_credencial_configurada_habilita_o_backend(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _liga_tavily(monkeypatch)
         _liga_ollama_cloud(monkeypatch)
 
@@ -72,7 +74,9 @@ class TestDisponibilidade:
 
 
 class TestResolucaoAutomatica:
-    def test_com_tavily_configurado_ele_e_o_preferido(self, monkeypatch) -> None:
+    def test_com_tavily_configurado_ele_e_o_preferido(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _liga_tavily(monkeypatch)
         assert resolve_backend().name == "tavily"
 
@@ -81,7 +85,9 @@ class TestResolucaoAutomatica:
         funcionando pela API JSON sem credencial."""
         assert resolve_backend().name == "duckduckgo"
 
-    def test_ollama_web_entra_antes_do_duckduckgo(self, monkeypatch) -> None:
+    def test_ollama_web_entra_antes_do_duckduckgo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda de ordenação: com key do Ollama Cloud e sem Tavily, a
         busca com credencial ganha da sem credencial."""
         _liga_ollama_cloud(monkeypatch)
@@ -89,7 +95,9 @@ class TestResolucaoAutomatica:
 
 
 class TestEscolhaExplicita:
-    def test_escolha_do_usuario_vence_a_ordem_de_preferencia(self, monkeypatch) -> None:
+    def test_escolha_do_usuario_vence_a_ordem_de_preferencia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Backend escolhido explicitamente vence a ordem de preferência
         automática, mesmo com Tavily configurado."""
         _liga_tavily(monkeypatch)
@@ -98,7 +106,7 @@ class TestEscolhaExplicita:
         assert resolve_backend().name == "browser"
 
     def test_escolha_de_backend_indisponivel_levanta_erro_claro(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: escolher `tavily` sem chave não pode cair em outro
         backend em silêncio — o usuário pediu aquele, e precisa saber que a
@@ -108,7 +116,9 @@ class TestEscolhaExplicita:
         with pytest.raises(SearchBackendUnavailableError, match="tavily"):
             resolve_backend()
 
-    def test_escolha_de_backend_inexistente_tambem_levanta(self, monkeypatch) -> None:
+    def test_escolha_de_backend_inexistente_tambem_levanta(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: nome digitado errado na config não pode virar
         'usa o default' silencioso."""
         _escolhe(monkeypatch, "gogle")
@@ -116,7 +126,9 @@ class TestEscolhaExplicita:
         with pytest.raises(SearchBackendUnavailableError, match="gogle"):
             resolve_backend()
 
-    def test_auto_volta_pra_ordem_de_preferencia(self, monkeypatch) -> None:
+    def test_auto_volta_pra_ordem_de_preferencia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _liga_tavily(monkeypatch)
         _escolhe(monkeypatch, "auto")
 
@@ -125,7 +137,9 @@ class TestEscolhaExplicita:
 
 class TestExecucao:
     @pytest.mark.asyncio
-    async def test_backend_do_duckduckgo_devolve_resultados(self, monkeypatch) -> None:
+    async def test_backend_do_duckduckgo_devolve_resultados(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         def _fake(query, max_results=5):
             return [{"title": "r", "url": "https://x.test", "content": "c"}]
 
@@ -138,7 +152,7 @@ class TestExecucao:
 
     @pytest.mark.asyncio
     async def test_falha_do_backend_escolhido_nao_vira_lista_vazia(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda crítico: lista vazia faz o LLM concluir que não há
         resultados, que é diferente de a busca ter falhado."""

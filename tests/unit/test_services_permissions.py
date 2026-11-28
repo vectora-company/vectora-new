@@ -72,7 +72,9 @@ class TestHasMinRole:
             ("viewer", "viewer", True),
         ],
     )
-    def test_role_comparisons(self, user_role, min_role, expected) -> None:
+    def test_role_comparisons(
+        self, user_role: str, min_role: str, expected: bool
+    ) -> None:
         from backend.rbac.permissions import has_min_role
 
         user = make_user(user_role)
@@ -237,7 +239,7 @@ class TestAuditAndUserManagement:
             ("viewer", False),
         ],
     )
-    def test_can_read_audit(self, role, expected) -> None:
+    def test_can_read_audit(self, role: str, expected: bool) -> None:
         from backend.rbac.permissions import can_read_audit
 
         user = make_user(role)
@@ -252,7 +254,7 @@ class TestAuditAndUserManagement:
             ("viewer", False),
         ],
     )
-    def test_can_manage_users(self, role, expected) -> None:
+    def test_can_manage_users(self, role: str, expected: bool) -> None:
         from backend.rbac.permissions import can_manage_users
 
         user = make_user(role)

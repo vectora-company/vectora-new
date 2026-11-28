@@ -6,6 +6,8 @@ fato)."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.persistence.native.store import VectoraStore
@@ -13,7 +15,7 @@ from backend.storage.sqlite.pool import AsyncConnectionPool
 
 
 @pytest.fixture
-async def store(tmp_path):
+async def store(tmp_path: Path):
     """Executa a operação store."""
     pool = AsyncConnectionPool(str(tmp_path / "store.db"), min_size=1, max_size=2)
     await pool.open()
@@ -32,7 +34,7 @@ async def _fake_embed(texts: list[str]) -> list[list[float]]:
 
 
 @pytest.fixture
-async def indexed_store(tmp_path):
+async def indexed_store(tmp_path: Path):
     """Executa a operação indexed store."""
     pool = AsyncConnectionPool(
         str(tmp_path / "store_indexed.db"), min_size=1, max_size=2

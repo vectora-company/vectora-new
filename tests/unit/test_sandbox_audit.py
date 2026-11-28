@@ -9,7 +9,7 @@ import pytest
 
 from backend.sandbox import audit
 from backend.sandbox.audit import MAX_FILE_BYTES, SandboxAuditLog, redact
-from tests.json_values import as_list, as_object, as_str
+from tests.json_values import as_list, as_object, as_str, dig
 
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def log(tmp_path: Path) -> SandboxAuditLog:
     return SandboxAuditLog(tmp_path / "audit.jsonl")
 
 
-def test_registros_ficam_encadeados_pelo_hash(log) -> None:
+def test_registros_ficam_encadeados_pelo_hash(log: SandboxAuditLog) -> None:
     a = log.append("ws", "worker_started", {"network": "filtered"})
     b = log.append("ws", "egress", {"host": "pypi.org", "allowed": True})
 
@@ -26,7 +26,7 @@ def test_registros_ficam_encadeados_pelo_hash(log) -> None:
     assert a["prev"] == "0" * 64
 
 
-def test_cadeia_integra_verifica(log) -> None:
+def test_cadeia_integra_verifica(log: SandboxAuditLog) -> None:
     for i in range(5):
         log.append("ws", "egress", {"host": f"h{i}.com"})
 
@@ -36,14 +36,14 @@ def test_cadeia_integra_verifica(log) -> None:
     assert verdict.records == 5
 
 
-def test_arquivo_inexistente_verifica_vazio(tmp_path) -> None:
+def test_arquivo_inexistente_verifica_vazio(tmp_path: Path) -> None:
     verdict = SandboxAuditLog(tmp_path / "nada.jsonl").verify()
 
     assert verdict.ok is True
     assert verdict.records == 0
 
 
-def test_alterar_um_registro_quebra_a_cadeia(log) -> None:
+def test_alterar_um_registro_quebra_a_cadeia(log: SandboxAuditLog) -> None:
     for i in range(3):
         log.append("ws", "egress", {"host": f"h{i}.com", "allowed": False})
     linhas = log.path.read_text().splitlines()
@@ -59,7 +59,7 @@ def test_alterar_um_registro_quebra_a_cadeia(log) -> None:
     assert verdict.reason == "hash não confere"
 
 
-def test_remover_um_registro_quebra_a_cadeia(log) -> None:
+def test_remover_um_registro_quebra_a_cadeia(log: SandboxAuditLog) -> None:
     for i in range(4):
         log.append("ws", "egress", {"host": f"h{i}.com"})
     linhas = log.path.read_text().splitlines()
@@ -72,7 +72,7 @@ def test_remover_um_registro_quebra_a_cadeia(log) -> None:
     assert verdict.broken_at == 2
 
 
-def test_reordenar_registros_quebra_a_cadeia(log) -> None:
+def test_reordenar_registros_quebra_a_cadeia(log: SandboxAuditLog) -> None:
     for i in range(3):
         log.append("ws", "egress", {"host": f"h{i}.com"})
     linhas = log.path.read_text().splitlines()
@@ -82,7 +82,7 @@ def test_reordenar_registros_quebra_a_cadeia(log) -> None:
     assert log.verify().ok is False
 
 
-def test_linha_ilegivel_e_apontada(log) -> None:
+def test_linha_ilegivel_e_apontada(log: SandboxAuditLog) -> None:
     log.append("ws", "egress", {})
     with log.path.open("a") as arquivo:
         arquivo.write("isto nao e json\n")
@@ -94,7 +94,7 @@ def test_linha_ilegivel_e_apontada(log) -> None:
     assert verdict.reason == "linha ilegível"
 
 
-def test_a_cadeia_continua_depois_de_reabrir_o_arquivo(tmp_path) -> None:
+def test_a_cadeia_continua_depois_de_reabrir_o_arquivo(tmp_path: Path) -> None:
     caminho = tmp_path / "audit.jsonl"
     SandboxAuditLog(caminho).append("ws", "egress", {"n": 1})
 
@@ -104,7 +104,7 @@ def test_a_cadeia_continua_depois_de_reabrir_o_arquivo(tmp_path) -> None:
     assert SandboxAuditLog(caminho).verify().ok is True
 
 
-def test_evento_desconhecido_e_recusado(log) -> None:
+def test_evento_desconhecido_e_recusado(log: SandboxAuditLog) -> None:
     with pytest.raises(ValueError, match="desconhecido"):
         log.append("ws", "qualquer_coisa", {})
 
@@ -128,24 +128,28 @@ def test_segredos_sao_mascarados_e_textos_longos_cortados() -> None:
     assert len(as_str(copy["longo"])) < 600
 
 
-def test_o_registro_gravado_nao_contem_o_segredo(log) -> None:
+def test_o_registro_gravado_nao_contem_o_segredo(log: SandboxAuditLog) -> None:
     log.append("ws", "worker_started", {"env": {"NPM_TOKEN": "npm_segredo"}})
 
     assert "npm_segredo" not in log.path.read_text()
 
 
-def test_read_devolve_os_mais_novos_primeiro_e_filtra_por_workspace(log) -> None:
+def test_read_devolve_os_mais_novos_primeiro_e_filtra_por_workspace(
+    log: SandboxAuditLog,
+) -> None:
     log.append("a", "egress", {"host": "1"})
     log.append("b", "egress", {"host": "2"})
     log.append("a", "egress", {"host": "3"})
 
     so_a = log.read(workspace_id="a")
 
-    assert [r["data"]["host"] for r in so_a] == ["3", "1"]
+    assert [dig(r["data"], "host") for r in so_a] == ["3", "1"]
     assert len(log.read(limit=2)) == 2
 
 
-def test_rotacao_arquiva_o_arquivo_e_a_cadeia_segue(tmp_path, monkeypatch) -> None:
+def test_rotacao_arquiva_o_arquivo_e_a_cadeia_segue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(audit, "MAX_FILE_BYTES", 400)
     log = SandboxAuditLog(tmp_path / "audit.jsonl")
     ultimo = None
@@ -158,7 +162,9 @@ def test_rotacao_arquiva_o_arquivo_e_a_cadeia_segue(tmp_path, monkeypatch) -> No
     assert MAX_FILE_BYTES > 400  # o teto real continua sendo o do módulo
 
 
-def test_record_nunca_levanta_mesmo_com_falha_de_disco(monkeypatch, tmp_path) -> None:
+def test_record_nunca_levanta_mesmo_com_falha_de_disco(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setenv(audit.AUDIT_FILE_ENV, str(tmp_path / "pasta" / "a.jsonl"))
     (tmp_path / "pasta").write_text("sou um arquivo, não uma pasta")
     monkeypatch.setattr(audit, "audit_log", SandboxAuditLog())

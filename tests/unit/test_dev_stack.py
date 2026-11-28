@@ -392,7 +392,7 @@ def test_container_matches_spec_inspect_falha_recria(
 
 
 @pytest.fixture
-def _reset_singletons(_no_nats_sidecar):
+def _reset_singletons(_no_nats_sidecar: None):
     """Executa a operação reset singletons."""
     from backend.persistence.kv import reset_kv, reset_reachable_cache
     from backend.scheduling.mq import reset_mq

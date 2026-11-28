@@ -53,7 +53,7 @@ def _clean_registry():
 class TestListTerminals:
     @pytest.mark.asyncio
     async def test_open_registra_pty_do_agente_para_a_workbench(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         workspace = SimpleNamespace(cwd="C:/workspace", trusted=True)
         monkeypatch.setattr(

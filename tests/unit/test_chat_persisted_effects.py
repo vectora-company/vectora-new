@@ -8,6 +8,7 @@ recebe, confere o que fica persistido depois do stream e que o retry do mesmo
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -23,7 +24,7 @@ THREAD = "thread-efeitos"
 
 
 @pytest.fixture
-async def store(tmp_path):
+async def store(tmp_path: Path):
     pool = AsyncConnectionPool(str(tmp_path / "efeitos.db"), min_size=1, max_size=2)
     await pool.open()
     session_store = SessionStore(pool)

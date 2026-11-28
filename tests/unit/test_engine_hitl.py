@@ -27,7 +27,7 @@ from backend.vtypes.message import ContentBlock, MessageRole, VMessage, text_mes
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     """Executa a operação session store."""
     pool = AsyncConnectionPool(str(tmp_path / "hitl.db"), min_size=1, max_size=2)
     await pool.open()
@@ -199,7 +199,7 @@ class TestShouldRequireApproval:
         assert should_require_approval("kanban_update_status", ctx, args, []) is True
 
     def test_workspace_jailed_dispensa_aprovacao_de_terminal_e_file_write(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de workspace jailed dispensa aprovacao de terminal e file write."""
         monkeypatch.setattr(
@@ -231,7 +231,7 @@ class TestShouldRequireApproval:
         assert should_require_approval("install_learned_skill", ctx, {}, []) is True
 
     def test_terminal_em_jail_com_rede_aberta_continua_pedindo_aprovacao(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Jail vivo, mas com a rede do host aberta: o terminal executa código
         arbitrário e poderia exfiltrar, então a pausa não é dispensada."""
@@ -248,7 +248,9 @@ class TestShouldRequireApproval:
         assert should_require_approval("file_write", ctx, {}, []) is False
         assert should_require_approval("file_edit", ctx, {}, []) is False
 
-    def test_workspace_nao_jailed_continua_pedindo_aprovacao(self, monkeypatch) -> None:
+    def test_workspace_nao_jailed_continua_pedindo_aprovacao(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de workspace nao jailed continua pedindo aprovacao."""
         monkeypatch.setattr(
             "backend.engine.hitl._workspace_is_jailed", lambda _wsid: False

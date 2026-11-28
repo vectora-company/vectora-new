@@ -10,6 +10,8 @@ par de erro).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.config import collections as collections_mod
@@ -103,7 +105,9 @@ class TestCollectionRegistry:
 
 class TestRegisteredModelsTableAdapter:
     @pytest.mark.asyncio
-    async def test_add_list_remove(self, tmp_path, monkeypatch) -> None:
+    async def test_add_list_remove(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Usa DB isolado em tmp_path via monkeypatch do resolutor de DB.
         import sqlite3
 
@@ -133,7 +137,9 @@ class TestRegisteredModelsTableAdapter:
         assert await adapter.list_items() == []
 
     @pytest.mark.asyncio
-    async def test_add_tag_duplicada_levanta_erro(self, tmp_path, monkeypatch) -> None:
+    async def test_add_tag_duplicada_levanta_erro(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import aiosqlite
 
         db_path = tmp_path / "provider.db"
@@ -165,7 +171,9 @@ class TestUserRowAdapter:
     """
 
     @pytest.mark.asyncio
-    async def test_get_set_delete_por_usuario(self, monkeypatch) -> None:
+    async def test_get_set_delete_por_usuario(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.rbac.auth as auth_svc
         from backend.config.adapters import UserRowAdapter
 
@@ -194,7 +202,9 @@ class TestUserRowAdapter:
         assert await adapter.get("u1") is None
 
     @pytest.mark.asyncio
-    async def test_user_local_delega_ao_rbac_auth(self, monkeypatch) -> None:
+    async def test_user_local_delega_ao_rbac_auth(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.rbac.auth as auth_svc
         from backend.config.adapters import UserRowAdapter
 

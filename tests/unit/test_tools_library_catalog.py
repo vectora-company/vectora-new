@@ -17,7 +17,9 @@ from backend.tools import library
 
 
 @pytest.mark.asyncio
-async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(monkeypatch) -> None:
+async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def _registry():
         return [
             SimpleNamespace(
@@ -54,7 +56,9 @@ async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_list_skills_catalog_happy_e_catalogo_vazio(monkeypatch) -> None:
+async def test_list_skills_catalog_happy_e_catalogo_vazio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def _catalog(_kind):
         return [{"id": "revisar-pr", "name": "Revisar PR", "description": "Como"}]
 
@@ -70,7 +74,9 @@ async def test_list_skills_catalog_happy_e_catalogo_vazio(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_memory_bucket_catalog_happy_e_falha(monkeypatch) -> None:
+async def test_list_memory_bucket_catalog_happy_e_falha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def _catalog():
         return [{"id": "leis-br", "name": "Leis BR", "description": "Legislação"}]
 
@@ -88,7 +94,9 @@ async def test_list_memory_bucket_catalog_happy_e_falha(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_catalogo_grande_e_truncado_com_total_real(monkeypatch) -> None:
+async def test_catalogo_grande_e_truncado_com_total_real(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Regressão de contexto: o registry oficial tem centenas de entradas e
     # despejar tudo gastaria a janela do LLM. `total` continua o número real
     # pra o agente saber que há mais.

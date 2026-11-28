@@ -9,13 +9,15 @@ ausente é negado.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.rbac import token_auth
 
 
 @pytest.fixture
-async def db(tmp_path):
+async def db(tmp_path: Path):
     import aiosqlite
 
     conn = await aiosqlite.connect(str(tmp_path / "test_token_auth.db"))

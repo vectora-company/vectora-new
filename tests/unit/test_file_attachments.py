@@ -389,7 +389,9 @@ class TestBuildUserVMessage:
         assert [block.kind for block in msg.content] == ["text"]
 
     @pytest.mark.asyncio
-    async def test_falha_ao_persistir_nao_aborta_o_turno(self, monkeypatch) -> None:
+    async def test_falha_ao_persistir_nao_aborta_o_turno(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: disco cheio/sem permissão não pode derrubar o chat —
         a imagem já foi enviada ao provider via base64 inline, só a
         reexibição pós-restart fica indisponível. Testa
@@ -686,7 +688,9 @@ class TestStreamChatBlocksImageForNonVisionProvider:
     de chamar o provider, com um ErrorEvent(code='MODEL_NO_VISION')."""
 
     @pytest.fixture(autouse=True)
-    def _isolated_vectora_home(self, tmp_path, monkeypatch) -> None:
+    def _isolated_vectora_home(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """`stream_chat` com anexo de imagem grava em `settings.vectora_home`
         (`_persist_image_attachment`) — nunca aponta pro `~/.vectora` real
         do ambiente rodando o teste."""
@@ -848,7 +852,7 @@ class TestStreamChatBlocksImageForNonVisionProvider:
 
     @pytest.mark.asyncio
     async def test_ignora_fallback_persistido_apos_remover_credencial(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers import chat as chat_mod
         from backend.settings import CapabilityState

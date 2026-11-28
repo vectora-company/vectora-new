@@ -15,7 +15,7 @@ from backend.workspace import plugins
 
 
 @pytest.fixture(autouse=True)
-def _isolado(monkeypatch: pytest.MonkeyPatch, _no_nats_sidecar):
+def _isolado(monkeypatch: pytest.MonkeyPatch, _no_nats_sidecar: None):
     from backend.settings import settings
 
     monkeypatch.setattr(settings, "redis_url", None)

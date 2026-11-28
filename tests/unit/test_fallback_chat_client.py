@@ -55,7 +55,11 @@ async def _async_value(value):
 
 
 def _make_client(
-    monkeypatch, *, fallback_chain, clients_por_modelo, on_model_switch=None
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    fallback_chain,
+    clients_por_modelo,
+    on_model_switch=None,
 ):
     monkeypatch.setattr(
         "backend.llm.fallback_chat_client.get_fallback_chain",
@@ -70,7 +74,7 @@ def _make_client(
 
 class TestAgenerate:
     async def test_managed_llamacpp_e_iniciado_antes_de_resolver_candidatos(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         chamado = False
 
@@ -91,7 +95,9 @@ class TestAgenerate:
         assert await cliente._candidate_ids([]) == ["llamacpp:qwen"]
         assert chamado is True
 
-    async def test_usa_o_primario_quando_nao_ha_erro(self, monkeypatch) -> None:
+    async def test_usa_o_primario_quando_nao_ha_erro(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         cliente = _make_client(
             monkeypatch,
             fallback_chain=[],
@@ -105,7 +111,7 @@ class TestAgenerate:
         assert resultado.text() == "do primário"
 
     async def test_erro_de_quota_troca_para_o_proximo_da_cadeia(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         trocas: list[tuple[str, str]] = []
 
@@ -131,7 +137,7 @@ class TestAgenerate:
         assert trocas == [("openai:gpt-4o", "anthropic:claude-sonnet")]
 
     async def test_erro_nao_recuperavel_no_primario_propaga_sem_fallback(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         cliente = _make_client(
             monkeypatch,
@@ -148,7 +154,7 @@ class TestAgenerate:
             await cliente.agenerate([text_message(MessageRole.USER, "oi")])
 
     async def test_todos_os_candidatos_esgotados_vira_quota_exhausted(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         cliente = _make_client(
             monkeypatch,
@@ -184,7 +190,9 @@ class TestAgenerate:
         resultado = await cliente.agenerate([mensagem])
         assert resultado.text() == "ok"
 
-    async def test_ignora_fallback_de_imagem_sem_credencial(self, monkeypatch) -> None:
+    async def test_ignora_fallback_de_imagem_sem_credencial(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import CapabilityState
 
         async def _supported(_model: str) -> CapabilityState:
@@ -213,7 +221,9 @@ class TestAgenerate:
 
 
 class TestAstream:
-    async def test_chunks_do_primario_saem_direto(self, monkeypatch) -> None:
+    async def test_chunks_do_primario_saem_direto(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         cliente = _make_client(
             monkeypatch,
             fallback_chain=[],
@@ -231,7 +241,7 @@ class TestAstream:
         assert "".join(c.delta_text for c in chunks) == "ab"
 
     async def test_erro_de_quota_antes_do_primeiro_chunk_troca_de_provider(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         cliente = _make_client(
             monkeypatch,
@@ -253,7 +263,7 @@ class TestAstream:
         assert "".join(c.delta_text for c in chunks) == "do fallback"
 
     async def test_erro_depois_de_ja_ter_streamado_chunk_propaga_sem_trocar(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         cliente = _make_client(
             monkeypatch,

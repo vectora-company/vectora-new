@@ -114,7 +114,7 @@ class TestPolling:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("estado", ["failed", "cancelled", "expired"])
-    async def test_estado_terminal_de_falha_vira_erro_tipado(self, estado) -> None:
+    async def test_estado_terminal_de_falha_vira_erro_tipado(self, estado: str) -> None:
         """Erro/borda: os três estados terminais que não são `completed`
         precisam sair do loop com erro, não continuar consultando."""
 

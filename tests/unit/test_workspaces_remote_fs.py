@@ -13,7 +13,7 @@ from backend.transport.base import DirEntry, RunResult
 
 
 @pytest.fixture
-def remote(monkeypatch):
+def remote(monkeypatch: pytest.MonkeyPatch):
     ws = SimpleNamespace(transport="codespace", remote_path="/workspaces/project")
     transport = AsyncMock()
 
@@ -29,7 +29,9 @@ def remote(monkeypatch):
     return ws, transport
 
 
-async def test_remote_tree_lists_workspace_entries(remote, monkeypatch) -> None:
+async def test_remote_tree_lists_workspace_entries(
+    remote, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _ws, transport = remote
     monkeypatch.setattr(
         workspaces,
@@ -49,7 +51,9 @@ async def test_remote_tree_lists_workspace_entries(remote, monkeypatch) -> None:
     transport.list_dir.assert_awaited_once_with("/workspaces/project/src")
 
 
-async def test_remote_file_preview_and_hash(remote, monkeypatch) -> None:
+async def test_remote_file_preview_and_hash(
+    remote, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _ws, transport = remote
     content = b"remote"
     monkeypatch.setattr(
@@ -65,7 +69,9 @@ async def test_remote_file_preview_and_hash(remote, monkeypatch) -> None:
     assert result.sha256 == hashlib.sha256(content).hexdigest()
 
 
-async def test_remote_update_uses_optimistic_hash(remote, monkeypatch) -> None:
+async def test_remote_update_uses_optimistic_hash(
+    remote, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _ws, transport = remote
     current = b"old"
     monkeypatch.setattr(
@@ -86,7 +92,9 @@ async def test_remote_update_uses_optimistic_hash(remote, monkeypatch) -> None:
     transport.write_file.assert_not_awaited()
 
 
-async def test_remote_create_file_uses_transport(remote, monkeypatch) -> None:
+async def test_remote_create_file_uses_transport(
+    remote, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _ws, transport = remote
     monkeypatch.setattr(
         workspaces,
@@ -104,7 +112,9 @@ async def test_remote_create_file_uses_transport(remote, monkeypatch) -> None:
     )
 
 
-async def test_remote_create_directory_uses_confined_path(remote, monkeypatch) -> None:
+async def test_remote_create_directory_uses_confined_path(
+    remote, monkeypatch: pytest.MonkeyPatch
+) -> None:
     ws, transport = remote
     run = AsyncMock()
     monkeypatch.setattr(workspaces, "_remote_fs_run", run)
@@ -133,7 +143,7 @@ async def test_remote_delete_requires_explicit_permanent_confirmation(remote) ->
 
 
 async def test_remote_move_checks_conflicts_and_runs_rename(
-    remote, monkeypatch
+    remote, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ws, transport = remote
     monkeypatch.setattr(
@@ -159,7 +169,7 @@ async def test_remote_move_checks_conflicts_and_runs_rename(
 
 
 async def test_remote_update_writes_new_content_after_hash_check(
-    remote, monkeypatch
+    remote, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _ws, transport = remote
     current = b"old"

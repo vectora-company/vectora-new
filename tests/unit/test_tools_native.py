@@ -253,7 +253,7 @@ class TestJwtDecode:
 
 class TestHttpRequest:
     @pytest.mark.asyncio
-    async def test_get_returns_body_text(self, monkeypatch) -> None:
+    async def test_get_returns_body_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import httpx
 
         from backend.tools.native.http_request import http_request
@@ -281,7 +281,9 @@ class TestHttpRequest:
         assert result == '{"ok": true}'
 
     @pytest.mark.asyncio
-    async def test_connection_error_returns_error(self, monkeypatch) -> None:
+    async def test_connection_error_returns_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import httpx
 
         from backend.tools.native.http_request import http_request

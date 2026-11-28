@@ -18,7 +18,9 @@ from backend.vtypes.contracts import JsonObject
 
 
 class TestBuildSoftEnv:
-    def test_descarta_segredos_mas_mantem_essenciais(self, monkeypatch) -> None:
+    def test_descarta_segredos_mas_mantem_essenciais(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         env = {
             "SYSTEMROOT": "C:\\Windows",
             "PATH": "C:\\bin;C:\\Windows\\System32",
@@ -39,7 +41,9 @@ class TestBuildSoftEnv:
         assert "VECTORA_TOKEN" not in result
         assert "AWS_SECRET_ACCESS_KEY" not in result
 
-    def test_mantem_todas_as_vars_vectora_sandbox(self, monkeypatch) -> None:
+    def test_mantem_todas_as_vars_vectora_sandbox(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         env = {
             "SYSTEMROOT": "C:\\Windows",
             "VECTORA_SANDBOX_SOFT": "1",
@@ -51,14 +55,16 @@ class TestBuildSoftEnv:
         assert result["VECTORA_SANDBOX_SOFT"] == "1"
         assert result["VECTORA_SANDBOX_WORKSPACE_DIR"] == "C:\\ws"
 
-    def test_merge_extra_sobrescreve(self, monkeypatch) -> None:
+    def test_merge_extra_sobrescreve(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(win.os, "environ", {})
         result = win.build_soft_env({"VECTORA_SANDBOX_SOFT": "1"})
         assert result["VECTORA_SANDBOX_SOFT"] == "1"
 
 
 class TestAssignJobObject:
-    def test_degrada_pra_none_quando_kernel32_indisponivel(self, monkeypatch) -> None:
+    def test_degrada_pra_none_quando_kernel32_indisponivel(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         class _FakeCtypes:
             @property
             def windll(self):
@@ -67,7 +73,9 @@ class TestAssignJobObject:
         monkeypatch.setattr(win, "ctypes", _FakeCtypes())
         assert win.assign_job_object_kill_on_close(999) is None
 
-    def test_associa_processo_quando_tudo_disponivel(self, monkeypatch) -> None:
+    def test_associa_processo_quando_tudo_disponivel(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         calls: dict[str, bool | tuple[int, ...]] = {}
         closed_handles: list[int] = []
 

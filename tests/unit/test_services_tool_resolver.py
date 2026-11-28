@@ -22,21 +22,25 @@ class _FakeWorkspace:
 
 
 @pytest.fixture
-def fake_all_tools(monkeypatch):
+def fake_all_tools(monkeypatch: pytest.MonkeyPatch):
     tools = [_FakeTool("file_read"), _FakeTool("terminal"), _FakeTool("grep")]
     monkeypatch.setattr(tool_resolver, "ALL_TOOL_SPECS", tools)
     return tools
 
 
 @pytest.mark.asyncio
-async def test_local_user_gets_all_tools(fake_all_tools, monkeypatch) -> None:
+async def test_local_user_gets_all_tools(
+    fake_all_tools, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Sem user_id (CLI/local) → ALL_TOOLS, sem consulta de policy/MCP."""
     result = await tool_resolver.resolve_tools(None)
     assert [t.name for t in result] == ["file_read", "terminal", "grep"]
 
 
 @pytest.mark.asyncio
-async def test_filters_disabled_tools(fake_all_tools, monkeypatch) -> None:
+async def test_filters_disabled_tools(
+    fake_all_tools, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(
         "backend.rbac.tool_policy.is_allowed",
         lambda uid, name: name != "terminal",
@@ -55,7 +59,9 @@ async def test_filters_disabled_tools(fake_all_tools, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_appends_mcp_tools(fake_all_tools, monkeypatch) -> None:
+async def test_appends_mcp_tools(
+    fake_all_tools, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 
     async def _mcp(_uid):
@@ -72,7 +78,9 @@ async def test_appends_mcp_tools(fake_all_tools, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_mcp_failure_degrades_to_builtins(fake_all_tools, monkeypatch) -> None:
+async def test_mcp_failure_degrades_to_builtins(
+    fake_all_tools, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 
     async def _boom(_uid):
@@ -87,7 +95,7 @@ async def test_mcp_failure_degrades_to_builtins(fake_all_tools, monkeypatch) -> 
 
 @pytest.mark.asyncio
 async def test_workspace_skill_resolution_usa_diretorio_autorizado(
-    fake_all_tools, monkeypatch
+    fake_all_tools, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 

@@ -13,14 +13,16 @@ from backend.sandbox.policy import SandboxPolicy
 
 
 @pytest.fixture(autouse=True)
-def _no_real_modal_module(monkeypatch) -> None:
+def _no_real_modal_module(monkeypatch: pytest.MonkeyPatch) -> None:
     # Garante que um `modal` real instalado no ambiente não interfira —
     # cada teste controla explicitamente se o import deve funcionar.
     monkeypatch.delitem(sys.modules, "modal", raising=False)
 
 
 @pytest.mark.asyncio
-async def test_missing_modal_sdk_degrades_with_clear_message(monkeypatch) -> None:
+async def test_missing_modal_sdk_degrades_with_clear_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setitem(sys.modules, "modal", None)  # força ImportError
 
     from backend.sandbox.modal import run_modal_sandboxed
@@ -32,7 +34,9 @@ async def test_missing_modal_sdk_degrades_with_clear_message(monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
-async def test_successful_run_returns_sandbox_output(monkeypatch) -> None:
+async def test_successful_run_returns_sandbox_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_process = MagicMock()
     fake_process.wait.return_value = 0
     fake_process.stdout.read.return_value = "hello\n"
@@ -63,7 +67,7 @@ async def test_successful_run_returns_sandbox_output(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_sdk_failure_returns_clear_error_offering_other_backends(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_modal = types.ModuleType("modal")
     fake_modal.App = MagicMock()  # ty: ignore[missing-attribute]
@@ -100,7 +104,9 @@ def _fake_modal_module(*, exec_side_effect=None, wait_return=0):
 
 
 @pytest.mark.asyncio
-async def test_timeout_no_modal_cloud_devolve_timed_out(monkeypatch) -> None:
+async def test_timeout_no_modal_cloud_devolve_timed_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Erro/borda: sandbox.exec()/wait() nunca retorna dentro do orçamento
     # (timeout_s + 10.0) — o wrapper de asyncio.wait_for deve reportar
     # timed_out=True, sem depender de bloquear uma thread real (que
@@ -124,7 +130,9 @@ async def test_timeout_no_modal_cloud_devolve_timed_out(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sandbox_terminate_e_chamado_mesmo_quando_exec_falha(monkeypatch) -> None:
+async def test_sandbox_terminate_e_chamado_mesmo_quando_exec_falha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # O finally garante terminate() mesmo em falha no meio da execução
     # (comando que quebra o processo remoto) — não vaza sandbox cloud
     # rodando indefinidamente (custo real).
@@ -141,7 +149,9 @@ async def test_sandbox_terminate_e_chamado_mesmo_quando_exec_falha(monkeypatch) 
 
 
 @pytest.mark.asyncio
-async def test_comando_com_lista_vazia_ainda_chama_sandbox_exec(monkeypatch) -> None:
+async def test_comando_com_lista_vazia_ainda_chama_sandbox_exec(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_modal, fake_sandbox, _fake_process = _fake_modal_module()
     monkeypatch.setitem(sys.modules, "modal", fake_modal)
 
@@ -154,7 +164,9 @@ async def test_comando_com_lista_vazia_ainda_chama_sandbox_exec(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_exit_code_diferente_de_zero_e_preservado(monkeypatch) -> None:
+async def test_exit_code_diferente_de_zero_e_preservado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_modal, _fake_sandbox, fake_process = _fake_modal_module(wait_return=7)
     fake_process.stderr.read.return_value = "falhou no remoto\n"
     monkeypatch.setitem(sys.modules, "modal", fake_modal)
@@ -168,7 +180,9 @@ async def test_exit_code_diferente_de_zero_e_preservado(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_app_lookup_cria_app_se_nao_existir(monkeypatch) -> None:
+async def test_app_lookup_cria_app_se_nao_existir(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_modal, _fake_sandbox, _fake_process = _fake_modal_module()
     monkeypatch.setitem(sys.modules, "modal", fake_modal)
 
@@ -182,7 +196,9 @@ async def test_app_lookup_cria_app_se_nao_existir(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_workspace_dir_nao_afeta_o_exec_do_backend_modal(monkeypatch) -> None:
+async def test_workspace_dir_nao_afeta_o_exec_do_backend_modal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Invariante documentada no docstring do módulo: modal roda em
     # filesystem cloud isolado, `workspace_dir` não é montado nem afeta o
     # exec. De `policy` só o perfil de recurso é lido (teste próprio).
@@ -202,7 +218,9 @@ async def test_workspace_dir_nao_afeta_o_exec_do_backend_modal(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_import_error_message_offers_other_backends(monkeypatch) -> None:
+async def test_import_error_message_offers_other_backends(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setitem(sys.modules, "modal", None)
 
     from backend.sandbox.modal import run_modal_sandboxed
@@ -215,7 +233,9 @@ async def test_import_error_message_offers_other_backends(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sandbox_terminate_called_even_when_exec_raises(monkeypatch) -> None:
+async def test_sandbox_terminate_called_even_when_exec_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_sandbox = MagicMock()
     fake_sandbox.exec.side_effect = RuntimeError("exec falhou")
 
@@ -238,7 +258,7 @@ async def test_sandbox_terminate_called_even_when_exec_raises(monkeypatch) -> No
 
 @pytest.mark.asyncio
 async def test_nonzero_exit_code_from_sandbox_process_is_propagated(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_process = MagicMock()
     fake_process.wait.return_value = 3
@@ -267,7 +287,9 @@ async def test_nonzero_exit_code_from_sandbox_process_is_propagated(
 
 
 @pytest.mark.asyncio
-async def test_timeout_returns_clear_error_without_raising(monkeypatch) -> None:
+async def test_timeout_returns_clear_error_without_raising(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Mocka asyncio.wait_for diretamente em vez de correr uma corrida real
     # contra um asyncio.sleep(N) perto do limite do timeout — testes que
     # dependem de tempo real perto da borda são inerentemente instáveis
@@ -293,7 +315,9 @@ async def test_timeout_returns_clear_error_without_raising(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sandbox_recebe_teto_de_cpu_e_memoria_por_perfil(monkeypatch) -> None:
+async def test_sandbox_recebe_teto_de_cpu_e_memoria_por_perfil(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Sem teto explícito, um comando em loop roda no limite default da
     conta — e aqui a execução é remota e cobrada de verdade."""
     fake_modal, _sandbox, _process = _fake_modal_module()

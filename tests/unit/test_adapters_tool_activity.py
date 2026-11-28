@@ -22,7 +22,7 @@ from backend.engine.stream_events import ToolActivity, ToolCallStarted, ToolResu
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence) -> None:
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 

@@ -8,6 +8,7 @@ Verifica:
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
@@ -114,7 +115,9 @@ class TestAdminSystemInfo:
         assert "python_version" in info
         assert "platform" in info
 
-    def test_build_version_falls_back_to_version_without_env(self, monkeypatch) -> None:
+    def test_build_version_falls_back_to_version_without_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Sem VECTORA_BUILD_VERSION (dev local, sem build oficial), cai pra semver puro."""
         from backend.api.handlers.admin import _build_system_info
 
@@ -122,7 +125,9 @@ class TestAdminSystemInfo:
         info = _build_system_info()
         assert info["build_version"] == info["version"]
 
-    def test_build_version_reads_env_when_set(self, monkeypatch) -> None:
+    def test_build_version_reads_env_when_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Com VECTORA_BUILD_VERSION setado (pipeline de release), usa o valor com hash."""
         from backend.api.handlers.admin import _build_system_info
 
@@ -251,7 +256,9 @@ class TestApiKeysEndpoints:
         assert mock_upsert.called
 
     @pytest.mark.asyncio
-    async def test_get_api_keys_le_dos_fields_do_registry(self, monkeypatch) -> None:
+    async def test_get_api_keys_le_dos_fields_do_registry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A leitura passa pelos fields do registry (EnvAdapter), não por
         os.environ direto — mesma fonte usada por CLI/outros handlers."""
         from unittest.mock import MagicMock
@@ -306,7 +313,9 @@ class TestCreateInvite:
     """Convites da instância local respeitam o papel, não o tier Pro."""
 
     @pytest.mark.asyncio
-    async def test_admin_free_pode_convidar_membro_local(self, monkeypatch) -> None:
+    async def test_admin_free_pode_convidar_membro_local(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
         from backend.api.handlers.admin import CreateInviteBody, create_invite
@@ -329,7 +338,9 @@ class TestCreateInvite:
         )
 
     @pytest.mark.asyncio
-    async def test_membro_sem_papel_admin_nao_pode_convidar(self, monkeypatch) -> None:
+    async def test_membro_sem_papel_admin_nao_pode_convidar(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
         from backend.api.handlers.admin import CreateInviteBody, create_invite
@@ -364,7 +375,7 @@ class TestInviteLinkAndTypedResponses:
 
     @pytest.mark.asyncio
     async def test_link_usa_o_endereco_de_onde_o_app_e_servido(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from unittest.mock import AsyncMock
 
@@ -382,7 +393,7 @@ class TestInviteLinkAndTypedResponses:
 
     @pytest.mark.asyncio
     async def test_frontend_url_definida_vence_o_endereco_da_requisicao(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from unittest.mock import AsyncMock
 
@@ -409,7 +420,9 @@ class TestInviteLinkAndTypedResponses:
         assert CreateInviteBody(ttl_hours=720).ttl_hours == 720
 
     @pytest.mark.asyncio
-    async def test_papel_invalido_responde_400_sem_criar(self, monkeypatch) -> None:
+    async def test_papel_invalido_responde_400_sem_criar(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock
 
         from backend.api.handlers.admin import CreateInviteBody, create_invite
@@ -425,7 +438,9 @@ class TestInviteLinkAndTypedResponses:
         create_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_lista_devolve_convites_tipados_e_o_total(self, monkeypatch) -> None:
+    async def test_lista_devolve_convites_tipados_e_o_total(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock
 
         from backend.api.handlers.admin import list_invites
@@ -448,7 +463,9 @@ class TestInviteLinkAndTypedResponses:
         assert result.invites[0].email is None
 
     @pytest.mark.asyncio
-    async def test_so_admin_lista_e_revoga(self, monkeypatch) -> None:
+    async def test_so_admin_lista_e_revoga(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
         from backend.api.handlers.admin import list_invites, revoke_invite
@@ -470,7 +487,7 @@ class TestInviteLinkAndTypedResponses:
 
     @pytest.mark.asyncio
     async def test_revogar_devolve_o_hash_e_convite_inexistente_e_404(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from unittest.mock import AsyncMock
 
@@ -497,7 +514,7 @@ class TestToggleToolGlobal:
     """
 
     @pytest.fixture(autouse=True)
-    def iso_dir(self, tmp_path, monkeypatch) -> None:
+    def iso_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from backend.rbac import tool_policy
 
         monkeypatch.setattr(tool_policy, "_policy_dir", lambda: tmp_path / "tools")
@@ -606,7 +623,9 @@ class TestTimezoneEndpoint:
         assert any("timezone" in p for p in paths)
 
     @pytest.mark.asyncio
-    async def test_salva_timezone_valido_e_rejeita_invalido(self, monkeypatch) -> None:
+    async def test_salva_timezone_valido_e_rejeita_invalido(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers import admin
@@ -651,7 +670,9 @@ class TestTimezoneEndpoint:
         assert gravados[-1] == ""
 
     @pytest.mark.asyncio
-    async def test_get_devolve_lista_de_zonas_para_o_seletor(self, monkeypatch) -> None:
+    async def test_get_devolve_lista_de_zonas_para_o_seletor(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers import admin
 
         monkeypatch.setattr(admin, "require_admin", lambda _u: None)
@@ -672,7 +693,7 @@ class TestServiceTokenEndpoints:
     """POST/GET/DELETE /admin/service-tokens — apenas root."""
 
     @pytest.fixture(autouse=True)
-    async def _isolate_db(self, tmp_path, monkeypatch):
+    async def _isolate_db(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import aiosqlite
 
         import backend.rbac.auth as auth_mod
@@ -803,7 +824,9 @@ class TestTracerAdministration:
         return request
 
     @pytest.mark.asyncio
-    async def test_list_traces_excludes_freeform_metadata(self, monkeypatch) -> None:
+    async def test_list_traces_excludes_freeform_metadata(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock
 
         from backend.api.handlers import admin
@@ -843,7 +866,9 @@ class TestTracerAdministration:
         get_recent.assert_awaited_once_with(n=20)
 
     @pytest.mark.asyncio
-    async def test_member_cannot_list_or_clear_traces(self, monkeypatch) -> None:
+    async def test_member_cannot_list_or_clear_traces(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock
 
         from fastapi import HTTPException
@@ -877,7 +902,9 @@ class TestTracerAdministration:
         assert exc.value.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_clear_traces_can_be_scoped_to_session(self, monkeypatch) -> None:
+    async def test_clear_traces_can_be_scoped_to_session(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock
 
         from backend.api.handlers import admin
@@ -901,7 +928,7 @@ class TestToolAccessByRole:
     """RBAC de tools: GET/PUT /admin/tool-access."""
 
     @pytest.fixture(autouse=True)
-    def iso_dir(self, tmp_path, monkeypatch) -> None:
+    def iso_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from backend.rbac import tool_policy
 
         monkeypatch.setattr(tool_policy, "_policy_dir", lambda: tmp_path / "tools")

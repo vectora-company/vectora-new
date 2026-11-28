@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -477,7 +478,9 @@ class TestVectorSearchBucketFanout:
         return mock_backend
 
     @pytest.mark.asyncio
-    async def test_searches_only_active_buckets_of_workspace(self, tmp_path) -> None:
+    async def test_searches_only_active_buckets_of_workspace(
+        self, tmp_path: Path
+    ) -> None:
         """Verifica o comportamento de searches only active buckets of workspace."""
         from backend.services import rag_buckets
         from backend.tools.rag import vector_search
@@ -527,7 +530,7 @@ class TestVectorSearchBucketFanout:
 
     @pytest.mark.asyncio
     async def test_no_active_buckets_falls_back_to_legacy_articles_table(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de no active buckets falls back to legacy articles table."""
         from backend.tools.rag import vector_search
@@ -569,7 +572,9 @@ class TestVectorSearchBucketFanout:
         assert [r["content"] for r in data["results"]] == ["dado legado"]
 
     @pytest.mark.asyncio
-    async def test_explicit_collection_overrides_active_buckets(self, tmp_path) -> None:
+    async def test_explicit_collection_overrides_active_buckets(
+        self, tmp_path: Path
+    ) -> None:
         """Passar `collection` manualmente ignora os buckets ativos —
         comportamento avançado preservado (regressão)."""
         from backend.services import rag_buckets
@@ -674,7 +679,7 @@ class TestEmbedding:
 class TestIngestDocs:
     @pytest.mark.asyncio
     async def test_sensitive_files_are_filtered_before_ingestion(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         from backend.tools.rag import ingest_docs
 
@@ -715,7 +720,7 @@ class TestIngestDocs:
         assert "denied" in result.lower() or "Access" in result
 
     @pytest.mark.asyncio
-    async def test_not_a_directory_returns_error(self, tmp_path) -> None:
+    async def test_not_a_directory_returns_error(self, tmp_path: Path) -> None:
         """Verifica o comportamento de not a directory returns error."""
         from backend.tools.rag import ingest_docs
 
@@ -733,7 +738,7 @@ class TestIngestDocs:
         assert "Not a directory" in result
 
     @pytest.mark.asyncio
-    async def test_no_files_found_returns_no_files(self, tmp_path) -> None:
+    async def test_no_files_found_returns_no_files(self, tmp_path: Path) -> None:
         """Verifica o comportamento de no files found returns no files."""
         from backend.tools.rag import ingest_docs
 
@@ -753,7 +758,7 @@ class TestIngestDocs:
         assert data["status"] == "no_files"
 
     @pytest.mark.asyncio
-    async def test_chunk_fail_counts_as_failure(self, tmp_path) -> None:
+    async def test_chunk_fail_counts_as_failure(self, tmp_path: Path) -> None:
         """Verifica o comportamento de chunk fail counts as failure."""
         from backend.tools.rag import ingest_docs
 
@@ -783,7 +788,7 @@ class TestIngestDocs:
         assert data["failed"] >= 1
 
     @pytest.mark.asyncio
-    async def test_gitignore_skip_counts_as_ignored(self, tmp_path) -> None:
+    async def test_gitignore_skip_counts_as_ignored(self, tmp_path: Path) -> None:
         """Covers is_ignored=True branch (lines 283-288)."""
         from backend.tools.rag import ingest_docs
 
@@ -809,7 +814,7 @@ class TestIngestDocs:
         assert data["skipped_ignored"] >= 1
 
     @pytest.mark.asyncio
-    async def test_always_skip_dirs_counted_in_ignored(self, tmp_path) -> None:
+    async def test_always_skip_dirs_counted_in_ignored(self, tmp_path: Path) -> None:
         """Dirs em ALWAYS_SKIP_DIRS contam em skipped_ignored (não silenciados).
 
         Com walk_files, __pycache__ é PODADO durante o os.walk (a subárvore
@@ -857,7 +862,7 @@ class TestIngestDocs:
         )
 
     @pytest.mark.asyncio
-    async def test_file_read_error_counts_as_failure(self, tmp_path) -> None:
+    async def test_file_read_error_counts_as_failure(self, tmp_path: Path) -> None:
         """Covers file read exception path (lines 310-316)."""
         from unittest.mock import mock_open, patch
 
@@ -890,7 +895,7 @@ class TestIngestDocs:
 
     @pytest.mark.asyncio
     async def test_embedding_non_fire_and_forget_counts_as_failure(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         """Covers else branch when embedding returns unexpected status (line 340)."""
         from backend.tools.rag import ingest_docs
@@ -924,7 +929,7 @@ class TestIngestDocs:
         assert data["failed"] >= 1
 
     @pytest.mark.asyncio
-    async def test_ingest_chama_embedding_diretamente(self, tmp_path) -> None:
+    async def test_ingest_chama_embedding_diretamente(self, tmp_path: Path) -> None:
         """`ingest_docs` chama `embedding` como função async direta — sem
         passar por adapter compatível com o motor de execução antigo."""
         from backend.tools.rag import ingest_docs
@@ -958,7 +963,7 @@ class TestIngestDocs:
 
     @pytest.mark.asyncio
     async def test_pdf_docx_xlsx_reais_extraem_texto_em_vez_de_binario_cru(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         """PDF/DOCX/XLSX passavam por `read_text(errors="ignore")` puro —
         um arquivo binário real virava lixo decodificado, indexado no RAG
@@ -1014,7 +1019,7 @@ class TestIngestDocs:
         assert "not a real pdf" not in todo_texto
 
     async def test_path_traversal_e_rejeitado_de_verdade(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """`directory_path` vem do modelo (tool call) — precisa da mesma
         defesa forte que `file_read`/`file_write` já usam
@@ -1052,7 +1057,7 @@ class TestIngestDocs:
 
     @pytest.mark.asyncio
     async def test_path_dentro_do_workspace_continua_funcionando(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Regressão: path legítimo (relativo, dentro do workspace) segue
         indexando normalmente com a defesa forte — não é só o caminho de

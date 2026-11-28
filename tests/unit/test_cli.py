@@ -230,7 +230,9 @@ def test_upsert_env_key_insere_e_atualiza(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_run_docker_status_ok(monkeypatch, capsys) -> None:
+def test_run_docker_status_ok(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     from backend.storage.dev_stack import StackResult
 
     monkeypatch.setattr(

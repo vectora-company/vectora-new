@@ -38,7 +38,7 @@ class TestAdminStorageGet:
     """GET /admin/storage retorna health de todos os backends."""
 
     @pytest.mark.asyncio
-    async def test_endpoint_exists(self, admin_client) -> None:
+    async def test_endpoint_exists(self, admin_client: AsyncClient) -> None:
         """Endpoint /admin/storage existe e retorna resposta HTTP."""
         with patch(
             "backend.storage.factory.storage_health",
@@ -50,7 +50,7 @@ class TestAdminStorageGet:
         assert resp.status_code in (200, 401, 403, 404)
 
     @pytest.mark.asyncio
-    async def test_response_is_json(self, admin_client) -> None:
+    async def test_response_is_json(self, admin_client: AsyncClient) -> None:
         """Response tem Content-Type JSON quando não autenticado (401)."""
         resp = await admin_client.get("/admin/storage")
         assert resp.status_code in (200, 401, 403, 404)
@@ -60,7 +60,7 @@ class TestAdminStorageDefaults:
     """GET /admin/storage/defaults entrega config default para pré-preencher."""
 
     @pytest.mark.asyncio
-    async def test_endpoint_exists(self, admin_client) -> None:
+    async def test_endpoint_exists(self, admin_client: AsyncClient) -> None:
         """Endpoint registrado — responde HTTP (200 com auth, 401/403 sem)."""
         resp = await admin_client.get("/admin/storage/defaults")
         assert resp.status_code in (200, 401, 403, 404)
@@ -87,7 +87,9 @@ class TestAdminStorageTest:
     """POST /admin/storage/test verifica conectividade com DSN."""
 
     @pytest.mark.asyncio
-    async def test_sqlite_dsn_accepted(self, admin_client, tmp_path) -> None:
+    async def test_sqlite_dsn_accepted(
+        self, admin_client: AsyncClient, tmp_path: Path
+    ) -> None:
         db_path = str(tmp_path / "test.db")
         resp = await admin_client.post(
             "/admin/storage/test",
@@ -97,7 +99,7 @@ class TestAdminStorageTest:
         assert resp.status_code in (200, 401, 403, 422)
 
     @pytest.mark.asyncio
-    async def test_invalid_dsn_handled(self, admin_client) -> None:
+    async def test_invalid_dsn_handled(self, admin_client: AsyncClient) -> None:
         """DSN inválido retorna ok=False ou erro HTTP."""
         resp = await admin_client.post(
             "/admin/storage/test",
@@ -114,7 +116,7 @@ class TestAdminStoragePatch:
     """PATCH /admin/storage atualiza storage_mode em runtime."""
 
     @pytest.mark.asyncio
-    async def test_patch_storage_mode(self, admin_client) -> None:
+    async def test_patch_storage_mode(self, admin_client: AsyncClient) -> None:
         resp = await admin_client.patch(
             "/admin/storage",
             json={"storage_mode": "lite"},
@@ -123,7 +125,7 @@ class TestAdminStoragePatch:
 
     @pytest.mark.asyncio
     async def test_patch_storage_mode_nao_grava_no_event_loop(
-        self, admin_client, monkeypatch
+        self, admin_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A gravação no SQLite fica fora do event loop: o `busy_timeout` dela
         travava o loop inteiro quando outra tarefa segurava o lock."""
@@ -146,7 +148,7 @@ class TestAdminStoragePatch:
         assert loop_thread not in writers
 
     @pytest.mark.asyncio
-    async def test_patch_invalid_mode(self, admin_client) -> None:
+    async def test_patch_invalid_mode(self, admin_client: AsyncClient) -> None:
         """Modo inválido deve retornar erro ou ser aceito com validação."""
         resp = await admin_client.patch(
             "/admin/storage",
@@ -160,7 +162,9 @@ class TestStorageHealthUnit:
     """storage_health() unit test sem infra real."""
 
     @pytest.mark.asyncio
-    async def test_health_returns_dict(self, tmp_path, monkeypatch) -> None:
+    async def test_health_returns_dict(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.settings as _settings_mod
         from backend.storage.factory import storage_health
 
@@ -185,7 +189,9 @@ class TestStorageHealthUnit:
         assert len(health) >= 1
 
     @pytest.mark.asyncio
-    async def test_health_sqlite_ok_on_lite(self, tmp_path, monkeypatch) -> None:
+    async def test_health_sqlite_ok_on_lite(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.settings as _settings_mod
         from backend.storage.factory import storage_health
 
@@ -215,7 +221,7 @@ class TestStorageHealthUnit:
 class TestImageFallbackModelEndpoint:
     """GET/PATCH /admin/model/image-fallback."""
 
-    def _fresh_runtime(self, tmp_path, monkeypatch):
+    def _fresh_runtime(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import backend.workspace.runtime_settings as rt_mod
         from backend.workspace.runtime_settings import RuntimeSettings
 
@@ -225,7 +231,7 @@ class TestImageFallbackModelEndpoint:
 
     @pytest.mark.asyncio
     async def test_get_vazio_por_padrao(
-        self, admin_client, tmp_path, monkeypatch
+        self, admin_client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Sem configuração: string vazia, não erro — o comportamento
         antigo (bloquear o envio) continua sendo o default."""
@@ -237,7 +243,7 @@ class TestImageFallbackModelEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_seta_e_get_reflete(
-        self, admin_client, tmp_path, monkeypatch
+        self, admin_client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._fresh_runtime(tmp_path, monkeypatch)
         resp = await admin_client.patch(
@@ -252,7 +258,7 @@ class TestImageFallbackModelEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_string_vazia_limpa(
-        self, admin_client, tmp_path, monkeypatch
+        self, admin_client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Bad/edge: enviar string vazia limpa a config já salva, em vez de
         ser rejeitado ou ignorado silenciosamente."""
@@ -303,7 +309,9 @@ class TestPatchStorageFree:
     """Storage configurado pelo operador permanece disponível no Free."""
 
     @staticmethod
-    def _write_license(tmp_path, monkeypatch, tier: str) -> None:
+    def _write_license(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tier: str
+    ) -> None:
         import json
         from datetime import UTC, datetime
 
@@ -334,7 +342,9 @@ class TestPatchStorageFree:
         return request
 
     @pytest.mark.asyncio
-    async def test_free_pode_ligar_modo_completo(self, tmp_path, monkeypatch) -> None:
+    async def test_free_pode_ligar_modo_completo(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers.admin import update_storage_config
         from backend.settings import settings as _s
         from backend.workspace.runtime_settings import runtime_settings
@@ -352,7 +362,7 @@ class TestPatchStorageFree:
 
     @pytest.mark.asyncio
     async def test_free_pode_configurar_conexoes_do_modo_completo(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """As URLs e credenciais são do operador, sem gate de assinatura."""
         import backend.api.handlers.admin as admin_handlers
@@ -387,7 +397,9 @@ class TestPatchStorageFree:
         assert "QDRANT_API_KEY=operator-key" in env_file.read_text()
 
     @pytest.mark.asyncio
-    async def test_free_pode_voltar_pra_lite(self, tmp_path, monkeypatch) -> None:
+    async def test_free_pode_voltar_pra_lite(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """`lite` nunca é bloqueado — gatear a volta prenderia um usuário que
         perdeu a licença no modo que ele não pode mais usar."""
         from backend.api.handlers.admin import update_storage_config
@@ -403,7 +415,9 @@ class TestPatchStorageFree:
         assert _s.storage_mode == "lite"
 
     @pytest.mark.asyncio
-    async def test_pro_liga_modo_completo(self, tmp_path, monkeypatch) -> None:
+    async def test_pro_liga_modo_completo(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers.admin import update_storage_config
         from backend.settings import settings as _s
         from backend.workspace.runtime_settings import runtime_settings

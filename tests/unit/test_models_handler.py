@@ -55,7 +55,9 @@ class TestModelsProviders:
 
 
 @pytest.mark.asyncio
-async def test_ollama_runtime_status_reports_missing_runtime(monkeypatch) -> None:
+async def test_ollama_runtime_status_reports_missing_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """O wizard precisa distinguir Ollama ausente de um servidor parado."""
     from backend.api.handlers import provider_routing
 
@@ -75,7 +77,9 @@ async def test_ollama_runtime_status_reports_missing_runtime(monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
-async def test_ollama_runtime_status_reports_active_install(monkeypatch) -> None:
+async def test_ollama_runtime_status_reports_active_install(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Uma instalação em andamento não deve aparecer como runtime ausente."""
     from backend.api.handlers import provider_routing
 

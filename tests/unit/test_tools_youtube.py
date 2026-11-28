@@ -96,7 +96,9 @@ class TestGetTranscript:
         result = json.loads(await get_transcript(url="https://example.com/x"))
         assert "error" in result
 
-    async def test_com_captions_publicas_usa_o_caminho_leve(self, monkeypatch) -> None:
+    async def test_com_captions_publicas_usa_o_caminho_leve(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Caminho feliz: legendas existem — nunca baixa áudio nenhum."""
         import backend.tools.youtube as mod
 
@@ -125,7 +127,7 @@ class TestGetTranscript:
         assert chamou_audio["sim"] is False
 
     async def test_sem_captions_cai_pro_fallback_de_audio_sem_baixar_video(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: vídeo sem legendas (exceção da lib) — cai pro
         fallback de áudio, chamando transcribe_audio (LLM), não algum
@@ -156,7 +158,9 @@ class TestGetTranscript:
         assert args[0][0] == b"audio-bytes"
         assert args[0][2] == "audio/webm"
 
-    async def test_falha_nos_dois_caminhos_vira_erro_tipado(self, monkeypatch) -> None:
+    async def test_falha_nos_dois_caminhos_vira_erro_tipado(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: sem legendas E sem conseguir baixar áudio (ex.: vídeo
         indisponível/geobloqueado) — erro legível, nunca traceback cru."""
         import backend.tools.youtube as mod
@@ -207,7 +211,7 @@ class TestYoutubeFrameAt:
         assert "error" in result
 
     async def test_baixa_so_um_trecho_curto_e_extrai_o_frame(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Prova que o fluxo é: baixar CLIPE curto (nunca o vídeo inteiro)
         → extrair frame do clipe → persistir → devolver url servível."""
@@ -257,7 +261,7 @@ class TestYoutubeFrameAt:
         assert not clip_path.exists()
 
     async def test_aceita_url_de_outra_plataforma_suportada_pelo_ytdlp(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """`video_id` (regex do YouTube) nunca deveria ser um requisito pra
         extrair frame — `_download_clip_sync` já recebe a `url` original e
@@ -297,7 +301,7 @@ class TestYoutubeFrameAt:
         assert "error" not in result
 
     async def test_falha_no_download_do_clipe_vira_erro_tipado(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: vídeo indisponível/geobloqueado — erro legível, nunca
         traceback cru."""

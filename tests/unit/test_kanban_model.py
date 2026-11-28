@@ -18,11 +18,13 @@ E um invariante do Vectora que o Hermes também tem: delegação síncrona
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 
 @pytest.fixture
-async def db(tmp_path, monkeypatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Banco SQLite isolado com o schema real aplicado."""
     import aiosqlite
 
@@ -665,7 +667,7 @@ class TestEventoSSE:
 
     @pytest.mark.asyncio
     async def test_set_status_emite_evento_com_task_id_e_status(
-        self, db, monkeypatch
+        self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers import webhooks
         from backend.scheduling.kanban import set_status
@@ -687,7 +689,7 @@ class TestEventoSSE:
 
     @pytest.mark.asyncio
     async def test_block_task_emite_status_e_block_kind_reason(
-        self, db, monkeypatch
+        self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers import webhooks
         from backend.scheduling.kanban import block_task
@@ -714,7 +716,9 @@ class TestEventoSSE:
         }
 
     @pytest.mark.asyncio
-    async def test_evento_leva_o_board_id_real_da_task(self, db, monkeypatch) -> None:
+    async def test_evento_leva_o_board_id_real_da_task(
+        self, db, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Um board reconciliando por SSE precisa saber
         se o evento é dele; sem `board_id` no payload, cairia sempre no
         fallback de refetch completo (perde o ponto de usar SSE)."""
@@ -738,7 +742,7 @@ class TestEventoSSE:
 
     @pytest.mark.asyncio
     async def test_unblock_task_emite_status_ready_sem_block_kind(
-        self, db, monkeypatch
+        self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers import webhooks
         from backend.scheduling.kanban import block_task, unblock_task
@@ -761,7 +765,7 @@ class TestEventoSSE:
 
     @pytest.mark.asyncio
     async def test_falha_ao_emitir_evento_nao_impede_a_transicao_de_status(
-        self, db, monkeypatch
+        self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: a camada de notificação é acessória (CLAUDE.md
         regra 11 — tools/funções defensivas). Se `_emit_sse_event` explodir

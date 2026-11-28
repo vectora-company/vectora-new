@@ -157,7 +157,9 @@ class TestCadeiaDeTranscricao:
     """`transcribe_audio` escolhe o provider pela chave configurada."""
 
     @pytest.mark.asyncio
-    async def test_sem_openai_e_sem_google_usa_openrouter(self, monkeypatch) -> None:
+    async def test_sem_openai_e_sem_google_usa_openrouter(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.llm import transcription
         from backend.settings import settings as _s
 
@@ -189,7 +191,9 @@ class TestCadeiaDeTranscricao:
         assert texto == "transcrito via openrouter"
 
     @pytest.mark.asyncio
-    async def test_sem_nenhuma_chave_continua_com_erro_claro(self, monkeypatch) -> None:
+    async def test_sem_nenhuma_chave_continua_com_erro_claro(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: sem nenhum provider de STT configurado, o erro
         identifica que falta chave, independente de qual provider seria
         usado."""
@@ -215,7 +219,7 @@ class TestCadeiaDeTranscricao:
 
     @pytest.mark.asyncio
     async def test_openrouter_sem_modelo_de_stt_nao_entra_na_cadeia(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: key configurada mas sem modelo de STT escolhido — a
         capacidade não está disponível, e o erro tem que dizer isso."""

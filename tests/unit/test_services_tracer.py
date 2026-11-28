@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from pathlib import Path
 
 import pytest
 
@@ -22,7 +23,7 @@ from backend.persistence.tracer import VectoraTracer, tracer
 
 
 @pytest.fixture
-async def tr(tmp_path):
+async def tr(tmp_path: Path):
     """Tracer isolado com banco temporário."""
     return VectoraTracer(db_path=tmp_path / "test_traces.db")
 
@@ -131,7 +132,7 @@ class TestRecordSync:
         spans = await tr.get_session(77)
         assert len(spans) >= 1
 
-    def test_record_sync_doesnt_raise_on_bad_path(self, tmp_path) -> None:
+    def test_record_sync_doesnt_raise_on_bad_path(self, tmp_path: Path) -> None:
         """record_sync deve ser silencioso em caso de erro."""
         t = VectoraTracer(db_path="/invalid/path/that/cannot/be/created/traces.db")
         # Não deve lançar exceção
@@ -171,7 +172,7 @@ class TestQueryMethods:
         assert spans == []
 
     @pytest.mark.asyncio
-    async def test_get_recent_on_missing_db_returns_empty(self, tmp_path) -> None:
+    async def test_get_recent_on_missing_db_returns_empty(self, tmp_path: Path) -> None:
         t = VectoraTracer(db_path=tmp_path / "missing.db")
         # arquivo não existe ainda
         spans = await t.get_recent(n=10)
@@ -208,7 +209,7 @@ class TestClearMethods:
         assert removed == 0
 
     @pytest.mark.asyncio
-    async def test_clear_all_on_missing_db_returns_zero(self, tmp_path) -> None:
+    async def test_clear_all_on_missing_db_returns_zero(self, tmp_path: Path) -> None:
         t = VectoraTracer(db_path=tmp_path / "missing.db")
         removed = await t.clear_all()
         assert removed == 0
@@ -226,7 +227,7 @@ class TestSingleton:
         assert tracer is t2
 
     @pytest.mark.asyncio
-    async def test_singleton_can_record_and_query(self, tmp_path) -> None:
+    async def test_singleton_can_record_and_query(self, tmp_path: Path) -> None:
         """O singleton funciona com DB temporário."""
         t = VectoraTracer(db_path=tmp_path / "singleton_test.db")
         async with t.span("singleton_node", "test", session_id=1212):

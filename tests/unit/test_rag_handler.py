@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -77,7 +78,7 @@ def _bypass_workspace_ownership():
 
 class TestRagSettingsEndpoints:
     @pytest.mark.asyncio
-    async def test_get_returns_runtime_settings(self, tmp_path) -> None:
+    async def test_get_returns_runtime_settings(self, tmp_path: Path) -> None:
         from backend.api.handlers import rag as handler
         from backend.workspace.runtime_settings import RuntimeSettings
 
@@ -95,7 +96,7 @@ class TestRagSettingsEndpoints:
 
     @pytest.mark.asyncio
     @pytest.mark.asyncio
-    async def test_patch_updates_and_returns(self, tmp_path) -> None:
+    async def test_patch_updates_and_returns(self, tmp_path: Path) -> None:
         from backend.api.handlers import rag as handler
         from backend.api.handlers.rag import RagSettingsBody
         from backend.workspace.runtime_settings import RuntimeSettings
@@ -307,7 +308,7 @@ class TestRagCollectionsRealLanceDB:
     pytestmark = pytest.mark.real_lancedb
 
     @pytest.fixture(autouse=True)
-    def _reset_vector_store_singleton(self, monkeypatch):
+    def _reset_vector_store_singleton(self, monkeypatch: pytest.MonkeyPatch):
         """`get_vector_store_backend()` cacheia um singleton por processo —
         sem resetar, o 2º teste desta classe reusaria o `LanceDBBackend` do
         1º, apontando pro `tmp_path` errado.
@@ -329,7 +330,7 @@ class TestRagCollectionsRealLanceDB:
         factory._reset_singletons()
 
     @pytest.mark.asyncio
-    async def test_list_collections_shape_with_real_table(self, tmp_path) -> None:
+    async def test_list_collections_shape_with_real_table(self, tmp_path: Path) -> None:
         import lancedb
         import pyarrow as pa
 
@@ -360,7 +361,9 @@ class TestRagCollectionsRealLanceDB:
         assert isinstance(collection["count"], int)
 
     @pytest.mark.asyncio
-    async def test_workspace_summary_shape_with_real_table(self, tmp_path) -> None:
+    async def test_workspace_summary_shape_with_real_table(
+        self, tmp_path: Path
+    ) -> None:
         import lancedb
         import pyarrow as pa
 

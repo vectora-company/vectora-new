@@ -21,7 +21,7 @@ from backend.llm.fallback_chat_client import load_chat_client
 
 class TestGeminiSafetySettings:
     def test_gemini_usa_client_nativo_com_safety_settings_permissivos(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """``load_chat_client("google_genai:...")`` produz ``GoogleChatClient``
         — o comportamento em si (``safetySettings`` com ``BLOCK_NONE`` em todas
@@ -34,7 +34,9 @@ class TestGeminiSafetySettings:
 
         assert isinstance(modelo, GoogleChatClient)
 
-    def test_provider_sem_suporte_nao_recebe_safety_settings(self, monkeypatch) -> None:
+    def test_provider_sem_suporte_nao_recebe_safety_settings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: o client nativo do OpenRouter nem aceita
         ``safety_settings`` — diferentemente do SDK do Google."""
         from backend.llm.openrouter.chat_client import OpenRouterChatClient

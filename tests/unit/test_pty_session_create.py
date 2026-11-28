@@ -6,6 +6,7 @@ do usuário compartilha a MESMA política jailada (bwrap) que `terminal`/
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -21,7 +22,7 @@ class _FakeSpawnedProc:
 
 
 @pytest.fixture(autouse=True)
-def _fake_backend(monkeypatch):
+def _fake_backend(monkeypatch: pytest.MonkeyPatch):
     """Substitui `_Backend.spawn` por um fake que captura o argv/cwd/env
     recebidos, sem depender de pywinpty/ptyprocess reais instalados."""
     spawn_mock = MagicMock(return_value=_FakeSpawnedProc())
@@ -32,7 +33,9 @@ def _fake_backend(monkeypatch):
     return spawn_mock
 
 
-def test_sem_policy_spawna_shell_padrao_sem_bwrap(_fake_backend, tmp_path) -> None:
+def test_sem_policy_spawna_shell_padrao_sem_bwrap(
+    _fake_backend, tmp_path: Path
+) -> None:
     session = PtySession.create(
         terminal_id="t1", workspace_id="ws-1", thread_id="th-1", cwd=str(tmp_path)
     )
@@ -42,7 +45,9 @@ def test_sem_policy_spawna_shell_padrao_sem_bwrap(_fake_backend, tmp_path) -> No
     assert isinstance(session, PtySession)
 
 
-def test_shell_configurado_inexistente_usa_shell_posix_disponivel(monkeypatch) -> None:
+def test_shell_configurado_inexistente_usa_shell_posix_disponivel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     available_shells = {"bash": None, "sh": "/bin/sh"}
     monkeypatch.setattr(pty_mod, "_IS_WINDOWS", False)
     monkeypatch.setenv("SHELL", "/missing/configured-shell")
@@ -55,7 +60,9 @@ def test_shell_configurado_inexistente_usa_shell_posix_disponivel(monkeypatch) -
     assert pty_mod._default_shell() == ["/bin/sh"]
 
 
-def test_policy_desabilitada_nao_envolve_com_bwrap(_fake_backend, tmp_path) -> None:
+def test_policy_desabilitada_nao_envolve_com_bwrap(
+    _fake_backend, tmp_path: Path
+) -> None:
     PtySession.create(
         terminal_id="t1",
         workspace_id="ws-1",
@@ -69,7 +76,7 @@ def test_policy_desabilitada_nao_envolve_com_bwrap(_fake_backend, tmp_path) -> N
 
 
 def test_policy_habilitada_backend_local_com_bwrap_disponivel_envolve_argv(
-    _fake_backend, tmp_path, monkeypatch
+    _fake_backend, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import shutil
 
@@ -93,7 +100,7 @@ def test_policy_habilitada_backend_local_com_bwrap_disponivel_envolve_argv(
 
 
 def test_policy_habilitada_sem_bwrap_no_sistema_falha_com_mensagem_clara(
-    _fake_backend, tmp_path, monkeypatch
+    _fake_backend, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import shutil
 
@@ -112,7 +119,7 @@ def test_policy_habilitada_sem_bwrap_no_sistema_falha_com_mensagem_clara(
 
 
 def test_policy_habilitada_backend_nao_local_falha_com_mensagem_clara(
-    _fake_backend, tmp_path
+    _fake_backend, tmp_path: Path
 ) -> None:
     with pytest.raises(RuntimeError, match="docker"):
         PtySession.create(

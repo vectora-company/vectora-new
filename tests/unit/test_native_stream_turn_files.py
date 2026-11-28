@@ -14,7 +14,9 @@ _CHANGE = TurnFileChange(path="a.py", status="M", additions=1, deletions=0, hunk
 
 
 @pytest.mark.asyncio
-async def test_slow_scan_is_abandoned_at_deadline(monkeypatch) -> None:
+async def test_slow_scan_is_abandoned_at_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(native_stream, "_TURN_FILES_TIMEOUT_SECONDS", 0.05)
 
     def slow_scan(_snapshot):
@@ -35,7 +37,9 @@ async def test_fast_scan_returns_changes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_file_persistence_runs_in_background(monkeypatch) -> None:
+async def test_file_persistence_runs_in_background(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     called = asyncio.Event()
 
     class _Store:
@@ -54,7 +58,7 @@ async def test_file_persistence_runs_in_background(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_finalize_and_attach_returns_list_and_schedules_persistence(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scheduled: list[tuple] = []
     monkeypatch.setattr(
@@ -77,7 +81,7 @@ async def test_finalize_and_attach_returns_list_and_schedules_persistence(
 
 @pytest.mark.asyncio
 async def test_finalize_and_attach_without_changes_does_not_persist(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scheduled: list[tuple] = []
     monkeypatch.setattr(

@@ -9,11 +9,13 @@ definido (`None`), a tarefa nunca é barrada.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 
 @pytest.fixture
-async def db(tmp_path, monkeypatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import aiosqlite
 
     from backend.scheduling import budget
@@ -192,7 +194,9 @@ class TestCorteAutomatico:
         assert await check_budget("t1") is True
 
     @pytest.mark.asyncio
-    async def test_task_sem_budget_herda_do_perfil(self, db, monkeypatch) -> None:
+    async def test_task_sem_budget_herda_do_perfil(
+        self, db, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Task sem budget próprio, mas com agent_profile_id, herda o teto
         do perfil — nunca sobrescreve um budget que a task já definiu
         explicitamente (ver teste seguinte)."""
@@ -215,7 +219,7 @@ class TestCorteAutomatico:
 
     @pytest.mark.asyncio
     async def test_budget_proprio_da_task_nao_e_sobrescrito_pelo_perfil(
-        self, db, monkeypatch
+        self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from types import SimpleNamespace
 
@@ -236,7 +240,7 @@ class TestCorteAutomatico:
 
     @pytest.mark.asyncio
     async def test_falha_ao_carregar_perfil_degrada_para_sem_limite(
-        self, db, monkeypatch
+        self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: perfil apagado ou DB indisponível não pode impedir a
         run de rodar — degrada pro comportamento padrão (sem limite)."""

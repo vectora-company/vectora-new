@@ -17,7 +17,7 @@ from backend.scheduling.mq import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_singleton(_no_nats_sidecar):
+def _reset_singleton(_no_nats_sidecar: None):
     reset_mq()
     yield
     reset_mq()

@@ -220,7 +220,7 @@ async def test_consolidate_memory_no_threads_skips_llm() -> None:
 
 @pytest.mark.asyncio
 async def test_consolidate_memory_skips_without_provider_but_runs_with_one(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Job periódico, sem usuário no loop — nunca pode chamar o LLM sem
     nenhum provider configurado (ex.: instalação recém-extraída ainda sem

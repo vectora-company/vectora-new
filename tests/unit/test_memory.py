@@ -218,7 +218,7 @@ class TestGetStore:
 
 
 @pytest.fixture
-def store(monkeypatch):
+def store(monkeypatch: pytest.MonkeyPatch):
     """Executa a operação store."""
     real_store = NativeInMemoryStore()
     monkeypatch.setattr("backend.tools.memory._get_store", lambda ctx: real_store)
@@ -416,7 +416,7 @@ class TestListFactContents:
         assert await list_fact_contents("u1") == ["Fato vigente"]
 
     async def test_funciona_fora_do_contexto_de_execucao_do_grafo(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Regressão: `_get_store()` levanta RuntimeError fora de uma
         execução do motor nativo em andamento — exatamente o cenário real

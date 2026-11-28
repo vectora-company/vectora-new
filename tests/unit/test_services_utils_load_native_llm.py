@@ -23,7 +23,7 @@ from backend.workspace.runtime_settings import runtime_settings
 
 
 @pytest.fixture(autouse=True)
-def _isolated_runtime_settings(monkeypatch) -> None:
+def _isolated_runtime_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     """Nunca deixa este teste ler/escrever o `checkpoints.db` real do
     usuário — cada teste começa com provider/modelo genuinamente vazios."""
     monkeypatch.setattr(runtime_settings, "_data", {})
@@ -67,7 +67,7 @@ def test_provider_e_modelo_configurados_resolve_normalmente() -> None:
     mock_load.assert_called_once_with("openai:gpt-5.2")
 
 
-def test_env_var_sobrepoe_active_model(monkeypatch) -> None:
+def test_env_var_sobrepoe_active_model(monkeypatch: pytest.MonkeyPatch) -> None:
     """`GOOGLE_MODEL` no ambiente continua tendo prioridade sobre
     `runtime_settings.active_model` — comportamento preexistente mantido."""
     runtime_settings.set_active_model("google-genai", "gemini-3.6-flash")

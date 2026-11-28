@@ -138,7 +138,7 @@ def test_count_tokens_various_samples(sample) -> None:
 @pytest.mark.parametrize(
     "n_calls", [1_000, 5_000, 10_000, 20_000], ids=lambda n: f"calls={n}"
 )
-def test_count_tokens_throughput_various_volumes(n_calls) -> None:
+def test_count_tokens_throughput_various_volumes(n_calls: int) -> None:
     """Throughput de count_tokens em volumes crescentes de chamadas."""
     sample = "O Vectora processa texto em chunks tokenizados via tiktoken."
     baseline = text_service.count_tokens(sample)
@@ -156,7 +156,7 @@ def test_count_tokens_throughput_various_volumes(n_calls) -> None:
 @pytest.mark.parametrize(
     "size", [1_000, 5_000, 20_000, 50_000], ids=lambda n: f"chars={n}"
 )
-def test_split_various_text_sizes(size) -> None:
+def test_split_various_text_sizes(size: int) -> None:
     """split() em textos de tamanhos crescentes — chunking sempre determinístico."""
     unit = "frase de teste com conteúdo variado. "
     text = (unit * ((size // len(unit)) + 1))[:size]
@@ -172,7 +172,7 @@ def test_split_various_text_sizes(size) -> None:
 @pytest.mark.parametrize(
     "batch_size", [100, 500, 1_000, 5_000], ids=lambda n: f"batch={n}"
 )
-def test_count_tokens_rapid_batch_various_sizes(batch_size) -> None:
+def test_count_tokens_rapid_batch_various_sizes(batch_size: int) -> None:
     """Lote de chamadas rápidas de count_tokens em textos distintos — sem degradação de precisão."""
     texts = [
         f"documento número {i} com algum conteúdo variável {i * 2}"

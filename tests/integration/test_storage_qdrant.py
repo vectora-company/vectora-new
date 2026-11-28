@@ -114,7 +114,7 @@ class TestQdrantBackendNative:
     cliente nativo `AsyncQdrantClient`."""
 
     @pytest.fixture
-    def backend(self, _storage_stack_ok, qdrant_url):
+    def backend(self, _storage_stack_ok: bool, qdrant_url: str):
         if not _storage_stack_ok:
             pytest.skip("Docker indisponível — Qdrant não iniciado")
 
@@ -247,7 +247,7 @@ class TestVectorStoreRoutingRealStack:
     @pytest.mark.asyncio
     @pytest.mark.storage
     async def test_storage_mode_complete_roteia_para_qdrant(
-        self, _storage_stack_ok, monkeypatch
+        self, _storage_stack_ok: bool, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         if not _storage_stack_ok:
             pytest.skip("Docker indisponível — Qdrant não iniciado")
@@ -267,7 +267,9 @@ class TestVectorStoreRoutingRealStack:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_storage_mode_lite_roteia_para_lancedb(self, monkeypatch) -> None:
+    async def test_storage_mode_lite_roteia_para_lancedb(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.storage import factory
         from backend.storage.vectorstore.lancedb_backend import LanceDBBackend
 

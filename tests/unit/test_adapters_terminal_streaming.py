@@ -21,7 +21,7 @@ from backend.services.terminal_stream import emit_terminal_line
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence) -> None:
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 

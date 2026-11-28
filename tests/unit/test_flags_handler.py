@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def _isolated_runtime_settings(tmp_path: Path, monkeypatch):
+def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Isola local_user_name de cada teste (nunca lê/escreve o ~/.vectora real)."""
     from backend.workspace import runtime_settings as rs_module
     from backend.workspace.runtime_settings import RuntimeSettings
@@ -32,7 +32,7 @@ def _isolated_runtime_settings(tmp_path: Path, monkeypatch):
 
 
 @pytest.fixture
-def client(monkeypatch, _isolated_runtime_settings):
+def client(monkeypatch: pytest.MonkeyPatch, _isolated_runtime_settings):
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
     from backend.api.server import create_app
 
@@ -43,7 +43,11 @@ def client(monkeypatch, _isolated_runtime_settings):
 class TestGetFlags:
     @pytest.mark.parametrize("operation", ["read", "write"])
     def test_preferences_storage_failure_is_503(
-        self, client, _isolated_runtime_settings, monkeypatch, operation
+        self,
+        client,
+        _isolated_runtime_settings,
+        monkeypatch: pytest.MonkeyPatch,
+        operation: str,
     ) -> None:
         def unavailable(*_args, **_kwargs):
             raise sqlite3.OperationalError("private database path")
@@ -68,14 +72,18 @@ class TestGetFlags:
         assert response.json() == {"theme": "dark"}
         assert client.get("/settings/prefs").json() == {"theme": "dark"}
 
-    def test_always_enabled_by_default(self, client, monkeypatch) -> None:
+    def test_always_enabled_by_default(
+        self, client, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Features beta agora são estáveis e habilitadas por padrão."""
         monkeypatch.delenv("VECTORA_DEV", raising=False)
         resp = client.get("/settings/flags")
         assert resp.status_code == 200
         assert resp.json()["enable_features_beta"] is True
 
-    def test_vectora_dev_does_not_affect_it(self, client, monkeypatch) -> None:
+    def test_vectora_dev_does_not_affect_it(
+        self, client, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Independente de VECTORA_DEV, agora é sempre True."""
         for value in ("1", "0", "true", ""):
             monkeypatch.setenv("VECTORA_DEV", value)

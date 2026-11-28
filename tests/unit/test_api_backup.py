@@ -54,7 +54,7 @@ async def test_maintenance_window_waits_for_active_storage_operation() -> None:
     await window
 
 
-def test_backup_inspect_exige_ponte_desktop(monkeypatch) -> None:
+def test_backup_inspect_exige_ponte_desktop(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
     monkeypatch.setenv("VECTORA_DESKTOP_BRIDGE_TOKEN", "bridge-token")
     from backend.api.server import create_app
@@ -66,7 +66,9 @@ def test_backup_inspect_exige_ponte_desktop(monkeypatch) -> None:
     assert response.status_code == 403
 
 
-def test_backup_restore_exige_confirmacao_explicita(monkeypatch) -> None:
+def test_backup_restore_exige_confirmacao_explicita(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
     monkeypatch.setenv("VECTORA_DESKTOP_BRIDGE_TOKEN", "bridge-token")
     from backend.api.server import create_app

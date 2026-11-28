@@ -296,7 +296,9 @@ async def test_stop_electron_sidecar_sem_processo_e_noop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stop_sem_processo_rastreado_loga_o_motivo(caplog) -> None:
+async def test_stop_sem_processo_rastreado_loga_o_motivo(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     caplog.set_level(logging.INFO, logger="backend.services.electron_sidecar")
 
     await electron_sidecar.stop_electron_sidecar()
@@ -306,7 +308,7 @@ async def test_stop_sem_processo_rastreado_loga_o_motivo(caplog) -> None:
 
 @pytest.mark.asyncio
 async def test_stop_com_processo_ja_morto_loga_o_code_sem_chamar_terminate(
-    caplog,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.INFO, logger="backend.services.electron_sidecar")
     fake_proc = MagicMock()
@@ -321,7 +323,9 @@ async def test_stop_com_processo_ja_morto_loga_o_code_sem_chamar_terminate(
 
 
 @pytest.mark.asyncio
-async def test_stop_com_processo_vivo_loga_sucesso_apos_terminar(caplog) -> None:
+async def test_stop_com_processo_vivo_loga_sucesso_apos_terminar(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     caplog.set_level(logging.INFO, logger="backend.services.electron_sidecar")
     fake_proc = MagicMock()
     fake_proc.pid = 4242

@@ -10,6 +10,7 @@ Cobre:
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -107,7 +108,7 @@ class TestIsPublicRoute:
 
 
 @pytest.fixture
-def _isolated_runtime_settings(tmp_path, monkeypatch):
+def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Isola _auth_enabled()/runtime_settings de cada teste (nunca toca o real)."""
     from backend.workspace import runtime_settings as rs_module
     from backend.workspace.runtime_settings import RuntimeSettings
@@ -118,38 +119,40 @@ def _isolated_runtime_settings(tmp_path, monkeypatch):
 
 
 class TestAuthEnabled:
-    def test_true_by_default(self, monkeypatch, _isolated_runtime_settings) -> None:
+    def test_true_by_default(
+        self, monkeypatch: pytest.MonkeyPatch, _isolated_runtime_settings
+    ) -> None:
         from backend.api.middleware import auth as m
 
         monkeypatch.delenv("VECTORA_AUTH_REQUIRED", raising=False)
         assert m._auth_enabled() is True
 
-    def test_false_when_set_false(self, monkeypatch) -> None:
+    def test_false_when_set_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from backend.api.middleware import auth as m
 
         monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
         assert m._auth_enabled() is False
 
-    def test_false_when_set_0(self, monkeypatch) -> None:
+    def test_false_when_set_0(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from backend.api.middleware import auth as m
 
         monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "0")
         assert m._auth_enabled() is False
 
-    def test_true_when_set_true(self, monkeypatch) -> None:
+    def test_true_when_set_true(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from backend.api.middleware import auth as m
 
         monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "true")
         assert m._auth_enabled() is True
 
-    def test_case_insensitive(self, monkeypatch) -> None:
+    def test_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from backend.api.middleware import auth as m
 
         monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "FALSE")
         assert m._auth_enabled() is False
 
     def test_sem_env_var_cai_no_runtime_settings(
-        self, monkeypatch, _isolated_runtime_settings
+        self, monkeypatch: pytest.MonkeyPatch, _isolated_runtime_settings
     ) -> None:
         """Sem VECTORA_AUTH_REQUIRED no ambiente, o valor persistido pelo
         wizard (setup-local) em app_settings é a fonte de verdade — não mais
@@ -161,7 +164,7 @@ class TestAuthEnabled:
         assert m._auth_enabled() is False
 
     def test_env_var_tem_prioridade_sobre_runtime_settings(
-        self, monkeypatch, _isolated_runtime_settings
+        self, monkeypatch: pytest.MonkeyPatch, _isolated_runtime_settings
     ) -> None:
         """Env var é override de operador (Docker/CI/testes) — ganha mesmo
         se app_settings diz o contrário."""
@@ -227,7 +230,7 @@ class TestGetVirtualLocalUser:
 
 
 @pytest.fixture
-def auth_client(tmp_path, monkeypatch):
+def auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """App com auth habilitada e banco temporário."""
     os.environ["VECTORA_AUTH_REQUIRED"] = "true"
 
@@ -334,7 +337,7 @@ class TestAuthMiddlewareIntegration:
         assert response.status_code == 401
 
     def test_tool_usage_contract_is_user_scoped_and_redacted(
-        self, auth_client, monkeypatch
+        self, auth_client, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The HTTP contract exposes only per-user counts for available tools."""
         signup = auth_client.post(
@@ -379,7 +382,7 @@ class TestAuthMiddlewareIntegration:
         )
 
     def test_tool_usage_returns_zero_for_tools_without_events(
-        self, auth_client, monkeypatch
+        self, auth_client, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         signup = auth_client.post(
             "/auth/signup",

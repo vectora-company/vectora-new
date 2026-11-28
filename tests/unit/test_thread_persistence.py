@@ -13,6 +13,7 @@ import logging
 import os
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractContextManager, ExitStack
+from pathlib import Path
 from types import ModuleType, TracebackType
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, _patch, patch
@@ -219,7 +220,7 @@ class TestGetDbConcurrency:
 
     @pytest.mark.asyncio
     async def test_concurrent_calls_share_single_connection(
-        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import asyncio
 
@@ -746,7 +747,7 @@ class TestListThreadsIncludesUpserted:
     """Threads com posse nativa e metadados de UI aparecem em ListThreads."""
 
     @pytest.fixture
-    async def session_store(self, monkeypatch, tmp_path):
+    async def session_store(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         """Provide isolated native ownership for the HTTP listing tests."""
         from backend.persistence.native.session_store import SessionStore
         from backend.storage.sqlite.pool import AsyncConnectionPool

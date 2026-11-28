@@ -80,7 +80,10 @@ def test_list_mostra_as_regras_e_a_aprovacao(
 
 
 def test_list_sem_workspace_registrado_ou_sem_regras(
-    root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch
+    root: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(workspace_module.workspace_registry, "list_all", list)
     _, out = _run(root, capsys, action="list")

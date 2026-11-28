@@ -7,6 +7,7 @@ que o loop nativo chama pra invocar uma SOUL, consumindo ``run_subagent``
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
@@ -33,7 +34,7 @@ class _HangingChatClient:
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     pool = AsyncConnectionPool(
         str(tmp_path / "subagent_delegate.db"), min_size=1, max_size=2
     )

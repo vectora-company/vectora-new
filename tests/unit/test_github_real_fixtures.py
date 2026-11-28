@@ -340,7 +340,9 @@ def test_raw_fixtures_are_valid_json(path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_truncated_real_output_is_an_error_not_a_crash(monkeypatch) -> None:
+async def test_truncated_real_output_is_an_error_not_a_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     broken = _raw("gh_run_view.json")[:200]
 
     async def fake(args, cwd=None, input_data=None, user_id=None):
@@ -354,7 +356,9 @@ async def test_truncated_real_output_is_an_error_not_a_crash(monkeypatch) -> Non
     assert response.status == "error" and response.run is None
 
 
-async def test_a_run_list_payload_is_not_accepted_as_a_run_detail(monkeypatch) -> None:
+async def test_a_run_list_payload_is_not_accepted_as_a_run_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def fake(args, cwd=None, input_data=None, user_id=None):
         return {"status": "ok", "output": _raw("gh_run_list.json")}
 

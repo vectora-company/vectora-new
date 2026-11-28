@@ -21,7 +21,9 @@ from backend.services.subprocess_sidecar_utils import (
 )
 
 
-def test_sidecar_process_options_isolates_windows_console_group(monkeypatch) -> None:
+def test_sidecar_process_options_isolates_windows_console_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "backend.services.subprocess_sidecar_utils.sys.platform", "win32"
     )
@@ -32,7 +34,9 @@ def test_sidecar_process_options_isolates_windows_console_group(monkeypatch) -> 
     assert "start_new_session" not in options
 
 
-def test_sidecar_process_options_isolates_a_posix_process_group(monkeypatch) -> None:
+def test_sidecar_process_options_isolates_a_posix_process_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "backend.services.subprocess_sidecar_utils.sys.platform", "linux"
     )

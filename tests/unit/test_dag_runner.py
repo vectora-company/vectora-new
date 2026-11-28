@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import aiosqlite
@@ -15,7 +16,7 @@ from backend.vtypes.contracts import JsonObject
 
 @pytest.mark.asyncio
 async def test_dag_dispatches_only_dependency_ready_stage_then_advances(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "dag-runner.db"
     db = await aiosqlite.connect(db_path)
@@ -76,7 +77,7 @@ async def test_dag_dispatches_only_dependency_ready_stage_then_advances(
 
 @pytest.mark.asyncio
 async def test_cancel_stops_a_claimed_stage_before_its_worker_starts(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "dag-runner-cancel.db"
     db = await aiosqlite.connect(db_path)

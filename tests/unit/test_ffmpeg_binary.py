@@ -5,12 +5,16 @@ ffmpeg/ffprobe. Mesmo padrão (e mesma ordem de prioridade) de
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 import backend.services.ffmpeg_binary as mod
 
 
 class TestResolveFfmpeg:
     def test_prioriza_bundle_congelado_sobre_path_e_resources(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Ordem: bundle congelado → PATH → resources/. Um binário
         no bundle vence mesmo com PATH e resources também tendo um."""
@@ -29,7 +33,9 @@ class TestResolveFfmpeg:
 
         assert mod.resolve_ffmpeg() == str(bundle_bin)
 
-    def test_sem_bundle_usa_path_do_sistema(self, monkeypatch, tmp_path) -> None:
+    def test_sem_bundle_usa_path_do_sistema(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setattr(mod, "_frozen_bundle_bases", list)
         monkeypatch.setattr(mod, "_resources_dir", lambda: tmp_path / "resources")
         monkeypatch.setattr(mod.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
@@ -37,7 +43,7 @@ class TestResolveFfmpeg:
         assert mod.resolve_ffmpeg() == "/usr/bin/ffmpeg"
 
     def test_sem_bundle_e_sem_path_cai_pro_vectora_resources(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         resources_dir = tmp_path / "resources"
         resources_dir.mkdir()
@@ -51,7 +57,7 @@ class TestResolveFfmpeg:
         assert mod.resolve_ffprobe() == str(ffprobe_bin)
 
     def test_nada_encontrado_em_lugar_nenhum_devolve_none_sem_lancar(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Erro/borda: sem bundle, sem PATH e sem `resources/` —
         devolve `None` sem lançar. O chamador (`media_native.py`) degrada

@@ -98,7 +98,7 @@ class TestOptIn:
 
 class TestAcoes:
     @pytest.fixture(autouse=True)
-    def _habilitado(self, monkeypatch) -> None:
+    def _habilitado(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(cu, "_computer_use_enabled", lambda _workspace_id: True)
         info = WindowInfo("window-1", "Fixture", 0, 0, 1200, 800, True)
         selection = SimpleNamespace(

@@ -3,6 +3,7 @@ DENTRO do jail (exec/read_file/write_file)."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,7 +12,9 @@ from backend.sandbox import worker
 
 
 @pytest.mark.asyncio
-async def test_exec_returns_stdout_stderr_exit_code(monkeypatch) -> None:
+async def test_exec_returns_stdout_stderr_exit_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(b"ok\n", b""))
     proc.returncode = 0
@@ -27,7 +30,9 @@ async def test_exec_returns_stdout_stderr_exit_code(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_exec_nonzero_exit_code_propagated(monkeypatch) -> None:
+async def test_exec_nonzero_exit_code_propagated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(b"", b"boom\n"))
     proc.returncode = 2
@@ -42,7 +47,9 @@ async def test_exec_nonzero_exit_code_propagated(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_exec_command_not_found_returns_error_not_exception(monkeypatch) -> None:
+async def test_exec_command_not_found_returns_error_not_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def _raise(*_args, **_kwargs):
         raise FileNotFoundError("nope")
 
@@ -55,7 +62,7 @@ async def test_exec_command_not_found_returns_error_not_exception(monkeypatch) -
 
 
 @pytest.mark.asyncio
-async def test_write_then_read_file_roundtrip(tmp_path) -> None:
+async def test_write_then_read_file_roundtrip(tmp_path: Path) -> None:
     target = tmp_path / "f.txt"
 
     write_resp = await worker.handle_request(
@@ -70,7 +77,7 @@ async def test_write_then_read_file_roundtrip(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_read_file_missing_returns_error_not_exception(tmp_path) -> None:
+async def test_read_file_missing_returns_error_not_exception(tmp_path: Path) -> None:
     resp = await worker.handle_request(
         {"op": "read_file", "id": 6, "path": str(tmp_path / "missing.txt")}
     )
@@ -94,7 +101,7 @@ class _StubReader:
         return b""
 
 
-def _stub_event_loop(monkeypatch) -> None:
+def _stub_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     loop_mock = MagicMock()
     loop_mock.connect_read_pipe = AsyncMock(return_value=None)
     monkeypatch.setattr(worker.asyncio, "get_event_loop", lambda: loop_mock)
@@ -105,7 +112,9 @@ def _stub_event_loop(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_main_aplica_rlimits_antes_do_loop_le_env_lockdown(monkeypatch) -> None:
+async def test_main_aplica_rlimits_antes_do_loop_le_env_lockdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # 4.2 — main() lê VECTORA_SANDBOX_LOCKDOWN (setado via --setenv pelo
     # bwrap conforme policy.lockdown) e aplica o perfil de rlimits certo
     # antes de entrar no loop RPC.
@@ -124,7 +133,9 @@ async def test_main_aplica_rlimits_antes_do_loop_le_env_lockdown(monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_main_sem_env_lockdown_usa_perfil_normal(monkeypatch) -> None:
+async def test_main_sem_env_lockdown_usa_perfil_normal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("VECTORA_SANDBOX_LOCKDOWN", raising=False)
     monkeypatch.delenv("VECTORA_SANDBOX_MAX_FILE_MB", raising=False)
     monkeypatch.delenv("VECTORA_SANDBOX_MEMORY_MB", raising=False)
@@ -141,7 +152,7 @@ async def test_main_sem_env_lockdown_usa_perfil_normal(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_main_repassa_os_limites_de_arquivo_e_memoria_do_ambiente(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("VECTORA_SANDBOX_LOCKDOWN", raising=False)
     monkeypatch.setenv("VECTORA_SANDBOX_MAX_FILE_MB", "128")
@@ -159,7 +170,7 @@ async def test_main_repassa_os_limites_de_arquivo_e_memoria_do_ambiente(
 
 @pytest.mark.asyncio
 async def test_main_repassa_allow_tcp_ports_pro_apply_landlock(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("VECTORA_SANDBOX_WORKSPACE_DIR", str(tmp_path))
     monkeypatch.setenv("VECTORA_SANDBOX_RW_PATHS", "[]")
@@ -178,7 +189,7 @@ async def test_main_repassa_allow_tcp_ports_pro_apply_landlock(
 
 @pytest.mark.asyncio
 async def test_main_sem_allow_tcp_ports_repassa_tupla_vazia(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     # Erro/borda: ausência da env var (worker antigo/config sem a feature)
     # não pode quebrar — degrada pra tupla vazia, mesmo comportamento de
@@ -199,7 +210,9 @@ async def test_main_sem_allow_tcp_ports_repassa_tupla_vazia(
 
 
 @pytest.mark.asyncio
-async def test_exec_com_env_substitui_o_ambiente_herdado(monkeypatch) -> None:
+async def test_exec_com_env_substitui_o_ambiente_herdado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(b"", b""))
     proc.returncode = 0

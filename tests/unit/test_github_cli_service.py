@@ -230,7 +230,9 @@ async def test_run_gh_kills_process_after_timeout(
 
 
 @pytest.mark.asyncio
-async def test_run_gh_exposes_only_etag_and_rate_headers(monkeypatch) -> None:
+async def test_run_gh_exposes_only_etag_and_rate_headers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     process = _Process(
         stdout=(
             b'HTTP/2.0 200 OK\r\nETag: "etag-1"\r\n'
@@ -255,7 +257,9 @@ async def test_run_gh_exposes_only_etag_and_rate_headers(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_gh_returns_rate_limit_reset_from_http_headers(monkeypatch) -> None:
+async def test_run_gh_returns_rate_limit_reset_from_http_headers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     reset_at = 1_900_000_000
     process = _Process(
         returncode=1,
@@ -282,7 +286,9 @@ async def test_run_gh_returns_rate_limit_reset_from_http_headers(monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_github_auth_epoch_is_a_non_reversible_token_digest(monkeypatch) -> None:
+async def test_github_auth_epoch_is_a_non_reversible_token_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.rbac import auth
 
     monkeypatch.setattr(

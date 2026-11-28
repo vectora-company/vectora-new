@@ -19,7 +19,7 @@ from backend.vtypes.message import MessageRole, text_message
 
 
 def test_export_run_cli_preserves_provenance_and_rejects_invalid_recording(
-    tmp_path, capsys
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     from backend.persistence.native.agent_run import AgentRun
 
@@ -111,7 +111,9 @@ async def test_fixture_replay_preserves_tool_history_without_external_calls() ->
 
 
 @pytest.mark.parametrize("missing_side", ["baseline", "candidate"])
-def test_comparison_rejects_missing_decision_evidence_on_one_side(missing_side) -> None:
+def test_comparison_rejects_missing_decision_evidence_on_one_side(
+    missing_side: str,
+) -> None:
     recorded = Cassette(
         cassette_id="recorded",
         interactions=[
@@ -1018,7 +1020,7 @@ def test_cli_compare_reports_incomparable_cassettes_without_traceback(
 
 @pytest.mark.asyncio
 async def test_recorded_run_export_survives_store_restart_and_session_purge(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     from backend.evaluation.recording import cassette_from_run, record_interaction
     from backend.persistence.native.agent_run import AgentRun

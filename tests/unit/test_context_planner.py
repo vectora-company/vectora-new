@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -241,7 +242,9 @@ def test_memory_store_conflicts_when_expiry_or_confidence_changes() -> None:
         )
 
 
-def test_memory_store_persists_across_instances_and_keeps_idempotence(tmp_path) -> None:
+def test_memory_store_persists_across_instances_and_keeps_idempotence(
+    tmp_path: Path,
+) -> None:
     """Verifica o comportamento de memory store persists across instances and keeps idempotence."""
     path = tmp_path / "context-memory.db"
     first = MemoryStore(path)
@@ -272,7 +275,7 @@ def test_memory_store_persists_across_instances_and_keeps_idempotence(tmp_path) 
     assert second.metrics()["idempotent_writes"] == 1
 
 
-def test_memory_store_persistence_keeps_expiry_auditable(tmp_path) -> None:
+def test_memory_store_persistence_keeps_expiry_auditable(tmp_path: Path) -> None:
     """Verifica o comportamento de memory store persistence keeps expiry auditable."""
     path = tmp_path / "context-memory.db"
     store = MemoryStore(path)
@@ -296,7 +299,9 @@ def test_memory_store_persistence_keeps_expiry_auditable(tmp_path) -> None:
     assert row is not None and row["invalidated_at"]
 
 
-def test_memory_store_persistent_expiry_compares_offsets_as_instants(tmp_path) -> None:
+def test_memory_store_persistent_expiry_compares_offsets_as_instants(
+    tmp_path: Path,
+) -> None:
     """Verifica o comportamento de memory store persistent expiry compares offsets as instants."""
     path = tmp_path / "context-memory-offset.db"
     store = MemoryStore(path)
@@ -312,7 +317,9 @@ def test_memory_store_persistent_expiry_compares_offsets_as_instants(tmp_path) -
     assert MemoryStore(path).retrieve(scope_id="thread-1").records == []
 
 
-def test_memory_store_expiry_is_batched_and_rejects_invalid_batch(tmp_path) -> None:
+def test_memory_store_expiry_is_batched_and_rejects_invalid_batch(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "context-memory-batch.db"
     store = MemoryStore(path)
     for index in range(3):

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -72,7 +73,7 @@ def test_modo_local_nao_chama_provider_remoto() -> None:
 
 
 def test_readiness_local_expoe_dependencia_e_cache_sem_tocar_modelo(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     readiness = {
         "mode": "local",
@@ -91,7 +92,7 @@ def test_readiness_local_expoe_dependencia_e_cache_sem_tocar_modelo(
     assert result == readiness
 
 
-def test_readiness_probe_usa_caminho_explicito(monkeypatch) -> None:
+def test_readiness_probe_usa_caminho_explicito(monkeypatch: pytest.MonkeyPatch) -> None:
     readiness = {
         "mode": "local",
         "dependency_available": True,
@@ -117,7 +118,7 @@ async def _async_value(value):
 
 
 def test_local_transcription_readiness_distingue_runtime_de_modelo_cacheado(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.llm.transcription import local_transcription_readiness
     from backend.settings import settings
@@ -152,7 +153,7 @@ def test_local_transcription_readiness_distingue_runtime_de_modelo_cacheado(
 
 
 def test_local_transcription_probe_runs_cached_model_without_network(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import sys
     import types
@@ -198,7 +199,7 @@ def test_local_transcription_probe_runs_cached_model_without_network(
 
 
 def test_local_transcription_probe_does_not_load_or_download_missing_model(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.llm.transcription import _probe_local_transcription_sync
     from backend.settings import settings
@@ -229,7 +230,7 @@ def test_local_transcription_readiness_reports_probe_in_progress() -> None:
 
 
 def test_local_transcription_probe_reports_timeout_without_claiming_readiness(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import threading
 
@@ -266,7 +267,7 @@ def test_local_transcription_probe_reports_timeout_without_claiming_readiness(
 
 
 def test_local_transcription_readiness_fails_when_dependency_missing(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.llm.transcription import local_transcription_readiness
     from backend.settings import settings
@@ -284,7 +285,7 @@ def test_local_transcription_readiness_fails_when_dependency_missing(
 
 
 def test_probe_without_dependency_returns_diagnostic_without_loading_model(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.llm.transcription import probe_local_transcription_readiness
     from backend.settings import settings

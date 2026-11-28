@@ -16,7 +16,7 @@ from backend.tools.context import ToolContext
 
 
 @pytest.fixture
-def _no_pending(monkeypatch) -> None:
+def _no_pending(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "backend.api.handlers.threads.get_remember_pending",
         AsyncMock(return_value=False),
@@ -24,7 +24,7 @@ def _no_pending(monkeypatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _provider_configured(monkeypatch) -> None:
+def _provider_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     """Hermético: os testes de "caminho feliz" não podem depender de haver
     (ou não) uma API key real na máquina que roda a suíte — fixam um
     provider configurado por padrão. `test_gatilho_pula_sem_provider...`
@@ -35,7 +35,9 @@ def _provider_configured(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_not_a_multiple_of_n_does_not_distill(monkeypatch, _no_pending) -> None:
+async def test_not_a_multiple_of_n_does_not_distill(
+    monkeypatch: pytest.MonkeyPatch, _no_pending: None
+) -> None:
     monkeypatch.setattr(
         "backend.api.handlers.threads.increment_remember_turn_count",
         AsyncMock(return_value=REMEMBER_TRIGGER_EVERY_N_TURNS - 1),
@@ -49,7 +51,9 @@ async def test_not_a_multiple_of_n_does_not_distill(monkeypatch, _no_pending) ->
 
 
 @pytest.mark.asyncio
-async def test_pending_proposal_blocks_new_trigger(monkeypatch) -> None:
+async def test_pending_proposal_blocks_new_trigger(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "backend.api.handlers.threads.increment_remember_turn_count",
         AsyncMock(return_value=REMEMBER_TRIGGER_EVERY_N_TURNS),
@@ -68,7 +72,7 @@ async def test_pending_proposal_blocks_new_trigger(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_multiple_of_n_without_pending_distills_and_writes_proposal(
-    monkeypatch, _no_pending
+    monkeypatch: pytest.MonkeyPatch, _no_pending: None
 ) -> None:
     monkeypatch.setattr(
         "backend.api.handlers.threads.increment_remember_turn_count",
@@ -125,7 +129,7 @@ async def test_multiple_of_n_without_pending_distills_and_writes_proposal(
 
 @pytest.mark.asyncio
 async def test_nothing_reusable_does_not_mark_pending_nor_write_artifact(
-    monkeypatch, _no_pending
+    monkeypatch: pytest.MonkeyPatch, _no_pending: None
 ) -> None:
     """Erro/borda: sem nada reaproveitável no transcript, não marca pending
     nem grava artifact — resultado vazio é válido, não gera ruído."""
@@ -160,7 +164,7 @@ async def test_nothing_reusable_does_not_mark_pending_nor_write_artifact(
 
 @pytest.mark.asyncio
 async def test_empty_transcript_returns_without_distilling(
-    monkeypatch, _no_pending
+    monkeypatch: pytest.MonkeyPatch, _no_pending: None
 ) -> None:
     """Erro/borda: thread sem nenhuma mensagem ainda (transcript vazio) não
     chama distill_transcript à toa."""
@@ -182,7 +186,9 @@ async def test_empty_transcript_returns_without_distilling(
 
 
 @pytest.mark.asyncio
-async def test_fato_ja_salvo_nao_e_proposto_de_novo(monkeypatch, _no_pending) -> None:
+async def test_fato_ja_salvo_nao_e_proposto_de_novo(
+    monkeypatch: pytest.MonkeyPatch, _no_pending: None
+) -> None:
     """Regressão: um fato já aprovado/salvo em sessão anterior não pode
     voltar a ser proposto pelo Remember — sem o dedup, o mesmo fato
     reaparece a cada N turnos indefinidamente."""
@@ -241,7 +247,7 @@ async def test_fato_ja_salvo_nao_e_proposto_de_novo(monkeypatch, _no_pending) ->
 
 @pytest.mark.asyncio
 async def test_gatilho_pula_sem_provider_configurado_mas_dispara_com_um(
-    monkeypatch, _no_pending
+    monkeypatch: pytest.MonkeyPatch, _no_pending: None
 ) -> None:
     """Gatilho automático (fire-and-forget, sem usuário no loop) nunca pode
     chamar uma LLM sem nenhum provider configurado — ex.: instalação recém-
@@ -276,7 +282,7 @@ async def test_gatilho_pula_sem_provider_configurado_mas_dispara_com_um(
 
 
 @pytest.mark.asyncio
-async def test_exception_never_propagates(monkeypatch) -> None:
+async def test_exception_never_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
     """Best-effort: qualquer falha interna nunca propaga (nunca pode afetar
     o turno de chat que já terminou)."""
     monkeypatch.setattr(
@@ -288,7 +294,9 @@ async def test_exception_never_propagates(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_schedule_remember_does_not_block_caller(monkeypatch) -> None:
+async def test_schedule_remember_does_not_block_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A destilação roda em segundo plano: o agendamento volta na hora."""
     import asyncio
 
@@ -314,7 +322,9 @@ async def test_schedule_remember_does_not_block_caller(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_distillation_uses_most_recent_part_of_thread(monkeypatch) -> None:
+async def test_distillation_uses_most_recent_part_of_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import learning
 
     captured: dict[str, str] = {}
@@ -350,7 +360,7 @@ async def test_distillation_uses_most_recent_part_of_thread(monkeypatch) -> None
     ],
 )
 async def test_explicit_remember_request_brings_review_forward(
-    monkeypatch, text, expected
+    monkeypatch: pytest.MonkeyPatch, text: str, expected: bool
 ) -> None:
     from backend.services import agent_factory
     from backend.services.remember_trigger import _explicit_cue

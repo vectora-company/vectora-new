@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import sys
+
+import pytest
 
 from backend.services import log_setup
 from backend.services.log_setup import JSONFormatter, TextFormatter
@@ -55,7 +59,7 @@ def test_json_formatter_emits_safe_context_without_raw_token() -> None:
 
 
 def test_shutdown_filter_suprime_cancelled_error_so_apos_shutdown(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     filtro = log_setup._ShutdownCancellationFilter()
     record = logging.LogRecord(
@@ -73,7 +77,7 @@ def test_shutdown_filter_suprime_cancelled_error_so_apos_shutdown(
     assert filtro.filter(record) is False
 
 
-def test_shutdown_filter_preserva_excecao_real(monkeypatch) -> None:
+def test_shutdown_filter_preserva_excecao_real(monkeypatch: pytest.MonkeyPatch) -> None:
     filtro = log_setup._ShutdownCancellationFilter()
     record = logging.LogRecord(
         "uvicorn.error", logging.ERROR, __file__, 1, "failed", (), None
@@ -99,7 +103,9 @@ def test_todo_caminho_de_shutdown_marca_o_encerramento() -> None:
         ), rel
 
 
-def test_shutdown_filter_suprime_o_aviso_de_prazo_do_uvicorn(monkeypatch) -> None:
+def test_shutdown_filter_suprime_o_aviso_de_prazo_do_uvicorn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     filtro = log_setup._ShutdownCancellationFilter()
     record = logging.LogRecord(
         "uvicorn.error",

@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -28,7 +29,7 @@ from backend.vtypes.message import ContentBlock, MessageRole, VMessage, VMessage
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     pool = AsyncConnectionPool(
         str(tmp_path / "goal-sessions.db"), min_size=1, max_size=2
     )
@@ -202,7 +203,7 @@ async def test_falhas_consecutivas_do_judge_disparam_auto_pause(session_store) -
 
 @pytest.mark.asyncio
 async def test_plan_mode_respeita_flag_de_decision_model(
-    session_store, monkeypatch
+    session_store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     thread_id = "goal-decision-model-flag"
     await _new_thread(session_store, thread_id)
@@ -281,7 +282,7 @@ async def test_mesmo_gate_falhando_repetidamente_dispara_auto_pause_antes_do_tur
 
 
 async def test_gate_e_judge_sao_criterios_independentes_nunca_marca_done_sozinho(
-    session_store, tmp_path
+    session_store, tmp_path: Path
 ) -> None:
     """AND real, dois subcasos no mesmo teste: (1) gate passa mas judge
     rejeita -> não fecha; (2) judge aprova mas gate falha -> não fecha. Só

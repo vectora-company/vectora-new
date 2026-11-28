@@ -16,6 +16,7 @@ Cobre:
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -25,7 +26,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def isolate_db(tmp_path, monkeypatch):
+def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Cada teste usa um banco SQLite temporário isolado."""
     db_file = str(tmp_path / "test_auth.db")
 
@@ -623,7 +624,9 @@ class TestEnvOverridesLocalUser:
     em vez de fazer UPDATE/SELECT sem efeito."""
 
     @pytest.fixture(autouse=True)
-    def _isolated_runtime_settings(self, tmp_path, monkeypatch):
+    def _isolated_runtime_settings(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         from backend.workspace import runtime_settings as rs_mod
 
         fresh = rs_mod.RuntimeSettings(path=tmp_path / "runtime.db")

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import threading
 import time
@@ -67,7 +69,7 @@ async def test_maintenance_rejeita_retencao_invalida(tmp_path: Path) -> None:
 
 
 async def test_maintenance_cancellation_stops_artifact_worker(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Verifica o comportamento de maintenance cancellation stops artifact worker."""
     import backend.services.storage_maintenance as maintenance_module

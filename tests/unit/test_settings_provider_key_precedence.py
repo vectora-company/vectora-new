@@ -6,6 +6,7 @@ esquecido no filesystem sobrescreve tudo."""
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -26,7 +27,7 @@ class TestProviderApiKeyEnvRegistry:
 
 
 @pytest.fixture
-def _isolated_env_hierarchy(tmp_path, monkeypatch):
+def _isolated_env_hierarchy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Isola `_load_environment_hierarchy`: home do usuário e cwd apontam
     pra diretórios temporários, sem tocar no `.env` real do repo."""
     import backend.settings as settings_mod
@@ -63,7 +64,7 @@ class TestTavilyKeyPrecedence:
         assert os.environ["NINE_ROUTER_API_KEY"] == "user-nine-key"
 
     def test_nine_router_model_restored_from_runtime_settings(
-        self, _isolated_env_hierarchy, monkeypatch
+        self, _isolated_env_hierarchy, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import backend.settings as settings_mod
         from backend.workspace.runtime_settings import runtime_settings

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -24,7 +25,7 @@ async def test_secret_key_listing_requires_authentication() -> None:
 
 
 async def test_secret_key_listing_returns_only_names_for_current_user(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.api.handlers import auth
 
@@ -39,7 +40,9 @@ async def test_secret_key_listing_returns_only_names_for_current_user(
     provider.list_keys.assert_awaited_once_with("user-1")
 
 
-async def test_secret_key_listing_reports_locked_vault(monkeypatch) -> None:
+async def test_secret_key_listing_reports_locked_vault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import auth
 
     provider = SimpleNamespace(
@@ -55,7 +58,7 @@ async def test_secret_key_listing_reports_locked_vault(monkeypatch) -> None:
 
 
 async def test_internal_provider_does_not_list_keys_when_vault_is_locked(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.secrets import internal
 
@@ -69,7 +72,7 @@ async def test_internal_provider_does_not_list_keys_when_vault_is_locked(
 
 
 async def test_secret_key_listing_isolated_between_real_internal_vaults(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.api.handlers import auth
     from backend.secrets import internal

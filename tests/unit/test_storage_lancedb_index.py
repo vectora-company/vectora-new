@@ -12,6 +12,7 @@ consolidado para usar este helper corrigido).
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -125,7 +126,9 @@ class TestCreateIvfIndexRealTable:
 
     pytestmark = pytest.mark.real_lancedb
 
-    async def test_cria_indice_ivf_pq_de_verdade_em_tabela_real(self, tmp_path) -> None:
+    async def test_cria_indice_ivf_pq_de_verdade_em_tabela_real(
+        self, tmp_path: Path
+    ) -> None:
         import lancedb
         import pyarrow as pa
 

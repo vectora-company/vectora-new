@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -258,7 +259,7 @@ async def test_close_route_thread_scope_rejects_terminal_from_another_thread() -
 @pytest.mark.parametrize("workspace_case", ["existing", "newly-created"])
 async def test_terminal_websocket_creates_interactive_pty_for_trusted_local_workspace(
     workspace_case: str,
-    tmp_path,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from pathlib import Path
@@ -314,7 +315,7 @@ async def _async_none(_token: str) -> None:
 
 @pytest.mark.asyncio
 async def test_terminal_websocket_returns_pty_creation_error_to_client(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     workspace = SimpleNamespace(
         id="workspace-1",

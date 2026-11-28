@@ -24,12 +24,13 @@ Verifica:
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
 
 @pytest.fixture
-def gate_client(monkeypatch):
+def gate_client(monkeypatch: pytest.MonkeyPatch):
     """App com auth habilitada; `_extract_user` lê `X-Test-User-*` em vez
     de decodificar JWT — foca o teste no gate de ownership, não no
     subsistema de auth (já coberto em test_api_middleware_auth.py)."""
@@ -69,7 +70,12 @@ def _headers(user_id: str, role: str = "member") -> dict[str, str]:
     return {"X-Test-User-Id": user_id, "X-Test-User-Role": role}
 
 
-def _register_workspace(monkeypatch, workspace_id: str, owner_id: str | None, tmp_path):
+def _register_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+    workspace_id: str,
+    owner_id: str | None,
+    tmp_path: Path,
+):
     from backend.vtypes import Workspace
     from backend.workspace import workspace as ws_mod
 
@@ -92,7 +98,9 @@ def _register_workspace(monkeypatch, workspace_id: str, owner_id: str | None, tm
 
 
 class TestWorkspaceOwnershipGate:
-    def test_dono_acessa_normalmente(self, gate_client, monkeypatch, tmp_path) -> None:
+    def test_dono_acessa_normalmente(
+        self, gate_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         _register_workspace(monkeypatch, "ws-owned", "owner-1", tmp_path)
 
         r = gate_client.get("/workspaces/ws-owned/tree", headers=_headers("owner-1"))
@@ -101,7 +109,7 @@ class TestWorkspaceOwnershipGate:
         assert "entries" in r.json()
 
     def test_outro_usuario_recebe_403_sem_handler_rodar(
-        self, gate_client, monkeypatch, tmp_path
+        self, gate_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         _register_workspace(monkeypatch, "ws-alheio", "owner-2", tmp_path)
 
@@ -113,7 +121,7 @@ class TestWorkspaceOwnershipGate:
         assert "entries" not in r.json()
 
     def test_workspace_sem_owner_id_continua_livre(
-        self, gate_client, monkeypatch, tmp_path
+        self, gate_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Regressão: workspace legado/desktop (sem owner_id) não pode
         passar a exigir dono depois desta migração — mesmo comportamento
@@ -127,7 +135,7 @@ class TestWorkspaceOwnershipGate:
         assert r.status_code == 200
 
     def test_workspace_inexistente_mantem_404_do_handler(
-        self, gate_client, monkeypatch
+        self, gate_client, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A dependency só barra 403 de dono errado — 404 de workspace
         inexistente continua sendo decisão de cada handler (aqui,
@@ -143,7 +151,7 @@ class TestWorkspaceOwnershipGate:
         assert r.status_code == 404
 
     def test_admin_acessa_qualquer_workspace(
-        self, gate_client, monkeypatch, tmp_path
+        self, gate_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """root/admin sempre têm acesso, mesmo sem ser dono — mesmo
         comportamento de `can_access_workspace`/`_is_privileged` já

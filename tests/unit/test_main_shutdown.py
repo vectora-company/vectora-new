@@ -267,14 +267,16 @@ def test_tray_exposes_icon_via_icon_ref() -> None:
 class TestShouldInstallTerminalSignals:
     """Os modos desktop e web processam sinais mesmo sem stdin interativo."""
 
-    def test_terminal_interativo_puro_instala(self, monkeypatch) -> None:
+    def test_terminal_interativo_puro_instala(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.main import _should_install_terminal_signals
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
         assert _should_install_terminal_signals({}) is True
 
     def test_backend_primario_dev_instala_mesmo_com_desktop_setado(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Caso central desta correção: o próprio backend se autoelegeu
         # primário e subiu o Electron — sem handler, Ctrl+C/fechar o
@@ -286,7 +288,9 @@ class TestShouldInstallTerminalSignals:
         env = {"VECTORA_DESKTOP": "1", "VECTORA_SPAWN_ELECTRON": "1"}
         assert _should_install_terminal_signals(env) is True
 
-    def test_backend_primario_dev_instala_mesmo_sem_tty(self, monkeypatch) -> None:
+    def test_backend_primario_dev_instala_mesmo_sem_tty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Regressão ao vivo: o gate antigo caía em `sys.stdin.isatty()` mesmo
         # nesse caso — se `uv run`/o shell pai entregasse stdin como não-tty,
         # o handler nunca era instalado e Ctrl+C não fechava nada, só o
@@ -299,7 +303,9 @@ class TestShouldInstallTerminalSignals:
         env = {"VECTORA_DESKTOP": "1", "VECTORA_SPAWN_ELECTRON": "1"}
         assert _should_install_terminal_signals(env) is True
 
-    def test_producao_com_electron_dono_instala_handlers(self, monkeypatch) -> None:
+    def test_producao_com_electron_dono_instala_handlers(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # O backend também recebe SIGTERM do Electron e SIGINT do terminal;
         # ambos devem usar o caminho gracioso para fechar lifespan e sidecars.
         from backend.main import _should_install_terminal_signals
@@ -308,13 +314,15 @@ class TestShouldInstallTerminalSignals:
         env = {"VECTORA_DESKTOP": "1"}
         assert _should_install_terminal_signals(env) is True
 
-    def test_vps_docker_sem_tty_nao_instala(self, monkeypatch) -> None:
+    def test_vps_docker_sem_tty_nao_instala(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.main import _should_install_terminal_signals
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         assert _should_install_terminal_signals({}) is False
 
-    def test_web_instala_mesmo_sem_tty(self, monkeypatch) -> None:
+    def test_web_instala_mesmo_sem_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The web owner must receive Ctrl+C when launched by a VPS runner."""
         from backend.main import _should_install_terminal_signals
 

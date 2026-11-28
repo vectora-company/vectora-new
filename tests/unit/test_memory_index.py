@@ -48,7 +48,9 @@ def _make_skill(name: str = "godot-helper") -> Skill:
 class TestSearchUnifiedMemoryHappyPath:
     """Query que bate nos três tipos retorna os três simultaneamente."""
 
-    async def test_returns_fact_skill_and_bucket(self, store, monkeypatch) -> None:
+    async def test_returns_fact_skill_and_bucket(
+        self, store, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         await store.aput(
             ("user", "user-1", "memories"),
             "godot-fact",
@@ -86,7 +88,9 @@ class TestSearchUnifiedMemoryHappyPath:
 class TestSearchUnifiedMemoryEmptyUser:
     """Usuário sem nenhuma memória de nenhum tipo não lança, devolve []."""
 
-    async def test_empty_user_returns_empty_list(self, store, monkeypatch) -> None:
+    async def test_empty_user_returns_empty_list(
+        self, store, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             "backend.services.agent_factory.get_store", AsyncMock(return_value=store)
         )
@@ -103,7 +107,7 @@ class TestSearchUnifiedMemoryEmptyUser:
         assert hits == []
 
     async def test_no_workspace_id_skips_bucket_search_without_raising(
-        self, store, monkeypatch
+        self, store, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
             "backend.services.agent_factory.get_store", AsyncMock(return_value=store)
@@ -121,7 +125,7 @@ class TestSearchUnifiedMemoryIsolatesFailures:
     """Storage corrompido num tipo não derruba a busca dos outros dois."""
 
     async def test_corrupted_skills_index_does_not_break_facts_and_buckets(
-        self, store, monkeypatch
+        self, store, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         await store.aput(
             ("user", "user-1", "memories"),
@@ -155,7 +159,7 @@ class TestSearchUnifiedMemoryIsolatesFailures:
         assert "rag_bucket" in types
 
     async def test_broken_store_does_not_break_skills_and_buckets(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
             "backend.services.agent_factory.get_store",
@@ -183,7 +187,7 @@ class TestSearchUnifiedMemoryTypesFilter:
     """`types` restringe a busca a um subconjunto explícito."""
 
     async def test_types_filter_skips_untargeted_storages(
-        self, store, monkeypatch
+        self, store, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         await store.aput(
             ("user", "user-1", "memories"),
@@ -222,7 +226,9 @@ class TestSearchFactsSubstringFallback:
     precisa filtrar por substring pra não ficar inconsistente com
     `_search_skills`/`_search_rag_buckets` (que sempre filtram)."""
 
-    async def test_sem_score_aplica_filtro_substring(self, store, monkeypatch) -> None:
+    async def test_sem_score_aplica_filtro_substring(
+        self, store, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             "backend.services.agent_factory.get_store", AsyncMock(return_value=store)
         )
@@ -241,7 +247,9 @@ class TestSearchFactsSubstringFallback:
 
         assert [h.id for h in hits] == ["f1"]
 
-    async def test_com_score_nao_reaplica_filtro(self, monkeypatch) -> None:
+    async def test_com_score_nao_reaplica_filtro(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Quando o store já devolveu ranking semântico (score presente),
         confiar nele — não filtrar de novo por substring, que poderia
         remover um resultado semanticamente relevante sem o termo literal."""
@@ -267,7 +275,9 @@ class TestSearchFactsSubstringFallback:
 
         assert [h.id for h in hits] == ["f1"]
 
-    async def test_query_vazia_nao_filtra(self, store, monkeypatch) -> None:
+    async def test_query_vazia_nao_filtra(
+        self, store, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             "backend.services.agent_factory.get_store", AsyncMock(return_value=store)
         )

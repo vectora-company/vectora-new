@@ -9,6 +9,7 @@ usa um `RuntimeSettings` apontando pra `tmp_path`, `ConfigTomlAdapter` usa
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -198,7 +199,7 @@ def _restore_settings():
 
 class TestEnvAdapter:
     def test_set_delega_pra_apply_llm_env_key(
-        self, tmp_path, monkeypatch, _restore_settings
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _restore_settings
     ) -> None:
         from backend.settings import settings
 
@@ -212,7 +213,9 @@ class TestEnvAdapter:
         mock_upsert.assert_called_once()
         assert _restore_settings.google_api_key == "AIza-nova"
 
-    def test_get_le_do_settings_singleton(self, monkeypatch, _restore_settings) -> None:
+    def test_get_le_do_settings_singleton(
+        self, monkeypatch: pytest.MonkeyPatch, _restore_settings
+    ) -> None:
         """`EnvAdapter.get` lê a fonte canônica em runtime: `os.environ`
         (que `apply_llm_env_key` seta na escrita). `settings` espelha no
         boot, mas uma key gravada/limpa em runtime só reflete aqui."""
@@ -224,7 +227,9 @@ class TestEnvAdapter:
 
 
 class TestRuntimeSettingsAdapter:
-    def test_get_set_isolado_por_tmp_path(self, tmp_path, monkeypatch) -> None:
+    def test_get_set_isolado_por_tmp_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.workspace.runtime_settings as rs_mod
         from backend.workspace.runtime_settings import RuntimeSettings
 
@@ -238,7 +243,7 @@ class TestRuntimeSettingsAdapter:
         assert isolated.get("theme") == "light"
 
     def test_settings_key_diferente_da_chave_publica(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import backend.workspace.runtime_settings as rs_mod
         from backend.workspace.runtime_settings import RuntimeSettings
@@ -254,7 +259,7 @@ class TestRuntimeSettingsAdapter:
 
 class TestConfigTomlAdapter:
     def test_set_chama_write_config_section_e_atualiza_settings(
-        self, monkeypatch, _restore_settings
+        self, monkeypatch: pytest.MonkeyPatch, _restore_settings
     ) -> None:
         calls: list[tuple[str, dict]] = []
 
@@ -298,7 +303,12 @@ class TestCliCategoryCommand:
         base.update(overrides)
         return argparse.Namespace(**base)
 
-    def test_set_e_get_roundtrip(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_set_e_get_roundtrip(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
         import backend.workspace.runtime_settings as rs_mod
         from backend.cli.config import run_config
         from backend.workspace.runtime_settings import RuntimeSettings
@@ -314,7 +324,9 @@ class TestCliCategoryCommand:
         out = capsys.readouterr().out
         assert "theme=light" in out
 
-    def test_get_chave_de_outra_categoria_da_erro(self, capsys) -> None:
+    def test_get_chave_de_outra_categoria_da_erro(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         from backend.cli.config import run_config
 
         with pytest.raises(SystemExit) as exc:
@@ -332,14 +344,21 @@ class TestCliCategoryCommand:
             run_config(self._ns(config_action="preferences", set_values=["sem-igual"]))
         assert exc.value.code == 1
 
-    def test_sem_get_nem_set_lista_campos_da_categoria(self, capsys) -> None:
+    def test_sem_get_nem_set_lista_campos_da_categoria(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         from backend.cli.config import run_config
 
         run_config(self._ns(config_action="integrations"))
         out = capsys.readouterr().out
         assert "google_api_key" in out
 
-    def test_secret_mascarado_na_listagem(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_secret_mascarado_na_listagem(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
         from backend.cli.config import run_config
         from backend.settings import settings
 
@@ -380,7 +399,7 @@ class TestCliCollectionCommand:
         base.update(overrides)
         return argparse.Namespace(**base)
 
-    def test_sem_list_flag_da_erro(self, capsys) -> None:
+    def test_sem_list_flag_da_erro(self, capsys: pytest.CaptureFixture[str]) -> None:
         from backend.cli.config import run_config
 
         with pytest.raises(SystemExit) as exc:
@@ -390,7 +409,7 @@ class TestCliCollectionCommand:
         assert "--list" in out
 
     def test_provider_routing_lista_modelos_registrados(
-        self, capsys, monkeypatch
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.cli.config import run_config
         from backend.config.adapters import RegisteredModelsTableAdapter
@@ -405,7 +424,9 @@ class TestCliCollectionCommand:
         assert "ollama_registered_models" in out
         assert "llama3" in out
 
-    def test_provider_routing_sem_itens_nao_quebra(self, capsys, monkeypatch) -> None:
+    def test_provider_routing_sem_itens_nao_quebra(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.cli.config import run_config
         from backend.config.adapters import RegisteredModelsTableAdapter
 
@@ -418,7 +439,9 @@ class TestCliCollectionCommand:
         out = capsys.readouterr().out
         assert "(nenhum item)" in out
 
-    def test_memory_usa_user_id_local_por_default(self, capsys, monkeypatch) -> None:
+    def test_memory_usa_user_id_local_por_default(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.cli.config import run_config
         from backend.config.adapters import MemoryAdapter
 
@@ -435,7 +458,9 @@ class TestCliCollectionCommand:
         assert seen_user_ids == ["local"]
         assert "prefere respostas curtas" in out
 
-    def test_account_respeita_user_id_explicito(self, capsys, monkeypatch) -> None:
+    def test_account_respeita_user_id_explicito(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.cli.config import run_config
         from backend.config.adapters import UserProfileAdapter
 

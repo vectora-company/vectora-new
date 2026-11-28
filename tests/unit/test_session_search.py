@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.persistence.native.session_store import (
@@ -18,7 +20,7 @@ def test_fts_expression_is_safe() -> None:
 
 
 @pytest.fixture
-async def store(tmp_path):
+async def store(tmp_path: Path):
     from backend.storage.sqlite.pool import AsyncConnectionPool
 
     pool = AsyncConnectionPool(str(tmp_path / "sessions.db"), min_size=1, max_size=2)

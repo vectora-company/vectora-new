@@ -46,7 +46,7 @@ def _req(uid: str | None = _UUID) -> MagicMock:
 
 
 @pytest.fixture
-async def db(tmp_path, monkeypatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from backend.scheduling import background_tasks as bg
 
     db_path = str(tmp_path / "boards_api.db")
@@ -213,7 +213,9 @@ async def test_get_board_view_agrupa_por_coluna_e_dono_errado_e_404(db) -> None:
     assert wrong_owner.value.status_code == 404
 
 
-async def test_board_batch_queries_treatem_ids_como_dados(db, monkeypatch) -> None:
+async def test_board_batch_queries_treatem_ids_como_dados(
+    db, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """IDs com sintaxe SQL devem continuar sendo valores, nunca parte da query."""
     from backend.scheduling import background_tasks as bg
     from backend.scheduling import kanban

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 
 import pytest
 
@@ -24,7 +25,7 @@ from backend.embedding.queue import EmbeddingQueue
 
 @pytest.mark.stress
 @pytest.mark.asyncio
-async def test_queue_full_lifecycle(tmp_path) -> None:
+async def test_queue_full_lifecycle(tmp_path: Path) -> None:
     """200 documentos: enqueue → get_pending → mark_success/failed — consistência total."""
     N = 200
     db_path = tmp_path / "stress_lifecycle.db"
@@ -83,7 +84,7 @@ async def test_queue_full_lifecycle(tmp_path) -> None:
 
 @pytest.mark.stress
 @pytest.mark.asyncio
-async def test_queue_count_pending_scales_with_index(tmp_path) -> None:
+async def test_queue_count_pending_scales_with_index(tmp_path: Path) -> None:
     """count_pending() deve ser O(log n) com o índice — rápido mesmo com 500 registros."""
     N = 500
     db_path = tmp_path / "stress_count.db"
@@ -112,7 +113,9 @@ async def test_queue_count_pending_scales_with_index(tmp_path) -> None:
 @pytest.mark.parametrize(
     "success_ratio", [0.0, 0.25, 0.5, 0.75, 1.0], ids=lambda r: f"ratio={r}"
 )
-async def test_queue_lifecycle_various_ratios(tmp_path, n, success_ratio) -> None:
+async def test_queue_lifecycle_various_ratios(
+    tmp_path: Path, n: int, success_ratio: float
+) -> None:
     """Ciclo enqueue→mark com proporções variadas de sucesso/falha — contagem final sempre zera."""
     db_path = tmp_path / f"stress_ratio_{n}_{success_ratio}.db"
     queue = EmbeddingQueue(f"sqlite+aiosqlite:///{db_path}")
@@ -137,7 +140,7 @@ async def test_queue_lifecycle_various_ratios(tmp_path, n, success_ratio) -> Non
 @pytest.mark.stress
 @pytest.mark.asyncio
 @pytest.mark.parametrize("n", [100, 300, 1000, 2000, 3000], ids=lambda n: f"n={n}")
-async def test_queue_count_pending_scales_various_sizes(tmp_path, n) -> None:
+async def test_queue_count_pending_scales_various_sizes(tmp_path: Path, n: int) -> None:
     """count_pending() permanece correto e rápido em volumes crescentes."""
     db_path = tmp_path / f"stress_count_{n}.db"
     queue = EmbeddingQueue(f"sqlite+aiosqlite:///{db_path}")
@@ -160,7 +163,7 @@ async def test_queue_count_pending_scales_various_sizes(tmp_path, n) -> None:
     ["timeout", "rate limit", "erro de parsing", "x" * 500, ""],
     ids=["timeout", "rate_limit", "parsing", "long_reason", "empty_reason"],
 )
-async def test_queue_mark_failed_various_reasons(tmp_path, reason) -> None:
+async def test_queue_mark_failed_various_reasons(tmp_path: Path, reason) -> None:
     """mark_failed aceita motivos de tamanhos/formatos variados sem corromper o registro."""
     db_path = tmp_path / "stress_reasons.db"
     queue = EmbeddingQueue(f"sqlite+aiosqlite:///{db_path}")
@@ -175,7 +178,7 @@ async def test_queue_mark_failed_various_reasons(tmp_path, reason) -> None:
 @pytest.mark.stress
 @pytest.mark.asyncio
 @pytest.mark.parametrize("limit", [1, 10, 50, 100, 500], ids=lambda n: f"limit={n}")
-async def test_queue_get_pending_various_limits(tmp_path, limit) -> None:
+async def test_queue_get_pending_various_limits(tmp_path: Path, limit: int) -> None:
     """get_pending(limit=N) nunca retorna mais que o limite pedido, mesmo com a fila cheia."""
     N = 200
     db_path = tmp_path / f"stress_limit_{limit}.db"
@@ -191,7 +194,7 @@ async def test_queue_get_pending_various_limits(tmp_path, limit) -> None:
 @pytest.mark.stress
 @pytest.mark.asyncio
 @pytest.mark.parametrize("n", [10, 100], ids=lambda n: f"n={n}")
-async def test_queue_mark_success_idempotent_under_load(tmp_path, n) -> None:
+async def test_queue_mark_success_idempotent_under_load(tmp_path: Path, n: int) -> None:
     """mark_success chamado duas vezes em paralelo pro mesmo lote — idempotente, nunca lança."""
     db_path = tmp_path / f"stress_idem_{n}.db"
     queue = EmbeddingQueue(f"sqlite+aiosqlite:///{db_path}")

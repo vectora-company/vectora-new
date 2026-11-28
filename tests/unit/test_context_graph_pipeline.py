@@ -94,7 +94,7 @@ def test_run_ast_extraction_empty_list() -> None:
     assert result["hyperedges"] == []
 
 
-def test_run_ast_extraction_unsupported_ext(tmp_path) -> None:
+def test_run_ast_extraction_unsupported_ext(tmp_path: Path) -> None:
     f = tmp_path / "file.unknownext123"
     f.write_text("hello", encoding="utf-8")
     result = _run_ast_extraction([str(f)], tmp_path)
@@ -102,7 +102,7 @@ def test_run_ast_extraction_unsupported_ext(tmp_path) -> None:
     assert isinstance(result["edges"], list)
 
 
-def test_run_ast_extraction_python_file(tmp_path) -> None:
+def test_run_ast_extraction_python_file(tmp_path: Path) -> None:
     py_file = tmp_path / "sample.py"
     py_file.write_text("def foo():\n    pass\n", encoding="utf-8")
     result = _run_ast_extraction([str(py_file)], tmp_path)
@@ -111,12 +111,12 @@ def test_run_ast_extraction_python_file(tmp_path) -> None:
     assert isinstance(result["hyperedges"], list)
 
 
-def test_run_ast_extraction_nonexistent_file(tmp_path) -> None:
+def test_run_ast_extraction_nonexistent_file(tmp_path: Path) -> None:
     result = _run_ast_extraction([str(tmp_path / "does_not_exist.py")], tmp_path)
     assert result["nodes"] == []
 
 
-def test_run_ast_extraction_multiple_files(tmp_path) -> None:
+def test_run_ast_extraction_multiple_files(tmp_path: Path) -> None:
     py_file1 = tmp_path / "a.py"
     py_file2 = tmp_path / "b.py"
     py_file1.write_text("class A:\n    pass\n", encoding="utf-8")
@@ -150,7 +150,7 @@ async def test_build_workspace_graph_no_workspace() -> None:
 
 
 @pytest.mark.asyncio
-async def test_build_workspace_graph_no_files(tmp_path) -> None:
+async def test_build_workspace_graph_no_files(tmp_path: Path) -> None:
     from backend.context_graph.pipeline import build_workspace_graph
 
     ws_mock = MagicMock()

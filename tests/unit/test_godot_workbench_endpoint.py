@@ -25,7 +25,9 @@ def _request(user_id: str = "user-1") -> Request:
 
 
 @pytest.mark.asyncio
-async def test_validates_only_the_requested_workspace_project(monkeypatch) -> None:
+async def test_validates_only_the_requested_workspace_project(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import workspaces
     from backend.rbac import tool_policy
     from backend.tools.registry import TOOL_REGISTRY
@@ -66,7 +68,9 @@ async def test_validates_only_the_requested_workspace_project(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_rejects_untrusted_workspace_before_tool_execution(monkeypatch) -> None:
+async def test_rejects_untrusted_workspace_before_tool_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import workspaces
 
     monkeypatch.setattr(
@@ -84,7 +88,7 @@ async def test_rejects_untrusted_workspace_before_tool_execution(monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_rejects_remote_workspace(monkeypatch) -> None:
+async def test_rejects_remote_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.api.handlers import workspaces
 
     monkeypatch.setattr(
@@ -102,7 +106,7 @@ async def test_rejects_remote_workspace(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_obeys_disabled_tool_policy(monkeypatch) -> None:
+async def test_obeys_disabled_tool_policy(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.api.handlers import workspaces
     from backend.rbac import tool_policy
 
@@ -122,7 +126,9 @@ async def test_obeys_disabled_tool_policy(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_enforces_a_total_timeout_for_all_validation_stages(monkeypatch) -> None:
+async def test_enforces_a_total_timeout_for_all_validation_stages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import workspaces
     from backend.rbac import tool_policy
     from backend.tools.registry import TOOL_REGISTRY

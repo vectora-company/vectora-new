@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -16,7 +17,7 @@ real_bwrap = pytest.mark.skipif(
 )
 
 
-async def _com_worker(tmp_path, policy, *comandos: str) -> list[dict]:
+async def _com_worker(tmp_path: Path, policy, *comandos: str) -> list[dict]:
     manager = workspace_jail.WorkspaceJailManager()
     try:
         worker = await manager.get_or_spawn("ws-rec", str(tmp_path), policy)
@@ -28,7 +29,7 @@ async def _com_worker(tmp_path, policy, *comandos: str) -> list[dict]:
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_arquivo_maior_que_o_limite_nao_e_gravado(tmp_path) -> None:
+async def test_arquivo_maior_que_o_limite_nao_e_gravado(tmp_path: Path) -> None:
     policy = SandboxPolicy(enabled=True, max_file_mb=1)
 
     pequeno, grande = await _com_worker(
@@ -49,7 +50,7 @@ async def test_arquivo_maior_que_o_limite_nao_e_gravado(tmp_path) -> None:
     not dry_run.bwrap_supports_size(), reason="bwrap sem --size neste computador"
 )
 @pytest.mark.asyncio
-async def test_tmpfs_do_jail_tem_teto_de_tamanho(tmp_path) -> None:
+async def test_tmpfs_do_jail_tem_teto_de_tamanho(tmp_path: Path) -> None:
     policy = SandboxPolicy(enabled=True, tmp_size_mb=4)
 
     cabe, nao_cabe = await _com_worker(
@@ -65,7 +66,7 @@ async def test_tmpfs_do_jail_tem_teto_de_tamanho(tmp_path) -> None:
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_limite_de_memoria_impede_alocar_alem_do_teto(tmp_path) -> None:
+async def test_limite_de_memoria_impede_alocar_alem_do_teto(tmp_path: Path) -> None:
     policy = SandboxPolicy(enabled=True, memory_limit_mb=512)
     alocar = f'{sys.executable} -c "b = bytearray(%d * 1024 * 1024); print(len(b))"'
 
@@ -78,7 +79,7 @@ async def test_limite_de_memoria_impede_alocar_alem_do_teto(tmp_path) -> None:
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_sem_limite_de_memoria_a_alocacao_grande_passa(tmp_path) -> None:
+async def test_sem_limite_de_memoria_a_alocacao_grande_passa(tmp_path: Path) -> None:
     policy = SandboxPolicy(enabled=True)
 
     (resultado,) = await _com_worker(

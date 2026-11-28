@@ -265,7 +265,7 @@ async def test_remove_task_worktree_com_task_id_vazio_ainda_chama_impl() -> None
 
 @pytest.mark.asyncio
 async def test_delegacao_sincrona_nunca_cria_worktree_so_background_cria(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """`task()` no meio de um turno roda no workspace principal (troca de
     persona, não paralelismo); tarefa em segundo plano isola em worktree

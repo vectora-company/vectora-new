@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import aiosqlite
@@ -15,7 +16,7 @@ from backend.scheduling.dag import DAGStage, DAGStore
 
 @pytest.mark.asyncio
 async def test_approve_dag_checks_thread_and_dispatches_after_approval(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "dag-api.db"
     db = await aiosqlite.connect(db_path)
@@ -62,7 +63,9 @@ async def test_approve_dag_checks_thread_and_dispatches_after_approval(
 
 
 @pytest.mark.asyncio
-async def test_plan_from_another_thread_is_not_visible(tmp_path, monkeypatch) -> None:
+async def test_plan_from_another_thread_is_not_visible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     db_path = tmp_path / "dag-api-owner.db"
     db = await aiosqlite.connect(db_path)
     store = DAGStore(db)
@@ -94,7 +97,7 @@ async def test_plan_from_another_thread_is_not_visible(tmp_path, monkeypatch) ->
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["read", "approve", "cancel"])
 async def test_dag_operations_reject_a_thread_the_user_cannot_access(
-    operation: str, monkeypatch
+    operation: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     async def denied(*_args, **_kwargs) -> None:
         raise HTTPException(status_code=404, detail="Thread not found")

@@ -23,7 +23,9 @@ _ELECTRON_DEV_UNAVAILABLE_REASON = (
 )
 
 
-def _patch_dirs(monkeypatch, frontend_dir: Path, electron_dir: Path) -> None:
+def _patch_dirs(
+    monkeypatch: pytest.MonkeyPatch, frontend_dir: Path, electron_dir: Path
+) -> None:
     """node_modules/electron/ vive em frontend_dir (pacote único); dist/main.js
     vive em electron_dir (tsconfig próprio, ver electron_launcher.py)."""
     monkeypatch.setattr(electron_launcher, "_frontend_dir", lambda: frontend_dir)
@@ -32,7 +34,7 @@ def _patch_dirs(monkeypatch, frontend_dir: Path, electron_dir: Path) -> None:
 
 class TestResolveElectronLaunch:
     def test_resolve_electron_empacotado_por_override(
-        self, tmp_path: Path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         executable = tmp_path / "vectora-electron"
         executable.write_bytes(b"fake electron")
@@ -42,7 +44,10 @@ class TestResolveElectronLaunch:
         assert electron_launcher.resolve_electron_launch() == (str(executable), [])
 
     def test_override_empacotado_invalido_retorna_none(
-        self, tmp_path: Path, monkeypatch, caplog
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         monkeypatch.setenv(
             "VECTORA_PACKAGED_ELECTRON_PATH", str(tmp_path / "missing-electron")
@@ -52,7 +57,10 @@ class TestResolveElectronLaunch:
         assert "VECTORA_PACKAGED_ELECTRON_PATH" in caplog.text
 
     def test_sem_main_js_retorna_none(
-        self, tmp_path: Path, monkeypatch, caplog
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         _patch_dirs(monkeypatch, tmp_path, tmp_path)
         with caplog.at_level("WARNING"):
@@ -61,7 +69,10 @@ class TestResolveElectronLaunch:
         assert "electron:build" in caplog.text
 
     def test_sem_path_txt_retorna_none(
-        self, tmp_path: Path, monkeypatch, caplog
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         (tmp_path / "dist").mkdir()
         (tmp_path / "dist" / "main.js").write_text("// main", encoding="utf-8")
@@ -75,7 +86,10 @@ class TestResolveElectronLaunch:
         assert "pnpm rebuild electron" in caplog.text
 
     def test_build_desatualizado_em_relacao_ao_fonte_retorna_none(
-        self, tmp_path: Path, monkeypatch, caplog
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         src_dir = tmp_path / "src"
         src_dir.mkdir()
@@ -96,7 +110,10 @@ class TestResolveElectronLaunch:
         assert "electron:build" in caplog.text
 
     def test_path_txt_vazio_retorna_none(
-        self, tmp_path: Path, monkeypatch, caplog
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         (tmp_path / "dist").mkdir()
         (tmp_path / "dist" / "main.js").write_text("// main", encoding="utf-8")
@@ -109,7 +126,10 @@ class TestResolveElectronLaunch:
         assert "vazio" in caplog.text
 
     def test_binario_referenciado_nao_existe_retorna_none(
-        self, tmp_path: Path, monkeypatch, caplog
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         # Par de erro: path.txt aponta para um executável que não foi
         # baixado (dist/ do pacote electron incompleto) — nunca lança.
@@ -124,7 +144,7 @@ class TestResolveElectronLaunch:
         assert "pnpm rebuild electron" in caplog.text
 
     def test_tudo_presente_resolve_executavel_e_main_js(
-        self, tmp_path: Path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         electron_dir = tmp_path / "electron"
         electron_dir.mkdir()

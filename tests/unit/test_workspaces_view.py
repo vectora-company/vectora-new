@@ -28,7 +28,7 @@ from backend.workspace.runtime_settings import RuntimeSettings
 
 
 @pytest.fixture
-def trusted_ws(tmp_path, monkeypatch):
+def trusted_ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Registra um workspace confiável em tmp_path no registry.
 
     Devolve uma tupla ``(workspace_id, tmp_path)`` para os testes montarem
@@ -152,7 +152,7 @@ class TestWorkspaceTree:
 
     @pytest.mark.asyncio
     async def test_reports_missing_workspace_root_instead_of_empty_tree(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from fastapi import HTTPException
 
@@ -180,7 +180,7 @@ class TestWorkspaceTree:
 
     @pytest.mark.asyncio
     async def test_lists_and_opens_associated_source_roots(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers.workspaces import workspace_tree
         from backend.workspace import workspace as ws_mod
@@ -674,7 +674,7 @@ class TestGitLogPagination:
 class TestPrEndpoints:
     @pytest.mark.asyncio
     async def test_pr_list_unavailable_when_gh_fails(
-        self, trusted_ws, monkeypatch
+        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from unittest.mock import AsyncMock
 
@@ -701,7 +701,9 @@ class TestListRagBuckets:
     Memory tab."""
 
     @pytest.fixture(autouse=True)
-    def _isolated_runtime_settings(self, tmp_path, monkeypatch):
+    def _isolated_runtime_settings(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         from backend.workspace import runtime_settings as rs_mod
 
         isolated = rs_mod.RuntimeSettings(path=tmp_path / "checkpoints.db")
@@ -770,7 +772,9 @@ class TestToggleAndDeleteRagBucket:
     remover do painel de buckets."""
 
     @pytest.fixture(autouse=True)
-    def _isolated_runtime_settings(self, tmp_path, monkeypatch):
+    def _isolated_runtime_settings(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         from backend.workspace import runtime_settings as rs_mod
 
         isolated = rs_mod.RuntimeSettings(path=tmp_path / "checkpoints.db")
@@ -936,7 +940,7 @@ class TestToggleAndDeleteRagBucket:
 
     @pytest.mark.asyncio
     async def test_delete_purga_a_tabela_vetorial_orfa(
-        self, trusted_ws, _isolated_runtime_settings, monkeypatch
+        self, trusted_ws, _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Regressão: apagar o bucket só removia o registro do catálogo — a
         tabela LanceDB (`bucket_{id}`) ficava órfã com todos os itens,
@@ -964,7 +968,7 @@ class TestToggleAndDeleteRagBucket:
 
     @pytest.mark.asyncio
     async def test_delete_falha_no_purge_nao_impede_remocao_do_catalogo(
-        self, trusted_ws, _isolated_runtime_settings, monkeypatch
+        self, trusted_ws, _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: storage indisponível (ou tabela nunca criada — bucket
         criado mas nunca ingerido) durante o purge não pode deixar o bucket
@@ -1015,7 +1019,7 @@ class TestSandboxStatus:
     @pytest.mark.usefixtures("sem_bwrap_automatico")
     @pytest.mark.asyncio
     async def test_enabled_false_without_vectora_toml_e_wsl2_disponivel(
-        self, trusted_ws, monkeypatch
+        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers import workspaces as ws_mod
 
@@ -1033,7 +1037,7 @@ class TestSandboxStatus:
     @pytest.mark.usefixtures("sem_bwrap_automatico")
     @pytest.mark.asyncio
     async def test_enabled_false_without_vectora_toml_e_sem_wsl2(
-        self, trusted_ws, monkeypatch
+        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import backend.sandbox.policy as policy_mod
         from backend.api.handlers import workspaces as ws_mod
@@ -1138,7 +1142,7 @@ def _fake_request(user_id: str = "u1"):
 
 
 class TestLocalWorkspaceUpdate:
-    def test_resolves_project_directory_inside_safe_root(self, tmp_path) -> None:
+    def test_resolves_project_directory_inside_safe_root(self, tmp_path: Path) -> None:
         from backend.api.handlers import workspaces as handlers
 
         approved_root = tmp_path / "approved"
@@ -1153,7 +1157,7 @@ class TestLocalWorkspaceUpdate:
 
     @pytest.mark.asyncio
     async def test_rejects_project_path_outside_safe_roots(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         from types import SimpleNamespace
 
@@ -1208,7 +1212,7 @@ class TestLocalWorkspaceUpdate:
 
     @pytest.mark.parametrize("relative_path", ["../outside", "../approved-sibling"])
     def test_rejects_project_path_that_escapes_safe_root(
-        self, tmp_path, relative_path
+        self, tmp_path: Path, relative_path: str
     ) -> None:
         from fastapi import HTTPException
 
@@ -1226,7 +1230,7 @@ class TestLocalWorkspaceUpdate:
 
         assert exc_info.value.status_code == 403
 
-    def test_rejects_project_symlink_outside_safe_roots(self, tmp_path) -> None:
+    def test_rejects_project_symlink_outside_safe_roots(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers import workspaces as handlers
@@ -1250,7 +1254,7 @@ class TestLocalWorkspaceUpdate:
 
     @pytest.mark.asyncio
     async def test_rejects_source_root_outside_safe_roots(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         from types import SimpleNamespace
 
@@ -1311,7 +1315,9 @@ class TestMemorySearchUnified:
     skills + buckets RAG, consumida pela busca da Memory Tab."""
 
     @pytest.mark.asyncio
-    async def test_combina_os_tres_tipos(self, trusted_ws, monkeypatch) -> None:
+    async def test_combina_os_tres_tipos(
+        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers.workspaces import search_memory_unified
         from backend.services.memory_index import MemoryIndexHit
 
@@ -1355,7 +1361,7 @@ class TestMemorySearchUnified:
 
     @pytest.mark.asyncio
     async def test_types_invalido_e_normalizado_sem_quebrar(
-        self, trusted_ws, monkeypatch
+        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """`types=invalid` não deve derrubar a query — vira None (busca todos)."""
         from backend.api.handlers.workspaces import search_memory_unified
@@ -1383,7 +1389,7 @@ class TestMemorySearchUnified:
 
     @pytest.mark.asyncio
     async def test_types_valido_e_repassado_como_frozenset(
-        self, trusted_ws, monkeypatch
+        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers.workspaces import search_memory_unified
 
@@ -1405,7 +1411,9 @@ class TestMemorySearchUnified:
         assert captured["types"] == frozenset({"fact"})
 
     @pytest.mark.asyncio
-    async def test_workspace_de_outro_dono_retorna_403(self, monkeypatch) -> None:
+    async def test_workspace_de_outro_dono_retorna_403(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Regressão: o endpoint precisa checar ownership via
         `require_workspace_access` (mesmo padrão de `rag.py`/`context_graph.py`)
         — sem isso, qualquer usuário autenticado que soubesse o `workspace_id`
@@ -1441,7 +1449,7 @@ class TestMemorySearchUnified:
 
 class TestRagIngestPreview:
     @pytest.mark.asyncio
-    async def test_lists_files_matching_current_filters(self, tmp_path) -> None:
+    async def test_lists_files_matching_current_filters(self, tmp_path: Path) -> None:
         from backend.api.handlers.workspaces import rag_ingest_preview
 
         (tmp_path / "a.py").write_text("1", encoding="utf-8")
@@ -1460,7 +1468,9 @@ class TestRagIngestPreview:
         assert result.files == ["b.md"]
 
     @pytest.mark.asyncio
-    async def test_unsafe_path_raises_400(self, monkeypatch, tmp_path) -> None:
+    async def test_unsafe_path_raises_400(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers import workspaces as ws_handlers_mod

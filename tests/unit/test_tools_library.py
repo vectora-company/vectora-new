@@ -36,7 +36,7 @@ def _ctx(user_id: str = "local") -> ToolContext:
 
 @pytest.mark.asyncio
 async def test_install_mcp_from_registry_installs_connector_without_env_vars(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.api.handlers import mcp_marketplace
 
@@ -68,7 +68,7 @@ async def test_install_mcp_from_registry_installs_connector_without_env_vars(
 
 @pytest.mark.asyncio
 async def test_install_mcp_from_registry_missing_env_vars_does_not_install(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.api.handlers import mcp_marketplace
 
@@ -97,7 +97,7 @@ async def test_install_mcp_from_registry_missing_env_vars_does_not_install(
 
 @pytest.mark.asyncio
 async def test_install_mcp_from_registry_unknown_connector_returns_error(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.api.handlers import mcp_marketplace
 
@@ -116,7 +116,9 @@ async def test_install_mcp_from_registry_unknown_connector_returns_error(
 
 
 @pytest.mark.asyncio
-async def test_install_skill_from_catalog_installs_skill(monkeypatch) -> None:
+async def test_install_skill_from_catalog_installs_skill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import registry_client
     from backend.workspace import skills as skills_mod
 
@@ -150,7 +152,7 @@ async def test_install_skill_from_catalog_installs_skill(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_install_skill_from_catalog_unknown_skill_returns_error(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.services import registry_client
 
@@ -169,7 +171,9 @@ async def test_install_skill_from_catalog_unknown_skill_returns_error(
 
 
 @pytest.mark.asyncio
-async def test_install_memory_bucket_installs_collection(monkeypatch) -> None:
+async def test_install_memory_bucket_installs_collection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import memory_buckets
 
     monkeypatch.setattr(
@@ -185,7 +189,7 @@ async def test_install_memory_bucket_installs_collection(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_install_memory_bucket_error_returns_status_error_not_raised(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.services import memory_buckets
 
@@ -206,7 +210,7 @@ async def test_install_memory_bucket_error_returns_status_error_not_raised(
 
 
 @pytest.mark.asyncio
-async def test_uninstall_mcp_removes_connector(monkeypatch) -> None:
+async def test_uninstall_mcp_removes_connector(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.api.handlers import mcp_marketplace
 
     monkeypatch.setattr(
@@ -221,7 +225,9 @@ async def test_uninstall_mcp_removes_connector(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_uninstall_mcp_not_installed_returns_not_found(monkeypatch) -> None:
+async def test_uninstall_mcp_not_installed_returns_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import mcp_marketplace
 
     monkeypatch.setattr(
@@ -241,7 +247,9 @@ async def test_uninstall_mcp_not_installed_returns_not_found(monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
-async def test_delete_skill_removes_installed_skill(monkeypatch) -> None:
+async def test_delete_skill_removes_installed_skill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace import skills as skills_mod
 
     monkeypatch.setattr(skills_mod, "remove_skill", lambda user_id, skill_id: True)
@@ -252,7 +260,9 @@ async def test_delete_skill_removes_installed_skill(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_skill_unknown_skill_returns_error(monkeypatch) -> None:
+async def test_delete_skill_unknown_skill_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace import skills as skills_mod
 
     monkeypatch.setattr(skills_mod, "remove_skill", lambda user_id, skill_id: False)
@@ -268,7 +278,9 @@ async def test_delete_skill_unknown_skill_returns_error(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_verify_skill_revalidates_and_returns_status(monkeypatch) -> None:
+async def test_verify_skill_revalidates_and_returns_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace import skills as skills_mod
 
     monkeypatch.setattr(
@@ -284,7 +296,7 @@ async def test_verify_skill_revalidates_and_returns_status(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_verify_skill_propagates_internal_error_as_typed_error(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.workspace import skills as skills_mod
 
@@ -304,7 +316,9 @@ async def test_verify_skill_propagates_internal_error_as_typed_error(
 
 
 @pytest.mark.asyncio
-async def test_publish_memory_bucket_tool_publishes_with_token(monkeypatch) -> None:
+async def test_publish_memory_bucket_tool_publishes_with_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import license as license_service
     from backend.services import memory_buckets
 
@@ -342,7 +356,7 @@ async def test_publish_memory_bucket_tool_publishes_with_token(monkeypatch) -> N
 
 @pytest.mark.asyncio
 async def test_publish_memory_bucket_tool_no_token_returns_error_without_publishing(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.services import license as license_service
     from backend.services import memory_buckets
@@ -370,7 +384,9 @@ async def test_publish_memory_bucket_tool_no_token_returns_error_without_publish
 
 
 @pytest.mark.asyncio
-async def test_save_mcp_env_var_persists_override(monkeypatch) -> None:
+async def test_save_mcp_env_var_persists_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.rbac import auth as auth_svc
 
     set_spy = AsyncMock()
@@ -394,7 +410,9 @@ async def test_save_mcp_env_var_persists_override(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_save_mcp_env_var_internal_error_returns_typed_error(monkeypatch) -> None:
+async def test_save_mcp_env_var_internal_error_returns_typed_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.rbac import auth as auth_svc
 
     async def _boom(user_id, key, value):

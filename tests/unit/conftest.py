@@ -50,7 +50,7 @@ def _no_thread_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def sem_bwrap_automatico(monkeypatch) -> None:
+def sem_bwrap_automatico(monkeypatch: pytest.MonkeyPatch) -> None:
     """Faz `parse_policy` ignorar o `bwrap` do host: os testes que esperam o
     sandbox desligado sem `vectora.toml` não podem depender de a máquina de
     quem roda ter ou não o binário instalado."""
@@ -93,7 +93,7 @@ def _encerra_workers_do_jail():
 
 
 @pytest.fixture(autouse=True)
-def _git_com_ramo_padrao_master(monkeypatch) -> None:
+def _git_com_ramo_padrao_master(monkeypatch: pytest.MonkeyPatch) -> None:
     """Repositórios criados pelos testes nascem em `master`, qualquer que seja
     o `init.defaultBranch` da máquina de quem roda (os testes de git citam o
     ramo pelo nome)."""
@@ -103,7 +103,9 @@ def _git_com_ramo_padrao_master(monkeypatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _politica_do_sandbox_isolada(monkeypatch, tmp_path_factory) -> None:
+def _politica_do_sandbox_isolada(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
     """A política do usuário (fora do workspace) nunca vem do `~/.vectora` de
     quem roda os testes: cada teste enxerga uma pasta vazia."""
     monkeypatch.setenv(

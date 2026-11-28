@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -43,7 +44,7 @@ def _req(
 
 
 @pytest.fixture(autouse=True)
-def _isolated_runtime_settings(tmp_path, monkeypatch):
+def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Isola cada teste com um RuntimeSettings próprio (nunca toca o real)."""
     from backend.api.handlers import flags as handler
     from backend.workspace import runtime_settings as rs_module
@@ -118,7 +119,7 @@ def test_transcription_mode_persists_only_supported_values() -> None:
 
 
 def test_decision_model_workspace_preferences_reject_foreign_workspace(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from fastapi import HTTPException
 

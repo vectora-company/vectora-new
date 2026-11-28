@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import json
 import time
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -499,7 +500,7 @@ class TestObservabilityWebhookEndpoint:
     webhook de saída pra cá."""
 
     @pytest.fixture
-    def obs_db(self, tmp_path, monkeypatch):
+    def obs_db(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import asyncio
         from pathlib import Path
 

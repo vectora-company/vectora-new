@@ -157,7 +157,7 @@ async def test_browser_close_tab_id_inexistente_retorna_erro(
 
 
 @pytest.mark.asyncio
-async def test_browser_close_tab_sucesso(monkeypatch) -> None:
+async def test_browser_close_tab_sucesso(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(bd, "has_browser_session", lambda _wid: True)
     monkeypatch.setattr(bd, "close_tab", AsyncMock(return_value=True))
 
@@ -167,7 +167,9 @@ async def test_browser_close_tab_sucesso(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_select_tab_troca_aba_ativa(monkeypatch) -> None:
+async def test_browser_select_tab_troca_aba_ativa(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(bd, "has_browser_session", lambda _wid: True)
     monkeypatch.setattr(bd, "select_tab", AsyncMock(return_value=True))
 
@@ -177,7 +179,9 @@ async def test_browser_select_tab_troca_aba_ativa(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_select_tab_inexistente_retorna_erro(monkeypatch) -> None:
+async def test_browser_select_tab_inexistente_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(bd, "has_browser_session", lambda _wid: True)
     monkeypatch.setattr(bd, "select_tab", AsyncMock(return_value=False))
 
@@ -199,7 +203,9 @@ def _fake_tab(console=None, network=None):
 
 
 @pytest.mark.asyncio
-async def test_browser_list_console_messages_respeita_limit(monkeypatch) -> None:
+async def test_browser_list_console_messages_respeita_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     messages = [{"type": "log", "text": f"msg {i}"} for i in range(5)]
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: _fake_tab(messages))
 
@@ -211,7 +217,7 @@ async def test_browser_list_console_messages_respeita_limit(monkeypatch) -> None
 
 @pytest.mark.asyncio
 async def test_browser_list_console_messages_sem_sessao_retorna_erro(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: None)
 
@@ -221,7 +227,9 @@ async def test_browser_list_console_messages_sem_sessao_retorna_erro(
 
 
 @pytest.mark.asyncio
-async def test_browser_clear_console_limpa_buffer(monkeypatch) -> None:
+async def test_browser_clear_console_limpa_buffer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tab = _fake_tab(console=[{"type": "log", "text": "x"}])
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
 
@@ -238,7 +246,7 @@ async def test_browser_clear_console_limpa_buffer(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_browser_list_network_requests_filtra_por_resource_type(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     entries = [
         {"request_id": "r1", "url": "https://a", "resource_type": "document"},
@@ -258,7 +266,7 @@ async def test_browser_list_network_requests_filtra_por_resource_type(
 
 @pytest.mark.asyncio
 async def test_browser_list_network_requests_sem_filtro_lista_todas(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     entries = [
         {"request_id": "r1", "url": "https://a", "resource_type": "document"},
@@ -274,7 +282,9 @@ async def test_browser_list_network_requests_sem_filtro_lista_todas(
 
 
 @pytest.mark.asyncio
-async def test_browser_get_network_request_encontrada(monkeypatch) -> None:
+async def test_browser_get_network_request_encontrada(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     entries = [{"request_id": "r1", "url": "https://a", "status": 200}]
     monkeypatch.setattr(
         bd, "get_tab_state", lambda _wid, _tid: _fake_tab(network=entries)
@@ -289,7 +299,7 @@ async def test_browser_get_network_request_encontrada(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_browser_get_network_request_nao_encontrada_retorna_erro(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: _fake_tab(network=[]))
 
@@ -316,7 +326,9 @@ def _fake_tab_with_page(evaluate_result=None, evaluate_error=None):
 
 
 @pytest.mark.asyncio
-async def test_browser_evaluate_retorna_resultado_serializado(monkeypatch) -> None:
+async def test_browser_evaluate_retorna_resultado_serializado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         bd, "get_tab_state", lambda _wid, _tid: _fake_tab_with_page(evaluate_result=42)
     )
@@ -327,7 +339,9 @@ async def test_browser_evaluate_retorna_resultado_serializado(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_browser_evaluate_sem_sessao_retorna_erro(monkeypatch) -> None:
+async def test_browser_evaluate_sem_sessao_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: None)
 
     result = json.loads(await bd.browser_evaluate(script="1", ctx=_ctx()))
@@ -336,7 +350,9 @@ async def test_browser_evaluate_sem_sessao_retorna_erro(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_evaluate_erro_de_script_nao_propaga(monkeypatch) -> None:
+async def test_browser_evaluate_erro_de_script_nao_propaga(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         bd,
         "get_tab_state",
@@ -363,7 +379,9 @@ async def test_browser_set_dialog_policy_action_invalida_retorna_erro() -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_set_dialog_policy_sem_sessao_retorna_erro(monkeypatch) -> None:
+async def test_browser_set_dialog_policy_sem_sessao_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(bd, "set_dialog_policy", lambda *a, **k: False)
 
     result = json.loads(await bd.browser_set_dialog_policy(action="accept", ctx=_ctx()))
@@ -372,7 +390,9 @@ async def test_browser_set_dialog_policy_sem_sessao_retorna_erro(monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_browser_set_dialog_policy_sucesso(monkeypatch) -> None:
+async def test_browser_set_dialog_policy_sucesso(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = []
     monkeypatch.setattr(
         bd,
@@ -404,7 +424,9 @@ def _fake_tab_for_emulate():
 
 
 @pytest.mark.asyncio
-async def test_browser_emulate_sem_sessao_retorna_erro(monkeypatch) -> None:
+async def test_browser_emulate_sem_sessao_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: None)
 
     result = json.loads(
@@ -415,7 +437,7 @@ async def test_browser_emulate_sem_sessao_retorna_erro(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_emulate_aplica_viewport(monkeypatch) -> None:
+async def test_browser_emulate_aplica_viewport(monkeypatch: pytest.MonkeyPatch) -> None:
     tab = _fake_tab_for_emulate()
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
 
@@ -428,7 +450,9 @@ async def test_browser_emulate_aplica_viewport(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_emulate_aplica_cpu_throttle_via_cdp(monkeypatch) -> None:
+async def test_browser_emulate_aplica_cpu_throttle_via_cdp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tab = _fake_tab_for_emulate()
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
 
@@ -440,7 +464,7 @@ async def test_browser_emulate_aplica_cpu_throttle_via_cdp(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_browser_emulate_network_throttle_invalido_retorna_erro(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tab = _fake_tab_for_emulate()
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
@@ -453,7 +477,9 @@ async def test_browser_emulate_network_throttle_invalido_retorna_erro(
 
 
 @pytest.mark.asyncio
-async def test_browser_emulate_network_throttle_valido_chama_cdp(monkeypatch) -> None:
+async def test_browser_emulate_network_throttle_valido_chama_cdp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tab = _fake_tab_for_emulate()
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
 
@@ -467,7 +493,9 @@ async def test_browser_emulate_network_throttle_valido_chama_cdp(monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_browser_emulate_sem_parametros_nao_aplica_nada(monkeypatch) -> None:
+async def test_browser_emulate_sem_parametros_nao_aplica_nada(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tab = _fake_tab_for_emulate()
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
 
@@ -507,7 +535,9 @@ def _fake_tab_for_trace():
 
 
 @pytest.mark.asyncio
-async def test_browser_start_trace_sem_sessao_retorna_erro(monkeypatch) -> None:
+async def test_browser_start_trace_sem_sessao_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: None)
 
     result = json.loads(await bd.browser_start_trace(ctx=_ctx()))
@@ -516,7 +546,9 @@ async def test_browser_start_trace_sem_sessao_retorna_erro(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_start_trace_ja_em_andamento_retorna_erro(monkeypatch) -> None:
+async def test_browser_start_trace_ja_em_andamento_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tab = _fake_tab_for_trace()
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
 
@@ -531,7 +563,9 @@ async def test_browser_start_trace_ja_em_andamento_retorna_erro(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_stop_trace_sem_start_retorna_erro(monkeypatch) -> None:
+async def test_stop_trace_sem_start_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tab = _fake_tab_for_trace()
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
 
@@ -542,7 +576,7 @@ async def test_stop_trace_sem_start_retorna_erro(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_start_e_stop_trace_resume_eventos_coletados(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     tab = _fake_tab_for_trace()
     ws = SimpleNamespace(cwd=str(tmp_path))
@@ -633,7 +667,9 @@ def _fake_tab_for_heap(snapshot: dict):
 
 
 @pytest.mark.asyncio
-async def test_browser_take_heap_snapshot_sem_sessao_retorna_erro(monkeypatch) -> None:
+async def test_browser_take_heap_snapshot_sem_sessao_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: None)
 
     result = json.loads(await bd.browser_take_heap_snapshot(ctx=_ctx()))
@@ -643,7 +679,7 @@ async def test_browser_take_heap_snapshot_sem_sessao_retorna_erro(monkeypatch) -
 
 @pytest.mark.asyncio
 async def test_browser_take_heap_snapshot_resume_top_construtores(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     tab = _fake_tab_for_heap(_sample_heap_snapshot())
     ws = SimpleNamespace(cwd=str(tmp_path))
@@ -679,7 +715,7 @@ class _FakeLighthouseProc:
 
 @pytest.mark.asyncio
 async def test_browser_lighthouse_audit_npx_ausente_retorna_erro_tipado(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         bd.asyncio,
@@ -697,7 +733,7 @@ async def test_browser_lighthouse_audit_npx_ausente_retorna_erro_tipado(
 
 @pytest.mark.asyncio
 async def test_browser_lighthouse_audit_parseia_scores_e_oportunidades(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     report = {
         "categories": {
@@ -736,7 +772,7 @@ async def test_browser_lighthouse_audit_parseia_scores_e_oportunidades(
 
 @pytest.mark.asyncio
 async def test_browser_lighthouse_audit_exit_code_nao_zero_retorna_erro(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         bd.asyncio,
@@ -755,7 +791,7 @@ async def test_browser_lighthouse_audit_exit_code_nao_zero_retorna_erro(
 
 @pytest.mark.asyncio
 async def test_browser_lighthouse_audit_sem_url_usa_url_da_aba_ativa(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tab = SimpleNamespace(page=SimpleNamespace(url="http://localhost:9999"))
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
@@ -778,7 +814,7 @@ async def test_browser_lighthouse_audit_sem_url_usa_url_da_aba_ativa(
 
 @pytest.mark.asyncio
 async def test_browser_lighthouse_audit_sem_url_e_sem_sessao_retorna_erro(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: None)
 
@@ -856,7 +892,9 @@ def _fake_tab_for_snapshot(ax_nodes: list[AxNode]):
 
 
 @pytest.mark.asyncio
-async def test_browser_snapshot_sem_sessao_retorna_erro(monkeypatch) -> None:
+async def test_browser_snapshot_sem_sessao_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: None)
 
     result = await bd.browser_snapshot(ctx=_ctx())
@@ -865,7 +903,9 @@ async def test_browser_snapshot_sem_sessao_retorna_erro(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_snapshot_retorna_arvore_com_uid(monkeypatch) -> None:
+async def test_browser_snapshot_retorna_arvore_com_uid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tab = _fake_tab_for_snapshot(_AX_NODES)
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
 
@@ -876,7 +916,9 @@ async def test_browser_snapshot_retorna_arvore_com_uid(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_snapshot_erro_de_cdp_nao_propaga(monkeypatch) -> None:
+async def test_browser_snapshot_erro_de_cdp_nao_propaga(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cdp = SimpleNamespace(send=AsyncMock(side_effect=RuntimeError("CDP desconectado")))
     monkeypatch.setattr(
         bd, "get_tab_state", lambda _wid, _tid: SimpleNamespace(cdp=cdp)
@@ -934,7 +976,7 @@ def test_analyze_trace_events_identifica_long_tasks_acima_de_50ms() -> None:
 
 @pytest.mark.asyncio
 async def test_browser_analyze_trace_artifact_inexistente_retorna_erro_tipado(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     result = json.loads(
         await bd.browser_analyze_trace(artifact_path=str(tmp_path / "nao-existe.json"))
@@ -945,7 +987,7 @@ async def test_browser_analyze_trace_artifact_inexistente_retorna_erro_tipado(
 
 
 @pytest.mark.asyncio
-async def test_browser_analyze_trace_le_artifact_e_analisa(tmp_path) -> None:
+async def test_browser_analyze_trace_le_artifact_e_analisa(tmp_path: Path) -> None:
     artifact = tmp_path / "trace-abc.json"
     artifact.write_text(
         json.dumps(
@@ -965,7 +1007,7 @@ async def test_browser_analyze_trace_le_artifact_e_analisa(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_browser_analyze_trace_json_invalido_retorna_erro_tipado(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     artifact = tmp_path / "trace-corrompido.json"
     artifact.write_text("{ nao-eh-json-valido", encoding="utf-8")
@@ -1006,7 +1048,9 @@ def test_diff_heap_summaries_construtor_que_sumiu_fica_negativo() -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_compare_heap_snapshots_artifact_inexistente(tmp_path) -> None:
+async def test_browser_compare_heap_snapshots_artifact_inexistente(
+    tmp_path: Path,
+) -> None:
     result = json.loads(
         await bd.browser_compare_heap_snapshots(
             before_path=str(tmp_path / "antes.json"),
@@ -1018,7 +1062,9 @@ async def test_browser_compare_heap_snapshots_artifact_inexistente(tmp_path) -> 
 
 
 @pytest.mark.asyncio
-async def test_browser_compare_heap_snapshots_retorna_o_que_cresceu(tmp_path) -> None:
+async def test_browser_compare_heap_snapshots_retorna_o_que_cresceu(
+    tmp_path: Path,
+) -> None:
     before_path = tmp_path / "before.json"
     after_path = tmp_path / "after.json"
     before_path.write_text(json.dumps(_sample_heap_snapshot()), encoding="utf-8")
@@ -1064,7 +1110,9 @@ def _fake_tab_for_screencast():
 
 
 @pytest.mark.asyncio
-async def test_browser_screencast_start_sem_sessao_retorna_erro(monkeypatch) -> None:
+async def test_browser_screencast_start_sem_sessao_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: None)
 
     result = json.loads(await bd.browser_screencast_start(ctx=_ctx()))
@@ -1074,7 +1122,7 @@ async def test_browser_screencast_start_sem_sessao_retorna_erro(monkeypatch) -> 
 
 @pytest.mark.asyncio
 async def test_browser_screencast_start_ja_em_andamento_retorna_erro(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tab = _fake_tab_for_screencast()
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
@@ -1089,7 +1137,9 @@ async def test_browser_screencast_start_ja_em_andamento_retorna_erro(
 
 
 @pytest.mark.asyncio
-async def test_browser_screencast_stop_sem_start_retorna_erro(monkeypatch) -> None:
+async def test_browser_screencast_stop_sem_start_retorna_erro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tab = _fake_tab_for_screencast()
     monkeypatch.setattr(bd, "get_tab_state", lambda _wid, _tid: tab)
 
@@ -1100,7 +1150,7 @@ async def test_browser_screencast_stop_sem_start_retorna_erro(monkeypatch) -> No
 
 @pytest.mark.asyncio
 async def test_screencast_acumula_frames_e_persiste_artifact(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     tab = _fake_tab_for_screencast()
     ws = SimpleNamespace(cwd=str(tmp_path))

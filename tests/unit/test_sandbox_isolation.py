@@ -26,7 +26,7 @@ def _estado(report, nome):
 
 
 @pytest.fixture
-def host_com_bwrap(monkeypatch) -> None:
+def host_com_bwrap(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(isolation, "_host_can_isolate", lambda: True)
 
 
@@ -37,7 +37,7 @@ def test_sandbox_desligado_e_off() -> None:
     assert report.dimensions == ()
 
 
-def test_worker_com_tudo_aplicado_e_efetivo(host_com_bwrap) -> None:
+def test_worker_com_tudo_aplicado_e_efetivo(host_com_bwrap: None) -> None:
     report = isolation_report(
         SandboxPolicy(enabled=True), worker_status=_TUDO, worker_enforced=True
     )
@@ -47,7 +47,7 @@ def test_worker_com_tudo_aplicado_e_efetivo(host_com_bwrap) -> None:
     assert {d.state for d in report.dimensions} == {"effective"}
 
 
-def test_sem_seccomp_o_isolamento_e_parcial_nunca_efetivo(host_com_bwrap) -> None:
+def test_sem_seccomp_o_isolamento_e_parcial_nunca_efetivo(host_com_bwrap: None) -> None:
     status = {**_TUDO, "seccomp": False}
 
     report = isolation_report(
@@ -61,7 +61,7 @@ def test_sem_seccomp_o_isolamento_e_parcial_nunca_efetivo(host_com_bwrap) -> Non
     )
 
 
-def test_sem_landlock_o_isolamento_e_parcial(host_com_bwrap) -> None:
+def test_sem_landlock_o_isolamento_e_parcial(host_com_bwrap: None) -> None:
     report = isolation_report(
         SandboxPolicy(enabled=True),
         worker_status={**_TUDO, "landlock": False},
@@ -72,7 +72,7 @@ def test_sem_landlock_o_isolamento_e_parcial(host_com_bwrap) -> None:
     assert _estado(report, "landlock") == "partial"
 
 
-def test_rede_aberta_deixa_o_isolamento_parcial(host_com_bwrap) -> None:
+def test_rede_aberta_deixa_o_isolamento_parcial(host_com_bwrap: None) -> None:
     report = isolation_report(
         SandboxPolicy(enabled=True, network="open"),
         worker_status=_TUDO,
@@ -83,7 +83,7 @@ def test_rede_aberta_deixa_o_isolamento_parcial(host_com_bwrap) -> None:
     assert _estado(report, "network") == "partial"
 
 
-def test_rede_filtrada_e_sem_rede_sao_efetivas(host_com_bwrap) -> None:
+def test_rede_filtrada_e_sem_rede_sao_efetivas(host_com_bwrap: None) -> None:
     for modo in ("filtered", "off"):
         report = isolation_report(
             SandboxPolicy(enabled=True, network=modo),  # type: ignore[arg-type]
@@ -93,7 +93,7 @@ def test_rede_filtrada_e_sem_rede_sao_efetivas(host_com_bwrap) -> None:
         assert _estado(report, "network") == "effective"
 
 
-def test_git_gravavel_deixa_parcial(host_com_bwrap) -> None:
+def test_git_gravavel_deixa_parcial(host_com_bwrap: None) -> None:
     report = isolation_report(
         SandboxPolicy(enabled=True, git_writable=True),
         worker_status=_TUDO,
@@ -114,7 +114,7 @@ def test_worker_soft_do_windows_e_declarado_soft() -> None:
     assert _estado(report, "network") == "off"
 
 
-def test_sem_bwrap_no_host_o_nivel_e_off(monkeypatch) -> None:
+def test_sem_bwrap_no_host_o_nivel_e_off(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(isolation, "_host_can_isolate", lambda: False)
 
     report = isolation_report(SandboxPolicy(enabled=True))
@@ -125,7 +125,7 @@ def test_sem_bwrap_no_host_o_nivel_e_off(monkeypatch) -> None:
 
 
 def test_sem_worker_o_relatorio_diz_que_nao_e_ao_vivo(
-    host_com_bwrap, monkeypatch
+    host_com_bwrap: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(isolation, "_seccomp_available", lambda: True)
 
@@ -138,7 +138,7 @@ def test_sem_worker_o_relatorio_diz_que_nao_e_ao_vivo(
 
 
 def test_previa_mostra_o_comando_sem_executar_e_oculta_o_que_veio_do_host(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("NPM_TOKEN", "npm_segredo")
     policy = SandboxPolicy(enabled=True, env_pass=("NPM_TOKEN",))
@@ -154,7 +154,7 @@ def test_previa_mostra_o_comando_sem_executar_e_oculta_o_que_veio_do_host(
     assert "<comando>" in argv
 
 
-def test_previa_mantem_visiveis_as_variaveis_seguras(tmp_path) -> None:
+def test_previa_mantem_visiveis_as_variaveis_seguras(tmp_path: Path) -> None:
     argv = preview_bwrap_command(SandboxPolicy(enabled=True), str(tmp_path))
     texto = " ".join(argv)
 
@@ -167,7 +167,7 @@ def test_previa_mantem_visiveis_as_variaveis_seguras(tmp_path) -> None:
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_jail_real_registra_inicio_e_decisoes_de_rede(tmp_path) -> None:
+async def test_jail_real_registra_inicio_e_decisoes_de_rede(tmp_path: Path) -> None:
     manager = workspace_jail.WorkspaceJailManager()
     try:
         worker = await manager.get_or_spawn(
@@ -204,7 +204,7 @@ async def test_jail_real_registra_inicio_e_decisoes_de_rede(tmp_path) -> None:
 @real_bwrap
 @pytest.mark.asyncio
 async def test_isolamento_exigido_sem_seccomp_e_recusado_e_auditado(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(workspace_jail, "build_seccomp_filter", lambda: None)
     manager = workspace_jail.WorkspaceJailManager()
@@ -223,7 +223,7 @@ async def test_isolamento_exigido_sem_seccomp_e_recusado_e_auditado(
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_worker_for_so_devolve_worker_vivo(tmp_path) -> None:
+async def test_worker_for_so_devolve_worker_vivo(tmp_path: Path) -> None:
     manager = workspace_jail.WorkspaceJailManager()
     assert manager.worker_for("ws-x") is None
     try:

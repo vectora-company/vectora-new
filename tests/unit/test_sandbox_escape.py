@@ -9,6 +9,7 @@ from __future__ import annotations
 import platform
 import shlex
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -35,7 +36,7 @@ def _py(code: str) -> str:
     return f"{shlex.quote(sys.executable)} -c {shlex.quote(code)}"
 
 
-async def _no_jail(tmp_path, *comandos: str, policy: SandboxPolicy | None = None):
+async def _no_jail(tmp_path: Path, *comandos: str, policy: SandboxPolicy | None = None):
     manager = workspace_jail.WorkspaceJailManager()
     try:
         worker = await manager.get_or_spawn(
@@ -49,7 +50,7 @@ async def _no_jail(tmp_path, *comandos: str, policy: SandboxPolicy | None = None
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_syscalls_perigosas_matam_o_processo(tmp_path) -> None:
+async def test_syscalls_perigosas_matam_o_processo(tmp_path: Path) -> None:
     pytest.importorskip("pyseccomp")
     if _ARCH not in _SYSCALL_NUMBERS:
         pytest.skip(f"números de syscall não mapeados para {_ARCH}")
@@ -71,7 +72,9 @@ async def test_syscalls_perigosas_matam_o_processo(tmp_path) -> None:
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_clone_que_cria_namespace_e_morto_e_thread_comum_segue(tmp_path) -> None:
+async def test_clone_que_cria_namespace_e_morto_e_thread_comum_segue(
+    tmp_path: Path,
+) -> None:
     pytest.importorskip("pyseccomp")
     comum = _py(
         "import threading; t = threading.Thread(target=lambda: None); t.start(); t.join(); print('ok')"
@@ -92,7 +95,7 @@ async def test_clone_que_cria_namespace_e_morto_e_thread_comum_segue(tmp_path) -
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_tiocsti_e_negado_com_eperm(tmp_path) -> None:
+async def test_tiocsti_e_negado_com_eperm(tmp_path: Path) -> None:
     pytest.importorskip("pyseccomp")
     (resultado,) = await _no_jail(
         tmp_path,
@@ -110,7 +113,7 @@ async def test_tiocsti_e_negado_com_eperm(tmp_path) -> None:
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_sem_privilegios_e_sem_novas_capacidades(tmp_path) -> None:
+async def test_sem_privilegios_e_sem_novas_capacidades(tmp_path: Path) -> None:
     cap, nnp = await _no_jail(
         tmp_path,
         "grep CapEff /proc/self/status",
@@ -123,7 +126,9 @@ async def test_sem_privilegios_e_sem_novas_capacidades(tmp_path) -> None:
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_sistema_e_somente_leitura_e_o_home_real_nao_existe(tmp_path) -> None:
+async def test_sistema_e_somente_leitura_e_o_home_real_nao_existe(
+    tmp_path: Path,
+) -> None:
     escrever_usr, escrever_etc, home = await _no_jail(
         tmp_path,
         "touch /usr/arquivo-do-agente",
@@ -138,7 +143,7 @@ async def test_sistema_e_somente_leitura_e_o_home_real_nao_existe(tmp_path) -> N
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_nao_ha_docker_sock_no_jail(tmp_path) -> None:
+async def test_nao_ha_docker_sock_no_jail(tmp_path: Path) -> None:
     existe, run = await _no_jail(
         tmp_path,
         "test -e /var/run/docker.sock",
@@ -149,7 +154,7 @@ async def test_nao_ha_docker_sock_no_jail(tmp_path) -> None:
     assert "docker.sock" not in run["stdout"]
 
 
-def test_comando_do_bwrap_nunca_monta_o_docker_sock(tmp_path) -> None:
+def test_comando_do_bwrap_nunca_monta_o_docker_sock(tmp_path: Path) -> None:
     """Regressão: um socket montado entrega o host (o daemon roda como root e
     obedece a API), anulando todo o resto do isolamento."""
     politicas = [
@@ -167,7 +172,7 @@ def test_comando_do_bwrap_nunca_monta_o_docker_sock(tmp_path) -> None:
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_processo_do_jail_nao_enxerga_os_do_host(tmp_path) -> None:
+async def test_processo_do_jail_nao_enxerga_os_do_host(tmp_path: Path) -> None:
     (resultado,) = await _no_jail(tmp_path, "ls /proc | grep -c '^[0-9]'")
 
     assert int(resultado["stdout"].strip()) < 20  # só os processos do próprio jail
@@ -176,7 +181,7 @@ async def test_processo_do_jail_nao_enxerga_os_do_host(tmp_path) -> None:
 @real_bwrap
 @pytest.mark.asyncio
 async def test_segredos_do_backend_e_chaves_ssh_nao_aparecem(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-segredo")
     monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/ssh-agent-do-host")

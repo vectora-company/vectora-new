@@ -21,6 +21,7 @@ Cobre:
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -32,7 +33,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture(scope="module")
-def app_and_db(tmp_path_factory):
+def app_and_db(tmp_path_factory: pytest.TempPathFactory):
     """App FastAPI com auth HABILITADA e banco temporário."""
     tmp = tmp_path_factory.mktemp("auth_api")
     db_file = str(tmp / "test_api_auth.db")
@@ -355,7 +356,7 @@ class TestUsageEndpoint:
 
 class TestToolsPolicy:
     def test_get_and_put_policy(
-        self, client, root_tokens, tmp_path, monkeypatch
+        self, client, root_tokens, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.rbac import tool_policy
 
@@ -379,7 +380,7 @@ class TestToolsPolicy:
         assert r.json()["disabled"] == ["terminal"]
 
     def test_put_unknown_tool_rejected(
-        self, client, root_tokens, tmp_path, monkeypatch
+        self, client, root_tokens, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.rbac import tool_policy
 
@@ -618,7 +619,7 @@ class TestEnvOverridesEndpoints:
         assert "DEL_KEY" not in r.json()["keys"]
 
     def test_set_connect_key_without_pro_returns_402(
-        self, client, monkeypatch, tmp_path
+        self, client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Telegram/Discord/Slack/Email (Connect) exigem tier pro."""
         from backend.services import license as lic
@@ -635,7 +636,9 @@ class TestEnvOverridesEndpoints:
         )
         assert r.status_code == 402
 
-    def test_set_connect_key_with_pro_succeeds(self, client, monkeypatch) -> None:
+    def test_set_connect_key_with_pro_succeeds(
+        self, client, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("VECTORA_LICENSE_BYPASS", "1")
         # sync_adapters tentaria conectar de verdade com um token falso —
         # isola o efeito colateral, o teste cobre o gate, não o adapter.
@@ -654,7 +657,7 @@ class TestEnvOverridesEndpoints:
         assert r.status_code == 200
 
     def test_delete_connect_key_never_gated(
-        self, client, monkeypatch, tmp_path
+        self, client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Remover a própria credencial nunca é bloqueado — mesmo caído pra
         Free depois de ter salvo com Pro, o usuário sempre pode limpar."""
@@ -679,7 +682,7 @@ class TestEnvOverridesEndpoints:
         assert r.status_code == 200
 
     def test_set_non_connect_key_never_gated(
-        self, client, monkeypatch, tmp_path
+        self, client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Erro/borda inverso: uma key fora de CONNECT_ENV_KEYS (ex. token do
         GitHub, usado por git tools/RAG) nunca passa por require_pro."""
@@ -698,7 +701,7 @@ class TestEnvOverridesEndpoints:
         assert r.status_code == 200
 
     def test_set_env_llm_key_applies_to_os_environ_and_settings(
-        self, client, monkeypatch, tmp_path
+        self, client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Regressão do bug real: colar uma key de LLM (GOOGLE_API_KEY) na
         aba Envs precisa valer na PRÓXIMA chamada ao provider — antes só
@@ -748,7 +751,9 @@ class TestEnvOverridesEndpoints:
         finally:
             object.__setattr__(settings, "google_api_key", original_setting)
 
-    def test_set_env_unknown_key_stays_override_only(self, client, monkeypatch) -> None:
+    def test_set_env_unknown_key_stays_override_only(
+        self, client, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: chave desconhecida (não é key de LLM/search, ex.
         token OAuth de integração) preserva o comportamento antigo — só vai
         pro override por-usuário, nunca mexe em os.environ/settings."""

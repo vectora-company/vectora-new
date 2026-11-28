@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +18,7 @@ from backend.engine.stream_events import MessageChunk
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence) -> None:
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 
@@ -235,7 +236,7 @@ async def test_no_token_never_marks_thread_as_having_content() -> None:
 
 @pytest.mark.asyncio
 async def test_stops_consuming_events_when_client_disconnects_mid_stream(
-    _no_nats_sidecar,
+    _no_nats_sidecar: None,
 ) -> None:
     """Regressão: cancelar o fetch no cliente não tinha efeito enquanto o
     modelo estivesse "pensando" sem produzir token — o backend seguia
@@ -356,7 +357,7 @@ async def test_provider_error_midstream_becomes_clean_rate_limit() -> None:
 
 @pytest.mark.asyncio
 async def test_record_turn_checkpoint_nonexistent_directory_no_error(
-    tmp_path, monkeypatch, caplog
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """_record_turn_checkpoint não loga ERROR quando diretório do workspace não existe.
 
@@ -389,7 +390,7 @@ async def test_record_turn_checkpoint_nonexistent_directory_no_error(
 
 @pytest.mark.asyncio
 async def test_record_turn_checkpoint_nonexistent_directory_returns_silently(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """_record_turn_checkpoint retorna sem levantar exceção se diretório não existe."""
     from unittest.mock import MagicMock
@@ -410,7 +411,7 @@ async def test_record_turn_checkpoint_nonexistent_directory_returns_silently(
 
 @pytest.mark.asyncio
 async def test_resume_stream_recebe_o_que_o_cliente_perdeu_ao_cair(
-    _no_nats_sidecar,
+    _no_nats_sidecar: None,
 ) -> None:
     store = MagicMock()
     store.get_session = AsyncMock(return_value=object())

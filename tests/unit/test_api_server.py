@@ -52,7 +52,9 @@ class TestLifespan:
     ``ingest_docs``/``ingest_directory`` sejam processados pelo RAG.
     """
 
-    def test_lifespan_starts_embedding_worker(self, headless_app, monkeypatch) -> None:
+    def test_lifespan_starts_embedding_worker(
+        self, headless_app, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de lifespan starts embedding worker."""
         import backend.embedding.background as bg
 
@@ -82,7 +84,7 @@ class TestLifespan:
         )
 
     def test_lifespan_runs_thread_cleanup_immediately_at_boot(
-        self, headless_app, monkeypatch
+        self, headless_app, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """`cleanup_empty_threads` roda imediatamente no boot, sem esperar
         o primeiro `asyncio.sleep` do loop de limpeza — threads vazias de
@@ -130,7 +132,9 @@ class TestLifespan:
             "fantasma visíveis por até 1h a cada restart."
         )
 
-    def test_gateway_forwards_to_configured_backend_port(self, monkeypatch) -> None:
+    def test_gateway_forwards_to_configured_backend_port(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de gateway forwards to configured backend port."""
         from backend.api.server import _gateway_local_url
 

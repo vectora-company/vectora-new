@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -142,7 +143,7 @@ async def test_tool_call_busca_web_real(live_backend: str) -> None:
 
 
 @requires_google
-async def test_leitura_escrita_arquivo_real(live_backend: str, tmp_path) -> None:
+async def test_leitura_escrita_arquivo_real(live_backend: str, tmp_path: Path) -> None:
     workspace_dir = tmp_path / "agent-workspace"
     workspace_dir.mkdir()
 
@@ -218,7 +219,7 @@ async def test_multiturno_com_contexto_real(live_backend: str) -> None:
 
 @requires_google
 async def test_erro_recuperavel_tool_args_invalidos_real(
-    live_backend: str, tmp_path
+    live_backend: str, tmp_path: Path
 ) -> None:
     workspace_dir = tmp_path / "agent-workspace-erro"
     workspace_dir.mkdir()

@@ -23,7 +23,9 @@ class _FakeStreamReader:
 
 
 @pytest.mark.asyncio
-async def test_pipe_to_logger_forwards_each_line_with_prefix(caplog) -> None:
+async def test_pipe_to_logger_forwards_each_line_with_prefix(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     stream = _FakeStreamReader([b"line one\n", b"line two\n"])
     logger = logging.getLogger("test.pipe_to_logger")
 
@@ -53,7 +55,9 @@ async def test_pipe_to_logger_none_stream_is_noop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pipe_to_logger_skips_blank_lines(caplog) -> None:
+async def test_pipe_to_logger_skips_blank_lines(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     stream = _FakeStreamReader([b"\n", b"real content\n"])
     logger = logging.getLogger("test.pipe_to_logger")
 

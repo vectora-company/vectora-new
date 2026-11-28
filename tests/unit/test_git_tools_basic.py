@@ -171,7 +171,9 @@ class TestGitStatusImpl:
         # Untracked/modified continuam funcionando em repo unborn.
         assert result.modified == []
 
-    def test_empty_repo_with_staged_file(self, empty_repo: git.Repo, tmp_path) -> None:
+    def test_empty_repo_with_staged_file(
+        self, empty_repo: git.Repo, tmp_path: Path
+    ) -> None:
         """Repo sem commits mas com arquivo já no index (git add antes do 1º
         commit): o arquivo deve aparecer em ``staged`` (diff contra a árvore
         vazia), não crashar."""
@@ -186,7 +188,7 @@ class TestGitStatusImpl:
 
     @pytest.mark.asyncio
     async def test_handler_degrada_erro_inesperado_em_vez_de_500(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Defesa em profundidade do endpoint HTTP: se ``_git_status_impl``
         levantar algo além do unborn-HEAD (ex.: gitpython em estado

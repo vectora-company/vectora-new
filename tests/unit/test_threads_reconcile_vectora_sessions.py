@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import aiosqlite
@@ -39,7 +40,7 @@ async def checkpoints_db() -> AsyncIterator[aiosqlite.Connection]:
 
 
 @pytest.fixture
-async def session_store(tmp_path) -> AsyncIterator[SessionStore]:
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "sessions.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)

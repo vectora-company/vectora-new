@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -20,7 +21,7 @@ from backend.workspace.workspace import WorkspaceRegistry
 
 
 @pytest.fixture
-def _workspace(tmp_path, monkeypatch):
+def _workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Workspace real e confiável, registrado num registry isolado.
 
     Sem isso, ``_active_workspace`` cai no fallback ``get_or_create()``
@@ -50,7 +51,7 @@ def _clear_pending():
 
 @pytest.mark.asyncio
 async def test_terminal_command_idle_waiting_input_then_resumed_via_stdin(
-    monkeypatch, _workspace
+    monkeypatch: pytest.MonkeyPatch, _workspace
 ) -> None:
     """Comando que fica esperando input registra pendência e é retomado com stdin_input."""
     monkeypatch.setattr("backend.tools.fs._IDLE_TIMEOUT", 0.1)
@@ -101,7 +102,9 @@ async def test_terminal_without_command_or_stdin_input_returns_error(
 
 
 @pytest.mark.asyncio
-async def test_terminal_reuses_attached_workbench_pty(monkeypatch, _workspace) -> None:
+async def test_terminal_reuses_attached_workbench_pty(
+    monkeypatch: pytest.MonkeyPatch, _workspace
+) -> None:
     """Depois do attach, a tool terminal escreve no PTY que a UI exibe."""
 
     class SharedSession:
@@ -129,7 +132,9 @@ async def test_terminal_reuses_attached_workbench_pty(monkeypatch, _workspace) -
     assert session.data == b"git status" + expected_suffix
 
 
-def test_shared_terminal_uses_enter_for_windows_pty(monkeypatch) -> None:
+def test_shared_terminal_uses_enter_for_windows_pty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """ConPTY receives CR so a dispatched command is actually submitted."""
     monkeypatch.setattr("backend.tools.fs.platform.system", lambda: "Windows")
     assert _terminal_submit_suffix() == "\r"

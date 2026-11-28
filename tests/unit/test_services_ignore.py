@@ -16,13 +16,13 @@ import pytest
 class TestLoadVectoraignoreSpec:
     """load_vectoraignore_spec: carrega .vectoraignore como PathSpec."""
 
-    def test_returns_none_when_no_file(self, tmp_path) -> None:
+    def test_returns_none_when_no_file(self, tmp_path: Path) -> None:
         from backend.services.ignore import load_vectoraignore_spec
 
         spec = load_vectoraignore_spec(tmp_path)
         assert spec is None
 
-    def test_loads_simple_pattern(self, tmp_path) -> None:
+    def test_loads_simple_pattern(self, tmp_path: Path) -> None:
         from backend.services.ignore import load_vectoraignore_spec
 
         (tmp_path / ".vectoraignore").write_text("*.log\n")
@@ -31,7 +31,7 @@ class TestLoadVectoraignoreSpec:
         assert spec.match_file("error.log")
         assert not spec.match_file("main.py")
 
-    def test_loads_directory_pattern(self, tmp_path) -> None:
+    def test_loads_directory_pattern(self, tmp_path: Path) -> None:
         from backend.services.ignore import load_vectoraignore_spec
 
         (tmp_path / ".vectoraignore").write_text("tests/fixtures/**\n")
@@ -40,7 +40,7 @@ class TestLoadVectoraignoreSpec:
         assert spec.match_file("tests/fixtures/data.json")
         assert not spec.match_file("src/main.py")
 
-    def test_ignores_comment_lines(self, tmp_path) -> None:
+    def test_ignores_comment_lines(self, tmp_path: Path) -> None:
         from backend.services.ignore import load_vectoraignore_spec
 
         (tmp_path / ".vectoraignore").write_text("# comment\n*.generated.py\n")
@@ -49,7 +49,7 @@ class TestLoadVectoraignoreSpec:
         assert spec.match_file("schema.generated.py")
         assert not spec.match_file("models.py")
 
-    def test_searches_up_to_parent(self, tmp_path) -> None:
+    def test_searches_up_to_parent(self, tmp_path: Path) -> None:
         from backend.services.ignore import load_vectoraignore_spec
 
         (tmp_path / ".vectoraignore").write_text("*.secret\n")
@@ -60,7 +60,7 @@ class TestLoadVectoraignoreSpec:
         assert spec is not None
         assert spec.match_file("credentials.secret")
 
-    def test_uses_closest_vectoraignore(self, tmp_path) -> None:
+    def test_uses_closest_vectoraignore(self, tmp_path: Path) -> None:
         """Quando há dois .vectoraignore em níveis distintos, usa o mais próximo."""
         from backend.services.ignore import load_vectoraignore_spec
 
@@ -80,13 +80,13 @@ class TestLoadVectoraignoreSpec:
 class TestLoadIgnoreSpec:
     """load_ignore_spec: combina .gitignore + .vectoraignore."""
 
-    def test_returns_none_when_neither_exists(self, tmp_path) -> None:
+    def test_returns_none_when_neither_exists(self, tmp_path: Path) -> None:
         from backend.services.ignore import load_ignore_spec
 
         spec = load_ignore_spec(tmp_path)
         assert spec is None
 
-    def test_uses_gitignore_when_only_that_exists(self, tmp_path) -> None:
+    def test_uses_gitignore_when_only_that_exists(self, tmp_path: Path) -> None:
         from backend.services.ignore import load_ignore_spec
 
         (tmp_path / ".gitignore").write_text("*.pyc\n")
@@ -95,7 +95,7 @@ class TestLoadIgnoreSpec:
         assert spec.match_file("main.pyc")
         assert not spec.match_file("main.py")
 
-    def test_uses_vectoraignore_when_only_that_exists(self, tmp_path) -> None:
+    def test_uses_vectoraignore_when_only_that_exists(self, tmp_path: Path) -> None:
         from backend.services.ignore import load_ignore_spec
 
         (tmp_path / ".vectoraignore").write_text("data/**\n")
@@ -104,7 +104,7 @@ class TestLoadIgnoreSpec:
         assert spec.match_file("data/dump.json")
         assert not spec.match_file("src/model.py")
 
-    def test_combines_both_specs(self, tmp_path) -> None:
+    def test_combines_both_specs(self, tmp_path: Path) -> None:
         from backend.services.ignore import load_ignore_spec
 
         (tmp_path / ".gitignore").write_text("*.pyc\ndist/\n")
@@ -123,7 +123,9 @@ class TestLoadIgnoreSpec:
         # arquivo não ignorado por nenhum
         assert not spec.match_file("src/core/models.py")
 
-    def test_gitignore_and_vectoraignore_independent_search(self, tmp_path) -> None:
+    def test_gitignore_and_vectoraignore_independent_search(
+        self, tmp_path: Path
+    ) -> None:
         """Cada arquivo é procurado independentemente na hierarquia."""
         from backend.services.ignore import load_ignore_spec
 
@@ -145,7 +147,7 @@ class TestLoadIgnoreSpec:
 class TestIsIgnoredWithCombinedSpec:
     """Garante que is_ignored funciona com spec combinado de load_ignore_spec."""
 
-    def test_file_ignored_by_vectoraignore(self, tmp_path) -> None:
+    def test_file_ignored_by_vectoraignore(self, tmp_path: Path) -> None:
         from backend.services.ignore import is_ignored, load_ignore_spec
 
         (tmp_path / ".vectoraignore").write_text("*.dump\n")
@@ -154,7 +156,7 @@ class TestIsIgnoredWithCombinedSpec:
         dump_file = tmp_path / "db.dump"
         assert is_ignored(dump_file, tmp_path, spec)
 
-    def test_file_not_ignored(self, tmp_path) -> None:
+    def test_file_not_ignored(self, tmp_path: Path) -> None:
         from backend.services.ignore import is_ignored, load_ignore_spec
 
         (tmp_path / ".vectoraignore").write_text("*.dump\n")
@@ -163,7 +165,7 @@ class TestIsIgnoredWithCombinedSpec:
         py_file = tmp_path / "main.py"
         assert not is_ignored(py_file, tmp_path, spec)
 
-    def test_always_skip_dirs_still_apply(self, tmp_path) -> None:
+    def test_always_skip_dirs_still_apply(self, tmp_path: Path) -> None:
         """ALWAYS_SKIP_DIRS são bloqueados mesmo sem spec."""
         from backend.services.ignore import is_ignored
 
@@ -179,7 +181,9 @@ class TestWalkFilesPruning:
     congelamento de grep/list_dir/ingest_docs em repositórios grandes.
     """
 
-    def test_never_descends_into_always_skip_dirs(self, tmp_path, monkeypatch) -> None:
+    def test_never_descends_into_always_skip_dirs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """os.walk nunca visita o interior de node_modules (poda real)."""
         import os as os_module
 
@@ -207,7 +211,9 @@ class TestWalkFilesPruning:
             "walk desceu em node_modules — poda não está funcionando"
         )
 
-    def test_never_descends_into_gitignored_dirs(self, tmp_path, monkeypatch) -> None:
+    def test_never_descends_into_gitignored_dirs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Dirs batidos pelo .gitignore também são podados, não só filtrados."""
         import os as os_module
 
@@ -237,7 +243,7 @@ class TestWalkFilesPruning:
         )
 
     def test_skipped_count_includes_pruned_dirs_and_ignored_files(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         """skipped_ignored = dirs podados (1 por subárvore) + arquivos do spec."""
         from backend.services.ignore import load_ignore_spec, walk_files
@@ -254,7 +260,7 @@ class TestWalkFilesPruning:
         assert set(files) == {tmp_path / ".gitignore", tmp_path / "main.py"}
         assert skipped == 3
 
-    def test_include_dirs_lists_kept_directories(self, tmp_path) -> None:
+    def test_include_dirs_lists_kept_directories(self, tmp_path: Path) -> None:
         """include_dirs=True retorna dirs não podados (uso do list_dir)."""
         from backend.services.ignore import walk_files
 
@@ -267,7 +273,7 @@ class TestWalkFilesPruning:
         assert tmp_path / "src" / "app.py" in entries
         assert tmp_path / "node_modules" not in entries
 
-    def test_glob_pattern_filters_files_only(self, tmp_path) -> None:
+    def test_glob_pattern_filters_files_only(self, tmp_path: Path) -> None:
         """O glob filtra por nome de arquivo (ex: **/*.py)."""
         from backend.services.ignore import walk_files
 
@@ -284,7 +290,7 @@ class TestVectoraStateDirExemption:
     listada no `.gitignore` do projeto."""
 
     def test_is_ignored_false_mesmo_com_gitignore_listando_vectora(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         from backend.services.ignore import is_ignored, load_ignore_spec
 
@@ -294,7 +300,7 @@ class TestVectoraStateDirExemption:
         plan = tmp_path / ".vectora" / "plans" / "plan.md"
         assert is_ignored(plan, tmp_path, spec) is False
 
-    def test_is_ignored_false_sem_spec_tambem(self, tmp_path) -> None:
+    def test_is_ignored_false_sem_spec_tambem(self, tmp_path: Path) -> None:
         """Sem .gitignore nenhum, `.vectora` obviamente continua acessível."""
         from backend.services.ignore import is_ignored
 
@@ -302,7 +308,7 @@ class TestVectoraStateDirExemption:
         assert is_ignored(plan, tmp_path, None) is False
 
     def test_walk_desce_em_vectora_mesmo_gitignorada(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """`walk_files` varre o interior de `.vectora` mesmo com `.vectora/`
         no `.gitignore` — o plano/memória do Vectora nunca é podado."""
@@ -334,7 +340,7 @@ class TestVectoraStateDirExemption:
             "walk não desceu em .vectora — exceção de estado não aplicada"
         )
 
-    def test_outro_dir_gitignorado_continua_sendo_podado(self, tmp_path) -> None:
+    def test_outro_dir_gitignorado_continua_sendo_podado(self, tmp_path: Path) -> None:
         """A exceção é só pro `.vectora` — outros dirs gitignorados seguem
         bloqueados normalmente."""
         from backend.services.ignore import is_ignored, load_ignore_spec

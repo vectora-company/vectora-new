@@ -33,7 +33,7 @@ class TestSupabaseRecipe:
         assert dsn.startswith("postgresql")
         assert "secret" in dsn
 
-    def test_configure_settings(self, monkeypatch) -> None:
+    def test_configure_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from unittest.mock import MagicMock
 
         from backend.storage.recipes.supabase import configure_settings
@@ -76,7 +76,7 @@ class TestNeonRecipe:
         assert "-pooler" in dsn or "pooler" in dsn
         assert dsn.startswith("postgresql")
 
-    def test_configure_settings(self, monkeypatch) -> None:
+    def test_configure_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from unittest.mock import MagicMock
 
         from backend.storage.recipes.neon import configure_settings

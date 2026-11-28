@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable, Coroutine
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -172,7 +173,9 @@ def test_provider_supports_resolve_capacidade_por_provider_fixo() -> None:
     assert provider_supports("provider-que-nao-existe", "image") is False
 
 
-def test_provider_supports_gateway_depende_do_modelo_configurado(monkeypatch) -> None:
+def test_provider_supports_gateway_depende_do_modelo_configurado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.settings import settings
 
     # Erro/borda primeiro: sem modelo configurado a capacidade não existe.
@@ -198,7 +201,7 @@ def test_provider_supports_gateway_depende_do_modelo_configurado(monkeypatch) ->
 
 
 async def test_generate_image_provider_sem_suporte_avisa_e_nao_chama_sdk(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     chamou = {"sdk": False}
 
@@ -220,7 +223,7 @@ async def test_generate_image_provider_sem_suporte_avisa_e_nao_chama_sdk(
 
 
 async def test_generate_image_happy_path_persiste_arquivo(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(media, "_media_dir", lambda _s: tmp_path / "media")
     monkeypatch.setattr(media, "_generate_image_bytes", lambda *_a: b"\x89PNG-fake")
@@ -255,7 +258,7 @@ def test_generate_image_render_hint_bate_com_chave_reconhecida_pelo_frontend() -
 
 
 async def test_generate_image_prompt_vazio_e_sdk_quebrado_viram_erro_tipado(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(media, "_media_dir", lambda _s: tmp_path / "media")
 
@@ -291,7 +294,7 @@ async def test_generate_image_prompt_vazio_e_sdk_quebrado_viram_erro_tipado(
 
 
 async def test_text_to_speech_sem_suporte_avisa_com_suporte_persiste(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(media, "_media_dir", lambda _s: tmp_path / "media")
 
@@ -309,7 +312,7 @@ async def test_text_to_speech_sem_suporte_avisa_com_suporte_persiste(
 
 
 async def test_text_to_speech_texto_vazio_e_audio_vazio_sao_rejeitados(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(media, "_media_dir", lambda _s: tmp_path / "media")
 
@@ -328,7 +331,9 @@ async def test_text_to_speech_texto_vazio_e_audio_vazio_sao_rejeitados(
 # ---------------------------------------------------------------------------
 
 
-def test_provider_vem_do_config_da_sessao_nao_do_global(monkeypatch) -> None:
+def test_provider_vem_do_config_da_sessao_nao_do_global(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A sessão pode ter trocado de modelo em runtime — vale o que está no
     ctx daquela conversa, não a preferência global."""
 
@@ -350,7 +355,7 @@ def test_provider_vem_do_config_da_sessao_nao_do_global(monkeypatch) -> None:
 
 @pytest.mark.parametrize("capability", ["image", "tts"])
 async def test_nenhuma_tool_de_midia_troca_de_provider_sozinha(
-    capability, monkeypatch
+    capability: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Mesmo com outro provider perfeitamente capaz configurado, a tool
     recusa em vez de desviar para ele."""
@@ -378,7 +383,7 @@ async def test_nenhuma_tool_de_midia_troca_de_provider_sozinha(
 # ---------------------------------------------------------------------------
 
 
-def test_escolha_da_ui_vence_a_env_var(monkeypatch) -> None:
+def test_escolha_da_ui_vence_a_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sem essa precedência, quem configurou por env nunca conseguiria trocar
     de modelo pela interface: a env sempre ganharia e a UI pareceria não
     salvar."""
@@ -421,7 +426,9 @@ def test_escolha_da_ui_vence_a_env_var(monkeypatch) -> None:
     assert provider_supports("ollama", "image") is False
 
 
-def test_runtime_settings_indisponivel_cai_na_env_sem_estourar(monkeypatch) -> None:
+def test_runtime_settings_indisponivel_cai_na_env_sem_estourar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: uma checagem de capacidade não pode explodir só porque o
     runtime_settings ainda não subiu (boot muito cedo, teste isolado)."""
     import backend.settings as settings_mod
@@ -466,12 +473,14 @@ class TestOpenRouterLigadoNasTools:
     chamam o cliente nativo em vez de levantar `NotImplementedError`."""
 
     @staticmethod
-    def _sem_key(monkeypatch) -> None:
+    def _sem_key(monkeypatch: pytest.MonkeyPatch) -> None:
         from backend.settings import settings as _s
 
         monkeypatch.setattr(_s, "openrouter_api_key", "", raising=False)
 
-    def test_imagem_via_openrouter_chama_o_cliente_nativo(self, monkeypatch) -> None:
+    def test_imagem_via_openrouter_chama_o_cliente_nativo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import settings as _s
         from backend.tools import media
 
@@ -490,7 +499,9 @@ class TestOpenRouterLigadoNasTools:
 
         assert media._generate_image_bytes("openrouter", "um gato") == b"\x89PNG-fake"
 
-    def test_tts_via_openrouter_chama_o_cliente_nativo(self, monkeypatch) -> None:
+    def test_tts_via_openrouter_chama_o_cliente_nativo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import settings as _s
         from backend.tools import media
 
@@ -512,7 +523,9 @@ class TestOpenRouterLigadoNasTools:
             media._synthesize_speech_bytes("openrouter", "oi", "alloy") == b"audio-cru"
         )
 
-    def test_provider_ainda_sem_cliente_segue_levantando(self, monkeypatch) -> None:
+    def test_provider_ainda_sem_cliente_segue_levantando(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: o Ollama continua sem cliente de imagem. Ligar o
         OpenRouter não pode ter transformado o erro claro num silêncio."""
         from backend.tools import media

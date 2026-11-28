@@ -1,5 +1,11 @@
 """Testes unitários para verificação de compatibilidade semântica de schemas."""
 
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
 from backend.contracts.compat import check_schema_compatibility
 from backend.vtypes.contracts import JsonObject
 
@@ -263,7 +269,9 @@ def test_schema_compat_removed_shared_definition_is_breaking() -> None:
     assert any("Payload" in item for item in report.breaking)
 
 
-def test_contract_baseline_prefers_ci_base_and_explicit_override(monkeypatch) -> None:
+def test_contract_baseline_prefers_ci_base_and_explicit_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verifica o comportamento de contract baseline prefers ci base and explicit override."""
     from backend.contracts.__main__ import _contract_baseline_ref
 
@@ -275,7 +283,9 @@ def test_contract_baseline_prefers_ci_base_and_explicit_override(monkeypatch) ->
     assert _contract_baseline_ref() == "refs/remotes/origin/custom"
 
 
-def test_baseline_contract_tree_is_detected(monkeypatch, tmp_path) -> None:
+def test_baseline_contract_tree_is_detected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A release without the contract tree is a valid initialization baseline."""
     import backend.contracts.__main__ as contracts_cli
 
@@ -290,7 +300,7 @@ def test_baseline_contract_tree_is_detected(monkeypatch, tmp_path) -> None:
 
 
 def test_baseline_contract_tree_missing_is_not_treated_as_drift(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The first contracts export must not fail only because its base is empty."""
     import backend.contracts.__main__ as contracts_cli

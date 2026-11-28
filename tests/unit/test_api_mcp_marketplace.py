@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import cast
+from typing import Literal, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -167,13 +167,15 @@ class TestFilterRegistry:
 
 
 @pytest.mark.asyncio
-async def test_get_registry_aplica_filtro_de_query(_catalog) -> None:
+async def test_get_registry_aplica_filtro_de_query(_catalog: list[JsonObject]) -> None:
     result = await get_registry(q="brave")
     assert result == []
 
 
 @pytest.mark.asyncio
-async def test_install_resolves_only_catalog_entry(_functional_store) -> None:
+async def test_install_resolves_only_catalog_entry(
+    _functional_store: ModuleType,
+) -> None:
     result = await install_mcp(InstallRequest(mcp_id="alpha", confirm_unverified=True))
     assert result["status"] == "installed"
     assert any(
@@ -182,14 +184,18 @@ async def test_install_resolves_only_catalog_entry(_functional_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_install_unknown_connector_returns_error(_functional_store) -> None:
+async def test_install_unknown_connector_returns_error(
+    _functional_store: ModuleType,
+) -> None:
     result = await install_mcp(InstallRequest(mcp_id="missing"))
     assert result["status"] == "error"
     assert _functional_store.list_servers("local") == []
 
 
 @pytest.mark.asyncio
-async def test_uninstall_removes_from_functional_store(_functional_store) -> None:
+async def test_uninstall_removes_from_functional_store(
+    _functional_store: ModuleType,
+) -> None:
     await install_mcp(InstallRequest(mcp_id="alpha", confirm_unverified=True))
     removed = await uninstall_mcp(UninstallRequest(mcp_id="alpha"))
     assert removed["status"] == "removed"
@@ -232,7 +238,7 @@ def test_req_user_id_extrai_do_request_state_ou_usa_fallback_local() -> None:
 
 @pytest.mark.asyncio
 async def test_install_uninstall_tratam_excecao_do_store(
-    _functional_store, monkeypatch
+    _functional_store: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def boom_add(*args, **kwargs):
         raise RuntimeError("disco cheio")
@@ -256,7 +262,9 @@ async def test_install_uninstall_tratam_excecao_do_store(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("code", ["blocked", "policy_unavailable"])
 async def test_install_audita_negacao_da_allowlist(
-    _functional_store, monkeypatch, code
+    _functional_store: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    code: Literal["blocked", "policy_unavailable"],
 ) -> None:
     from backend.api.handlers import mcp_marketplace
     from backend.services.mcp_policy import McpPolicyDecision

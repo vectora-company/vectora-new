@@ -155,7 +155,7 @@ def test_resolve_keeps_explicit_workspace() -> None:
     assert _resolve_workspace_id("ws-escolhido", "thread1", "u") == "ws-escolhido"
 
 
-def test_resolve_reuses_active_workspace(monkeypatch) -> None:
+def test_resolve_reuses_active_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sem workspace pedido mas com um ativo, reusa o ativo (não cria por thread)."""
     calls = {}
 
@@ -184,7 +184,9 @@ def test_resolve_reuses_active_workspace(monkeypatch) -> None:
     assert "created" not in calls
 
 
-def test_resolve_force_new_skips_active_workspace_reuse(monkeypatch) -> None:
+def test_resolve_force_new_skips_active_workspace_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """force_new=True pula o reuso do workspace ativo e cria um dedicado —
     par de erro: force_new=False (default) continua reusando o ativo, mesmo
     registry fake, confirmando que o comportamento antigo não regrediu."""
@@ -226,7 +228,9 @@ def test_resolve_force_new_skips_active_workspace_reuse(monkeypatch) -> None:
     assert "created_thread_id" not in calls
 
 
-def test_resolve_creates_session_workspace_when_no_active(monkeypatch) -> None:
+def test_resolve_creates_session_workspace_when_no_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Sem workspace pedido e sem ativo, deriva o padrão da sessão via registry."""
     calls = {}
 
@@ -262,7 +266,9 @@ def test_resolve_creates_session_workspace_when_no_active(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sem_fallback_configurado_devolve_none(monkeypatch) -> None:
+async def test_sem_fallback_configurado_devolve_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace.runtime_settings import runtime_settings
 
     monkeypatch.setattr(runtime_settings, "get", lambda key, default=None: "")
@@ -271,7 +277,9 @@ async def test_sem_fallback_configurado_devolve_none(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fallback_configurado_e_com_visao_e_devolvido(monkeypatch) -> None:
+async def test_fallback_configurado_e_com_visao_e_devolvido(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace.runtime_settings import runtime_settings
 
     async def _sempre_com_visao(spec: str) -> bool:
@@ -291,7 +299,7 @@ async def test_fallback_configurado_e_com_visao_e_devolvido(monkeypatch) -> None
 
 @pytest.mark.asyncio
 async def test_fallback_configurado_mas_tambem_sem_visao_devolve_none(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Bad path: config inconsistente (fallback apontando pra outro modelo
     sem visão) não vira loop de bloqueio disfarçado de fallback — trata

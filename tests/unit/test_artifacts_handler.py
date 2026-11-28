@@ -28,7 +28,7 @@ from fastapi import HTTPException, Request
 
 
 @pytest.fixture
-def fake_home(tmp_path, monkeypatch):
+def fake_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Isola ``settings.vectora_home`` em tmp_path — os helpers do handler
     resolvem o diretório de artifacts a partir dele."""
     from backend.settings import settings
@@ -54,7 +54,7 @@ def _write_artifact(home: Path, session_id: str, slug: str, content: str) -> Pat
 class TestListArtifacts:
     @pytest.mark.asyncio
     async def test_lists_markdown_plans_from_the_owned_local_workspace(
-        self, fake_home, tmp_path, monkeypatch
+        self, fake_home, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers.artifacts import get_artifact, list_artifacts
         from backend.workspace.workspace import workspace_registry
@@ -164,7 +164,7 @@ class TestListArtifacts:
 
     @pytest.mark.asyncio
     async def test_does_not_list_local_plans_for_remote_workspaces(
-        self, fake_home, tmp_path, monkeypatch
+        self, fake_home, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers.artifacts import list_artifacts
         from backend.workspace.workspace import workspace_registry
@@ -220,7 +220,7 @@ class TestListArtifacts:
 
     @pytest.mark.asyncio
     async def test_storage_read_failure_is_not_reported_as_an_empty_plan(
-        self, fake_home, monkeypatch
+        self, fake_home, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from fastapi import HTTPException
 
@@ -243,7 +243,7 @@ class TestListArtifacts:
 
     @pytest.mark.asyncio
     async def test_merges_configured_and_legacy_artifacts_for_same_session(
-        self, fake_home, tmp_path, monkeypatch
+        self, fake_home, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers.artifacts import get_artifact, list_artifacts
 
@@ -280,7 +280,7 @@ class TestListArtifacts:
 
     @pytest.mark.asyncio
     async def test_reads_legacy_artifact_directory_when_profile_home_changed(
-        self, fake_home, tmp_path, monkeypatch
+        self, fake_home, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -484,7 +484,7 @@ class TestListArtifacts:
 class TestGetArtifact:
     @pytest.mark.asyncio
     async def test_read_failure_is_not_returned_as_empty_content(
-        self, fake_home, monkeypatch
+        self, fake_home, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from fastapi import HTTPException
 
@@ -579,7 +579,7 @@ class TestMediaNaListagem:
 
     @pytest.mark.asyncio
     async def test_media_aparece_junto_dos_documentos(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de media aparece junto dos documentos."""
         from backend.api.handlers import artifacts as mod
@@ -609,7 +609,9 @@ class TestMediaNaListagem:
         assert all(a.sha256 == "" for a in media)
 
     @pytest.mark.asyncio
-    async def test_sessao_sem_media_nao_quebra(self, monkeypatch, tmp_path) -> None:
+    async def test_sessao_sem_media_nao_quebra(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Erro/borda: a esmagadora maioria das sessões nunca gera mídia — a
         ausência da pasta é o caso comum, não um erro."""
         from backend.api.handlers import artifacts as mod
@@ -625,7 +627,7 @@ class TestMediaNaListagem:
 
     @pytest.mark.asyncio
     async def test_media_ilegivel_nao_derruba_a_listagem(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Erro/borda: `iterdir` estourando (permissão, disco) não pode fazer a
         aba inteira sumir — os documentos continuam listados."""
@@ -654,7 +656,9 @@ class TestGetMediaArtifact:
     esperam)."""
 
     @pytest.mark.asyncio
-    async def test_serve_arquivo_existente(self, monkeypatch, tmp_path) -> None:
+    async def test_serve_arquivo_existente(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Verifica o comportamento de serve arquivo existente."""
         from backend.api.handlers import artifacts as mod
         from backend.settings import settings
@@ -670,7 +674,7 @@ class TestGetMediaArtifact:
 
     @pytest.mark.asyncio
     async def test_arquivo_ausente_devolve_404_e_path_traversal_e_neutralizado(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Erro/borda no mesmo teste: arquivo inexistente vira 404 (não
         `FileNotFoundError` cru), e um `filename`/`session_id` tentando

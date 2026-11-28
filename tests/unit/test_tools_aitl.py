@@ -31,7 +31,9 @@ def ctx() -> ToolContext:
 
 
 class TestAskParentAgent:
-    async def test_aprovado_quando_decisao_comeca_com_approved(self, ctx) -> None:
+    async def test_aprovado_quando_decisao_comeca_com_approved(
+        self, ctx: ToolContext
+    ) -> None:
         fake_agenerate = AsyncMock(
             return_value=_fake_response("APPROVED\nSeems safe, go ahead.")
         )
@@ -50,7 +52,9 @@ class TestAskParentAgent:
         assert result["approved"] is True
         assert "Seems safe" in result["reason"]
 
-    async def test_negado_quando_decisao_comeca_com_denied(self, ctx) -> None:
+    async def test_negado_quando_decisao_comeca_com_denied(
+        self, ctx: ToolContext
+    ) -> None:
         fake_agenerate = AsyncMock(
             return_value=_fake_response("DENIED\nToo vague, ask the user instead.")
         )
@@ -70,7 +74,9 @@ class TestAskParentAgent:
         assert result["approved"] is False
         assert "Too vague" in result["reason"]
 
-    async def test_erro_na_chamada_de_decisao_nunca_propaga_e_nega(self, ctx) -> None:
+    async def test_erro_na_chamada_de_decisao_nunca_propaga_e_nega(
+        self, ctx: ToolContext
+    ) -> None:
         """Erro/borda: LLM de julgamento falhando (rede, quota, o que for)
         vira negado com motivo — nunca uma exceção não tratada que travaria
         o subagent esperando indefinidamente."""
@@ -87,7 +93,7 @@ class TestAskParentAgent:
         assert "erro interno" in result["reason"]
         assert "quota esgotada" in result["reason"]
 
-    async def test_sem_requested_tool_ainda_funciona(self, ctx) -> None:
+    async def test_sem_requested_tool_ainda_funciona(self, ctx: ToolContext) -> None:
         """Erro/borda: requested_tool é opcional — omitir não quebra o prompt
         montado nem a chamada."""
         fake_agenerate = AsyncMock(return_value=_fake_response("APPROVED\nok"))

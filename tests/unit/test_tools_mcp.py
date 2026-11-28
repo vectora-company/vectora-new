@@ -27,7 +27,7 @@ _DUMMY_SERVER_CRASHES = str(
 
 
 @pytest.fixture(autouse=True)
-async def _reset_global_client(monkeypatch):
+async def _reset_global_client(monkeypatch: pytest.MonkeyPatch):
     """Cada teste começa sem client global cacheado — evita vazamento de
     estado entre testes (o módulo usa um singleton lazy).
 
@@ -55,19 +55,21 @@ async def _reset_global_client(monkeypatch):
 
 
 @pytest.fixture
-def _enable_mcp(monkeypatch) -> None:
+def _enable_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mcp_tool_module.settings, "enable_mcp", True)
 
 
 @pytest.fixture
-def _dummy_server_settings(monkeypatch) -> None:
+def _dummy_server_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mcp_tool_module.settings, "mcp_command", sys.executable)
     monkeypatch.setattr(mcp_tool_module.settings, "mcp_command_args", [_DUMMY_SERVER])
     monkeypatch.setattr(mcp_tool_module.settings, "mcp_server_url", None)
 
 
 class TestSafeSubprocessEnv:
-    def test_allowlist_nunca_inclui_chave_sensivel(self, monkeypatch) -> None:
+    def test_allowlist_nunca_inclui_chave_sensivel(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("VECTORA_ANTHROPIC_API_KEY", "sk-segredo")
         monkeypatch.setenv("PATH", "/usr/bin")
         env = _safe_subprocess_env()
@@ -113,7 +115,7 @@ class TestVectoraMCPClientReal:
             await client.aclose()
 
     async def test_launcher_de_ambiente_e_configuracao_usam_o_mesmo_proxy(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         captured: list[StdioServerParameters] = []
 
@@ -167,7 +169,7 @@ class TestVectoraMCPClientReal:
         ]
 
     async def test_env_do_subprocesso_e_allowlist_nao_variavel_sensivel(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("VECTORA_SEGREDO_DE_TESTE", "nao-deveria-vazar")
         client = VectoraMCPClient()
@@ -315,19 +317,21 @@ class TestVectoraMCPClientAcloseNuncaPropaga:
 class TestCallMcpToolIntegration:
     """Fluxo ponta a ponta da tool exposta ao agente."""
 
-    async def test_mcp_desabilitado_retorna_aviso(self, monkeypatch) -> None:
+    async def test_mcp_desabilitado_retorna_aviso(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(mcp_tool_module.settings, "enable_mcp", False)
         result = await call_mcp_tool(tool_name="echo", arguments="{}")
         assert "desabilitado" in result.lower()
 
     async def test_arguments_json_invalido_retorna_erro_tipado(
-        self, _enable_mcp
+        self, _enable_mcp: None
     ) -> None:
         result = await call_mcp_tool(tool_name="echo", arguments="{invalido")
         assert "JSON válido" in result
 
     async def test_nenhum_servidor_configurado_retorna_aviso(
-        self, _enable_mcp, monkeypatch
+        self, _enable_mcp: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(mcp_tool_module.settings, "mcp_server_url", None)
         monkeypatch.setattr(mcp_tool_module.settings, "mcp_command", None)
@@ -335,20 +339,23 @@ class TestCallMcpToolIntegration:
         assert "Nenhuma tool MCP disponível" in result
 
     async def test_happy_path_chama_tool_do_servidor_real(
-        self, _enable_mcp, _dummy_server_settings
+        self, _enable_mcp: None, _dummy_server_settings: None
     ) -> None:
         result = await call_mcp_tool(tool_name="echo", arguments='{"text": "mundo"}')
         assert result == "echo: mundo"
 
     async def test_tool_inexistente_lista_disponiveis(
-        self, _enable_mcp, _dummy_server_settings
+        self, _enable_mcp: None, _dummy_server_settings: None
     ) -> None:
         result = await call_mcp_tool(tool_name="nao_existe", arguments="{}")
         assert "não encontrada" in result
         assert "echo" in result
 
     async def test_timeout_retorna_erro_tipado(
-        self, _enable_mcp, _dummy_server_settings, monkeypatch
+        self,
+        _enable_mcp: None,
+        _dummy_server_settings: None,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # `mcp_timeout=1` + tool que dorme 5s (não `mcp_timeout=0`): cancelar
         # bem no meio do handshake dispara uma race real no teardown do

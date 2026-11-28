@@ -164,7 +164,7 @@ class TestMediaQuotaPostgres:
     @pytest.mark.asyncio
     @pytest.mark.storage
     async def test_reapply_after_content_change_updates_checksum(
-        self, pg_conn, tmp_path
+        self, pg_conn, tmp_path: Path
     ) -> None:
         """Editar o schema.sql muda o checksum: upgrade() reaplica e status() reflete."""
         from backend.storage.migrations.postgres_runner import PostgresMigrationRunner
@@ -250,7 +250,7 @@ class TestPostgresPool:
     @pytest.mark.asyncio
     @pytest.mark.storage
     async def test_get_pg_pool_factory(
-        self, _storage_stack_ok, pg_dsn, monkeypatch
+        self, _storage_stack_ok: bool, pg_dsn: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """get_pg_pool() cria pool e garante schema via migration runner."""
         if not _storage_stack_ok:
@@ -291,7 +291,9 @@ class TestPostgresPool:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_get_pg_pool_raises_without_dsn(self, monkeypatch) -> None:
+    async def test_get_pg_pool_raises_without_dsn(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """get_pg_pool() exige DSN, sem depender do plano da conta."""
         import backend.settings as _s
         import backend.storage.factory as _fac
@@ -309,7 +311,7 @@ class TestPostgresPool:
     @pytest.mark.asyncio
     @pytest.mark.storage
     async def test_get_pg_pool_free_tier_can_use_configured_postgres(
-        self, pg_pool, pg_dsn, monkeypatch, tmp_path
+        self, pg_pool, pg_dsn: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Uma licença Free pode usar o Postgres configurado pelo operador."""
         import json

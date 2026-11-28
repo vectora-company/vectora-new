@@ -360,7 +360,7 @@ class TestReload:
 class TestRagSettings:
     """rag_settings: defaults + merge + persistência (aba de memória)."""
 
-    def test_defaults(self, rs) -> None:
+    def test_defaults(self, rs: RuntimeSettings) -> None:
         s = rs.rag_settings
         assert s["reranker_enabled"] is True
         assert s["reranker_top_k"] == 5
@@ -368,7 +368,7 @@ class TestRagSettings:
         assert s["embed_model"] == ""
         assert s["ingest_file_types"] == []
 
-    def test_set_merges_partial(self, rs) -> None:
+    def test_set_merges_partial(self, rs: RuntimeSettings) -> None:
         rs.set_rag_settings(reranker_enabled=False, reranker_top_k=12)
         s = rs.rag_settings
         assert s["reranker_enabled"] is False
@@ -376,14 +376,14 @@ class TestRagSettings:
         # O modelo selecionado permanece vazio até ser escolhido em IA Models.
         assert s["rerank_model"] == ""
 
-    def test_set_ignores_none(self, rs) -> None:
+    def test_set_ignores_none(self, rs: RuntimeSettings) -> None:
         rs.set_rag_settings(reranker_top_k=8)
         rs.set_rag_settings(reranker_top_k=None, rerank_model="cohere:rerank-v4")
         s = rs.rag_settings
         assert s["reranker_top_k"] == 8  # não sobrescrito por None
         assert s["rerank_model"] == "cohere:rerank-v4"
 
-    def test_persists_across_reload(self, tmp_settings_path) -> None:
+    def test_persists_across_reload(self, tmp_settings_path: Path) -> None:
         from backend.workspace.runtime_settings import RuntimeSettings
 
         rs1 = RuntimeSettings(path=tmp_settings_path)
@@ -396,7 +396,7 @@ class TestRagSettings:
 class TestFrontendPrefs:
     @pytest.mark.parametrize("failure", ["write", "commit"])
     def test_failed_preference_write_preserves_revision_and_durable_state(
-        self, tmp_path, failure
+        self, tmp_path: Path, failure: str
     ) -> None:
         first = RuntimeSettings(tmp_path / "failed-prefs.db")
         second = RuntimeSettings(tmp_path / "failed-prefs.db")
@@ -442,11 +442,11 @@ class TestFrontendPrefs:
 
     """frontend_prefs: preferências do web app sincronizadas com o backend."""
 
-    def test_defaults_vazio(self, rs) -> None:
+    def test_defaults_vazio(self, rs: RuntimeSettings) -> None:
         assert rs.get_frontend_prefs("u1") == {}
 
     def test_independent_connections_merge_and_observe_revocation(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         first = RuntimeSettings(tmp_path / "prefs.db")
         second = RuntimeSettings(tmp_path / "prefs.db")
@@ -461,7 +461,9 @@ class TestFrontendPrefs:
             first._conn.close()
             second._conn.close()
 
-    def test_decision_revision_detects_aba_and_preserves_scope(self, tmp_path) -> None:
+    def test_decision_revision_detects_aba_and_preserves_scope(
+        self, tmp_path: Path
+    ) -> None:
         first = RuntimeSettings(tmp_path / "revision.db")
         second = RuntimeSettings(tmp_path / "revision.db")
         try:
@@ -491,7 +493,7 @@ class TestFrontendPrefs:
             first._conn.close()
             second._conn.close()
 
-    def test_set_merge_e_leitura(self, rs) -> None:
+    def test_set_merge_e_leitura(self, rs: RuntimeSettings) -> None:
         rs.set_frontend_prefs("u1", {"selectedModel": "cohere:command-a-plus"})
         rs.set_frontend_prefs("u1", {"theme": "dark"})
         assert rs.get_frontend_prefs("u1") == {
@@ -499,18 +501,18 @@ class TestFrontendPrefs:
             "theme": "dark",
         }
 
-    def test_ignora_chaves_fora_da_whitelist(self, rs) -> None:
+    def test_ignora_chaves_fora_da_whitelist(self, rs: RuntimeSettings) -> None:
         rs.set_frontend_prefs("u1", {"theme": "dark", "chave_desconhecida": "x"})
         prefs = rs.get_frontend_prefs("u1")
         assert prefs == {"theme": "dark"}
 
-    def test_isola_por_usuario(self, rs) -> None:
+    def test_isola_por_usuario(self, rs: RuntimeSettings) -> None:
         rs.set_frontend_prefs("u1", {"theme": "dark"})
         rs.set_frontend_prefs("u2", {"theme": "light"})
         assert rs.get_frontend_prefs("u1") == {"theme": "dark"}
         assert rs.get_frontend_prefs("u2") == {"theme": "light"}
 
-    def test_persiste_apos_reload(self, tmp_settings_path) -> None:
+    def test_persiste_apos_reload(self, tmp_settings_path: Path) -> None:
         from backend.workspace.runtime_settings import RuntimeSettings
 
         rs1 = RuntimeSettings(path=tmp_settings_path)
@@ -520,7 +522,9 @@ class TestFrontendPrefs:
             "selectedModel": "google-genai:gemini-2.5-flash"
         }
 
-    def test_retorno_do_set_e_o_estado_mesclado_final(self, rs) -> None:
+    def test_retorno_do_set_e_o_estado_mesclado_final(
+        self, rs: RuntimeSettings
+    ) -> None:
         rs.set_frontend_prefs("u1", {"theme": "dark"})
         result = rs.set_frontend_prefs("u1", {"language": "pt"})
         assert result == {"theme": "dark", "language": "pt"}

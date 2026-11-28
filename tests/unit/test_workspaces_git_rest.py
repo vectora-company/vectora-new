@@ -273,7 +273,7 @@ async def test_reorder_lista_vazia_devolve_erro(
 
 
 @pytest.mark.asyncio
-async def test_cherry_pick_via_rest(ws_repo) -> None:
+async def test_cherry_pick_via_rest(ws_repo: tuple[git.Repo, Path]) -> None:
     repo, tmp_path = ws_repo
     repo.git.checkout("-b", "feature")
     (tmp_path / "feat.txt").write_text("feat\n")
@@ -288,7 +288,9 @@ async def test_cherry_pick_via_rest(ws_repo) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cherry_pick_sha_invalido_devolve_erro(ws_repo) -> None:
+async def test_cherry_pick_sha_invalido_devolve_erro(
+    ws_repo: tuple[git.Repo, Path],
+) -> None:
     result = await git_cherry_pick_inline(
         "ws-git", GitCherryPickRequest(sha="sha-invalido-000")
     )

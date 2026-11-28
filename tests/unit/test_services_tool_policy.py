@@ -7,6 +7,7 @@ por arquivo, isolado entre usuários. Diretório base redirecionado para tmp_pat
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 
@@ -17,14 +18,14 @@ from backend.storage.sqlite.pool import AsyncConnectionPool
 
 
 @pytest.fixture(autouse=True)
-def iso_dir(tmp_path, monkeypatch) -> None:
+def iso_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tool_policy, "_policy_dir", lambda: tmp_path / "tools")
     monkeypatch.setattr(tool_policy, "_versions", {})
     monkeypatch.setattr(tool_policy, "_version_store", None)
 
 
 @pytest.fixture
-async def version_store(tmp_path) -> AsyncIterator[SessionStore]:
+async def version_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "sessions.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -177,7 +178,7 @@ async def test_set_disabled_com_banco_fora_ainda_grava_arquivo_e_avanca_local(
 
 
 @pytest.fixture
-def roles(monkeypatch):
+def roles(monkeypatch: pytest.MonkeyPatch):
     """Roles por usuário, sem banco: ``roles['u']`` define o role de ``u``."""
     table: dict[str, str] = {}
     monkeypatch.setattr(tool_policy, "user_role", lambda uid: table.get(uid or ""))

@@ -22,7 +22,7 @@ from backend.vtypes.message import (
 
 
 @pytest.fixture
-async def store(tmp_path):
+async def store(tmp_path: Path):
     pool = AsyncConnectionPool(str(tmp_path / "sessions.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)

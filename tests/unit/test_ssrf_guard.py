@@ -32,11 +32,11 @@ class TestIsBlockedIp:
             "64:ff9b::c000:0201",  # NAT64 embedding 192.0.2.1
         ],
     )
-    def test_blocks_private_and_special_ranges(self, ip) -> None:
+    def test_blocks_private_and_special_ranges(self, ip: str) -> None:
         assert _is_blocked_ip(ip) is True
 
     @pytest.mark.parametrize("ip", ["8.8.8.8", "1.1.1.1", "93.184.216.34"])
-    def test_allows_public_ips(self, ip) -> None:
+    def test_allows_public_ips(self, ip: str) -> None:
         assert _is_blocked_ip(ip) is False
 
     def test_unparseable_string_is_blocked(self) -> None:

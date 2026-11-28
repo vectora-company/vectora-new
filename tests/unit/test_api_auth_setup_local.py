@@ -19,7 +19,7 @@ from backend.workspace.runtime_settings import RuntimeSettings
 
 
 @pytest.fixture(autouse=True)
-def _isolated_runtime_settings(tmp_path: Path, monkeypatch):
+def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Isola cada teste com um RuntimeSettings próprio (nunca toca o real)."""
     from backend.workspace import runtime_settings as rs_module
 

@@ -31,7 +31,7 @@ _SCHEMA = (
 
 
 @pytest.fixture
-async def db_real(tmp_path, monkeypatch):
+async def db_real(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Aplica schema.sql no arquivo que `settings.db_dsn` aponta — igual
     `run_migrations` faz no boot real — sem tocar em `_get_db` de nenhum
     módulo do Kanban/budget."""
@@ -80,7 +80,7 @@ async def test_kanban_e_budget_convergem_pro_banco_de_background_tasks(db_real) 
 
 @pytest.mark.asyncio
 async def test_kanban_no_checkpoints_db_falharia_com_tabela_ausente(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Erro/borda que documenta o bug original: se `_get_db` apontar pro
     banco de threads/checkpoints (sem `schema.sql` aplicado), a mesma

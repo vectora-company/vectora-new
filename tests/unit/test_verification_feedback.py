@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.engine.conversation_loop import (
@@ -23,7 +25,7 @@ from backend.vtypes.message import MessageRole, VMessageChunk, text_message
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     pool = AsyncConnectionPool(str(tmp_path / "feedback.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -119,7 +121,7 @@ class _RecordingClient:
 
 
 async def test_next_turn_sends_the_failure_to_the_model(
-    session_store, monkeypatch
+    session_store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     await _save_run(session_store, "r1", "failed", "ruff: 3 erros")
     await session_store.append_message(

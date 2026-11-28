@@ -143,7 +143,7 @@ class TestDespachoParaleloSequencial:
         assert changes[0].additions == 1
 
     async def test_unavailable_shared_policy_prevents_tool_effect(
-        self, ctx, monkeypatch
+        self, ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.rbac import tool_policy
 
@@ -1056,7 +1056,9 @@ class TestDespachoParaleloSequencial:
 
         assert [r.text() for r in resultados] == ["lido", "escrito"]
 
-    async def test_tool_inexistente_no_registry_vira_erro_tipado(self, ctx) -> None:
+    async def test_tool_inexistente_no_registry_vira_erro_tipado(
+        self, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de tool inexistente no registry vira erro tipado."""
         calls = [ToolCall(id="c1", name="nao-existe", args={})]
         resultados = await execute_tool_batch(
@@ -1067,7 +1069,9 @@ class TestDespachoParaleloSequencial:
         assert resultados[0].is_error is True
         assert "não encontrada" in resultados[0].text()
 
-    async def test_falha_localizada_de_tool_mcp_vira_erro_tipado(self, ctx) -> None:
+    async def test_falha_localizada_de_tool_mcp_vira_erro_tipado(
+        self, ctx: ToolContext
+    ) -> None:
         """Mensagens MCP em português devem persistir como erro."""
 
         @vtool(extras=ToolExtras(destructive=False))
@@ -1089,7 +1093,9 @@ class TestDespachoParaleloSequencial:
 
 
 class TestTurnBudget:
-    async def test_chamada_alem_do_teto_vira_erro_sem_executar(self, ctx) -> None:
+    async def test_chamada_alem_do_teto_vira_erro_sem_executar(
+        self, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de chamada alem do teto vira erro sem executar."""
         executada = False
 
@@ -1148,7 +1154,7 @@ class TestRedacaoDeSegredosPosExecucao:
         assert _redact_secrets(texto) == texto
 
     async def test_segredo_vazado_por_tool_e_redigido_antes_de_virar_mensagem(
-        self, ctx
+        self, ctx: ToolContext
     ) -> None:
         """Fim a fim: uma tool que "vaza" uma chave na saída (ex.:
         `terminal` ecoando uma env var) tem o resultado redigido pelo
@@ -1169,7 +1175,9 @@ class TestRedacaoDeSegredosPosExecucao:
         assert "sk-abcdefghijklmnopqrstuvwx" not in resultados[0].text()
         assert "[REDACTED]" in resultados[0].text()
 
-    async def test_validacao_de_policy_nao_bloqueia_o_event_loop(self, ctx) -> None:
+    async def test_validacao_de_policy_nao_bloqueia_o_event_loop(
+        self, ctx: ToolContext
+    ) -> None:
         """Uma validação lenta (DNS síncrono) roda fora do loop: outras tarefas
         continuam avançando, e a negação ainda impede a tool de executar."""
         import time
@@ -1224,7 +1232,7 @@ class TestRedacaoDeSegredosPosExecucao:
         assert ran == ["executou"]
 
     async def test_propagates_immutable_policy_snapshot_to_tool_context(
-        self, ctx
+        self, ctx: ToolContext
     ) -> None:
         """A tool recebe o snapshot do run, sem recompilar settings mutáveis."""
         seen: list[PolicySnapshot | None] = []
@@ -1266,7 +1274,7 @@ def test_envelopes_git_sem_sucesso_contam_como_erro(status: str) -> None:
 
 @pytest.mark.asyncio
 async def test_policy_is_rechecked_after_last_pre_execute_hook(
-    ctx, monkeypatch
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from backend.engine import tool_batch
     from backend.services.policy_compiler import compile_policy_snapshot
@@ -1317,7 +1325,9 @@ async def test_policy_is_rechecked_after_last_pre_execute_hook(
         {"decision": "allow", "reason": "invalid", "risk_score": -1},
     ],
 )
-async def test_invalid_decision_contract_blocks_handler(ctx, record) -> None:
+async def test_invalid_decision_contract_blocks_handler(
+    ctx: ToolContext, record
+) -> None:
     from backend.engine.hitl import _risk_assessment_key
 
     ctx._extra["systemone_decisions"] = {_risk_assessment_key("probe", {}): record}

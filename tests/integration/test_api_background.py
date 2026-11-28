@@ -65,7 +65,7 @@ def _req(uid: str | None = _UUID) -> MagicMock:
 
 
 @pytest.fixture
-async def db(tmp_path, monkeypatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     db_path = str(tmp_path / "bg.db")
     up_sql = _SCHEMA.read_text(encoding="utf-8")
 
@@ -109,14 +109,14 @@ async def db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _pro_tier_by_default(monkeypatch) -> None:
+def _pro_tier_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tarefas `webhook` exigem tier pro — este arquivo cobre o handler
     REST, não o gating em si (coberto em test_services_background.py)."""
     monkeypatch.setenv("VECTORA_LICENSE_BYPASS", "1")
 
 
 @pytest.fixture
-async def native_session_store(tmp_path):
+async def native_session_store(tmp_path: Path):
     """``SessionStore`` real (sqlite à parte do banco de tasks/runs) — a
     mesma infraestrutura que ``agent_factory.get_session_store()`` devolve
     em produção, isolada por teste."""
@@ -815,7 +815,7 @@ async def test_get_board_comment_count_e_progress_batelados_nao_por_card(db) -> 
 
 
 async def test_manual_run_creates_run_and_registers_thread(
-    db, monkeypatch, native_session_store
+    db, monkeypatch: pytest.MonkeyPatch, native_session_store
 ) -> None:
     patch_native_engine(
         monkeypatch,
@@ -864,7 +864,7 @@ async def test_manual_run_creates_run_and_registers_thread(
 
 
 async def test_manual_run_com_subagent_type_roda_a_soul_ate_o_fim(
-    db, monkeypatch, native_session_store
+    db, monkeypatch: pytest.MonkeyPatch, native_session_store
 ) -> None:
     """Gap real (revisão de 2026-08-30): nenhum teste de integração criava
     uma task com `trigger_config={"subagent_type": ...}` pelo endpoint REST
@@ -905,7 +905,7 @@ async def test_manual_run_com_subagent_type_roda_a_soul_ate_o_fim(
 
 
 async def test_resume_run_endpoint_cancel_and_approve(
-    db, monkeypatch, native_session_store
+    db, monkeypatch: pytest.MonkeyPatch, native_session_store
 ) -> None:
     """POST /runs/{id}/resume: cancela sincronamente (decision='cancel') ou
     enfileira o resume (approve/reject) via BackgroundTasks — mesmo padrão do

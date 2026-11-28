@@ -24,7 +24,7 @@ from tests.json_values import as_object, dig
 
 
 @pytest.fixture(autouse=True)
-def _sem_cache_de_prompt(monkeypatch, request) -> None:
+def _sem_cache_de_prompt(monkeypatch: pytest.MonkeyPatch, request) -> None:
     """Os testes de conversão comparam o corpo cru; o cache tem testes próprios."""
     if request.node.get_closest_marker("prompt_cache"):
         return
@@ -393,7 +393,9 @@ class TestStreamingToolCallsEUsage:
 
 
 class TestPromptCache:
-    def test_marks_tools_system_and_last_messages(self, monkeypatch) -> None:
+    def test_marks_tools_system_and_last_messages(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.llm.anthropic.chat_client import _with_prompt_cache
         from backend.settings import settings
 
@@ -418,7 +420,9 @@ class TestPromptCache:
         assert dig(out, "messages", 2, "content", -1, "text") == "três"
         assert dig(out, "messages", 2, "content", -1, "cache_control")
 
-    def test_disabled_does_not_change_body(self, monkeypatch) -> None:
+    def test_disabled_does_not_change_body(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.llm.anthropic.chat_client import _with_prompt_cache
         from backend.settings import settings
 

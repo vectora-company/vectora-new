@@ -3,6 +3,7 @@ testável sem o binário docker instalado; execução real mockada."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -39,7 +40,9 @@ def test_build_docker_command_lockdown_disables_network() -> None:
 
 
 @pytest.mark.asyncio
-async def test_missing_docker_binary_returns_clear_error(tmp_path, monkeypatch) -> None:
+async def test_missing_docker_binary_returns_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     async def _raise_not_found(*_args, **_kwargs):
         raise FileNotFoundError("docker")
 
@@ -56,7 +59,9 @@ async def test_missing_docker_binary_returns_clear_error(tmp_path, monkeypatch) 
 
 
 @pytest.mark.asyncio
-async def test_successful_run_returns_output(tmp_path, monkeypatch) -> None:
+async def test_successful_run_returns_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(b"hi\n", b""))
     proc.returncode = 0
@@ -75,7 +80,7 @@ async def test_successful_run_returns_output(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_permission_denied_returns_clear_error_not_exception(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     async def _raise_permission_denied(*_args, **_kwargs):
         raise PermissionError("Permission denied: docker")
@@ -95,7 +100,7 @@ async def test_permission_denied_returns_clear_error_not_exception(
 
 @pytest.mark.asyncio
 async def test_timeout_kills_container_process_and_reports_timed_out(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     proc = MagicMock()
 
@@ -123,7 +128,7 @@ async def test_timeout_kills_container_process_and_reports_timed_out(
 
 @pytest.mark.asyncio
 async def test_nonzero_exit_code_from_container_is_propagated(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(b"", b"comando falhou\n"))
@@ -164,7 +169,9 @@ def test_build_docker_command_workspace_with_spaces_and_unicode() -> None:
     assert argv[v_idx + 1] == "/home/usuário/meu projeto:/home/usuário/meu projeto"
 
 
-def test_build_docker_command_sempre_aplica_flags_de_seguranca(monkeypatch) -> None:
+def test_build_docker_command_sempre_aplica_flags_de_seguranca(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Cap-drop/no-new-privileges não dependem de cgroup — valem mesmo num
     host onde os limites de recurso não podem ser aplicados."""
     monkeypatch.setattr(
@@ -202,7 +209,9 @@ def test_build_docker_command_nunca_monta_o_socket_do_docker_do_host(policy) -> 
     assert not any(":/var/run/docker.sock" in arg for arg in argv)
 
 
-def test_build_docker_command_limites_de_recurso_por_perfil(monkeypatch) -> None:
+def test_build_docker_command_limites_de_recurso_por_perfil(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr("backend.sandbox.docker._cgroup_limits_available", lambda: True)
 
     normal = build_docker_command(SandboxPolicy(enabled=True), "/ws", ["true"])

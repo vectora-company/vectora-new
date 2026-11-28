@@ -192,7 +192,9 @@ class TestEmbeddings:
 
 
 class TestFactoryUsaClienteNativo:
-    def test_build_ollama_embeddings_anota_provider_e_modelo(self, monkeypatch) -> None:
+    def test_build_ollama_embeddings_anota_provider_e_modelo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import settings as _s
         from backend.storage import factory
 
@@ -209,7 +211,9 @@ class TestFactoryUsaClienteNativo:
         # import quebrado falharia alto, não passaria silenciosamente.
         assert emb.inner.client.base_url == "http://127.0.0.1:11434"
 
-    def test_sem_modelo_configurado_devolve_none(self, monkeypatch) -> None:
+    def test_sem_modelo_configurado_devolve_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import settings as _s
         from backend.storage import factory
 

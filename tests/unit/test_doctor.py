@@ -19,7 +19,9 @@ def _run(stdout: str, returncode: int = 0) -> MagicMock:
 
 
 class TestFindNatsServerPidsWin32:
-    def test_parsing_feliz_da_saida_do_tasklist(self, monkeypatch) -> None:
+    def test_parsing_feliz_da_saida_do_tasklist(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(doctor.sys, "platform", "win32")
         tasklist_output = (
             "nats-server.exe             12345 Console                    1      6.676 K\n"
@@ -35,12 +37,16 @@ class TestFindNatsServerPidsWin32:
 
         assert pids == [12345, 9999]
 
-    def test_tasklist_ausente_retorna_lista_vazia(self, monkeypatch) -> None:
+    def test_tasklist_ausente_retorna_lista_vazia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(doctor.sys, "platform", "win32")
         with patch.object(doctor.shutil, "which", return_value=None):
             assert doctor.find_nats_server_pids() == []
 
-    def test_subprocess_lancando_retorna_lista_vazia(self, monkeypatch) -> None:
+    def test_subprocess_lancando_retorna_lista_vazia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Erro/borda: qualquer falha do subprocess (timeout, permissão)
         # nunca deve propagar — degrada pra "nada encontrado".
         monkeypatch.setattr(doctor.sys, "platform", "win32")
@@ -50,7 +56,9 @@ class TestFindNatsServerPidsWin32:
         ):
             assert doctor.find_nats_server_pids() == []
 
-    def test_saida_sem_processos_retorna_lista_vazia(self, monkeypatch) -> None:
+    def test_saida_sem_processos_retorna_lista_vazia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(doctor.sys, "platform", "win32")
         with (
             patch.object(doctor.shutil, "which", return_value="tasklist"),
@@ -64,7 +72,9 @@ class TestFindNatsServerPidsWin32:
 
 
 class TestFindNatsServerPidsPosix:
-    def test_parsing_feliz_da_saida_do_pgrep(self, monkeypatch) -> None:
+    def test_parsing_feliz_da_saida_do_pgrep(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(doctor.sys, "platform", "linux")
         with (
             patch.object(doctor.shutil, "which", return_value="/usr/bin/pgrep"),
@@ -74,7 +84,9 @@ class TestFindNatsServerPidsPosix:
 
         assert pids == [111, 222]
 
-    def test_pgrep_ausente_retorna_lista_vazia(self, monkeypatch) -> None:
+    def test_pgrep_ausente_retorna_lista_vazia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(doctor.sys, "platform", "linux")
         with patch.object(doctor.shutil, "which", return_value=None):
             assert doctor.find_nats_server_pids() == []
@@ -89,7 +101,7 @@ class TestRunDoctor:
         with patch.object(doctor, "_report_sandbox_status", AsyncMock()):
             yield
 
-    def test_sem_orfaos_nao_mata_nada(self, capsys) -> None:
+    def test_sem_orfaos_nao_mata_nada(self, capsys: pytest.CaptureFixture[str]) -> None:
         with (
             patch.object(doctor, "find_nats_server_pids", return_value=[]),
             patch("backend.scheduling.nats_sidecar.kill_orphan_pid") as kill_mock,
@@ -127,7 +139,9 @@ class TestReportSandboxStatus:
     aqui)."""
 
     @pytest.mark.asyncio
-    async def test_no_linux_sem_singularity_nao_imprime_nada(self, monkeypatch) -> None:
+    async def test_no_linux_sem_singularity_nao_imprime_nada(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # bwrap é nativo aqui — sem singularity/apptainer, nada a diagnosticar.
         monkeypatch.setattr(doctor.sys, "platform", "linux")
         monkeypatch.setattr(doctor.shutil, "which", lambda _name: None)
@@ -139,7 +153,7 @@ class TestReportSandboxStatus:
 
     @pytest.mark.asyncio
     async def test_no_linux_com_singularity_informa_alternativa(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Com `singularity` instalado, o doctor reporta o backend alternativo
         pro `bwrap` (útil em ambientes HPC/cluster sem daemon Docker)."""
@@ -159,7 +173,7 @@ class TestReportSandboxStatus:
 
     @pytest.mark.asyncio
     async def test_no_linux_com_apptainer_informa_alternativa(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """`apptainer` (rebrand do Singularity) também é detectado, não só o
         binário `singularity` original."""
@@ -179,7 +193,7 @@ class TestReportSandboxStatus:
 
     @pytest.mark.asyncio
     async def test_macos_sem_sandbox_exec_recomenda_alternativas(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Sem `sandbox-exec` instalado (interface legada da Apple, pode ter
         sido removida), o doctor não finge suporte ao backend nativo —
@@ -203,7 +217,7 @@ class TestReportSandboxStatus:
 
     @pytest.mark.asyncio
     async def test_macos_com_sandbox_exec_recomenda_backend_nativo(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Com `sandbox-exec` disponível, o doctor aponta o backend nativo
         `"macos"` (Seatbelt) em vez de só recomendar docker/ssh/modal."""
@@ -226,7 +240,9 @@ class TestReportSandboxStatus:
         assert 'backend = "macos"' in printed
 
     @pytest.mark.asyncio
-    async def test_sem_wsl2_orienta_a_instalar(self, monkeypatch) -> None:
+    async def test_sem_wsl2_orienta_a_instalar(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(doctor.sys, "platform", "win32")
         monkeypatch.setattr(
             "backend.sandbox.policy.detect_wsl2", AsyncMock(return_value=None)
@@ -239,7 +255,9 @@ class TestReportSandboxStatus:
         assert "wsl --install" in printed
 
     @pytest.mark.asyncio
-    async def test_com_wsl2_e_bwrap_reporta_tudo_ok(self, monkeypatch) -> None:
+    async def test_com_wsl2_e_bwrap_reporta_tudo_ok(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(doctor.sys, "platform", "win32")
         monkeypatch.setattr(
             "backend.sandbox.policy.detect_wsl2", AsyncMock(return_value="Ubuntu")
@@ -258,7 +276,7 @@ class TestReportSandboxStatus:
 
     @pytest.mark.asyncio
     async def test_com_wsl2_mas_sem_bwrap_na_distro_orienta_instalar(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(doctor.sys, "platform", "win32")
         monkeypatch.setattr(

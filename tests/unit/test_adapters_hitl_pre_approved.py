@@ -40,12 +40,14 @@ def _hitl_run(tool_name: str, args: dict):
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence) -> None:
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 
 @pytest.mark.asyncio
-async def test_pre_approved_reflete_o_avaliador(monkeypatch) -> None:
+async def test_pre_approved_reflete_o_avaliador(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def _sempre_true(*_a, **_k) -> bool:
         return True
 
@@ -59,7 +61,9 @@ async def test_pre_approved_reflete_o_avaliador(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_falha_no_avaliador_nao_derruba_o_stream(monkeypatch) -> None:
+async def test_falha_no_avaliador_nao_derruba_o_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: `_pre_approved` já degrada sozinho, mas se algo escapar
     (bug futuro) o stream ainda não pode quebrar por causa de uma anotação
     cosmética — HITL é a parte que importa."""

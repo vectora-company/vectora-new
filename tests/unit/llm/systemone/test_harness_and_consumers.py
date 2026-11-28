@@ -1301,7 +1301,9 @@ async def test_systemone_tools_enforce_registered_patterns_and_authenticated_con
 
 
 @pytest.mark.asyncio
-async def test_kanban_decision_tool_respects_surface_preference(monkeypatch) -> None:
+async def test_kanban_decision_tool_respects_surface_preference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.tools import systemone_tools
 
     ctx = ToolContext(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -42,7 +43,7 @@ class _AnsweringClient:
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     pool = AsyncConnectionPool(str(tmp_path / "verify.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -54,7 +55,9 @@ async def session_store(tmp_path):
         await pool.close()
 
 
-async def _run_with_verification(session_store, monkeypatch, result):
+async def _run_with_verification(
+    session_store, monkeypatch: pytest.MonkeyPatch, result
+):
     async def fake_run_verification(*_args, **_kwargs):
         return result
 
@@ -82,7 +85,7 @@ async def _run_with_verification(session_store, monkeypatch, result):
 
 
 async def test_loop_emits_verification_when_a_gate_ran(
-    session_store, monkeypatch
+    session_store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     result = VerificationResult(
         passed=True, status="passed", snapshot_sha256="abc", outcome="passed"
@@ -94,7 +97,7 @@ async def test_loop_emits_verification_when_a_gate_ran(
 
 
 async def test_loop_stays_quiet_for_a_plain_chat_turn(
-    session_store, monkeypatch
+    session_store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     result = VerificationResult(
         passed=False, status="degraded", snapshot_sha256="abc", outcome="not_run"

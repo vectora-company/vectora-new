@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+from pathlib import Path
 
 import aiohttp
 import httpx
@@ -17,7 +18,7 @@ class _NetworkTouchedError(AssertionError):
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch, tmp_path):
+def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """App completo, sem Services e com qualquer saída de rede proibida."""
     monkeypatch.setenv("VECTORA_NO_SERVICES", "1")
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
@@ -49,7 +50,7 @@ SEM_SERVICES = "Services desabilitado nesta execução"
     ],
 )
 def test_rota_do_services_responde_503_sem_tocar_a_rede(
-    client, method, path, body
+    client, method: str, path: str, body
 ) -> None:
     resposta = client.request(method, path, json=body)
 
@@ -75,7 +76,9 @@ def test_status_da_licenca_informa_que_o_services_esta_desligado(client) -> None
     assert resposta.json()["services_enabled"] is False
 
 
-def test_validar_a_licenca_usa_so_o_cache_local_sem_rede(client, monkeypatch) -> None:
+def test_validar_a_licenca_usa_so_o_cache_local_sem_rede(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("VECTORA_TOKEN", "um-token-configurado")
 
     resposta = client.post("/license/validate")
@@ -85,7 +88,9 @@ def test_validar_a_licenca_usa_so_o_cache_local_sem_rede(client, monkeypatch) ->
     assert resposta.json()["valid"] in {True, False}
 
 
-def test_login_social_nao_consulta_o_broker_do_services(client, monkeypatch) -> None:
+def test_login_social_nao_consulta_o_broker_do_services(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from backend.api.handlers import oauth
 
     consultas: list[str] = []
@@ -104,7 +109,9 @@ def test_login_social_nao_consulta_o_broker_do_services(client, monkeypatch) -> 
     assert resposta.status_code in {302, 307, 503}
 
 
-def test_com_services_ligado_o_status_informa_true(monkeypatch, tmp_path) -> None:
+def test_com_services_ligado_o_status_informa_true(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.delenv("VECTORA_NO_SERVICES", raising=False)
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
     monkeypatch.setenv("VECTORA_HOME", str(tmp_path))

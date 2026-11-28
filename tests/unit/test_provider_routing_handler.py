@@ -69,7 +69,7 @@ def decision_model_settings() -> Settings:
 
 @pytest.mark.asyncio
 async def test_decision_model_readiness_reports_missing_remote_credential(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.api.handlers import provider_routing
 
@@ -95,8 +95,8 @@ async def test_decision_model_readiness_reports_missing_remote_credential(
 
 @pytest.mark.asyncio
 async def test_decision_model_readiness_uses_remote_credentials_from_environment(
-    monkeypatch,
-    decision_model_settings,
+    monkeypatch: pytest.MonkeyPatch,
+    decision_model_settings: Settings,
 ) -> None:
     from backend.api.handlers import provider_routing
 
@@ -142,7 +142,7 @@ async def test_decision_model_readiness_uses_remote_credentials_from_environment
 
 @pytest.mark.asyncio
 async def test_decision_model_readiness_probes_user_selected_provider(
-    monkeypatch, decision_model_settings
+    monkeypatch: pytest.MonkeyPatch, decision_model_settings: Settings
 ) -> None:
     from backend.api.handlers import provider_routing
 
@@ -224,7 +224,7 @@ async def test_decision_model_readiness_distinguishes_rejected_key_from_outage(
 
 
 @pytest.fixture(scope="module")
-def app(tmp_path_factory):
+def app(tmp_path_factory: pytest.TempPathFactory):
     """App FastAPI com banco de registro (Ollama/OpenRouter) isolado.
 
     ``provider_routing._get_db()`` reusa o MESMO singleton de
@@ -285,7 +285,7 @@ def client(app):
 
 
 def test_ollama_config_api_persists_validated_endpoint(
-    client, monkeypatch, tmp_path
+    client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.api.handlers import provider_routing
     from backend.settings import settings
@@ -318,14 +318,16 @@ def test_ollama_config_api_persists_validated_endpoint(
     "base_url",
     ["", "file:///tmp/ollama", "https://user:pass@example.com", "http://host/path?q=x"],
 )
-def test_ollama_config_api_rejects_invalid_endpoint(client, base_url) -> None:
+def test_ollama_config_api_rejects_invalid_endpoint(client, base_url: str) -> None:
     response = client.post(
         "/provider-routing/ollama/config", json={"base_url": base_url}
     )
     assert response.status_code == 400
 
 
-def test_ollama_test_endpoint_reports_model_catalog(client, monkeypatch) -> None:
+def test_ollama_test_endpoint_reports_model_catalog(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from backend.api.handlers import provider_routing
 
     async def fake_test(base_url=None, api_key=None):
@@ -430,7 +432,7 @@ def clean_llamacpp_config():
 
 class TestOllamaDiscovery:
     def test_ollama_release_tag_persists_and_allows_explicit_override(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de ollama release tag persists and allows explicit override."""
         from backend.api.handlers import provider_routing
@@ -449,7 +451,9 @@ class TestOllamaDiscovery:
         with pytest.raises(ValueError, match="inválida"):
             provider_routing._ollama_release_tag(tools_dir)
 
-    def test_trusted_cli_rejects_relative_path_from_path(self, monkeypatch) -> None:
+    def test_trusted_cli_rejects_relative_path_from_path(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de trusted cli rejects relative path from path."""
         from backend.api.handlers import provider_routing
 
@@ -458,7 +462,7 @@ class TestOllamaDiscovery:
         assert provider_routing._trusted_cli_executable("winget") is None
 
     def test_trusted_cli_accepts_existing_absolute_executable(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de trusted cli accepts existing absolute executable."""
         from backend.api.handlers import provider_routing
@@ -490,7 +494,9 @@ class TestOllamaDiscovery:
         assert body["models"] == []
 
     @pytest.mark.asyncio
-    async def test_install_ollama_applies_global_deadline(self, monkeypatch) -> None:
+    async def test_install_ollama_applies_global_deadline(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de install ollama applies global deadline."""
         from backend.api.handlers import provider_routing
 
@@ -515,7 +521,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_cleanup_kills_and_waits_with_own_deadline(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de ollama cleanup kills and waits with own deadline."""
         from backend.api.handlers import provider_routing
@@ -533,7 +539,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_cleanup_returns_when_both_waits_hang(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de ollama cleanup returns when both waits hang."""
         from backend.api.handlers import provider_routing
@@ -554,7 +560,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_shutdown_stops_only_managed_process(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de ollama shutdown stops only managed process."""
         from backend.api.handlers import provider_routing
@@ -571,7 +577,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_install_ollama_serializes_concurrent_requests(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de install ollama serializes concurrent requests."""
         from backend.api.handlers import provider_routing
@@ -600,7 +606,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_install_reports_ready_phase_after_readiness(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """O wizard só publica ``ready`` depois de confirmar o endpoint."""
         from backend.api.handlers import provider_routing
@@ -622,7 +628,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_missing_linux_runtime_uses_managed_release(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         from backend.api.handlers import provider_routing
 
@@ -648,7 +654,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_install_cancelled_phase_is_observable(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de ollama install cancelled phase is observable."""
         from backend.api.handlers import provider_routing
@@ -664,7 +670,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_unexpected_failure_leaves_failed_phase(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de ollama unexpected failure leaves failed phase."""
         from backend.api.handlers import provider_routing
@@ -680,7 +686,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_status_exposes_failed_phase_as_error(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de ollama status exposes failed phase as error."""
         from backend.api.handlers import provider_routing
@@ -700,7 +706,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_resume_rejects_mismatched_content_range(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de ollama resume rejects mismatched content range."""
         from backend.api.handlers import provider_routing
@@ -786,7 +792,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_download_rejects_digest_mismatch_and_cleans_partial(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """A valid-size installer must still match the publisher digest."""
         from backend.api.handlers import provider_routing
@@ -860,7 +866,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_download_preserves_partial_on_transport_error(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """A transient HTTP stream failure must remain resumable."""
         from backend.api.handlers import provider_routing
@@ -934,7 +940,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_download_rejects_resume_when_server_ignores_range(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """A resumed download must never append a full 200 response."""
         from backend.api.handlers import provider_routing
@@ -1032,7 +1038,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_ollama_download_reads_digest_manifest_when_asset_omits_digest(
-        self, monkeypatch, tmp_path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de ollama download reads digest manifest when asset omits digest."""
         from backend.api.handlers import provider_routing
@@ -1163,7 +1169,7 @@ class TestOllamaDiscovery:
 
     @pytest.mark.asyncio
     async def test_terminate_ollama_process_bounds_log_task_within_budget(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de terminate ollama process bounds log task within budget."""
         from backend.api.handlers import provider_routing
@@ -1214,7 +1220,7 @@ class TestOllamaDiscovery:
 
 class TestOllamaRegisteredModels:
     def test_registered_model_mutation_requires_authentication(
-        self, client, monkeypatch
+        self, client, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de registered model mutation requires authentication."""
         monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "true")
@@ -1435,7 +1441,9 @@ class TestLlamaCppAndHuggingFace:
             "blobs": "true",
         }
 
-    def test_local_executor_requires_desktop_bridge_token(self, monkeypatch) -> None:
+    def test_local_executor_requires_desktop_bridge_token(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de local executor requires desktop bridge token."""
         from fastapi import HTTPException
 
@@ -1459,7 +1467,7 @@ class TestLlamaCppAndHuggingFace:
         "filename", ["/tmp/model.gguf", "C:/model.gguf", "./model.gguf"]
     )
     def test_huggingface_download_rejects_absolute_or_ambiguous_paths(
-        self, client, filename
+        self, client, filename: str
     ) -> None:
         """Verifica o comportamento de huggingface download rejects absolute or ambiguous paths."""
         response = client.post(
@@ -1478,7 +1486,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_cancel_waits_for_download_lock_before_removing_partial(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de huggingface cancel waits for download lock before removing partial."""
         from backend.api.handlers import provider_routing as provider_mod
@@ -1516,7 +1524,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_download_rejects_duplicate_active_transfer(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de huggingface download rejects duplicate active transfer."""
         from fastapi import HTTPException
@@ -1556,7 +1564,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_install_writes_manifest_for_selected_files(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de huggingface install writes manifest for selected files."""
         from backend.api.handlers.provider_routing import (
@@ -1644,7 +1652,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_ollama_install_requires_runtime_readiness(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de huggingface ollama install requires runtime readiness."""
         from backend.api.handlers import provider_routing as provider_mod
@@ -1691,7 +1699,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_ollama_failure_does_not_publish_manifest(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de huggingface ollama failure does not publish manifest."""
         from fastapi import HTTPException
@@ -1751,7 +1759,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_install_rejects_file_without_source_metadata(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de huggingface install rejects file without source metadata."""
         from fastapi import HTTPException
@@ -1779,7 +1787,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_start_uses_active_managed_runtime(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de huggingface start uses active managed runtime."""
         from backend.api.handlers.provider_routing import (
@@ -1859,7 +1867,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_start_restores_configuration_when_confirmation_fails(
-        self, app, tmp_path, monkeypatch
+        self, app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A falha de confirmação não deixa um endpoint falso como gerenciado."""
         from backend.api.handlers.provider_routing import (
@@ -1925,7 +1933,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_start_removes_new_env_when_confirmation_fails(
-        self, app, tmp_path, monkeypatch
+        self, app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Falha sem .env prévio não deixa um arquivo vazio persistente."""
         from backend.api.handlers.provider_routing import (
@@ -2026,7 +2034,9 @@ class TestLlamaCppAndHuggingFace:
         )
         assert response.status_code == 400
 
-    def test_llamacpp_archive_extraction_rejects_traversal(self, tmp_path) -> None:
+    def test_llamacpp_archive_extraction_rejects_traversal(
+        self, tmp_path: Path
+    ) -> None:
         """Verifica o comportamento de llamacpp archive extraction rejects traversal."""
         archive = tmp_path / "runtime.zip"
         with zipfile.ZipFile(archive, "w") as bundle:
@@ -2034,7 +2044,7 @@ class TestLlamaCppAndHuggingFace:
         with pytest.raises(ValueError):
             _extract_llamacpp_archive(archive, tmp_path / "runtime")
 
-    def test_llamacpp_archive_extraction_returns_files(self, tmp_path) -> None:
+    def test_llamacpp_archive_extraction_returns_files(self, tmp_path: Path) -> None:
         """Verifica o comportamento de llamacpp archive extraction returns files."""
         archive = tmp_path / "runtime.zip"
         destination = tmp_path / "runtime"
@@ -2056,13 +2066,15 @@ class TestLlamaCppAndHuggingFace:
         ],
     )
     def test_ollama_asset_matches_supported_platforms(
-        self, system, machine, expected
+        self, system: str, machine: str, expected: str | None
     ) -> None:
         from backend.api.handlers.provider_routing import _ollama_asset_name
 
         assert _ollama_asset_name(system, machine) == expected
 
-    def test_ollama_archive_extraction_rejects_path_traversal(self, tmp_path) -> None:
+    def test_ollama_archive_extraction_rejects_path_traversal(
+        self, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.provider_routing import _extract_ollama_archive
 
         archive = tmp_path / "ollama.tgz"
@@ -2073,7 +2085,7 @@ class TestLlamaCppAndHuggingFace:
         with pytest.raises(ValueError, match="fora do diretório"):
             _extract_ollama_archive(archive, tmp_path / "runtime")
 
-    def test_ollama_archive_extraction_handles_zstandard(self, tmp_path) -> None:
+    def test_ollama_archive_extraction_handles_zstandard(self, tmp_path: Path) -> None:
         import io
 
         import zstandard
@@ -2108,7 +2120,7 @@ class TestLlamaCppAndHuggingFace:
         ],
     )
     def test_llamacpp_recommends_only_supported_cpu_asset(
-        self, name, system, machine, expected
+        self, name: str, system: str, machine: str, expected: bool
     ) -> None:
         from backend.api.handlers.provider_routing import _llamacpp_asset_recommended
 
@@ -2126,7 +2138,7 @@ class TestOpenRouterKey:
         assert resp.json() == {"configured": False, "masked": ""}
 
     def test_set_key_valid_persists_and_masks(
-        self, client, clean_openrouter_key, tmp_path
+        self, client, clean_openrouter_key, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set key valid persists and masks."""
         mock_response = MagicMock()
@@ -2158,7 +2170,7 @@ class TestOpenRouterKey:
         assert os.environ["OPENROUTER_API_KEY"] == "sk-or-v1-abcdef123456"
 
     def test_set_key_rejected_by_openrouter_returns_400(
-        self, client, clean_openrouter_key, tmp_path
+        self, client, clean_openrouter_key, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set key rejected by openrouter returns 400."""
         mock_response = MagicMock()
@@ -2196,7 +2208,7 @@ class TestOpenRouterKey:
         mock_httpx.assert_not_called()
 
     def test_clear_key_removes_env(
-        self, client, clean_openrouter_key, tmp_path
+        self, client, clean_openrouter_key, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de clear key removes env."""
         os.environ["OPENROUTER_API_KEY"] = "sk-or-v1-should-be-removed"
@@ -2329,7 +2341,7 @@ class TestOpenRouterCatalog:
         assert resp.json()["models"], "catálogo vazio com a rede fora"
 
     def test_catalog_stale_sentinel_survives_low_monotonic_clock(
-        self, app, client, monkeypatch
+        self, app, client, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Bug real reproduzido só em CI (Linux, VM efêmera recém-bootada),
         nunca localmente: `time.monotonic()` não conta a partir de zero —
@@ -2618,7 +2630,9 @@ class TestOpenRouterModelSupportsImage:
         assert await openrouter_model_supports_image("deepseek/deepseek-r1") is False
 
     @pytest.mark.asyncio
-    async def test_modelo_ausente_do_catalogo_falha_aberto(self, monkeypatch) -> None:
+    async def test_modelo_ausente_do_catalogo_falha_aberto(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Modelo não encontrado (id incomum, catálogo indisponível) não
         pode bloquear preventivamente — fail-open deixa a chamada real ao
         provider decidir."""
@@ -2637,7 +2651,9 @@ class TestOpenRouterModelSupportsImage:
         assert await openrouter_model_supports_image("id/inexistente") is True
 
     @pytest.mark.asyncio
-    async def test_cache_vazio_tenta_popular_antes_de_checar(self, monkeypatch) -> None:
+    async def test_cache_vazio_tenta_popular_antes_de_checar(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de cache vazio tenta popular antes de checar."""
         from backend.api.handlers import provider_routing as pr
         from backend.api.handlers.provider_routing import (
@@ -2674,7 +2690,7 @@ class TestNineRouterConfig:
         assert body["masked"] == ""
 
     def test_set_config_persists_both_fields(
-        self, client, clean_nine_router_config, tmp_path
+        self, client, clean_nine_router_config, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set config persists both fields."""
         with patch(
@@ -2698,7 +2714,7 @@ class TestNineRouterConfig:
         assert os.environ["NINE_ROUTER_API_KEY"] == "9r-abcdef123456"
 
     def test_set_config_empty_base_url_returns_400(
-        self, client, clean_nine_router_config, tmp_path
+        self, client, clean_nine_router_config, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set config empty base url returns 400."""
         with patch(
@@ -2713,7 +2729,7 @@ class TestNineRouterConfig:
         assert "NINE_ROUTER_BASE_URL" not in os.environ
 
     def test_set_config_empty_api_key_returns_400(
-        self, client, clean_nine_router_config, tmp_path
+        self, client, clean_nine_router_config, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set config empty api key returns 400."""
         with patch(
@@ -2728,7 +2744,7 @@ class TestNineRouterConfig:
         assert "NINE_ROUTER_API_KEY" not in os.environ
 
     def test_clear_config_removes_both(
-        self, client, clean_nine_router_config, tmp_path
+        self, client, clean_nine_router_config, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de clear config removes both."""
         with patch(
@@ -2758,7 +2774,7 @@ class TestNineRouterDiscovery:
         assert body["models"] == []
 
     def test_host_unreachable_returns_reachable_false_not_500(
-        self, client, clean_nine_router_config, tmp_path
+        self, client, clean_nine_router_config, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de host unreachable returns reachable false not 500."""
         with patch(
@@ -2784,7 +2800,7 @@ class TestNineRouterDiscovery:
         assert body["models"] == []
 
     def test_host_reachable_returns_models(
-        self, client, clean_nine_router_config, tmp_path
+        self, client, clean_nine_router_config, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de host reachable returns models."""
         with patch(
@@ -2821,7 +2837,7 @@ class TestNineRouterDiscovery:
         ]
 
     def test_only_chat_models_are_listed_with_their_provider(
-        self, client, clean_nine_router_config, tmp_path
+        self, client, clean_nine_router_config, tmp_path: Path
     ) -> None:
         """O OmniRoute lista imagem, áudio e embedding junto: só chat sai, e o
         provider de origem acompanha cada modelo. Pede `kind=chat` ao roteador."""
@@ -2958,7 +2974,9 @@ class TestNineRouterRegisteredModels:
 
 
 class TestLlamaCppConfiguration:
-    def test_managed_mode_requires_ready_sidecar(self, client, monkeypatch) -> None:
+    def test_managed_mode_requires_ready_sidecar(
+        self, client, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de managed mode requires ready sidecar."""
         monkeypatch.delenv("LLAMACPP_MODE", raising=False)
         monkeypatch.setattr(
@@ -2971,7 +2989,11 @@ class TestLlamaCppConfiguration:
         assert response.status_code == 409
 
     def test_external_mode_is_persisted_without_copying_credentials(
-        self, client, clean_llamacpp_config, tmp_path, monkeypatch
+        self,
+        client,
+        clean_llamacpp_config,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Verifica o comportamento de external mode is persisted without copying credentials."""
         monkeypatch.setattr(
@@ -2986,7 +3008,11 @@ class TestLlamaCppConfiguration:
         assert "LLAMACPP_MODE=external" in (tmp_path / ".env").read_text()
 
     def test_config_syncs_model_environment(
-        self, client, clean_llamacpp_config, tmp_path, monkeypatch
+        self,
+        client,
+        clean_llamacpp_config,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Verifica o comportamento de config syncs model environment."""
         from backend.settings import settings
@@ -3016,7 +3042,7 @@ class TestLlamaCppConfiguration:
 
     @pytest.mark.asyncio
     async def test_runtime_status_reads_installed_manifest(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de runtime status reads installed manifest."""
         from backend.settings import settings
@@ -3048,7 +3074,7 @@ class TestLlamaCppConfiguration:
 
     @pytest.mark.asyncio
     async def test_runtime_status_distinguishes_external_mode_without_managed_files(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de runtime status distinguishes external mode without managed files."""
         from backend.api.handlers.provider_routing import llamacpp_runtime_status
@@ -3070,7 +3096,7 @@ class TestLlamaCppConfiguration:
 
     @pytest.mark.asyncio
     async def test_runtime_status_marks_persisted_unknown_process(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de runtime status marks persisted unknown process."""
         from backend.api.handlers.provider_routing import llamacpp_runtime_status
@@ -3094,7 +3120,7 @@ class TestLlamaCppConfiguration:
 
     @pytest.mark.asyncio
     async def test_runtime_status_detects_system_llama_server(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers.provider_routing import llamacpp_runtime_status
         from backend.settings import settings
@@ -3115,7 +3141,9 @@ class TestLlamaCppConfiguration:
         assert status["external"] is True
 
     @pytest.mark.asyncio
-    async def test_runtime_removal_rejects_active_sidecar(self, monkeypatch) -> None:
+    async def test_runtime_removal_rejects_active_sidecar(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de runtime removal rejects active sidecar."""
         monkeypatch.setattr(
             "backend.services.llamacpp_sidecar.llamacpp_status",
@@ -3127,7 +3155,7 @@ class TestLlamaCppConfiguration:
 
     @pytest.mark.asyncio
     async def test_runtime_rollback_activates_registered_version(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de runtime rollback activates registered version."""
         from backend.api.handlers.provider_routing import rollback_llamacpp_runtime
@@ -3151,7 +3179,7 @@ class TestLlamaCppConfiguration:
 
     @pytest.mark.asyncio
     async def test_runtime_version_removal_keeps_active_version(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de runtime version removal keeps active version."""
         from backend.api.handlers.provider_routing import (
@@ -3175,7 +3203,7 @@ class TestLlamaCppConfiguration:
 
     @pytest.mark.asyncio
     async def test_runtime_cleanup_retains_active_and_newest_inactive_versions(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de runtime cleanup retains active and newest inactive versions."""
         from backend.api.handlers.provider_routing import (
@@ -3303,7 +3331,9 @@ def test_decision_model_status_with_empty_local_model(
 
 
 @pytest.mark.asyncio
-async def test_decision_model_readiness_openrouter_sem_chave(monkeypatch) -> None:
+async def test_decision_model_readiness_openrouter_sem_chave(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """O OpenRouter usa a chave do próprio OpenRouter; sem ela nada é sondado."""
     from backend.api.handlers import provider_routing
 
@@ -3330,7 +3360,7 @@ async def test_decision_model_readiness_openrouter_sem_chave(monkeypatch) -> Non
 
 @pytest.mark.asyncio
 async def test_decision_model_readiness_openrouter_com_chave_sonda_o_provider(
-    monkeypatch, decision_model_settings
+    monkeypatch: pytest.MonkeyPatch, decision_model_settings: Settings
 ) -> None:
     from backend.api.handlers import provider_routing
 

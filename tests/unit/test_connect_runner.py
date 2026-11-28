@@ -9,6 +9,7 @@ externa não tem UI de aprovar/rejeitar tool call).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -34,7 +35,7 @@ from tests.native_engine import patch_native_engine
 
 
 @pytest.fixture
-async def native_session_store(tmp_path):
+async def native_session_store(tmp_path: Path):
     pool = AsyncConnectionPool(
         str(tmp_path / "connect-runner-sessions.db"), min_size=1, max_size=2
     )
@@ -49,7 +50,7 @@ async def native_session_store(tmp_path):
 
 class TestRunAgentForThread:
     async def test_roda_o_turno_e_devolve_o_texto_final(
-        self, native_session_store, monkeypatch
+        self, native_session_store, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         client = ScriptedChatClient([[texto_chunk("Olá! Como posso ajudar?")]])
         patch_native_engine(
@@ -90,7 +91,7 @@ class TestRunAgentForThread:
         assert reply2.endswith("…")
 
     async def test_segunda_mensagem_na_mesma_thread_reusa_o_historico(
-        self, native_session_store, monkeypatch
+        self, native_session_store, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Cada chamada relê o histórico persistido — a 2ª mensagem do mesmo
         `thread_id` não recria o system prompt nem perde o turno anterior."""
@@ -121,7 +122,7 @@ class TestRunAgentForThread:
         ]
 
     async def test_tool_destrutiva_nunca_pausa_em_hitl_mensageria_externa(
-        self, native_session_store, monkeypatch
+        self, native_session_store, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """`permission_mode` fixo em "auto" — o interlocutor externo não tem
         UI de aprovar/rejeitar, então uma tool destrutiva roda direto em vez
@@ -173,7 +174,7 @@ class TestRunAgentForThread:
         ]
 
     async def test_conector_nao_executa_tool_quando_modelo_exige_aprovacao(
-        self, native_session_store, monkeypatch
+        self, native_session_store, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.engine import conversation_loop
         from backend.engine.hitl import _risk_assessment_key
@@ -257,7 +258,7 @@ class TestRunAgentForThread:
         assert run.approvals[0]["tool_name"] == "escrever_arquivo_com_aprovacao_connect"
 
     async def test_delegacao_a_uma_soul_roda_sem_pausar_em_hitl(
-        self, native_session_store, monkeypatch
+        self, native_session_store, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Gap real (revisão de 2026-08-30): nenhum teste deste arquivo
         exercitava `native_agent.subagent_catalog` não-vazio — em produção
@@ -313,7 +314,7 @@ class TestRunAgentForThread:
         ]
 
     async def test_falha_no_chat_client_propaga_pro_handle_incoming_message(
-        self, native_session_store, monkeypatch
+        self, native_session_store, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: run_agent_for_thread NÃO trata a exceção — é
         `handle_incoming_message` (backend/services/gateway/messaging.py)
@@ -332,7 +333,7 @@ class TestRunAgentForThread:
 
 class TestProcessIncoming:
     async def test_fluxo_completo_resolve_thread_roda_agente_e_devolve_resposta(
-        self, native_session_store, monkeypatch, tmp_path
+        self, native_session_store, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Fluxo ponta a ponta de uma mensagem de plataforma externa: resolve
         (cria) o mapeamento thread, roda o agente via `run_agent_for_thread`

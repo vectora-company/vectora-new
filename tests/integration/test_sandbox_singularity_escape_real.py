@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -34,7 +35,7 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-async def test_leitura_dentro_do_workspace_funciona_fora_falha(tmp_path) -> None:
+async def test_leitura_dentro_do_workspace_funciona_fora_falha(tmp_path: Path) -> None:
     """Happy: o que está no bind mount é legível. Erro: `/etc/shadow` do host
     está fora do bind e a leitura precisa falhar — se passar, o `--containall`
     não está isolando o filesystem do host."""
@@ -56,7 +57,7 @@ async def test_leitura_dentro_do_workspace_funciona_fora_falha(tmp_path) -> None
 
 
 @pytest.mark.asyncio
-async def test_lockdown_nega_rede_de_verdade(tmp_path) -> None:
+async def test_lockdown_nega_rede_de_verdade(tmp_path: Path) -> None:
     """Com `lockdown=True`, `--net` isola pra uma rede privada sem rota
     externa — uma conexão de verdade contra um IP público precisa falhar."""
     policy = SandboxPolicy(enabled=True, lockdown=True, rw_paths=(str(tmp_path),))

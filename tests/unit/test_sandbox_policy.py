@@ -21,14 +21,14 @@ from backend.sandbox.policy import (
 
 
 @pytest.mark.usefixtures("sem_bwrap_automatico")
-def test_missing_file_returns_disabled_policy(tmp_path) -> None:
+def test_missing_file_returns_disabled_policy(tmp_path: Path) -> None:
     result = parse_policy(tmp_path / "vectora.toml")
 
     assert result == DISABLED_POLICY
     assert result.enabled is False
 
 
-def test_file_without_sandbox_section_returns_disabled_policy(tmp_path) -> None:
+def test_file_without_sandbox_section_returns_disabled_policy(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text('[other]\nkey = "value"\n', encoding="utf-8")
 
@@ -37,7 +37,7 @@ def test_file_without_sandbox_section_returns_disabled_policy(tmp_path) -> None:
     assert result == DISABLED_POLICY
 
 
-def test_valid_sandbox_section_parses_all_fields(tmp_path) -> None:
+def test_valid_sandbox_section_parses_all_fields(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text(
         """
@@ -64,7 +64,7 @@ lockdown = true
     assert result.lockdown is True
 
 
-def test_malformed_toml_fails_closed(tmp_path) -> None:
+def test_malformed_toml_fails_closed(tmp_path: Path) -> None:
     # Erro/borda: TOML quebrado nunca deve desabilitar a proteção
     # silenciosamente — a política mais restritiva é o resultado seguro.
     toml_path = tmp_path / "vectora.toml"
@@ -77,7 +77,7 @@ def test_malformed_toml_fails_closed(tmp_path) -> None:
     assert result.lockdown is True
 
 
-def test_wrong_field_type_fails_closed(tmp_path) -> None:
+def test_wrong_field_type_fails_closed(tmp_path: Path) -> None:
     # rw_paths deveria ser array de strings — aqui é um int solto.
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\nrw_paths = 42\n", encoding="utf-8")
@@ -87,7 +87,7 @@ def test_wrong_field_type_fails_closed(tmp_path) -> None:
     assert result == LOCKED_DOWN_POLICY
 
 
-def test_allow_tcp_ports_parses_int_list(tmp_path) -> None:
+def test_allow_tcp_ports_parses_int_list(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\nallow_tcp_ports = [443, 8080]\n", encoding="utf-8")
 
@@ -96,7 +96,7 @@ def test_allow_tcp_ports_parses_int_list(tmp_path) -> None:
     assert result.allow_tcp_ports == (443, 8080)
 
 
-def test_allow_tcp_ports_omitted_defaults_to_empty(tmp_path) -> None:
+def test_allow_tcp_ports_omitted_defaults_to_empty(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\n", encoding="utf-8")
 
@@ -105,7 +105,7 @@ def test_allow_tcp_ports_omitted_defaults_to_empty(tmp_path) -> None:
     assert result.allow_tcp_ports == ()
 
 
-def test_allow_tcp_ports_non_numeric_value_fails_closed(tmp_path) -> None:
+def test_allow_tcp_ports_non_numeric_value_fails_closed(tmp_path: Path) -> None:
     # Erro/borda: valor não-numérico na lista cai no mesmo fail-closed já
     # existente da política, em vez de propagar ValueError ou ignorar.
     toml_path = tmp_path / "vectora.toml"
@@ -118,7 +118,7 @@ def test_allow_tcp_ports_non_numeric_value_fails_closed(tmp_path) -> None:
     assert result == LOCKED_DOWN_POLICY
 
 
-def test_defaults_applied_when_fields_omitted(tmp_path) -> None:
+def test_defaults_applied_when_fields_omitted(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\n", encoding="utf-8")
 
@@ -131,7 +131,7 @@ def test_defaults_applied_when_fields_omitted(tmp_path) -> None:
     assert ".env" in result.mask
 
 
-def test_secao_sandbox_vazia_como_dict_usa_defaults(tmp_path) -> None:
+def test_secao_sandbox_vazia_como_dict_usa_defaults(tmp_path: Path) -> None:
     # [sandbox] presente mas sem nenhuma chave — dict vazio, não None.
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\n", encoding="utf-8")
@@ -143,7 +143,7 @@ def test_secao_sandbox_vazia_como_dict_usa_defaults(tmp_path) -> None:
     assert result.ro_paths == ()
 
 
-def test_sandbox_como_lista_em_vez_de_tabela_falha_fechado(tmp_path) -> None:
+def test_sandbox_como_lista_em_vez_de_tabela_falha_fechado(tmp_path: Path) -> None:
     # Erro/borda: [[sandbox]] TOML array-of-tables vira lista, não dict —
     # isinstance(section, dict) deve rejeitar e não vira DISABLED silencioso.
     toml_path = tmp_path / "vectora.toml"
@@ -154,7 +154,7 @@ def test_sandbox_como_lista_em_vez_de_tabela_falha_fechado(tmp_path) -> None:
     assert result == DISABLED_POLICY
 
 
-def test_rw_paths_com_entradas_duplicadas_preserva_duplicatas(tmp_path) -> None:
+def test_rw_paths_com_entradas_duplicadas_preserva_duplicatas(tmp_path: Path) -> None:
     # Duplicado: parser não deduplica — é decisão do backend de execução,
     # não da camada de parsing (dedupe silencioso esconderia intenção).
     toml_path = tmp_path / "vectora.toml"
@@ -167,7 +167,7 @@ def test_rw_paths_com_entradas_duplicadas_preserva_duplicatas(tmp_path) -> None:
     assert result.rw_paths == ("/workspace", "/workspace")
 
 
-def test_rw_e_ro_paths_vazios_explicitos_nao_quebram(tmp_path) -> None:
+def test_rw_e_ro_paths_vazios_explicitos_nao_quebram(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text(
         "[sandbox]\nrw_paths = []\nro_paths = []\nmask = []\n", encoding="utf-8"
@@ -180,7 +180,7 @@ def test_rw_e_ro_paths_vazios_explicitos_nao_quebram(tmp_path) -> None:
     assert result.mask == ()
 
 
-def test_mask_customizado_substitui_default_por_completo(tmp_path) -> None:
+def test_mask_customizado_substitui_default_por_completo(tmp_path: Path) -> None:
     # Borda: mask fornecido não faz merge com DEFAULT_MASK, substitui.
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text('[sandbox]\nmask = ["**/*.key"]\n', encoding="utf-8")
@@ -191,7 +191,7 @@ def test_mask_customizado_substitui_default_por_completo(tmp_path) -> None:
     assert ".env" not in result.mask
 
 
-def test_docker_image_ausente_fica_none(tmp_path) -> None:
+def test_docker_image_ausente_fica_none(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text('[sandbox]\nbackend = "docker"\n', encoding="utf-8")
 
@@ -202,7 +202,7 @@ def test_docker_image_ausente_fica_none(tmp_path) -> None:
     assert result.ssh_key_id is None
 
 
-def test_docker_image_com_tipo_numerico_e_coagido_para_string(tmp_path) -> None:
+def test_docker_image_com_tipo_numerico_e_coagido_para_string(tmp_path: Path) -> None:
     # docker_image = 123 não é erro de tipo fatal — str() converte.
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\ndocker_image = 123\n", encoding="utf-8")
@@ -213,7 +213,7 @@ def test_docker_image_com_tipo_numerico_e_coagido_para_string(tmp_path) -> None:
 
 
 def test_backend_desconhecido_e_aceito_pelo_parser_mas_nao_pelo_dispatch(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     # O parser não valida o valor de backend (é o runner.py que faz dispatch
     # fail-closed) — só confirma que não quebra aqui, string livre é aceita.
@@ -227,7 +227,7 @@ def test_backend_desconhecido_e_aceito_pelo_parser_mas_nao_pelo_dispatch(
     assert result.backend == "backend-inexistente"
 
 
-def test_arquivo_vazio_sem_nenhuma_secao_retorna_disabled(tmp_path) -> None:
+def test_arquivo_vazio_sem_nenhuma_secao_retorna_disabled(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("", encoding="utf-8")
 
@@ -236,7 +236,7 @@ def test_arquivo_vazio_sem_nenhuma_secao_retorna_disabled(tmp_path) -> None:
     assert result == DISABLED_POLICY
 
 
-def test_encoding_invalido_falha_fechado(tmp_path) -> None:
+def test_encoding_invalido_falha_fechado(tmp_path: Path) -> None:
     # Erro/borda: bytes que não decodificam como UTF-8 — read_text levanta
     # UnicodeDecodeError, capturado pelo except genérico do parse do TOML.
     toml_path = tmp_path / "vectora.toml"
@@ -247,7 +247,7 @@ def test_encoding_invalido_falha_fechado(tmp_path) -> None:
     assert result == LOCKED_DOWN_POLICY
 
 
-def test_enabled_com_string_truthy_e_coagido_para_bool(tmp_path) -> None:
+def test_enabled_com_string_truthy_e_coagido_para_bool(tmp_path: Path) -> None:
     # enabled = "false" (string) via bool() vira True — comportamento do
     # bool() do Python é documentado aqui pra não surpreender no futuro.
     toml_path = tmp_path / "vectora.toml"
@@ -258,7 +258,7 @@ def test_enabled_com_string_truthy_e_coagido_para_bool(tmp_path) -> None:
     assert result.enabled is True
 
 
-def test_lockdown_true_com_backend_custom_preserva_backend(tmp_path) -> None:
+def test_lockdown_true_com_backend_custom_preserva_backend(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text(
         '[sandbox]\nlockdown = true\nbackend = "docker"\n', encoding="utf-8"
@@ -270,7 +270,7 @@ def test_lockdown_true_com_backend_custom_preserva_backend(tmp_path) -> None:
     assert result.backend == "docker"
 
 
-def test_empty_toml_file_returns_disabled_policy(tmp_path) -> None:
+def test_empty_toml_file_returns_disabled_policy(tmp_path: Path) -> None:
     # Erro/borda: arquivo vazio (sem nenhuma seção) não deve quebrar o parser.
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("", encoding="utf-8")
@@ -280,7 +280,7 @@ def test_empty_toml_file_returns_disabled_policy(tmp_path) -> None:
     assert result == DISABLED_POLICY
 
 
-def test_sandbox_section_not_a_table_returns_disabled_policy(tmp_path) -> None:
+def test_sandbox_section_not_a_table_returns_disabled_policy(tmp_path: Path) -> None:
     # `[sandbox]` precisa ser uma tabela — um escalar solto não é seção válida.
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text('sandbox = "yes"\n', encoding="utf-8")
@@ -290,7 +290,7 @@ def test_sandbox_section_not_a_table_returns_disabled_policy(tmp_path) -> None:
     assert result == DISABLED_POLICY
 
 
-def test_ro_paths_wrong_type_fails_closed(tmp_path) -> None:
+def test_ro_paths_wrong_type_fails_closed(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\nro_paths = 7\n", encoding="utf-8")
 
@@ -299,7 +299,7 @@ def test_ro_paths_wrong_type_fails_closed(tmp_path) -> None:
     assert result == LOCKED_DOWN_POLICY
 
 
-def test_mask_wrong_type_fails_closed(tmp_path) -> None:
+def test_mask_wrong_type_fails_closed(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\nmask = true\n", encoding="utf-8")
 
@@ -308,7 +308,7 @@ def test_mask_wrong_type_fails_closed(tmp_path) -> None:
     assert result == LOCKED_DOWN_POLICY
 
 
-def test_duplicate_keys_in_toml_fails_closed(tmp_path) -> None:
+def test_duplicate_keys_in_toml_fails_closed(tmp_path: Path) -> None:
     # TOML não permite chave duplicada na mesma tabela — é erro de sintaxe.
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text(
@@ -320,7 +320,7 @@ def test_duplicate_keys_in_toml_fails_closed(tmp_path) -> None:
     assert result == LOCKED_DOWN_POLICY
 
 
-def test_optional_backend_fields_parsed_when_present(tmp_path) -> None:
+def test_optional_backend_fields_parsed_when_present(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text(
         """
@@ -340,7 +340,7 @@ ssh_key_id = "key-123"
     assert result.ssh_key_id == "key-123"
 
 
-def test_optional_backend_fields_default_to_none(tmp_path) -> None:
+def test_optional_backend_fields_default_to_none(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\n", encoding="utf-8")
 
@@ -351,7 +351,7 @@ def test_optional_backend_fields_default_to_none(tmp_path) -> None:
     assert result.ssh_key_id is None
 
 
-def test_enabled_explicitly_false_is_respected(tmp_path) -> None:
+def test_enabled_explicitly_false_is_respected(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\nenabled = false\n", encoding="utf-8")
 
@@ -360,7 +360,7 @@ def test_enabled_explicitly_false_is_respected(tmp_path) -> None:
     assert result.enabled is False
 
 
-def test_unknown_backend_name_is_preserved_not_normalized(tmp_path) -> None:
+def test_unknown_backend_name_is_preserved_not_normalized(tmp_path: Path) -> None:
     # O parser não valida o valor de `backend` — quem falha fechado por
     # backend desconhecido é o dispatcher (runner.py), não o parser.
     toml_path = tmp_path / "vectora.toml"
@@ -372,7 +372,7 @@ def test_unknown_backend_name_is_preserved_not_normalized(tmp_path) -> None:
     assert result.enabled is True
 
 
-def test_rw_and_ro_paths_with_unicode_and_spaces(tmp_path) -> None:
+def test_rw_and_ro_paths_with_unicode_and_spaces(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text(
         '[sandbox]\nrw_paths = ["/home/usuário/meu projeto"]\n',
@@ -384,7 +384,7 @@ def test_rw_and_ro_paths_with_unicode_and_spaces(tmp_path) -> None:
     assert result.rw_paths == ("/home/usuário/meu projeto",)
 
 
-def test_empty_rw_and_ro_paths_lists_are_valid(tmp_path) -> None:
+def test_empty_rw_and_ro_paths_lists_are_valid(tmp_path: Path) -> None:
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("[sandbox]\nrw_paths = []\nro_paths = []\n", encoding="utf-8")
 
@@ -407,14 +407,14 @@ class TestAutoEnableSemVectoraToml:
     do backend) já achou uma distro elegível — sem exigir opt-in manual."""
 
     @pytest.mark.usefixtures("sem_bwrap_automatico")
-    def test_cache_unset_mantem_desabilitado(self, tmp_path) -> None:
+    def test_cache_unset_mantem_desabilitado(self, tmp_path: Path) -> None:
         """Regressão: antes do warmup rodar (cache ainda _UNSET), nunca
         auto-habilita — nunca um falso positivo por checar cedo demais."""
         result = parse_policy(tmp_path / "vectora.toml")
 
         assert result == DISABLED_POLICY
 
-    def test_cache_com_distro_elegivel_auto_habilita(self, tmp_path) -> None:
+    def test_cache_com_distro_elegivel_auto_habilita(self, tmp_path: Path) -> None:
         policy_module._wsl2_distro_cache = "Ubuntu"
 
         result = parse_policy(tmp_path / "vectora.toml")
@@ -423,7 +423,7 @@ class TestAutoEnableSemVectoraToml:
         assert result.enabled is True
 
     @pytest.mark.usefixtures("sem_bwrap_automatico")
-    def test_cache_none_mantem_desabilitado(self, tmp_path) -> None:
+    def test_cache_none_mantem_desabilitado(self, tmp_path: Path) -> None:
         """Regressão: detecção já rodou mas não achou distro elegível
         (cache=None, distinto de _UNSET) — continua desabilitado."""
         policy_module._wsl2_distro_cache = None
@@ -433,7 +433,9 @@ class TestAutoEnableSemVectoraToml:
         assert result == DISABLED_POLICY
 
     @pytest.mark.asyncio
-    async def test_warm_wsl2_cache_popula_o_cache_sincrono(self, monkeypatch) -> None:
+    async def test_warm_wsl2_cache_popula_o_cache_sincrono(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         output = "  NAME      STATE           VERSION\n* Ubuntu    Running         2\n"
         monkeypatch.setattr(
             policy_module.asyncio,
@@ -453,7 +455,7 @@ class TestAutoEnableNativoLinuxMacos:
     não Windows, então auto-habilitar ali quebraria a primeira ação."""
 
     def test_linux_com_bwrap_disponivel_auto_habilita(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(policy_module.sys, "platform", "linux")
         monkeypatch.setattr(
@@ -464,7 +466,9 @@ class TestAutoEnableNativoLinuxMacos:
 
         assert result == AUTO_ENABLED_POLICY
 
-    def test_linux_sem_bwrap_mantem_desabilitado(self, tmp_path, monkeypatch) -> None:
+    def test_linux_sem_bwrap_mantem_desabilitado(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(policy_module.sys, "platform", "linux")
         monkeypatch.setattr(policy_module.shutil, "which", lambda nome: None)
 
@@ -473,7 +477,7 @@ class TestAutoEnableNativoLinuxMacos:
         assert result == DISABLED_POLICY
 
     def test_macos_com_sandbox_exec_disponivel_nao_auto_habilita(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(policy_module.sys, "platform", "darwin")
         monkeypatch.setattr(
@@ -486,7 +490,7 @@ class TestAutoEnableNativoLinuxMacos:
         assert policy_module._native_sandbox_available_sync() is False
 
     def test_macos_sem_sandbox_exec_mantem_desabilitado(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(policy_module.sys, "platform", "darwin")
         monkeypatch.setattr(policy_module.shutil, "which", lambda nome: None)
@@ -496,7 +500,7 @@ class TestAutoEnableNativoLinuxMacos:
         assert result == DISABLED_POLICY
 
     def test_windows_sem_wsl2_nao_e_afetado_pela_checagem_nativa(
-        self, tmp_path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Regressão: Windows continua exigindo WSL2 elegível — a checagem
         nativa (bwrap/sandbox-exec) nunca dispara fora de Linux/macOS, então
@@ -510,7 +514,9 @@ class TestAutoEnableNativoLinuxMacos:
 
         assert result == DISABLED_POLICY
 
-    def test_checagem_nativa_e_sincrona_sem_cache(self, monkeypatch) -> None:
+    def test_checagem_nativa_e_sincrona_sem_cache(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """`_native_sandbox_available_sync` não depende de warm-up prévio
         (diferente de `_wsl2_eligible_sync`) — reflete o `shutil.which`
         atual a cada chamada."""
@@ -556,7 +562,7 @@ def _mock_wsl_exec(list_output: str, usable_distros: set[str] | None = None):
 
 @pytest.mark.asyncio
 async def test_detect_wsl2_retorna_a_distro_default_marcada_com_versao_2(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = "  NAME      STATE           VERSION\n* Ubuntu    Running         2\n  Debian    Stopped         1\n"
     monkeypatch.setattr(
@@ -572,7 +578,7 @@ async def test_detect_wsl2_retorna_a_distro_default_marcada_com_versao_2(
 
 @pytest.mark.asyncio
 async def test_detect_wsl2_sem_default_cai_pra_primeira_distro_versao_2(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = "  NAME      STATE           VERSION\n  Debian    Stopped         1\n  Fedora    Running         2\n"
     monkeypatch.setattr(
@@ -588,7 +594,7 @@ async def test_detect_wsl2_sem_default_cai_pra_primeira_distro_versao_2(
 
 @pytest.mark.asyncio
 async def test_detect_wsl2_sem_nenhuma_distro_versao_2_retorna_none(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = "  NAME      STATE           VERSION\n  Debian    Stopped         1\n"
     monkeypatch.setattr(
@@ -604,7 +610,7 @@ async def test_detect_wsl2_sem_nenhuma_distro_versao_2_retorna_none(
 
 @pytest.mark.asyncio
 async def test_detect_wsl2_sem_wsl_exe_instalado_retorna_none_sem_lancar(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Erro/borda: wsl.exe ausente do sistema (não é Windows, ou WSL nunca
     # foi instalado) — FileNotFoundError nunca deve propagar.
@@ -620,7 +626,7 @@ async def test_detect_wsl2_sem_wsl_exe_instalado_retorna_none_sem_lancar(
 
 @pytest.mark.asyncio
 async def test_detect_wsl2_com_codigo_de_saida_diferente_de_zero_retorna_none(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _exec(*args, **_kwargs):
         return _fake_wsl_proc(b"", returncode=1)
@@ -633,7 +639,9 @@ async def test_detect_wsl2_com_codigo_de_saida_diferente_de_zero_retorna_none(
 
 
 @pytest.mark.asyncio
-async def test_detect_wsl2_resultado_e_cacheado_entre_chamadas(monkeypatch) -> None:
+async def test_detect_wsl2_resultado_e_cacheado_entre_chamadas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     output = "  NAME      STATE           VERSION\n* Ubuntu    Running         2\n"
     spawn_mock = AsyncMock(side_effect=_mock_wsl_exec(output))
     monkeypatch.setattr(policy_module.asyncio, "create_subprocess_exec", spawn_mock)
@@ -649,7 +657,7 @@ async def test_detect_wsl2_resultado_e_cacheado_entre_chamadas(monkeypatch) -> N
 
 @pytest.mark.asyncio
 async def test_detect_wsl2_ignora_docker_desktop_mesmo_sendo_a_distro_default(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # docker-desktop é a VM interna do Docker Desktop — nunca é uma distro
     # elegível de sandbox, mesmo marcada como default (`*`) na listagem.
@@ -671,7 +679,9 @@ async def test_detect_wsl2_ignora_docker_desktop_mesmo_sendo_a_distro_default(
 
 
 @pytest.mark.asyncio
-async def test_detect_wsl2_so_com_docker_desktop_retorna_none(monkeypatch) -> None:
+async def test_detect_wsl2_so_com_docker_desktop_retorna_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Regressão do bug real: `wsl --status` só mostra `docker-desktop` —
     # não deve ser aceita como distro de uso geral.
     output = "  NAME               STATE           VERSION\n* docker-desktop     Running         2\n"
@@ -688,7 +698,7 @@ async def test_detect_wsl2_so_com_docker_desktop_retorna_none(monkeypatch) -> No
 
 @pytest.mark.asyncio
 async def test_detect_wsl2_distro_listada_sem_bin_sh_utilizavel_e_pulada(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Distro aparece na listagem (existe, WSL2) mas não passa no teste de
     # `/bin/sh -x` — não é uma distro de uso geral utilizável.
@@ -710,7 +720,7 @@ async def test_detect_wsl2_distro_listada_sem_bin_sh_utilizavel_e_pulada(
 
 @pytest.mark.asyncio
 async def test_detect_wsl2_nenhuma_distro_com_shell_utilizavel_retorna_none(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = "  NAME      STATE           VERSION\n* Broken    Running         2\n"
     monkeypatch.setattr(
@@ -725,7 +735,9 @@ async def test_detect_wsl2_nenhuma_distro_com_shell_utilizavel_retorna_none(
 
 
 @pytest.mark.asyncio
-async def test_wsl2_diagnostic_sem_wsl_instalado(monkeypatch) -> None:
+async def test_wsl2_diagnostic_sem_wsl_instalado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def _raise(*args, **kwargs):
         raise FileNotFoundError("wsl.exe not found")
 
@@ -737,7 +749,9 @@ async def test_wsl2_diagnostic_sem_wsl_instalado(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_wsl2_diagnostic_so_docker_desktop_instalado(monkeypatch) -> None:
+async def test_wsl2_diagnostic_so_docker_desktop_instalado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     output = "  NAME               STATE           VERSION\n* docker-desktop     Running         2\n"
     monkeypatch.setattr(
         policy_module.asyncio,
@@ -751,7 +765,9 @@ async def test_wsl2_diagnostic_so_docker_desktop_instalado(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_wsl2_diagnostic_distro_sem_shell_utilizavel(monkeypatch) -> None:
+async def test_wsl2_diagnostic_distro_sem_shell_utilizavel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     output = "  NAME      STATE           VERSION\n* Broken    Running         2\n"
     monkeypatch.setattr(
         policy_module.asyncio,

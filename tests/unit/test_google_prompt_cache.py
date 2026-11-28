@@ -92,7 +92,7 @@ async def test_expired_cache_is_recreated() -> None:
 
 
 @pytest.mark.asyncio
-async def test_disabled_in_settings(monkeypatch) -> None:
+async def test_disabled_in_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.settings import settings
 
     monkeypatch.setattr(settings, "prompt_cache_enabled", False)

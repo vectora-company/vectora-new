@@ -5,13 +5,15 @@ rodar sempre com a personalidade genérica do orchestrator.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.services import agent_profiles as ap
 
 
 @pytest.fixture
-async def db(tmp_path, monkeypatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Banco SQLite isolado com o schema real da tabela aplicado."""
     from typing import Any
 

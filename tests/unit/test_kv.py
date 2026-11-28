@@ -18,7 +18,7 @@ from backend.persistence.kv import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_singleton(_no_nats_sidecar):
+def _reset_singleton(_no_nats_sidecar: None):
     reset_kv()
     yield
     reset_kv()

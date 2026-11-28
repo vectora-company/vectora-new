@@ -13,6 +13,7 @@ mockando só a fronteira de rede (`httpx`/JWKS), nunca o handler em si.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -22,7 +23,7 @@ from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture
-def app_and_db(tmp_path, monkeypatch):
+def app_and_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     db_file = str(tmp_path / "test_api_oidc.db")
     os.environ["VECTORA_AUTH_REQUIRED"] = "true"
 

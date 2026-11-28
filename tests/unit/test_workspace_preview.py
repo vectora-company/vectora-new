@@ -139,7 +139,7 @@ async def test_wait_port_open_or_exit_returns_early_when_process_dies() -> None:
 class TestPreviewStatus:
     @pytest.mark.asyncio
     async def test_running_false_when_process_alive_but_port_closed(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
@@ -160,7 +160,7 @@ class TestPreviewStatus:
 
     @pytest.mark.asyncio
     async def test_running_true_when_process_alive_and_port_open(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
@@ -182,7 +182,7 @@ class TestPreviewStatus:
 
     @pytest.mark.asyncio
     async def test_running_true_when_port_open_even_with_pid_dead_or_untracked(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Caso central do bug "Full Stack (Turbo)": comandos tipo `turbo run
         # dev`/`pnpm dev` no Windows encerram o processo pai capturado em
@@ -228,7 +228,7 @@ class TestPreviewStatus:
 class TestPreviewStart:
     @pytest.mark.asyncio
     async def test_returns_error_early_when_process_dies_before_port_opens(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
@@ -287,7 +287,9 @@ class TestPreviewStart:
 
 class TestPreviewLogsEndpoint:
     @pytest.mark.asyncio
-    async def test_returns_empty_list_when_never_started(self, monkeypatch) -> None:
+    async def test_returns_empty_list_when_never_started(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
         monkeypatch.setattr(ws_mod, "_browser_log_buffers", {})
@@ -297,7 +299,9 @@ class TestPreviewLogsEndpoint:
         assert result.lines == []
 
     @pytest.mark.asyncio
-    async def test_returns_buffered_lines(self, monkeypatch) -> None:
+    async def test_returns_buffered_lines(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import collections
 
         import backend.api.handlers.workspaces as ws_mod
@@ -310,7 +314,9 @@ class TestPreviewLogsEndpoint:
         assert result.lines == ["line1", "line2"]
 
     @pytest.mark.asyncio
-    async def test_buffer_survives_after_preview_stop(self, monkeypatch) -> None:
+    async def test_buffer_survives_after_preview_stop(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Erro/borda: parar o servidor não pode apagar o histórico — é
         # exatamente nesse momento (diagnosticar por que morreu) que ele
         # mais precisa continuar disponível.
@@ -343,7 +349,9 @@ class TestPreviewLogsEndpoint:
 
 class TestPreviewStartPopulatesLogBuffer:
     @pytest.mark.asyncio
-    async def test_lines_written_by_pipe_end_up_in_buffer(self, monkeypatch) -> None:
+    async def test_lines_written_by_pipe_end_up_in_buffer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
         import backend.api.handlers.workspaces as ws_mod

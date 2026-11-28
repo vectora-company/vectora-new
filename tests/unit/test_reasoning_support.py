@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 
@@ -223,7 +225,7 @@ class _ThinkingClient:
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     pool = AsyncConnectionPool(str(tmp_path / "reasoning.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
