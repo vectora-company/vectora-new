@@ -828,20 +828,46 @@ describe("MessageItem — streaming incremental (token a token, como astream)", 
     const details = container.querySelector("details");
     expect(details).not.toBeNull();
     expect(details?.open).toBe(true);
-    expect(screen.getByText(m.chat_tool_calls_many({ count: 2 }))).toBeTruthy();
+    expect(details?.textContent).toContain(
+      m.chat_tool_calls_many({ count: 2 }),
+    );
+    expect(details?.textContent).toContain(
+      m.chat_tool_activity_failures({ count: 1 }),
+    );
   });
 
-  it("recolhe o grupo concluído sem erro e esconde quando desligado", () => {
-    const tools = [{ id: "t1", name: "read_file", args: {}, output: "ok" }];
-    const { container, rerender } = render(
+  it("mostra o resumo recolhido por padrão mesmo com detalhes desligados", () => {
+    const tools = [
+      {
+        id: "t1",
+        name: "read_file",
+        args: {},
+        category: "filesystem" as const,
+        output: "ok",
+      },
+    ];
+    const { rerender } = render(
       <MessageItem
         {...baseProps(msg({ content: "feito", toolCalls: tools }), {
           showToolCalls: true,
         })}
       />,
     );
-    expect(container.querySelector("details")?.open).toBe(false);
-    expect(screen.getByText(m.chat_tool_calls_one())).toBeTruthy();
+    const details = screen.getByTestId(
+      "tool-activity-group",
+    ) as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toContain(m.chat_tool_calls_one());
+    expect(details.textContent).toContain(
+      m.chat_tool_category_count({
+        category: m.chat_tool_category_filesystem(),
+        count: 1,
+      }),
+    );
+    fireEvent.click(details.querySelector("summary")!);
+    expect(details.open).toBe(true);
+    fireEvent.click(details.querySelector("summary")!);
+    expect(details.open).toBe(false);
     rerender(
       <MessageItem
         {...baseProps(msg({ content: "feito", toolCalls: tools }), {
@@ -849,7 +875,98 @@ describe("MessageItem — streaming incremental (token a token, como astream)", 
         })}
       />,
     );
-    expect(container.querySelector("details")).toBeNull();
+    expect(
+      (screen.getByTestId("tool-activity-group") as HTMLDetailsElement).open,
+    ).toBe(false);
+  });
+
+  it("mantém o grupo recolhido se a chamada anterior está ativa e a preferência está desligada", () => {
+    render(
+      <MessageItem
+        {...baseProps(
+          msg({
+            isThinking: true,
+            toolCalls: [{ id: "t1", name: "read_file", args: {} }],
+          }),
+          { showToolCalls: false },
+        )}
+      />,
+    );
+
+    expect(
+      (screen.getByTestId("tool-activity-group") as HTMLDetailsElement).open,
+    ).toBe(false);
+  });
+
+  it("expande automaticamente durante o streaming quando a preferência está ativa", () => {
+    render(
+      <MessageItem
+        {...baseProps(
+          msg({
+            isThinking: true,
+            toolCalls: [{ id: "t1", name: "read_file", args: {} }],
+          }),
+          { showToolCalls: true },
+        )}
+      />,
+    );
+
+    expect(
+      (screen.getByTestId("tool-activity-group") as HTMLDetailsElement).open,
+    ).toBe(true);
+  });
+
+  it("preserva a ordem dos cartões ricos entre os grupos recolhíveis", () => {
+    const tools = [
+      {
+        id: "read",
+        name: "file_read",
+        args: {},
+        renderHint: "code_block" as const,
+        output: "conteúdo",
+      },
+      {
+        id: "edit",
+        name: "file_edit",
+        args: {},
+        renderHint: "diff" as const,
+        output: "diff",
+      },
+      {
+        id: "artifact",
+        name: "text_to_speech",
+        args: {},
+        renderHint: "artifact" as const,
+        output: JSON.stringify({
+          title: "artefato.mp3",
+          path: "/workspace/.vectora/artifacts/artefato.mp3",
+          url: "/artifacts/thread-1/media/artefato.mp3",
+          artifact_type: "audio",
+        }),
+      },
+      {
+        id: "terminal",
+        name: "terminal",
+        args: {},
+        renderHint: "terminal_output" as const,
+        output: "feito",
+      },
+    ];
+
+    render(<MessageItem {...baseProps(msg({ toolCalls: tools }))} />);
+
+    expect(screen.getAllByTestId("tool-activity-group")).toHaveLength(2);
+    expect(
+      screen
+        .getAllByTestId("tool-call")
+        .map((element) => element.getAttribute("data-tool-name")),
+    ).toEqual(["file_read", "file_edit", "text_to_speech", "terminal"]);
+    const artifactLink = screen.getByRole("link");
+    expect(artifactLink).toHaveAttribute(
+      "href",
+      "/artifacts/thread-1/media/artefato.mp3",
+    );
+    expect(artifactLink.closest("details")).toBeNull();
   });
 });
 
