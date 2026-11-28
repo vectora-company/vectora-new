@@ -65,35 +65,35 @@ def _make_cross_file_graph() -> nx.Graph:
 
 
 class TestIsFileNode:
-    def test_method_stub_is_file_node(self):
+    def test_method_stub_is_file_node(self) -> None:
         from backend.context_graph.analyze import _is_file_node
 
         G = nx.Graph()
         G.add_node("n", label=".method_name()", source_file="a.py")
         assert _is_file_node(G, "n") is True
 
-    def test_label_matches_filename_is_file_node(self):
+    def test_label_matches_filename_is_file_node(self) -> None:
         from backend.context_graph.analyze import _is_file_node
 
         G = nx.Graph()
         G.add_node("n", label="auth.py", source_file="src/auth.py")
         assert _is_file_node(G, "n") is True
 
-    def test_regular_node_is_not_file_node(self):
+    def test_regular_node_is_not_file_node(self) -> None:
         from backend.context_graph.analyze import _is_file_node
 
         G = nx.Graph()
         G.add_node("n", label="AuthService", source_file="auth.py")
         assert _is_file_node(G, "n") is False
 
-    def test_no_label_is_not_file_node(self):
+    def test_no_label_is_not_file_node(self) -> None:
         from backend.context_graph.analyze import _is_file_node
 
         G = nx.Graph()
         G.add_node("n", label="", source_file="auth.py")
         assert _is_file_node(G, "n") is False
 
-    def test_lone_function_stub_low_degree(self):
+    def test_lone_function_stub_low_degree(self) -> None:
         from backend.context_graph.analyze import _is_file_node
 
         G = nx.Graph()
@@ -102,21 +102,21 @@ class TestIsFileNode:
 
 
 class TestIsConceptNode:
-    def test_empty_source_is_concept(self):
+    def test_empty_source_is_concept(self) -> None:
         from backend.context_graph.analyze import _is_concept_node
 
         G = nx.Graph()
         G.add_node("n", label="Concept", source_file="")
         assert _is_concept_node(G, "n") is True
 
-    def test_no_extension_is_concept(self):
+    def test_no_extension_is_concept(self) -> None:
         from backend.context_graph.analyze import _is_concept_node
 
         G = nx.Graph()
         G.add_node("n", label="Concept", source_file="no_extension")
         assert _is_concept_node(G, "n") is True
 
-    def test_real_file_is_not_concept(self):
+    def test_real_file_is_not_concept(self) -> None:
         from backend.context_graph.analyze import _is_concept_node
 
         G = nx.Graph()
@@ -125,21 +125,21 @@ class TestIsConceptNode:
 
 
 class TestIsJsonKeyNode:
-    def test_json_noise_label_is_json_key_node(self):
+    def test_json_noise_label_is_json_key_node(self) -> None:
         from backend.context_graph.analyze import _is_json_key_node
 
         G = nx.Graph()
         G.add_node("n", label="name", source_file="config.json")
         assert _is_json_key_node(G, "n") is True
 
-    def test_non_json_file_not_json_key_node(self):
+    def test_non_json_file_not_json_key_node(self) -> None:
         from backend.context_graph.analyze import _is_json_key_node
 
         G = nx.Graph()
         G.add_node("n", label="name", source_file="auth.py")
         assert _is_json_key_node(G, "n") is False
 
-    def test_non_noise_label_not_json_key_node(self):
+    def test_non_noise_label_not_json_key_node(self) -> None:
         from backend.context_graph.analyze import _is_json_key_node
 
         G = nx.Graph()
@@ -148,7 +148,7 @@ class TestIsJsonKeyNode:
 
 
 class TestGodNodes:
-    def test_returns_most_connected(self):
+    def test_returns_most_connected(self) -> None:
         from backend.context_graph.analyze import god_nodes
 
         G = _make_graph()
@@ -156,7 +156,7 @@ class TestGodNodes:
         assert len(result) >= 1
         assert all("id" in n and "label" in n and "degree" in n for n in result)
 
-    def test_excludes_builtins(self):
+    def test_excludes_builtins(self) -> None:
         from backend.context_graph.analyze import god_nodes
 
         G = nx.Graph()
@@ -168,14 +168,14 @@ class TestGodNodes:
         ids = [n["id"] for n in result]
         assert "str_node" not in ids
 
-    def test_empty_graph_returns_empty(self):
+    def test_empty_graph_returns_empty(self) -> None:
         from backend.context_graph.analyze import god_nodes
 
         assert god_nodes(nx.Graph()) == []
 
 
 class TestSurprisingConnections:
-    def test_single_source_uses_cross_community(self):
+    def test_single_source_uses_cross_community(self) -> None:
         from backend.context_graph.analyze import surprising_connections
 
         G = _make_graph()
@@ -183,21 +183,21 @@ class TestSurprisingConnections:
         result = surprising_connections(G, communities=communities)
         assert isinstance(result, list)
 
-    def test_multi_source_uses_cross_file(self):
+    def test_multi_source_uses_cross_file(self) -> None:
         from backend.context_graph.analyze import surprising_connections
 
         G = _make_cross_file_graph()
         result = surprising_connections(G)
         assert isinstance(result, list)
 
-    def test_empty_graph_returns_empty(self):
+    def test_empty_graph_returns_empty(self) -> None:
         from backend.context_graph.analyze import surprising_connections
 
         assert surprising_connections(nx.Graph()) == []
 
 
 class TestSuggestQuestions:
-    def test_returns_list_of_questions(self):
+    def test_returns_list_of_questions(self) -> None:
         from backend.context_graph.analyze import suggest_questions
 
         G = _make_graph()
@@ -207,14 +207,14 @@ class TestSuggestQuestions:
         for q in result:
             assert "type" in q
 
-    def test_returns_no_signal_when_empty_graph(self):
+    def test_returns_no_signal_when_empty_graph(self) -> None:
         from backend.context_graph.analyze import suggest_questions
 
         G = nx.Graph()
         result = suggest_questions(G, {}, {})
         assert result[0]["type"] == "no_signal"
 
-    def test_ambiguous_edges_generate_questions(self):
+    def test_ambiguous_edges_generate_questions(self) -> None:
         from backend.context_graph.analyze import suggest_questions
 
         G = nx.Graph()
@@ -229,7 +229,7 @@ class TestSuggestQuestions:
 
 
 class TestGraphDiff:
-    def test_detects_new_nodes(self):
+    def test_detects_new_nodes(self) -> None:
         from backend.context_graph.analyze import graph_diff
 
         G_old = nx.Graph()
@@ -241,7 +241,7 @@ class TestGraphDiff:
         assert len(diff["new_nodes"]) == 1
         assert diff["new_nodes"][0]["id"] == "b"
 
-    def test_detects_removed_nodes(self):
+    def test_detects_removed_nodes(self) -> None:
         from backend.context_graph.analyze import graph_diff
 
         G_old = nx.Graph()
@@ -252,7 +252,7 @@ class TestGraphDiff:
         diff = graph_diff(G_old, G_new)
         assert len(diff["removed_nodes"]) == 1
 
-    def test_no_changes_summary(self):
+    def test_no_changes_summary(self) -> None:
         from backend.context_graph.analyze import graph_diff
 
         G = nx.Graph()
@@ -260,7 +260,7 @@ class TestGraphDiff:
         diff = graph_diff(G, G)
         assert diff["summary"] == "no changes"
 
-    def test_detects_new_edges(self):
+    def test_detects_new_edges(self) -> None:
         from backend.context_graph.analyze import graph_diff
 
         G_old = nx.Graph()
@@ -275,7 +275,7 @@ class TestGraphDiff:
 
 
 class TestFindImportCycles:
-    def test_detects_cycle(self):
+    def test_detects_cycle(self) -> None:
         from backend.context_graph.analyze import find_import_cycles
 
         G = nx.DiGraph()
@@ -291,7 +291,7 @@ class TestFindImportCycles:
         assert len(cycles) >= 1
         assert "a.ts" in cycles[0]["cycle"] or "b.ts" in cycles[0]["cycle"]
 
-    def test_no_cycle_returns_empty(self):
+    def test_no_cycle_returns_empty(self) -> None:
         from backend.context_graph.analyze import find_import_cycles
 
         G = nx.DiGraph()
@@ -302,12 +302,12 @@ class TestFindImportCycles:
         )
         assert find_import_cycles(G) == []
 
-    def test_empty_graph_returns_empty(self):
+    def test_empty_graph_returns_empty(self) -> None:
         from backend.context_graph.analyze import find_import_cycles
 
         assert find_import_cycles(nx.DiGraph()) == []
 
-    def test_non_import_edges_skipped(self):
+    def test_non_import_edges_skipped(self) -> None:
         from backend.context_graph.analyze import find_import_cycles
 
         G = nx.DiGraph()

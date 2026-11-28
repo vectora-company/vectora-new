@@ -7,11 +7,16 @@ com arquivos reais.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+import pytest
+
+from backend.vtypes.context_graph import ExtractionResult
 
 
 class TestGetExtractor:
-    def test_python_file_returns_extractor(self, tmp_path: Path):
+    def test_python_file_returns_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
 
         f = tmp_path / "app.py"
@@ -20,7 +25,7 @@ class TestGetExtractor:
         assert extractor is not None
         assert callable(extractor)
 
-    def test_typescript_file_returns_extractor(self, tmp_path: Path):
+    def test_typescript_file_returns_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
 
         f = tmp_path / "app.ts"
@@ -28,7 +33,7 @@ class TestGetExtractor:
         extractor = _get_extractor(f)
         assert extractor is not None
 
-    def test_tsx_file_returns_extractor(self, tmp_path: Path):
+    def test_tsx_file_returns_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
 
         f = tmp_path / "Component.tsx"
@@ -36,7 +41,7 @@ class TestGetExtractor:
         extractor = _get_extractor(f)
         assert extractor is not None
 
-    def test_go_file_returns_extractor(self, tmp_path: Path):
+    def test_go_file_returns_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
 
         f = tmp_path / "main.go"
@@ -44,14 +49,14 @@ class TestGetExtractor:
         extractor = _get_extractor(f)
         assert extractor is not None
 
-    def test_unknown_extension_returns_none(self, tmp_path: Path):
+    def test_unknown_extension_returns_none(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
 
         f = tmp_path / "data.xyz123abc"
         f.touch()
         assert _get_extractor(f) is None
 
-    def test_mcp_json_routed_to_mcp_extractor(self, tmp_path: Path):
+    def test_mcp_json_routed_to_mcp_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
@@ -59,7 +64,7 @@ class TestGetExtractor:
         f.touch()
         assert _get_extractor(f) is extract_mcp_config
 
-    def test_pyproject_toml_routed_to_manifest(self, tmp_path: Path):
+    def test_pyproject_toml_routed_to_manifest(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
@@ -69,7 +74,7 @@ class TestGetExtractor:
         f.touch()
         assert _get_extractor(f) is extract_package_manifest
 
-    def test_pom_xml_routed_to_manifest(self, tmp_path: Path):
+    def test_pom_xml_routed_to_manifest(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
@@ -79,7 +84,7 @@ class TestGetExtractor:
         f.touch()
         assert _get_extractor(f) is extract_package_manifest
 
-    def test_blade_php_returns_blade_extractor(self, tmp_path: Path):
+    def test_blade_php_returns_blade_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
 
         f = tmp_path / "layout.blade.php"
@@ -87,7 +92,7 @@ class TestGetExtractor:
         extractor = _get_extractor(f)
         assert extractor is not None
 
-    def test_json_non_mcp_returns_json_extractor(self, tmp_path: Path):
+    def test_json_non_mcp_returns_json_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor
 
         f = tmp_path / "schema.json"
@@ -101,7 +106,7 @@ class TestGetExtractor:
 
 
 class TestSafeExtract:
-    def test_returns_dict_on_success(self, tmp_path: Path):
+    def test_returns_dict_on_success(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, _safe_extract
 
         f = tmp_path / "file.py"
@@ -111,11 +116,11 @@ class TestSafeExtract:
         result = _safe_extract(extractor, f)
         assert isinstance(result, dict)
 
-    def test_returns_empty_on_exception(self, tmp_path: Path):
+    def test_returns_empty_on_exception(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _safe_extract
 
         class _RaisingExtractor:
-            def __call__(self, path: Path) -> dict:
+            def __call__(self, path: Path) -> ExtractionResult:
                 raise RuntimeError("parse failed")
 
         f = tmp_path / "broken.py"
@@ -126,24 +131,24 @@ class TestSafeExtract:
 
 
 class TestMakeId:
-    def test_deterministic(self):
+    def test_deterministic(self) -> None:
         from backend.context_graph.extract import _make_id
 
         assert _make_id("module", "fn") == _make_id("module", "fn")
 
-    def test_different_inputs_different_ids(self):
+    def test_different_inputs_different_ids(self) -> None:
         from backend.context_graph.extract import _make_id
 
         assert _make_id("module", "fn_a") != _make_id("module", "fn_b")
 
-    def test_returns_string(self):
+    def test_returns_string(self) -> None:
         from backend.context_graph.extract import _make_id
 
         assert isinstance(_make_id("x"), str)
 
 
 class TestFileStem:
-    def test_plain_stem_includes_parent(self):
+    def test_plain_stem_includes_parent(self) -> None:
         from backend.context_graph.extract import _file_stem
 
         # _file_stem qualifies with parent dir name to avoid ID collisions
@@ -152,7 +157,7 @@ class TestFileStem:
         assert "auth" in result
         assert "src" in result
 
-    def test_top_level_file_bare_stem(self):
+    def test_top_level_file_bare_stem(self) -> None:
         from backend.context_graph.extract import _file_stem
 
         # A file at root level (parent is ".") returns bare stem
@@ -162,28 +167,28 @@ class TestFileStem:
 
 
 class TestSourceLocation:
-    def test_integer_line(self):
+    def test_integer_line(self) -> None:
         from backend.context_graph.extract import _source_location
 
         result = _source_location(42)
         assert result is not None
         assert "42" in result
 
-    def test_string_line(self):
+    def test_string_line(self) -> None:
         from backend.context_graph.extract import _source_location
 
         result = _source_location("10")
         assert result is not None
         assert "10" in result
 
-    def test_none_returns_none(self):
+    def test_none_returns_none(self) -> None:
         from backend.context_graph.extract import _source_location
 
         assert _source_location(None) is None
 
 
 class TestExtractPythonFile:
-    def test_extracts_function(self, tmp_path: Path):
+    def test_extracts_function(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, _safe_extract
 
         f = tmp_path / "module.py"
@@ -191,10 +196,10 @@ class TestExtractPythonFile:
         extractor = _get_extractor(f)
         assert extractor is not None
         result = _safe_extract(extractor, f)
-        node_labels = [n.get("label", "") for n in result.get("nodes", [])]
+        node_labels = [str(n.get("label", "")) for n in result.get("nodes", [])]
         assert any("authenticate" in lbl for lbl in node_labels)
 
-    def test_extracts_class(self, tmp_path: Path):
+    def test_extracts_class(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, _safe_extract
 
         f = tmp_path / "service.py"
@@ -202,10 +207,10 @@ class TestExtractPythonFile:
         extractor = _get_extractor(f)
         assert extractor is not None
         result = _safe_extract(extractor, f)
-        node_labels = [n.get("label", "") for n in result.get("nodes", [])]
+        node_labels = [str(n.get("label", "")) for n in result.get("nodes", [])]
         assert any("AuthService" in lbl for lbl in node_labels)
 
-    def test_empty_file_no_nodes(self, tmp_path: Path):
+    def test_empty_file_no_nodes(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, _safe_extract
 
         f = tmp_path / "empty.py"
@@ -215,7 +220,7 @@ class TestExtractPythonFile:
         result = _safe_extract(extractor, f)
         assert isinstance(result, dict)
 
-    def test_syntax_error_graceful(self, tmp_path: Path):
+    def test_syntax_error_graceful(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, _safe_extract
 
         f = tmp_path / "bad.py"
@@ -242,7 +247,7 @@ class TestExtractTypeScriptFile:
         with pytest.raises(ValueError, match="does not provide"):
             _load_tree_sitter_language("dm")
 
-    def test_extracts_function_ts(self, tmp_path: Path):
+    def test_extracts_function_ts(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, _safe_extract
 
         f = tmp_path / "utils.ts"
@@ -255,7 +260,7 @@ class TestExtractTypeScriptFile:
         result = _safe_extract(extractor, f)
         assert isinstance(result.get("nodes"), list)
 
-    def test_extracts_interface(self, tmp_path: Path):
+    def test_extracts_interface(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, _safe_extract
 
         f = tmp_path / "types.ts"
@@ -298,14 +303,14 @@ class TestExtractGdscriptFile:
     registrada, apesar de já existir extractor pra linguagens de nicho
     ainda mais raras (DreamMaker)."""
 
-    def test_gd_routed_to_gdscript_extractor(self, tmp_path: Path):
+    def test_gd_routed_to_gdscript_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, extract_gdscript
 
         f = tmp_path / "player.gd"
         f.touch()
         assert _get_extractor(f) is extract_gdscript
 
-    def test_extends_signal_function_and_calls(self, tmp_path: Path):
+    def test_extends_signal_function_and_calls(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import extract_gdscript
 
         f = tmp_path / "player.gd"
@@ -333,10 +338,10 @@ class TestExtractGdscriptFile:
         call_targets = {
             e["target"] for e in result["edges"] if e["relation"] == "calls"
         }
-        assert any("apply" in t for t in call_targets)
-        assert any("emit_signal" in t for t in call_targets)
+        assert any("apply" in str(t) for t in call_targets)
+        assert any("emit_signal" in str(t) for t in call_targets)
 
-    def test_extends_by_res_path_resolves_to_real_file(self, tmp_path: Path):
+    def test_extends_by_res_path_resolves_to_real_file(self, tmp_path: Path) -> None:
         """`extends "res://base.gd"` resolve pro arquivo real via
         project.godot (regra de resolução do próprio Godot), não vira
         referência solta como um builtin da engine."""
@@ -355,7 +360,7 @@ class TestExtractGdscriptFile:
             for e in result["edges"]
         )
 
-    def test_syntax_error_graceful(self, tmp_path: Path):
+    def test_syntax_error_graceful(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import extract_gdscript
 
         f = tmp_path / "broken.gd"
@@ -364,7 +369,9 @@ class TestExtractGdscriptFile:
         assert isinstance(result, dict)
         assert isinstance(result.get("nodes"), list)
 
-    def test_missing_dependency_degrades_gracefully(self, tmp_path: Path, monkeypatch):
+    def test_missing_dependency_degrades_gracefully(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import sys
 
         import backend.context_graph.extract as extract_mod
@@ -385,21 +392,23 @@ class TestExtractGodotScene:
     tree-sitter), conecta uma cena aos scripts que ela usa via
     `[ext_resource type="Script" ...]` + `script = ExtResource("id")`."""
 
-    def test_tscn_routed_to_scene_extractor(self, tmp_path: Path):
+    def test_tscn_routed_to_scene_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, extract_godot_scene
 
         f = tmp_path / "level.tscn"
         f.touch()
         assert _get_extractor(f) is extract_godot_scene
 
-    def test_tres_routed_to_scene_extractor(self, tmp_path: Path):
+    def test_tres_routed_to_scene_extractor(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import _get_extractor, extract_godot_scene
 
         f = tmp_path / "theme.tres"
         f.touch()
         assert _get_extractor(f) is extract_godot_scene
 
-    def test_scene_attaching_script_emits_uses_edge_to_real_file(self, tmp_path: Path):
+    def test_scene_attaching_script_emits_uses_edge_to_real_file(
+        self, tmp_path: Path
+    ) -> None:
         from backend.context_graph.extract import _make_id, extract_godot_scene
 
         (tmp_path / "project.godot").write_text("", encoding="utf-8")
@@ -420,7 +429,7 @@ class TestExtractGodotScene:
             for e in result["edges"]
         )
 
-    def test_non_script_resource_produces_no_edge(self, tmp_path: Path):
+    def test_non_script_resource_produces_no_edge(self, tmp_path: Path) -> None:
         """Textura/malha anexada não é grafo-relevante — só Script gera
         aresta (erro/borda: resource de outro type não deve virar edge)."""
         from backend.context_graph.extract import extract_godot_scene
@@ -436,7 +445,7 @@ class TestExtractGodotScene:
         result = extract_godot_scene(f)
         assert result["edges"] == []
 
-    def test_oversized_scene_indexes_header_only_no_crash(self, tmp_path: Path):
+    def test_oversized_scene_indexes_header_only_no_crash(self, tmp_path: Path) -> None:
         """Erro/borda: arquivo acima do teto de tamanho não trava nem
         lança — indexa só o cabeçalho de ext_resource, sem escanear os
         blocos [node ...] (podem ter megabytes de sub-recursos)."""
@@ -457,7 +466,9 @@ class TestExtractGodotScene:
         assert result["edges"] == []
         assert len(result["nodes"]) == 1  # só o nó do arquivo, sem crash
 
-    def test_scene_without_ext_resource_returns_only_file_node(self, tmp_path: Path):
+    def test_scene_without_ext_resource_returns_only_file_node(
+        self, tmp_path: Path
+    ) -> None:
         from backend.context_graph.extract import extract_godot_scene
 
         f = tmp_path / "empty.tscn"
@@ -466,7 +477,7 @@ class TestExtractGodotScene:
         assert len(result["nodes"]) == 1
         assert result["edges"] == []
 
-    def test_missing_file_returns_error_not_exception(self, tmp_path: Path):
+    def test_missing_file_returns_error_not_exception(self, tmp_path: Path) -> None:
         from backend.context_graph.extract import extract_godot_scene
 
         result = extract_godot_scene(tmp_path / "does-not-exist.tscn")
@@ -475,7 +486,7 @@ class TestExtractGodotScene:
 
 
 class TestStripJsonc:
-    def test_removes_line_comments(self):
+    def test_removes_line_comments(self) -> None:
         from backend.context_graph.extract import _strip_jsonc
 
         code = '{\n  "key": "value" // comment\n}'
@@ -483,22 +494,22 @@ class TestStripJsonc:
         assert "//" not in result
         assert "value" in result
 
-    def test_removes_block_comments(self):
+    def test_removes_block_comments(self) -> None:
         from backend.context_graph.extract import _strip_jsonc
 
         code = '{ /* block comment */ "key": 1 }'
         result = _strip_jsonc(code)
         assert "/*" not in result
 
-    def test_preserves_urls(self):
+    def test_preserves_urls(self) -> None:
         from backend.context_graph.extract import _strip_jsonc
 
         code = '{ "url": "https://example.com" }'
         result = _strip_jsonc(code)
-        assert "https://example.com" in result
+        assert json.loads(result) == {"url": "https://example.com"}
 
 
-def test_utf16_project_keeps_valid_input_and_rejects_entities(tmp_path):
+def test_utf16_project_keeps_valid_input_and_rejects_entities(tmp_path: Path) -> None:
     from backend.context_graph.extract import extract_csproj
 
     path = tmp_path / "project.csproj"

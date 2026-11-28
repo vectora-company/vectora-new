@@ -20,10 +20,13 @@ import smtplib
 from dataclasses import dataclass
 from email.header import decode_header, make_header
 from email.message import EmailMessage
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.services.connect.runner import process_incoming
 from backend.services.gateway.messaging import IncomingMessage
+
+if TYPE_CHECKING:
+    from email.message import Message
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +62,7 @@ def _decode(value: str | None) -> str:
         return value
 
 
-def _plain_body(message: Any) -> str:
+def _plain_body(message: Message) -> str:
     """Primeira parte `text/plain`. Email só-HTML devolve string vazia — é
     melhor não responder do que mandar markup cru pro LLM."""
     if message.is_multipart():
@@ -188,13 +191,13 @@ async def poll_loop(
 
 async def start(
     config: EmailConfig, *, interval_s: float = DEFAULT_POLL_INTERVAL_S
-) -> Any:
+) -> asyncio.Task[None]:
     task = asyncio.create_task(poll_loop(config, interval_s=interval_s))
     logger.info("connect.email: polling IMAP iniciado (%ss)", interval_s)
     return task
 
 
-async def stop(task: Any) -> None:
+async def stop(task: asyncio.Task[None] | None) -> None:
     """Parada idempotente — task já cancelada não levanta."""
     if task is None:
         return

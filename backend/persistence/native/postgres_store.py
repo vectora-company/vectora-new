@@ -24,11 +24,14 @@ from backend.persistence.native.store import (
     is_store_value_expired,
 )
 from backend.persistence.telemetry import telemetry
+from backend.vtypes.contracts import JsonObject
 
 if TYPE_CHECKING:
     import asyncpg
 
     from backend.storage.protocols import HealthResult
+    from backend.vtypes.contracts import JsonObject
+    from backend.vtypes.store import EmbeddingIndex
 
 _SETUP_SQL = """
 CREATE TABLE IF NOT EXISTS vectora_store_items (
@@ -50,7 +53,7 @@ class VectoraPostgresStore:
     ``VectoraStore`` aceita."""
 
     def __init__(
-        self, pool: asyncpg.Pool, *, index: dict[str, Any] | None = None
+        self, pool: asyncpg.Pool, *, index: EmbeddingIndex | None = None
     ) -> None:
         """Inicializa o estado da instância."""
         self._pool = pool
@@ -112,7 +115,7 @@ class VectoraPostgresStore:
         )
 
     async def aput(
-        self, namespace: tuple[str, ...], key: str, value: dict[str, Any]
+        self, namespace: tuple[str, ...], key: str, value: JsonObject
     ) -> None:
         """Executa a operação aput."""
         started = time.perf_counter()
@@ -211,7 +214,7 @@ class VectoraPostgresStore:
         *,
         query: str | None = None,
         limit: int = 10,
-        filter: dict[str, Any] | None = None,  # noqa: A002 — mesmo nome do protocolo
+        filter: JsonObject | None = None,  # noqa: A002 — mesmo nome do protocolo
         offset: int = 0,
         include_expired: bool = False,
     ) -> list[SearchItem]:
@@ -292,7 +295,7 @@ class VectoraPostgresStore:
         except Exception as exc:
             return _err(str(exc))
 
-    async def _embed_for_index(self, value: dict[str, Any]) -> str | None:
+    async def _embed_for_index(self, value: JsonObject) -> str | None:
         """Executa a operação  embed for index."""
         if self._index is None:
             return None

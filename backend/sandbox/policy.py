@@ -19,8 +19,14 @@ import shutil
 import sys
 import tomllib
 from dataclasses import dataclass, field, replace
+from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from backend.vtypes.sandbox import TomlTable
 
 logger = logging.getLogger(__name__)
 
@@ -166,12 +172,12 @@ LOCKED_DOWN_POLICY = SandboxPolicy(
 )
 
 
-def _list_field(
-    section: dict[str, Any],
+def _list_field[Item](
+    section: TomlTable,
     key: str,
-    convert: type,
-    default: tuple[Any, ...] = (),
-) -> tuple[Any, ...]:
+    convert: Callable[[str], Item],
+    default: tuple[Item, ...] = (),
+) -> tuple[Item, ...]:
     """Campo de lista do `[sandbox]`. Uma string no lugar da lista (que o Python
     percorreria letra a letra) é tipo errado: levanta e cai na falha fechada."""
     if key not in section:
@@ -179,10 +185,10 @@ def _list_field(
     value = section[key]
     if not isinstance(value, list):
         raise TypeError(f"[sandbox].{key} deve ser uma lista")
-    return tuple(convert(item) for item in value)
+    return tuple(convert(str(item)) for item in value)
 
 
-def _positive_int(section: dict[str, Any], key: str, default: int) -> int:
+def _positive_int(section: TomlTable, key: str, default: int) -> int:
     """Inteiro positivo do `[sandbox]`; booleano, texto ou valor não positivo
     é tipo errado (falha fechada)."""
     if key not in section:
@@ -193,7 +199,7 @@ def _positive_int(section: dict[str, Any], key: str, default: int) -> int:
     return value
 
 
-def _network_field(section: dict[str, Any]) -> NetworkMode:
+def _network_field(section: TomlTable) -> NetworkMode:
     value = section.get("network", "filtered")
     if value not in NETWORK_MODES:
         raise ValueError(f"[sandbox].network deve ser um de {NETWORK_MODES}")
@@ -201,7 +207,7 @@ def _network_field(section: dict[str, Any]) -> NetworkMode:
 
 
 def _credential_bindings_field(
-    section: dict[str, Any],
+    section: TomlTable,
 ) -> tuple[CredentialBinding, ...]:
     """Lê bindings sem aceitar valores de segredo na política persistida."""
     raw = section.get("credential_bindings", [])
@@ -334,7 +340,9 @@ def trusted_policy_path(root: Path) -> Path:
     return trusted_policy_dir() / f"{digest[:24]}.toml"
 
 
-def _toml_value(value: object) -> str:
+def _toml_value(
+    value: str | int | tuple[str | int, ...] | tuple[str, ...] | tuple[int, ...] | None,
+) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int):
@@ -402,10 +410,16 @@ def write_trusted_policy(root: Path, policy: SandboxPolicy) -> Path:
     return path
 
 
-_MALFORMED: Any = object()
+class _Malformed(Enum):
+    """Marca um ``vectora.toml`` que não pode ser interpretado."""
+
+    MARKER = "malformed"
 
 
-def _read_repo_section(path: Path) -> dict[str, Any] | Any | None:
+_MALFORMED = _Malformed.MARKER
+
+
+def _read_repo_section(path: Path) -> TomlTable | _Malformed | None:
     """`[sandbox]` do repositório: `None` sem arquivo ou seção, `_MALFORMED` se
     o TOML ou a seção são inválidos."""
     if not path.is_file():
@@ -420,7 +434,9 @@ def _read_repo_section(path: Path) -> dict[str, Any] | Any | None:
     return section if isinstance(section, dict) else None
 
 
-def _narrowed(base: tuple[Any, ...], requested: tuple[Any, ...]) -> tuple[Any, ...]:
+def _narrowed[Item](
+    base: tuple[Item, ...], requested: tuple[Item, ...]
+) -> tuple[Item, ...]:
     """Só o que a política do usuário já permite e o repositório manteve."""
     return tuple(item for item in base if item in requested)
 
@@ -467,7 +483,7 @@ def resolve_policy(root: Path) -> SandboxPolicy:
     section = _read_repo_section(repo_toml)
     if section is None:
         return base
-    if section is _MALFORMED:
+    if isinstance(section, _Malformed):
         return replace(base, enabled=True, lockdown=True, rw_paths=())
 
     repo = parse_policy(root / "vectora.toml")

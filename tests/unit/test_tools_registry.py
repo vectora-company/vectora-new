@@ -18,6 +18,7 @@ from backend.tools.registry import (
     ToolSpec,
     vtool,
 )
+from tests.json_values import as_list, as_object
 
 _registry_local = ToolRegistry()
 
@@ -98,52 +99,53 @@ async def _com_parametro_title(title: str, content: str = "") -> str:
 
 
 class TestVtoolSchemaGeneration:
-    def test_registra_tool_no_registry_global(self):
+    def test_registra_tool_no_registry_global(self) -> None:
         spec = _get("_hash_text")
         assert spec.name == "_hash_text"
 
-    def test_schema_openai_tem_parametros_primitivos_e_defaults(self):
+    def test_schema_openai_tem_parametros_primitivos_e_defaults(self) -> None:
         schema = _get("_hash_text").openai_schema()
 
         assert schema["type"] == "function"
         assert schema["function"]["name"] == "_hash_text"
-        props = schema["function"]["parameters"]["properties"]
+        props = as_object(schema["function"]["parameters"]["properties"])
         assert "text" in props
         assert "algorithm" in props
         # `text` não tem default -> obrigatório; `algorithm` tem -> opcional.
-        required = schema["function"]["parameters"].get("required", [])
+        required = as_list(schema["function"]["parameters"].get("required", []))
         assert "text" in required
         assert "algorithm" not in required
 
-    def test_ctx_nunca_aparece_no_schema_exposto_ao_llm(self):
+    def test_ctx_nunca_aparece_no_schema_exposto_ao_llm(self) -> None:
         """Erro/borda: se `ctx` vazasse pro schema, o LLM tentaria
         preenchê-lo — quebraria toda chamada de tool que usa ToolContext."""
         spec = _get("_write_note")
         schema = spec.openai_schema()
-        props = schema["function"]["parameters"]["properties"]
+        props = as_object(schema["function"]["parameters"]["properties"])
 
         assert "ctx" not in props
         assert spec.needs_ctx is True
 
-    def test_descricao_por_argumento_extraida_da_docstring(self):
+    def test_descricao_por_argumento_extraida_da_docstring(self) -> None:
         schema = _get("_hash_text").openai_schema()
-        props = schema["function"]["parameters"]["properties"]
+        props = as_object(schema["function"]["parameters"]["properties"])
 
-        assert props["text"]["description"] == "Texto a ser hasheado"
+        assert as_object(props["text"])["description"] == "Texto a ser hasheado"
 
-    def test_parametro_sem_type_hint_vira_any_permissivo(self):
+    def test_parametro_sem_type_hint_vira_any_permissivo(self) -> None:
         """Erro/borda: parâmetro sem type hint não pode quebrar a geração
         de schema — vira campo sem `type` (JSON Schema sem `type` aceita
         qualquer valor), não uma exceção na hora de registrar a tool."""
         schema = _get("_sem_type_hint").openai_schema()
-        props = schema["function"]["parameters"]["properties"]
+        props = as_object(schema["function"]["parameters"]["properties"])
 
         assert "valor" in props
-        assert "type" not in props["valor"]
-        assert props["valor"]["description"] == "um valor qualquer"
-        assert "valor" in schema["function"]["parameters"]["required"]
+        value = as_object(props["valor"])
+        assert "type" not in value
+        assert value["description"] == "um valor qualquer"
+        assert "valor" in as_list(schema["function"]["parameters"]["required"])
 
-    def test_parametro_de_tipo_composto_gera_defs_e_ref(self):
+    def test_parametro_de_tipo_composto_gera_defs_e_ref(self) -> None:
         """Erro/borda: BaseModel aninhado como tipo de parâmetro precisa
         preservar `$defs`/`$ref` no schema final — removê-los (como
         `title`) quebraria a referência que `properties` faz pra lá."""
@@ -151,12 +153,15 @@ class TestVtoolSchemaGeneration:
         params = schema["function"]["parameters"]
 
         assert "$defs" in params
-        assert "Item" in params["$defs"] or "_Item" in params["$defs"]
-        item_key = next(iter(params["$defs"]))
-        assert params["$defs"][item_key]["properties"].keys() == {"nome", "qtd"}
-        assert params["properties"]["itens"]["items"]["$ref"] == f"#/$defs/{item_key}"
+        definitions = as_object(params["$defs"])
+        assert "Item" in definitions or "_Item" in definitions
+        item_key = next(iter(definitions))
+        item = as_object(definitions[item_key])
+        assert as_object(item["properties"]).keys() == {"nome", "qtd"}
+        items = as_object(as_object(params["properties"])["itens"])["items"]
+        assert as_object(items)["$ref"] == f"#/$defs/{item_key}"
 
-    def test_parametro_chamado_title_sobrevive_ao_strip_de_metadado(self):
+    def test_parametro_chamado_title_sobrevive_ao_strip_de_metadado(self) -> None:
         """Erro/borda: `_strip_titles` remove a chave `title` de metadado
         (ex.: `{"type": "string", "title": "Query"}` que o Pydantic injeta
         por campo) — mas não pode remover uma PROPRIEDADE cujo nome real é
@@ -169,24 +174,26 @@ class TestVtoolSchemaGeneration:
         schema = _get("_com_parametro_title").openai_schema()
         params = schema["function"]["parameters"]
 
-        assert "title" in params["properties"]
-        assert params["properties"]["title"]["type"] == "string"
-        assert "title" in params["required"]
+        properties = as_object(params["properties"])
+        assert "title" in properties
+        title = as_object(properties["title"])
+        assert title["type"] == "string"
+        assert "title" in as_list(params["required"])
         # O metadado `title` (auto-gerado por campo) continua removido —
         # não é isso que este teste contesta.
-        assert "title" not in params["properties"]["title"]
+        assert "title" not in title
         assert "title" not in params
 
 
 class TestToolSpecAinvoke:
-    async def test_ainvoke_chama_handler_e_devolve_string(self):
+    async def test_ainvoke_chama_handler_e_devolve_string(self) -> None:
         result = await _get("_hash_text").ainvoke({"text": "oi"}, ctx=ToolContext())
 
         import hashlib
 
         assert result == hashlib.sha256(b"oi").hexdigest()
 
-    async def test_ainvoke_injeta_ctx_quando_tool_pede(self):
+    async def test_ainvoke_injeta_ctx_quando_tool_pede(self) -> None:
         ctx = ToolContext(workspace_id="ws-1")
         result = await _get("_write_note").ainvoke(
             {"path": "a.md", "content": "x"}, ctx=ctx
@@ -194,7 +201,9 @@ class TestToolSpecAinvoke:
 
         assert "workspace=ws-1" in result
 
-    async def test_ainvoke_com_args_invalidos_devolve_erro_tipado_sem_levantar(self):
+    async def test_ainvoke_com_args_invalidos_devolve_erro_tipado_sem_levantar(
+        self,
+    ) -> None:
         """Erro/borda: argumento de tipo errado (int esperado, string
         chega) nunca deve propagar exceção — vira string de erro pro LLM
         reagir, igual ao contrato de todas as tools do Vectora."""
@@ -204,7 +213,7 @@ class TestToolSpecAinvoke:
 
         assert result.startswith("Error:")
 
-    async def test_ainvoke_com_excecao_do_handler_devolve_erro_tipado(self):
+    async def test_ainvoke_com_excecao_do_handler_devolve_erro_tipado(self) -> None:
         """Erro/borda: handler que levanta (não erro de validação de
         argumento, erro de execução) também nunca propaga."""
         result = await _get("_always_fails").ainvoke({"x": 1}, ctx=ToolContext())
@@ -214,7 +223,7 @@ class TestToolSpecAinvoke:
 
 
 class TestToolRegistryIsolated:
-    def test_registry_proprio_nao_interfere_no_global(self):
+    def test_registry_proprio_nao_interfere_no_global(self) -> None:
         """Confirma que uma instância isolada de ToolRegistry (usada por
         quem quiser um subconjunto de tools, ex. um subagente com toolset
         restrito) não polui o TOOL_REGISTRY global nem vice-versa."""

@@ -39,8 +39,11 @@ import logging
 import secrets
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +163,7 @@ async def exchange_code_for_tokens(
     code: str,
     redirect_uri: str,
     code_verifier: str,
-) -> dict[str, Any]:
+) -> JsonObject:
     import httpx
 
     payload = {
@@ -188,7 +191,7 @@ async def exchange_code_for_tokens(
 
 def verify_id_token(
     discovery: OIDCDiscovery, config: OIDCConfig, id_token: str
-) -> dict[str, Any]:
+) -> JsonObject:
     """Verifica assinatura + claims padrão via JWKS. Levanta `OIDCError`
     tipado em qualquer falha (chave não encontrada, assinatura inválida,
     `aud`/`iss` incorretos, token expirado) — nunca deixa a exceção crua
@@ -230,7 +233,7 @@ def start_login(
 
 async def complete_login(
     discovery: OIDCDiscovery, config: OIDCConfig, *, state: str, code: str
-) -> dict[str, Any]:
+) -> JsonObject:
     """Resolve o `state` pendente (rejeitando CSRF — `state` desconhecido ou
     já consumido), troca o código pelos tokens, verifica o `id_token` e
     devolve os claims verificados (`email`, `name`, `sub`, ...).
@@ -250,7 +253,7 @@ async def complete_login(
         code_verifier=pending.code_verifier,
     )
     id_token = tokens.get("id_token")
-    if not id_token:
+    if not isinstance(id_token, str) or not id_token:
         raise OIDCError("resposta do IDP não trouxe id_token")
 
     return verify_id_token(discovery, config, id_token)

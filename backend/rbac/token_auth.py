@@ -21,9 +21,12 @@ import logging
 import secrets
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +54,11 @@ def _generate_token() -> str:
 
 
 async def create_service_token(
-    db: Any, name: str, scopes: list[str], *, created_by: str | None = None
+    db: aiosqlite.Connection,
+    name: str,
+    scopes: list[str],
+    *,
+    created_by: str | None = None,
 ) -> tuple[ServiceToken, str]:
     """Cria um token de serviço novo. Retorna `(ServiceToken, token_cru)`
     — o token cru só existe neste retorno, nunca é recuperável depois
@@ -73,7 +80,9 @@ async def create_service_token(
     )
 
 
-async def verify_service_token(db: Any, raw_token: str) -> ServiceToken | None:
+async def verify_service_token(
+    db: aiosqlite.Connection, raw_token: str
+) -> ServiceToken | None:
     """Valida um token de serviço. `None` se inválido, revogado ou
     inexistente — nunca levanta exceção, nunca vaza qual dessas três
     coisas aconteceu (evita side-channel de enumeração)."""
@@ -98,7 +107,7 @@ async def verify_service_token(db: Any, raw_token: str) -> ServiceToken | None:
     )
 
 
-async def revoke_service_token(db: Any, token_id: str) -> bool:
+async def revoke_service_token(db: aiosqlite.Connection, token_id: str) -> bool:
     """Revoga um token de serviço. `True` se um token foi de fato revogado
     (existia e ainda não estava revogado); `False` caso contrário —
     idempotente, revogar duas vezes não é erro, só a segunda vez retorna
@@ -112,7 +121,7 @@ async def revoke_service_token(db: Any, token_id: str) -> bool:
     return cur.rowcount > 0
 
 
-async def list_service_tokens(db: Any) -> list[ServiceToken]:
+async def list_service_tokens(db: aiosqlite.Connection) -> list[ServiceToken]:
     """Lista todos os tokens de serviço (revogados inclusos, pra
     auditoria) — nunca o token cru, só metadados."""
     async with db.execute(

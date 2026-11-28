@@ -25,15 +25,19 @@ a fonte de verdade — uma credencial nova não aparece aqui sozinha.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.vtypes.connect import ConnectHandle
 
 logger = logging.getLogger(__name__)
 
 #: Handle vivo por plataforma (Application do Telegram, Client do Discord,
 #: handler do Slack, task do email). Vazio = nada rodando.
-_running: dict[str, Any] = {}
+_running: dict[str, ConnectHandle] = {}
 
 _ENABLED_SETTINGS_KEY = "connect_enabled_platforms"
 
@@ -76,7 +80,9 @@ def _enabled_overrides() -> dict[str, bool] | None:
     if not runtime_settings.has(_ENABLED_SETTINGS_KEY):
         return None
     raw = runtime_settings.get(_ENABLED_SETTINGS_KEY, {})
-    return raw if isinstance(raw, dict) else {}
+    if not isinstance(raw, dict):
+        return {}
+    return {platform: bool(value) for platform, value in raw.items()}
 
 
 def is_enabled(platform: str) -> bool:
@@ -99,7 +105,7 @@ def set_enabled(platform: str, enabled: bool) -> None:
         # plataforma não pode desligar silenciosamente outra já em uso.
         overrides = dict.fromkeys(credentialed_platforms(), True)
     overrides[platform] = enabled
-    runtime_settings.set(_ENABLED_SETTINGS_KEY, overrides)
+    runtime_settings.set(_ENABLED_SETTINGS_KEY, {**overrides})
 
 
 def configured_platforms() -> set[str]:
@@ -117,7 +123,7 @@ def configured_platforms() -> set[str]:
     return {p for p in credentialed_platforms() if is_enabled(p)}
 
 
-async def _start_platform(platform: str) -> Any:
+async def _start_platform(platform: str) -> ConnectHandle:
     if platform == "telegram":
         from backend.services.connect import telegram
 
@@ -144,23 +150,35 @@ async def _start_platform(platform: str) -> Any:
     raise ValueError(msg)
 
 
-async def _stop_platform(platform: str, handle: Any) -> None:
+async def _stop_platform(platform: str, handle: ConnectHandle) -> None:
     if platform == "telegram":
+        from telegram.ext import Application
+
         from backend.services.connect import telegram
 
-        await telegram.stop(handle)
+        if isinstance(handle, Application):
+            await telegram.stop(handle)
     elif platform == "discord":
+        from discord import Client
+
         from backend.services.connect import discord
 
-        await discord.stop(handle)
+        if isinstance(handle, Client):
+            await discord.stop(handle)
     elif platform == "slack":
+        from slack_bolt.adapter.socket_mode.async_handler import (
+            AsyncSocketModeHandler,
+        )
+
         from backend.services.connect import slack
 
-        await slack.stop(handle)
+        if isinstance(handle, AsyncSocketModeHandler):
+            await slack.stop(handle)
     elif platform == "email":
         from backend.services.connect import email
 
-        await email.stop(handle)
+        if isinstance(handle, asyncio.Task):
+            await email.stop(handle)
 
 
 async def sync_adapters() -> dict[str, str]:

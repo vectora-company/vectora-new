@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,26 +22,9 @@ from backend.workspace.workspace_config import (
     hook_rules_digest,
     load_workspace_config,
 )
+from tests.chat_fakes import ScriptedChatClient
 
 PY = json.dumps(sys.executable)
-
-
-class _ScriptedChatClient:
-    def __init__(self, turnos: list[list[VMessageChunk]]) -> None:
-        self._turnos = turnos
-        self.chamadas = 0
-
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
-        turno = self._turnos[self.chamadas]
-        self.chamadas += 1
-        for chunk in turno:
-            yield chunk
-
-    async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
-        msg = "não usado (astream-only)"
-        raise NotImplementedError(msg)
 
 
 def _chamada_da_tool() -> list[VMessageChunk]:
@@ -58,7 +42,7 @@ def _resposta_final() -> list[VMessageChunk]:
 
 
 @pytest.fixture
-async def session_store(tmp_path: Path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "sub.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -113,7 +97,7 @@ def _spec_com_sonda(executadas: list[bool]) -> SubagentSpec:
 
 
 async def _delega(spec: SubagentSpec, store: SessionStore) -> str:
-    client = _ScriptedChatClient([_chamada_da_tool(), _resposta_final()])
+    client = ScriptedChatClient([_chamada_da_tool(), _resposta_final()])
     ctx = ToolContext(
         user_id="alice",
         thread_id="thread-pai",

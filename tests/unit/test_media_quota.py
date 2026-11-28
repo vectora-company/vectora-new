@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import os
 import sqlite3
 from pathlib import Path
+from types import TracebackType
+from typing import NoReturn
 
 import pytest
 
@@ -141,7 +145,7 @@ async def test_finalize_usa_o_backend_da_reserva_mesmo_com_configuracao_trocada(
         lambda reservation_id, state: local_finalize.append((reservation_id, state)),
     )
 
-    async def should_not_run(*_args):
+    async def should_not_run(*_args) -> None:
         pytest.fail("reserva SQLite roteada para Postgres")
 
     monkeypatch.setattr(quota, "_finalize_postgres", should_not_run)
@@ -159,7 +163,7 @@ async def test_finalize_postgres_preserva_falha_para_retry(
         "remote-1", "u1", "2026-10", "generate_image", 1, backend="postgres"
     )
 
-    async def unavailable(*_args):
+    async def unavailable(*_args: str) -> NoReturn:
         raise ConnectionError("offline")
 
     monkeypatch.setattr(quota, "_finalize_postgres", unavailable)
@@ -270,7 +274,9 @@ class _FakeConnection:
     def __init__(self, row: dict[str, int]) -> None:
         self.row = row
 
-    async def fetchrow(self, _query: str, *_args: object) -> dict[str, int]:
+    async def fetchrow[**P](
+        self, _query: str, *_args: P.args, **_kwargs: P.kwargs
+    ) -> dict[str, int]:
         return self.row
 
 
@@ -281,7 +287,12 @@ class _FakeAcquire:
     async def __aenter__(self) -> _FakeConnection:
         return self.connection
 
-    async def __aexit__(self, *_args: object) -> None:
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
         return None
 
 

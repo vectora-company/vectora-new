@@ -19,7 +19,7 @@ import logging
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 from backend.settings import settings
 
@@ -68,7 +68,7 @@ async def sync_persisted_versions(*, strict: bool = False) -> None:
     Fora dele, a falha é registrada e mantém a última versão lida: a réplica
     continua com o cache, sem derrubar a execução de tools.
     """
-    store: Any = _version_store
+    store = _version_store
     if store is None:
         return
     try:
@@ -86,7 +86,7 @@ async def sync_persisted_versions(*, strict: bool = False) -> None:
 
 async def bump_policy_version(scope: str) -> int:
     """Incrementa a versão do escopo no banco e no cache local."""
-    store: Any = _version_store
+    store = _version_store
     local_next = _versions.get(scope, 0) + 1
     if store is not None:
         try:

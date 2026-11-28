@@ -15,6 +15,8 @@ import logging
 import os
 from typing import override
 
+from backend.vtypes.desktop import AwaitablePipeServer, PipeServingLoop
+
 logger = logging.getLogger(__name__)
 
 PIPE_ENV_VAR = "VECTORA_IPC_PIPE"
@@ -129,18 +131,12 @@ async def serve_pipe(pipe_path: str, tcp_host: str, tcp_port: int) -> None:
         tcp_port: Porta do uvicorn TCP.
     """
     loop = asyncio.get_running_loop()
-    if not hasattr(loop, "start_serving_pipe"):
+    if not isinstance(loop, PipeServingLoop):
         raise RuntimeError(
             "serve_pipe requer asyncio.ProactorEventLoop. "
             f"Loop atual: {type(loop).__name__}"
         )
-    from typing import Any
-
-    _loop_proactor: Any = (
-        loop  # ProactorEventLoop — AbstractEventLoop não expõe a API de pipe
-    )
-    _start = _loop_proactor.start_serving_pipe
-    servers: list = await _start(
+    servers = await loop.start_serving_pipe(
         lambda: _PipeSide(tcp_host, tcp_port),
         pipe_path,
     )
@@ -151,6 +147,10 @@ async def serve_pipe(pipe_path: str, tcp_host: str, tcp_port: int) -> None:
         for srv in servers:
             srv.close()
         await asyncio.gather(
-            *(srv.wait_closed() for srv in servers if hasattr(srv, "wait_closed")),
+            *(
+                srv.wait_closed()
+                for srv in servers
+                if isinstance(srv, AwaitablePipeServer)
+            ),
             return_exceptions=True,
         )

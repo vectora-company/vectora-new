@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.anthropic.chat_client import AnthropicChatClient
 from backend.llm.anthropic.client import AnthropicClient, AnthropicResponseError
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -19,10 +21,11 @@ from backend.vtypes.message import (
     VMessage,
     text_message,
 )
+from tests.json_values import as_object, dig
 
 
 @pytest.fixture(autouse=True)
-def _sem_cache_de_prompt(monkeypatch, request):
+def _sem_cache_de_prompt(monkeypatch: pytest.MonkeyPatch, request) -> None:
     """Os testes de conversão comparam o corpo cru; o cache tem testes próprios."""
     if request.node.get_closest_marker("prompt_cache"):
         return
@@ -49,8 +52,8 @@ def _ok_response(text: str = "Olá", **extra) -> dict:
 
 
 class TestAgenerate:
-    async def test_prompt_simples_devolve_conteudo(self):
-        def handler(_req):
+    async def test_prompt_simples_devolve_conteudo(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json=_ok_response("Olá da Anthropic"))
 
         resultado = await _client(handler).agenerate(
@@ -60,8 +63,8 @@ class TestAgenerate:
         assert resultado.text() == "Olá da Anthropic"
         assert resultado.role == MessageRole.ASSISTANT
 
-    async def test_resposta_sem_content_lista_vira_erro_tipado(self):
-        def handler(_req):
+    async def test_resposta_sem_content_lista_vira_erro_tipado(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"id": "msg_1"})
 
         with pytest.raises(AnthropicResponseError, match="content"):
@@ -69,7 +72,7 @@ class TestAgenerate:
 
 
 class TestConversaoDeMensagens:
-    async def test_system_vira_parametro_top_level_e_roles_traduzidos(self):
+    async def test_system_vira_parametro_top_level_e_roles_traduzidos(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -90,7 +93,7 @@ class TestConversaoDeMensagens:
         assert [m["role"] for m in capturado["messages"]] == ["user", "assistant"]
         assert "system" not in [m.get("role") for m in capturado["messages"]]
 
-    async def test_tool_message_vira_user_com_bloco_tool_result(self):
+    async def test_tool_message_vira_user_com_bloco_tool_result(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -119,7 +122,7 @@ class TestConversaoDeMensagens:
         assert bloco["content"] == "resultado"
         assert bloco["is_error"] is True
 
-    async def test_assistant_com_tool_calls_vira_blocos_text_e_tool_use(self):
+    async def test_assistant_com_tool_calls_vira_blocos_text_e_tool_use(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -147,7 +150,7 @@ class TestConversaoDeMensagens:
             "input": {"a": 1},
         }
 
-    async def test_mensagem_de_role_desconhecido_falha(self):
+    async def test_mensagem_de_role_desconhecido_falha(self) -> None:
         def handler(_req):
             return httpx.Response(200, json=_ok_response())
 
@@ -157,7 +160,7 @@ class TestConversaoDeMensagens:
         with pytest.raises(ValueError, match="extraterrestre"):
             await _client(handler).agenerate([estranha])
 
-    async def test_bloco_de_imagem_nao_e_descartado(self):
+    async def test_bloco_de_imagem_nao_e_descartado(self) -> None:
         """Regressão: `_to_anthropic_messages` usava `msg.text()` pra
         mensagens `user`/`assistant`, que só concatena blocos `text` — um
         anexo de imagem desaparecia do payload sem erro nem log."""
@@ -186,7 +189,7 @@ class TestConversaoDeMensagens:
             "source": {"type": "base64", "media_type": "image/png", "data": "abc"},
         } in partes
 
-    async def test_imagem_com_url_direta_vira_bloco_source_url(self):
+    async def test_imagem_com_url_direta_vira_bloco_source_url(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -212,7 +215,7 @@ class TestConversaoDeMensagens:
 
 
 class TestToolCalling:
-    async def test_tool_spec_vira_schema_nativo_anthropic(self):
+    async def test_tool_spec_vira_schema_nativo_anthropic(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -243,8 +246,8 @@ class TestToolCalling:
         assert "input_schema" in tool
         assert "type" not in tool  # Anthropic não usa o envelope da OpenAI
 
-    async def test_tool_use_nao_streaming_volta_montada(self):
-        def handler(_req):
+    async def test_tool_use_nao_streaming_volta_montada(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -270,7 +273,7 @@ class TestToolCalling:
 
 
 class TestStreaming:
-    async def test_chunks_de_texto_saem_na_ordem(self):
+    async def test_chunks_de_texto_saem_na_ordem(self) -> None:
         body = (
             b'data: {"type":"content_block_start","index":0,'
             b'"content_block":{"type":"text"}}\n\n'
@@ -281,7 +284,7 @@ class TestStreaming:
             b'data: {"type":"message_stop"}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )
@@ -296,8 +299,8 @@ class TestStreaming:
 
         assert text == "Oi mundo"
 
-    async def test_stream_sem_nenhum_chunk_util_nao_trava(self):
-        def handler(_req):
+    async def test_stream_sem_nenhum_chunk_util_nao_trava(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 content=b'data: {"type":"message_stop"}\n\n',
@@ -318,7 +321,7 @@ class TestStreamingToolCallsEUsage:
     tool call completa via ToolCallChunk acumulados pelo caller; `usage` de
     `message_delta` é cumulativo — cada emissão substitui, nunca soma."""
 
-    async def test_tool_call_fragmentada_em_varios_deltas_sai_completa(self):
+    async def test_tool_call_fragmentada_em_varios_deltas_sai_completa(self) -> None:
         body = (
             b'data: {"type":"content_block_start","index":0,'
             b'"content_block":{"type":"tool_use","id":"call_1",'
@@ -331,7 +334,7 @@ class TestStreamingToolCallsEUsage:
             b'data: {"type":"message_stop"}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )
@@ -354,7 +357,7 @@ class TestStreamingToolCallsEUsage:
         # chunk subsequente do mesmo índice.
         assert names == {"file_read"}
 
-    async def test_usage_de_message_delta_vira_usage_metadata_cumulativo(self):
+    async def test_usage_de_message_delta_vira_usage_metadata_cumulativo(self) -> None:
         body = (
             b'data: {"type":"content_block_start","index":0,'
             b'"content_block":{"type":"text"}}\n\n'
@@ -367,7 +370,7 @@ class TestStreamingToolCallsEUsage:
             b'data: {"type":"message_stop"}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )
@@ -391,12 +394,14 @@ class TestStreamingToolCallsEUsage:
 
 
 class TestPromptCache:
-    def test_marks_tools_system_and_last_messages(self, monkeypatch) -> None:
+    def test_marks_tools_system_and_last_messages(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.llm.anthropic.chat_client import _with_prompt_cache
         from backend.settings import settings
 
         monkeypatch.setattr(settings, "prompt_cache_enabled", True)
-        body = {
+        body: JsonObject = {
             "system": "regras",
             "tools": [{"name": "a"}, {"name": "b"}],
             "messages": [
@@ -408,20 +413,25 @@ class TestPromptCache:
 
         out = _with_prompt_cache(body)
 
-        assert "cache_control" not in out["tools"][0]
-        assert out["tools"][1]["cache_control"] == {"type": "ephemeral"}
-        assert out["system"][0]["cache_control"] == {"type": "ephemeral"}
-        assert out["messages"][0]["content"] == "um"
-        assert out["messages"][1]["content"][-1]["cache_control"]
-        assert out["messages"][2]["content"][-1]["text"] == "três"
-        assert out["messages"][2]["content"][-1]["cache_control"]
+        assert "cache_control" not in as_object(dig(out, "tools", 0))
+        assert dig(out, "tools", 1, "cache_control") == {"type": "ephemeral"}
+        assert dig(out, "system", 0, "cache_control") == {"type": "ephemeral"}
+        assert dig(out, "messages", 0, "content") == "um"
+        assert dig(out, "messages", 1, "content", -1, "cache_control")
+        assert dig(out, "messages", 2, "content", -1, "text") == "três"
+        assert dig(out, "messages", 2, "content", -1, "cache_control")
 
-    def test_disabled_does_not_change_body(self, monkeypatch) -> None:
+    def test_disabled_does_not_change_body(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.llm.anthropic.chat_client import _with_prompt_cache
         from backend.settings import settings
 
         monkeypatch.setattr(settings, "prompt_cache_enabled", False)
-        body = {"system": "regras", "messages": [{"role": "user", "content": "oi"}]}
+        body: JsonObject = {
+            "system": "regras",
+            "messages": [{"role": "user", "content": "oi"}],
+        }
 
         assert _with_prompt_cache(body) == {
             "system": "regras",

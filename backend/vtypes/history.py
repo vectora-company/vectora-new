@@ -6,6 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
+from backend.vtypes.contracts import JsonObject
+
 
 class HistoryDiffHunk(BaseModel):
     """Serializable diff hunk stored with an edited file."""
@@ -76,5 +78,5 @@ class ThreadHistoryEntry(BaseModel):
     is_error: bool | None = False
     parts: list[HistoryPart] = Field(default_factory=list)
     verification: HistoryVerification | None = None
-    attachments: list[dict[str, object]] = Field(default_factory=list)
+    attachments: list[JsonObject] = Field(default_factory=list)
     edited_files: list[HistoryEditedFile] = Field(default_factory=list)

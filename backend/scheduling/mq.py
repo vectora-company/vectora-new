@@ -22,7 +22,11 @@ import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from nats.aio.client import Client
+    from nats.js import JetStreamContext
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +95,8 @@ class NatsMQ:
 
     def __init__(self, url: str) -> None:
         self._url = url
-        self._nc: Any = None
-        self._js: Any = None
+        self._nc: Client | None = None
+        self._js: JetStreamContext | None = None
         self._closing = False
         self._failed: bool = (
             False  # True após esgotar reconexões — força reset do singleton
@@ -113,7 +117,7 @@ class NatsMQ:
         except Exception:
             return True
 
-    async def _connect(self) -> Any:
+    async def _connect(self) -> JetStreamContext:
         if self._failed:
             raise RuntimeError("mq: NATS permanentemente desconectado — use fallback")
         if self._js is None:
@@ -268,7 +272,7 @@ class RedisMQ:
         await self._ensure_group(stream, group)
         while stop_event is None or not stop_event.is_set():
             try:
-                batches: Any = await self._redis.xreadgroup(
+                batches = await self._redis.xreadgroup(
                     group, consumer, {stream: ">"}, count=count, block=block_ms
                 )
             except asyncio.CancelledError:
@@ -278,7 +282,11 @@ class RedisMQ:
                 await asyncio.sleep(2)
                 continue
             for _stream_name, messages in batches or []:
+                if not isinstance(messages, list):
+                    continue
                 for msg_id, fields in messages:
+                    if not isinstance(fields, dict):
+                        continue
                     try:
                         payload = json.loads(fields.get("payload", "{}"))
                     except json.JSONDecodeError:

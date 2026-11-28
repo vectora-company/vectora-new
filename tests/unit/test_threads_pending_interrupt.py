@@ -19,7 +19,7 @@ from backend.api.handlers.threads import thread_pending_interrupt
 
 class TestThreadPendingInterrupt:
     @pytest.mark.asyncio
-    async def test_no_pending_interrupt_returns_none(self):
+    async def test_no_pending_interrupt_returns_none(self) -> None:
         with patch(
             "backend.services.agent_factory.aget_thread_pending_interrupt",
             AsyncMock(return_value=None),
@@ -29,7 +29,7 @@ class TestThreadPendingInterrupt:
         assert result.interrupt is None
 
     @pytest.mark.asyncio
-    async def test_pending_interrupt_returns_hitl_event(self):
+    async def test_pending_interrupt_returns_hitl_event(self) -> None:
         pending = {
             "tool_name": "terminal",
             "args": {"command": "rm -rf /tmp/x"},
@@ -53,7 +53,7 @@ class TestThreadPendingInterrupt:
         assert '"command"' in result.interrupt.args_json
 
     @pytest.mark.asyncio
-    async def test_smart_approval_failure_degrades_to_not_pre_approved(self):
+    async def test_smart_approval_failure_degrades_to_not_pre_approved(self) -> None:
         """Erro/borda: `evaluate_command` indisponível não pode impedir a
         reidratação do card em si — só a anotação de pré-aprovação some."""
         pending = {"tool_name": "git_status", "args": {}, "interrupt_id": "intr-2"}

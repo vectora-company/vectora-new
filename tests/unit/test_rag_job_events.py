@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from typing import Any
+from pathlib import Path
+from typing import Any, NoReturn
 
 import pytest
 
 from backend.api.handlers import workspaces
+from backend.vtypes.contracts import JsonObject
 
 
 class _FakeQueue:
@@ -39,7 +41,7 @@ def _patch_queue(monkeypatch: pytest.MonkeyPatch, stats: dict[str, int]) -> None
 def _capture_emitted(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, dict]]:
     calls: list[tuple[str, str, dict]] = []
 
-    def _fake_emit(provider: str, event_type: str, data: dict[str, Any]) -> None:
+    def _fake_emit(provider: str, event_type: str, data: JsonObject) -> None:
         calls.append((provider, event_type, data))
 
     monkeypatch.setattr("backend.api.handlers.webhooks._emit_sse_event", _fake_emit)
@@ -151,7 +153,7 @@ async def test_erro_ao_buscar_stats_nao_propaga(
         "enqueue_done": False,
     }
 
-    async def _boom(_dsn: str | None) -> Any:
+    async def _boom(_dsn: str | None) -> NoReturn:
         raise RuntimeError("fila indisponível")
 
     monkeypatch.setattr("backend.embedding.queue.get_configured_embedding_queue", _boom)
@@ -172,7 +174,7 @@ async def test_job_endpoints_report_queue_unavailable(
 
     from backend.api.handlers.workspaces import rag_job_status, rag_jobs
 
-    async def unavailable(_dsn: str | None) -> None:
+    async def unavailable(_dsn: str | None) -> NoReturn:
         raise RuntimeError("database unavailable")
 
     monkeypatch.setattr(
@@ -197,7 +199,7 @@ async def test_enqueue_failure_is_visible_even_when_queue_is_unavailable(
         "enqueue_error": "Falha ao preparar a fila de indexação.",
     }
 
-    async def unavailable(_dsn: str | None) -> None:
+    async def unavailable(_dsn: str | None) -> NoReturn:
         raise RuntimeError("database unavailable")
 
     monkeypatch.setattr(
@@ -242,7 +244,7 @@ async def test_retry_only_allows_own_workspace(monkeypatch: pytest.MonkeyPatch) 
 
 @pytest.mark.asyncio
 async def test_job_status_recovers_metadata_after_restart_with_workspace_isolation(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from fastapi import HTTPException
 
@@ -278,7 +280,7 @@ async def test_job_status_recovers_metadata_after_restart_with_workspace_isolati
 
 @pytest.mark.asyncio
 async def test_unconfirmed_preparation_is_unknown_until_persisted_completion(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from backend.embedding.queue import EmbeddingQueue
 

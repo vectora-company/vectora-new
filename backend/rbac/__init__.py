@@ -12,6 +12,8 @@ necessário.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 __all__ = [
     "User",
     "require_min_role",
@@ -19,7 +21,13 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> object:
+if TYPE_CHECKING:
+    from types import FunctionType
+
+    from backend.rbac.auth import User
+
+
+def __getattr__(name: str) -> type[User] | FunctionType:
     if name == "User":
         from backend.rbac.auth import User
 

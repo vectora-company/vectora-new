@@ -16,8 +16,15 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Any, Self
+from typing import TYPE_CHECKING, Self
 from urllib.parse import urlsplit
+
+if TYPE_CHECKING:
+    from types import TracebackType
+
+    import httpx
+
+    from backend.vtypes.contracts import JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +64,7 @@ class OpenRouterResponseError(OpenRouterError):
     problema não é a conta nem a requisição, é o que voltou."""
 
 
-def _extrair_mensagem(corpo: Any, fallback: str) -> str:
+def _extrair_mensagem(corpo: JsonValue, fallback: str) -> str:
     if isinstance(corpo, dict):
         erro = corpo.get("error")
         if isinstance(erro, dict) and erro.get("message"):
@@ -75,7 +82,7 @@ class OpenRouterClient:
         api_key: str,
         *,
         base_url: str = BASE_URL,
-        http_client: Any = None,
+        http_client: httpx.AsyncClient | None = None,
         timeout_s: float = _DEFAULT_TIMEOUT_S,
         require_api_key: bool = True,
         include_attribution: bool = True,
@@ -119,7 +126,7 @@ class OpenRouterClient:
             headers.update(extra)
         return headers
 
-    async def _ensure_client(self) -> Any:
+    async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
             import httpx
 
@@ -130,7 +137,12 @@ class OpenRouterClient:
         await self._ensure_client()
         return self
 
-    async def __aexit__(self, *_exc: object) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         await self.aclose()
 
     async def aclose(self) -> None:
@@ -140,7 +152,7 @@ class OpenRouterClient:
             with contextlib.suppress(Exception):
                 await self._client.aclose()
 
-    def _raise_for_status(self, status: int, corpo: Any) -> None:
+    def _raise_for_status(self, status: int, corpo: JsonValue) -> None:
         if status < 400:
             return
         msg = _extrair_mensagem(corpo, f"OpenRouter respondeu {status}")
@@ -229,8 +241,8 @@ class OpenRouterClient:
         self,
         path: str,
         *,
-        files: dict[str, Any],
-        data: dict[str, Any] | None = None,
+        files: dict[str, tuple[str, bytes, str]],
+        data: dict[str, str] | None = None,
     ) -> dict:
         """POST multipart com resposta JSON — STT (`/audio/transcriptions`).
 

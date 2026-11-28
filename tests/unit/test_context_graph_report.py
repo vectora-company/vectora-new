@@ -25,28 +25,28 @@ def _minimal_graph() -> nx.Graph:
 
 
 class TestSafeCommunityName:
-    def test_strips_invalid_chars(self):
+    def test_strips_invalid_chars(self) -> None:
         from backend.context_graph.report import _safe_community_name
 
         assert _safe_community_name("My*Community") == "MyCommunity"
 
-    def test_strips_md_extension(self):
+    def test_strips_md_extension(self) -> None:
         from backend.context_graph.report import _safe_community_name
 
         assert _safe_community_name("topic.md") == "topic"
 
-    def test_empty_label_returns_unnamed(self):
+    def test_empty_label_returns_unnamed(self) -> None:
         from backend.context_graph.report import _safe_community_name
 
         assert _safe_community_name("") == "unnamed"
         assert _safe_community_name("***") == "unnamed"
 
-    def test_normal_label_unchanged(self):
+    def test_normal_label_unchanged(self) -> None:
         from backend.context_graph.report import _safe_community_name
 
         assert _safe_community_name("AuthSystem") == "AuthSystem"
 
-    def test_newlines_replaced_with_space(self):
+    def test_newlines_replaced_with_space(self) -> None:
         from backend.context_graph.report import _safe_community_name
 
         result = _safe_community_name("line1\nline2")
@@ -82,31 +82,31 @@ class TestGenerate:
             **kwargs,
         )
 
-    def test_basic_report_generated(self):
+    def test_basic_report_generated(self) -> None:
         text = self._generate()
         assert "Graph Report" in text
         assert "God Nodes" in text
 
-    def test_detection_warning_shown(self):
+    def test_detection_warning_shown(self) -> None:
         text = self._generate(detection={"warning": "Corpus too small"})
         assert "Corpus too small" in text
 
-    def test_detection_stats_shown(self):
+    def test_detection_stats_shown(self) -> None:
         text = self._generate(detection={"total_files": 42, "total_words": 1000})
         assert "42 files" in text
 
-    def test_built_at_commit_shown(self):
+    def test_built_at_commit_shown(self) -> None:
         text = self._generate(built_at_commit="abc123def456")
         assert "abc123d" in text
 
-    def test_community_hubs_shown_when_nonempty(self):
+    def test_community_hubs_shown_when_nonempty(self) -> None:
         text = self._generate(
             communities={0: ["a", "b"]},
             labels={0: "Auth System"},
         )
         assert "Community Hubs" in text
 
-    def test_thin_community_omitted(self):
+    def test_thin_community_omitted(self) -> None:
         G = _minimal_graph()
         G.add_node("c", label="lone", source_file="c.py", file_type="code")
         text = self._generate(
@@ -117,7 +117,7 @@ class TestGenerate:
         )
         assert "thin omitted" in text
 
-    def test_surprise_connections_shown(self):
+    def test_surprise_connections_shown(self) -> None:
         surprises = [
             {
                 "source": "auth",
@@ -132,7 +132,7 @@ class TestGenerate:
         assert "auth" in text
         assert "ui_comp" in text
 
-    def test_inferred_surprise_shows_score(self):
+    def test_inferred_surprise_shows_score(self) -> None:
         surprises = [
             {
                 "source": "a",
@@ -147,11 +147,11 @@ class TestGenerate:
         assert "INFERRED" in text
         assert "0.75" in text
 
-    def test_no_surprises_shows_message(self):
+    def test_no_surprises_shows_message(self) -> None:
         text = self._generate(surprise=[])
         assert "None detected" in text
 
-    def test_import_cycles_shown(self):
+    def test_import_cycles_shown(self) -> None:
         G = nx.DiGraph()
         G.add_node("a", label="a", source_file="a.ts")
         G.add_node("b", label="b", source_file="b.ts")
@@ -164,11 +164,11 @@ class TestGenerate:
         text = self._generate(graph=G)
         assert "Import Cycles" in text
 
-    def test_no_import_cycles_shows_none(self):
+    def test_no_import_cycles_shows_none(self) -> None:
         text = self._generate()
         assert "None detected." in text
 
-    def test_ambiguous_edges_section_shown(self):
+    def test_ambiguous_edges_section_shown(self) -> None:
         G = nx.Graph()
         G.add_node("a", label="A", source_file="a.py", file_type="code")
         G.add_node("b", label="B", source_file="b.py", file_type="code")
@@ -178,14 +178,14 @@ class TestGenerate:
         text = self._generate(graph=G, communities={0: ["a", "b"]})
         assert "Ambiguous Edges" in text
 
-    def test_suggested_questions_no_signal(self):
+    def test_suggested_questions_no_signal(self) -> None:
         questions = [
             {"type": "no_signal", "question": None, "why": "Not enough signal"}
         ]
         text = self._generate(questions=questions)
         assert "Not enough signal" in text
 
-    def test_suggested_questions_with_real_questions(self):
+    def test_suggested_questions_with_real_questions(self) -> None:
         questions = [
             {
                 "type": "bridge_node",
@@ -196,7 +196,7 @@ class TestGenerate:
         text = self._generate(questions=questions)
         assert "Why does X connect Y?" in text
 
-    def test_hyperedges_shown(self):
+    def test_hyperedges_shown(self) -> None:
         G = _minimal_graph()
         G.graph["hyperedges"] = [
             {
@@ -211,7 +211,7 @@ class TestGenerate:
         assert "Hyperedges" in text
         assert "GroupA" in text
 
-    def test_knowledge_gaps_shown_when_isolated(self):
+    def test_knowledge_gaps_shown_when_isolated(self) -> None:
         G = nx.Graph()
         G.add_node("a", label="A", source_file="a.py", file_type="code")
         G.add_node("b", label="B", source_file="b.py", file_type="code")
@@ -219,7 +219,7 @@ class TestGenerate:
         text = self._generate(graph=G, communities={0: ["a", "b"]})
         assert "Knowledge Gaps" in text
 
-    def test_string_community_labels_normalized(self):
+    def test_string_community_labels_normalized(self) -> None:
         G = _minimal_graph()
         text = self._generate(
             graph=G,

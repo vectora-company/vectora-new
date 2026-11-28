@@ -12,12 +12,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from backend.services.context_manifest import ContextDomain
 from backend.vtypes import JsonObject
 
 MemoryTrustLevel = Literal["trusted", "verified", "untrusted"]
+
+
+if TYPE_CHECKING:
+    from backend.vtypes.sql import SqlValue
 
 
 class MemoryConflictError(ValueError):
@@ -168,7 +172,7 @@ class MemoryStore:
             return None
 
     @staticmethod
-    def _record_parameters(record: MemoryRecord) -> tuple[object, ...]:
+    def _record_parameters(record: MemoryRecord) -> tuple[SqlValue, ...]:
         """Executa a operação  record parameters."""
         return (
             record.id,

@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from backend.api.handlers import mcp_marketplace
 from backend.api.handlers import skills as skills_handler
 from backend.services import registry_client
+from backend.vtypes.contracts import JsonObject, JsonValue, as_int
 from backend.workspace import plugins
 from backend.workspace.skills import (
     install_skill,
@@ -40,10 +41,10 @@ class MarketplaceArgs(Protocol):
 
 
 def _envelope(
-    status: str, data: object = None, error: str | None = None
-) -> dict[str, object]:
+    status: str, data: JsonValue = None, error: str | None = None
+) -> JsonObject:
     """Create the versioned output contract shared by all subcommands."""
-    result: dict[str, object] = {
+    result: JsonObject = {
         "schema_version": SCHEMA_VERSION,
         "status": status,
         "data": data,
@@ -53,26 +54,22 @@ def _envelope(
     return result
 
 
-def _public_skill(skill: object) -> dict[str, object]:
+def _public_skill(skill: BaseModel | JsonObject) -> JsonObject:
     """Remove filesystem and user details from CLI output."""
-    if isinstance(skill, BaseModel):
-        value = skill.model_dump()
-    elif isinstance(skill, dict):
-        value = dict(skill)
-    else:
-        value = {"value": str(skill)}
+    value: JsonObject = (
+        skill.model_dump(mode="json") if isinstance(skill, BaseModel) else dict(skill)
+    )
     for key in ("path", "source", "installed_by"):
         value.pop(key, None)
     return value
 
 
-def _public_server(server: object) -> dict[str, object]:
-    if isinstance(server, BaseModel):
-        value = server.model_dump()
-    elif isinstance(server, dict):
-        value = dict(server)
-    else:
-        value = {"value": str(server)}
+def _public_server(server: BaseModel | JsonObject) -> JsonObject:
+    value: JsonObject = (
+        server.model_dump(mode="json")
+        if isinstance(server, BaseModel)
+        else dict(server)
+    )
     # Environment variable names are safe metadata; values are never stored here.
     return {
         key: value[key]
@@ -81,8 +78,8 @@ def _public_server(server: object) -> dict[str, object]:
     }
 
 
-def _emit(result: dict[str, object], output: str) -> int:
-    failure_code = int(cast("int", result.get("error_code", OPERATION_ERROR)))
+def _emit(result: JsonObject, output: str) -> int:
+    failure_code = as_int(result.get("error_code", OPERATION_ERROR))
     if output == "json":
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     else:
@@ -104,9 +101,7 @@ def _emit(result: dict[str, object], output: str) -> int:
     return SUCCESS if result["status"] != "error" else failure_code
 
 
-def _match(
-    items: list[dict[str, object]], query: str | None
-) -> list[dict[str, object]]:
+def _match(items: list[JsonObject], query: str | None) -> list[JsonObject]:
     if not query:
         return items
     needle = query.strip().lower()
@@ -119,15 +114,16 @@ def _match(
     ]
 
 
-async def _mcp(args: MarketplaceArgs) -> dict[str, object]:
+async def _mcp(args: MarketplaceArgs) -> JsonObject:
     installed = [_public_server(server) for server in plugins.list_servers("local")]
     if args.action == "list":
-        return _envelope("ok", installed)
+        return _envelope("ok", [*installed])
     registry = [
-        connector.model_dump() for connector in await mcp_marketplace.list_registry()
+        connector.model_dump(mode="json")
+        for connector in await mcp_marketplace.list_registry()
     ]
     if args.action == "search":
-        return _envelope("ok", _match(registry, args.query))
+        return _envelope("ok", [*_match(registry, args.query)])
     if args.action == "info":
         found = _match(registry, args.identifier)
         return _envelope(
@@ -158,19 +154,19 @@ async def _mcp(args: MarketplaceArgs) -> dict[str, object]:
     return _envelope("error", error="Comando MCP indisponível")
 
 
-async def _skills(args: MarketplaceArgs) -> dict[str, object]:  # noqa: PLR0911
+async def _skills(args: MarketplaceArgs) -> JsonObject:  # noqa: PLR0911
     if args.action == "list":
         return _envelope("ok", [_public_skill(skill) for skill in list_skills("local")])
     if args.action in {"search", "info"}:
         response = await skills_handler.get_skills_catalog()
-        catalog = [entry.model_dump() for entry in response.entries]
+        catalog = [entry.model_dump(mode="json") for entry in response.entries]
         if args.action == "info":
             catalog = [_public_skill(skill) for skill in list_skills("local")] + catalog
         found = _match(
             catalog, getattr(args, "query", None) or getattr(args, "identifier", None)
         )
         if args.action == "search":
-            return _envelope("ok", found)
+            return _envelope("ok", [*found])
         return _envelope(
             "ok", found[0] if found else None, None if found else "Skill não encontrada"
         )

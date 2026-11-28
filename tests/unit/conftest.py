@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from unittest.mock import AsyncMock
 
 import pytest
 
 
 @pytest.fixture
-def _no_nats_sidecar(monkeypatch: pytest.MonkeyPatch):
+def _no_nats_sidecar(monkeypatch: pytest.MonkeyPatch) -> None:
     """Neutraliza o sidecar NATS: ``get_kv``/``get_mq`` caem no fallback de memória.
 
     Sem isso, todo teste que assume ``MemoryKV``/``MemoryMQ`` passa a subir o
@@ -29,7 +30,7 @@ def _no_nats_sidecar(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture
-def _no_thread_persistence(monkeypatch: pytest.MonkeyPatch):
+def _no_thread_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
     """Neutraliza ``threads._increment_message_count``.
 
     ``stream_engine_events()`` (native_stream.py) dispara essa chamada
@@ -50,7 +51,7 @@ def _no_thread_persistence(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture
-def sem_bwrap_automatico(monkeypatch):
+def sem_bwrap_automatico(monkeypatch: pytest.MonkeyPatch) -> None:
     """Faz `parse_policy` ignorar o `bwrap` do host: os testes que esperam o
     sandbox desligado sem `vectora.toml` não podem depender de a máquina de
     quem roda ter ou não o binário instalado."""
@@ -60,7 +61,7 @@ def sem_bwrap_automatico(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _limpa_cache_de_leituras_do_gh():
+def _limpa_cache_de_leituras_do_gh() -> Iterator[None]:
     """O handler do GitHub guarda leituras por alguns segundos; sem limpar, um
     teste veria a resposta simulada do anterior."""
     from backend.api.handlers import github
@@ -77,7 +78,7 @@ def _limpa_cache_de_leituras_do_gh():
 
 
 @pytest.fixture(autouse=True)
-def _encerra_workers_do_jail():
+def _encerra_workers_do_jail() -> Iterator[None]:
     """Nenhum worker jailado sobrevive ao teste que o criou: o `jail_manager` é
     um singleton do processo, e um worker esquecido seguiria apontando para a
     pasta temporária de um teste anterior."""
@@ -93,7 +94,7 @@ def _encerra_workers_do_jail():
 
 
 @pytest.fixture(autouse=True)
-def _git_com_ramo_padrao_master(monkeypatch):
+def _git_com_ramo_padrao_master(monkeypatch: pytest.MonkeyPatch) -> None:
     """Repositórios criados pelos testes nascem em `master`, qualquer que seja
     o `init.defaultBranch` da máquina de quem roda (os testes de git citam o
     ramo pelo nome)."""
@@ -103,7 +104,9 @@ def _git_com_ramo_padrao_master(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _politica_do_sandbox_isolada(monkeypatch, tmp_path_factory):
+def _politica_do_sandbox_isolada(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
     """A política do usuário (fora do workspace) nunca vem do `~/.vectora` de
     quem roda os testes: cada teste enxerga uma pasta vazia."""
     monkeypatch.setenv(

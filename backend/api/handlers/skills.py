@@ -27,6 +27,8 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from backend.services import registry_client
 from backend.services.importers import preview_skill_config
+from backend.vtypes.contracts import JsonObject, JsonValue
+from backend.vtypes.services import SkillImportPreview
 from backend.vtypes.skill import SkillCatalogEntry, SkillCatalogResponse
 from backend.workspace.skills import (
     install_skill,
@@ -42,7 +44,7 @@ router = APIRouter(prefix="/skills", tags=["skills"])
 
 
 class ImportPreviewRequest(BaseModel):
-    payload: object
+    payload: JsonValue
 
 
 class CatalogSkillInstallRequest(BaseModel):
@@ -56,7 +58,7 @@ class CatalogSkillInstallRequest(BaseModel):
 
     @field_validator("target", "workspace_id", mode="before")
     @classmethod
-    def normalize_optional_identifier(cls, value: object) -> object:
+    def normalize_optional_identifier(cls, value: JsonValue) -> JsonValue:
         """Treat blank form values as omitted optional identifiers."""
         if isinstance(value, str) and not value.strip():
             return None
@@ -64,13 +66,13 @@ class CatalogSkillInstallRequest(BaseModel):
 
 
 class SkillsListResponse(TypedDict):
-    skills: list[dict[str, object]]
+    skills: list[JsonObject]
     total: int
 
 
 class SkillResponse(TypedDict):
     status: str
-    skill: dict[str, object]
+    skill: JsonObject
 
 
 class RemovalResponse(TypedDict):
@@ -149,7 +151,7 @@ def _matches_skill_query(
 
 
 def _validate_catalog_entries(
-    entries: Sequence[object],
+    entries: Sequence[JsonValue],
     catalog_source: Literal["remote", "enterprise"],
 ) -> list[SkillCatalogEntry]:
     validated: list[SkillCatalogEntry] = []
@@ -278,6 +280,6 @@ async def verify_user_skill(
 
 
 @router.post("/import/preview")
-async def preview_skill_import(req: ImportPreviewRequest) -> dict:
+async def preview_skill_import(req: ImportPreviewRequest) -> SkillImportPreview:
     """Return a non-executing preview of supported skill metadata."""
     return preview_skill_config(req.payload)

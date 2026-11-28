@@ -29,7 +29,7 @@ import time
 from collections.abc import Mapping
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
@@ -40,6 +40,14 @@ from mcp.types import Tool as MCPTool
 from backend.settings import settings
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+if TYPE_CHECKING:
+    from mcp.types import CallToolResult
+    from mcp.types import ContentBlock as ContentBlockType
+
+    from backend.sandbox.mcp_launcher import JailedLaunch
+    from backend.vtypes.services import SavedToolImage, ToolImage
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +119,10 @@ def builtin_stdio_sandbox_available() -> bool:
     return jail_available()
 
 
+def _strings(value: JsonValue) -> list[str]:
+    return [str(item) for item in value] if isinstance(value, list) else []
+
+
 class VectoraMCPClient:
     """Uma `ClientSession` MCP por servidor configurado — gerencia conexões
     e expõe as tools agregadas.
@@ -122,10 +134,10 @@ class VectoraMCPClient:
         self._tools_by_name: dict[str, tuple[str, MCPTool]] = {}
         self._connected = False
         #: Servidores iniciados no jail embutido (para encerrar o proxy de saída).
-        self._jails: list[Any] = []
+        self._jails: list[JailedLaunch] = []
 
     async def connect(
-        self, connections: dict[str, dict[str, Any]], *, strict: bool = False
+        self, connections: dict[str, JsonObject], *, strict: bool = False
     ) -> None:
         """Abre uma sessão por servidor configurado.
 
@@ -157,9 +169,7 @@ class VectoraMCPClient:
                 self._tools_by_name[t.name] = (server_name, t)
         self._connected = True
 
-    async def _connect_one(
-        self, server_name: str, cfg: dict[str, Any]
-    ) -> ClientSession:
+    async def _connect_one(self, server_name: str, cfg: JsonObject) -> ClientSession:
         transport = cfg["transport"]
         if transport == "stdio":
             launcher = str(
@@ -170,9 +180,14 @@ class VectoraMCPClient:
                 raise RuntimeError(
                     "sandbox protocol-aware obrigatório para servidor MCP stdio indisponível"
                 )
-            explicit_env = cfg.get("env") or {}
-            command = cfg["command"]
-            args = list(cfg.get("args") or [])
+            raw_env = cfg.get("env")
+            explicit_env = (
+                {key: str(value) for key, value in raw_env.items()}
+                if isinstance(raw_env, dict)
+                else {}
+            )
+            command = str(cfg["command"])
+            args = _strings(cfg.get("args"))
             if cfg.get("require_sandbox"):
                 if launcher and shutil.which(launcher):
                     command, args = launcher, [command, *args]
@@ -183,7 +198,7 @@ class VectoraMCPClient:
                         server_name,
                         command,
                         args,
-                        allow_hosts=tuple(cfg.get("allow_hosts") or ()),
+                        allow_hosts=tuple(_strings(cfg.get("allow_hosts"))),
                     )
                     self._jails.append(jailed)
                     command, args = jailed.command, jailed.args
@@ -194,10 +209,12 @@ class VectoraMCPClient:
             )
             read, write = await self._stack.enter_async_context(stdio_client(params))
         elif transport == "sse":
-            read, write = await self._stack.enter_async_context(sse_client(cfg["url"]))
+            read, write = await self._stack.enter_async_context(
+                sse_client(str(cfg["url"]))
+            )
         elif transport == "streamable_http":
             read, write = await self._stack.enter_async_context(
-                streamable_http_client(cfg["url"])
+                streamable_http_client(str(cfg["url"]))
             )
         else:
             raise ValueError(f"transporte MCP desconhecido: {transport!r}")
@@ -217,7 +234,7 @@ class VectoraMCPClient:
     async def call_tool(
         self,
         tool_name: str,
-        arguments: dict[str, Any],
+        arguments: JsonObject,
         ctx: ToolContext | None = None,
     ) -> str:
         """Invoca `tool_name` no servidor que a expõe. Levanta `KeyError` se
@@ -275,7 +292,7 @@ _MAX_AUDIO_BYTES = 25 * 1024 * 1024
 _MAX_AUDIO_TRANSCRIPT_CHARS = 12_000
 
 
-async def _transcribe_audio_blocks(result: Any) -> dict[int, str]:
+async def _transcribe_audio_blocks(result: CallToolResult) -> dict[int, str]:
     """Transcreve localmente cada ``AudioContent`` do resultado.
 
     Devolve o texto por posição do bloco; áudio inválido, grande demais ou sem
@@ -321,7 +338,7 @@ async def _transcribe_audio_blocks(result: Any) -> dict[int, str]:
 
 
 def _render_call_result(
-    result: Any,
+    result: CallToolResult,
     ctx: ToolContext | None = None,
     audio_transcripts: dict[int, str] | None = None,
 ) -> str:
@@ -334,7 +351,7 @@ def _render_call_result(
     ela, como uma nota; recursos binários viram uma nota curta.
     """
     parts: list[str] = []
-    images: list[dict[str, Any]] = []
+    images: list[ToolImage] = []
     urls: list[str] = []
     for index, block in enumerate(getattr(result, "content", []) or []):
         kind = getattr(block, "type", None)
@@ -398,8 +415,8 @@ def _render_call_result(
 
 
 def _save_mcp_image(
-    block: Any, ctx: ToolContext | None, index: int
-) -> dict[str, Any] | None:
+    block: ContentBlockType, ctx: ToolContext | None, index: int
+) -> SavedToolImage | None:
     """Decodifica e salva uma `ImageContent` do MCP como asset da sessão."""
     if ctx is None or not ctx.thread_id:
         return None
@@ -420,10 +437,10 @@ _mcp_client: VectoraMCPClient | None = None
 _mcp_lock: asyncio.Lock = asyncio.Lock()
 
 
-def _build_connections() -> dict[str, dict[str, Any]]:
+def _build_connections() -> dict[str, JsonObject]:
     """Monta o dict de conexões a partir das settings — mesmo shape de
     antes (`transport` + campos específicos por tipo)."""
-    connections: dict[str, dict[str, Any]] = {}
+    connections: dict[str, JsonObject] = {}
 
     if settings.mcp_server_url:
         transport = "sse" if settings.mcp_transport_type == "sse" else "streamable_http"
@@ -436,8 +453,8 @@ def _build_connections() -> dict[str, dict[str, Any]]:
         connections["local"] = {
             "transport": "stdio",
             "command": settings.mcp_command,
-            "args": settings.mcp_command_args or [],
-            "env_vars": settings.mcp_command_env_vars or [],
+            "args": [*(settings.mcp_command_args or [])],
+            "env_vars": [*(settings.mcp_command_env_vars or [])],
             "env": {
                 key: os.environ[key]
                 for key in settings.mcp_command_env_vars or []
@@ -505,7 +522,7 @@ async def call_mcp_tool(
         return "MCP desabilitado. Defina ENABLE_MCP=true para usar servidores externos."
 
     try:
-        args_dict: dict[str, Any] = json.loads(arguments) if arguments else {}
+        args_dict: JsonObject = json.loads(arguments) if arguments else {}
     except json.JSONDecodeError as e:
         return f"Erro: 'arguments' deve ser JSON válido — {e}"
 

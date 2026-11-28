@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 
@@ -21,9 +19,3 @@ class SessionMetadata(BaseModel):
     manifest_version: int = Field(
         description="Versão do manifest carregada no contexto desta sessão."
     )
-
-    def __getitem__(self, item: str) -> Any:
-        return getattr(self, item)
-
-    def get(self, item: str, default: Any = None) -> Any:
-        return getattr(self, item, default)

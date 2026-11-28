@@ -29,7 +29,10 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from backend.vtypes.services import SttEngines, SttSettings
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +262,7 @@ def validate_system_model(model: str) -> str:
     return value
 
 
-def stt_settings() -> dict[str, object]:
+def stt_settings() -> SttSettings:
     """Configuração efetiva, motores detectados e modelos em cache."""
     return {
         "model": local_model_size(),
@@ -275,7 +278,7 @@ def stt_settings() -> dict[str, object]:
     }
 
 
-def available_engines() -> dict[str, object]:
+def available_engines() -> SttEngines:
     """Motores locais disponíveis, para diagnóstico e interface."""
     system = detect_system_whisper()
     return {

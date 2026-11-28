@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
+from aiosqlite import Connection
 from fastapi import HTTPException
 
 from backend.api.handlers.agent_profiles import (
@@ -15,15 +18,16 @@ from backend.api.handlers.agent_profiles import (
     patch_agent_profile,
     post_agent_profile,
 )
+from tests.fake_requests import fake_request
 
 
-def _req(user_id: str | None = "user-1"):
+def _req(user_id: str | None = "user-1") -> MagicMock:
     user = SimpleNamespace(id=user_id) if user_id else None
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    return fake_request(state=SimpleNamespace(user=user))
 
 
 @pytest.fixture
-async def db(tmp_path, monkeypatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from typing import Any
 
     import aiosqlite
@@ -31,10 +35,8 @@ async def db(tmp_path, monkeypatch):
     from backend.services import agent_profiles as ap
 
     caminho = tmp_path / "agent_profiles.db"
-    conn: Any = await aiosqlite.connect(caminho)
-    conn.row_factory = lambda c, r: dict(
-        zip([col[0] for col in c.description], r, strict=False)
-    )
+    conn = await aiosqlite.connect(caminho)
+    conn.row_factory = aiosqlite.Row
     await conn.executescript(
         """
         CREATE TABLE vectora_agent_profiles (
@@ -56,7 +58,7 @@ async def db(tmp_path, monkeypatch):
     )
     await conn.commit()
 
-    async def _get_db():
+    async def _get_db() -> Connection:
         return conn
 
     monkeypatch.setattr(ap, "_get_db", _get_db)
@@ -65,7 +67,7 @@ async def db(tmp_path, monkeypatch):
 
 
 class TestGetAgentProfiles:
-    async def test_lista_perfis_do_usuario(self, db):
+    async def test_lista_perfis_do_usuario(self, db: Connection) -> None:
         await post_agent_profile(_req("user-1"), CreateAgentProfileRequest(name="A"))
         await post_agent_profile(_req("user-2"), CreateAgentProfileRequest(name="B"))
 
@@ -76,7 +78,7 @@ class TestGetAgentProfiles:
 
 
 class TestPostAgentProfile:
-    async def test_cria_perfil(self, db):
+    async def test_cria_perfil(self, db: Connection) -> None:
         created = await post_agent_profile(
             _req("user-1"), CreateAgentProfileRequest(name="QA Bot")
         )
@@ -84,7 +86,7 @@ class TestPostAgentProfile:
         assert created.name == "QA Bot"
         assert created.status == "active"
 
-    async def test_nome_invalido_vira_422(self, db):
+    async def test_nome_invalido_vira_422(self, db: Connection) -> None:
         with pytest.raises(HTTPException) as exc_info:
             await post_agent_profile(
                 _req("user-1"), CreateAgentProfileRequest(name=" ")
@@ -94,7 +96,7 @@ class TestPostAgentProfile:
 
 
 class TestPatchAgentProfile:
-    async def test_atualiza_perfil_proprio(self, db):
+    async def test_atualiza_perfil_proprio(self, db: Connection) -> None:
         created = await post_agent_profile(
             _req("user-1"), CreateAgentProfileRequest(name="X")
         )
@@ -105,7 +107,9 @@ class TestPatchAgentProfile:
 
         assert updated.name == "Y"
 
-    async def test_atualizar_perfil_de_outro_usuario_vira_404(self, db):
+    async def test_atualizar_perfil_de_outro_usuario_vira_404(
+        self, db: Connection
+    ) -> None:
         """Erro/borda: usuário B não pode nem enxergar (muito menos editar)
         um perfil de outro usuário."""
         created = await post_agent_profile(
@@ -121,7 +125,7 @@ class TestPatchAgentProfile:
 
 
 class TestDeleteAgentProfile:
-    async def test_apaga_perfil_proprio(self, db):
+    async def test_apaga_perfil_proprio(self, db: Connection) -> None:
         created = await post_agent_profile(
             _req("user-1"), CreateAgentProfileRequest(name="X")
         )
@@ -131,7 +135,9 @@ class TestDeleteAgentProfile:
         result = await get_agent_profiles(_req("user-1"))
         assert result == []
 
-    async def test_apagar_perfil_de_outro_usuario_vira_404(self, db):
+    async def test_apagar_perfil_de_outro_usuario_vira_404(
+        self, db: Connection
+    ) -> None:
         created = await post_agent_profile(
             _req("user-1"), CreateAgentProfileRequest(name="X")
         )

@@ -5,11 +5,13 @@ de threads nunca usadas).
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 
 from backend.api.handlers.threads import (
     ListThreadsRequest,
@@ -20,7 +22,7 @@ from backend.api.handlers.threads import (
 
 
 @pytest.fixture
-async def mem_db():
+async def mem_db() -> Connection:
     import aiosqlite
 
     db = await aiosqlite.connect(":memory:")
@@ -29,7 +31,7 @@ async def mem_db():
 
 
 @pytest.fixture(autouse=True)
-def patch_get_db(mem_db):
+def patch_get_db(mem_db: Connection) -> Iterator[Connection]:
     with patch(
         "backend.api.handlers.threads._get_db", new=AsyncMock(return_value=mem_db)
     ):
@@ -37,7 +39,7 @@ def patch_get_db(mem_db):
 
 
 async def _insert_session(
-    db, thread_id: str, message_count: int, created_at: str
+    db: Connection, thread_id: str, message_count: int, created_at: str
 ) -> None:
     await db.execute(
         "INSERT INTO vectora_sessions "
@@ -50,7 +52,7 @@ async def _insert_session(
 
 class TestListThreadsFiltersEmpty:
     @pytest.mark.asyncio
-    async def test_omits_threads_with_zero_messages(self, mem_db):
+    async def test_omits_threads_with_zero_messages(self, mem_db: Connection) -> None:
         now = datetime.now(UTC).isoformat()
         await _insert_session(mem_db, "empty1", 0, now)
         await _insert_session(mem_db, "real1", 2, now)
@@ -61,14 +63,14 @@ class TestListThreadsFiltersEmpty:
         assert ids == ["real1"]
 
     @pytest.mark.asyncio
-    async def test_empty_db_returns_empty_list(self, mem_db):
+    async def test_empty_db_returns_empty_list(self, mem_db: Connection) -> None:
         out = await list_threads(ListThreadsRequest(limit=50))
         assert out.threads == []
 
 
 class TestCleanupEmptyThreads:
     @pytest.mark.asyncio
-    async def test_deletes_only_old_empty_threads(self, mem_db):
+    async def test_deletes_only_old_empty_threads(self, mem_db: Connection) -> None:
         old = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
         recent = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
         await _insert_session(mem_db, "ghost-old", 0, old)
@@ -86,7 +88,7 @@ class TestCleanupEmptyThreads:
         assert remaining == {"ghost-recent", "real-old"}
 
     @pytest.mark.asyncio
-    async def test_no_empty_threads_deletes_nothing(self, mem_db):
+    async def test_no_empty_threads_deletes_nothing(self, mem_db: Connection) -> None:
         now = datetime.now(UTC).isoformat()
         await _insert_session(mem_db, "real1", 1, now)
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
 from backend.llm.systemone.harness import SystemOneHarness, WorkspaceBudgetTracker
 from backend.llm.systemone.patterns import DEFAULT_PATTERN_REGISTRY
@@ -20,13 +19,16 @@ from backend.llm.systemone.types import DecisionProviderType
 from backend.scheduling import kanban
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
 _SHARED_TOOL_BUDGET = WorkspaceBudgetTracker(
     default_limit_tokens=50_000, window_seconds=3600.0
 )
-_DEFAULT_HARNESS_CACHE: tuple[tuple[object, ...], SystemOneHarness] | None = None
+_DEFAULT_HARNESS_CACHE: (
+    tuple[tuple[str | int | float | None, ...], SystemOneHarness] | None
+) = None
 
 
 def _resolve_authenticated_workspace(ctx: ToolContext) -> str | None:
@@ -149,7 +151,7 @@ async def systemone_list_patterns(ctx: ToolContext) -> str:
 async def systemone_evaluate_pattern(
     ctx: ToolContext,
     pattern_id: str,
-    state: dict[str, Any],
+    state: JsonObject,
     pattern_version: str | None = None,
 ) -> str:
     """Executa uma avaliação consultiva sobre um Decision Pattern registrado.

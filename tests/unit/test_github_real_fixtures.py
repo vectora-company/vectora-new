@@ -20,10 +20,12 @@ import json
 import re
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
 from backend.api.handlers import github
+from tests.fake_requests import fake_request
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "tests" / "fixtures" / "github"
@@ -50,8 +52,8 @@ def _api(name: str) -> dict:
     return json.loads((API / name).read_text(encoding="utf-8"))
 
 
-def _request():
-    return SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(id="alice")))
+def _request() -> MagicMock:
+    return fake_request(state=SimpleNamespace(user=SimpleNamespace(id="alice")))
 
 
 @pytest.fixture
@@ -60,7 +62,12 @@ def gh_output(monkeypatch: pytest.MonkeyPatch):
     calls: list[list[str]] = []
     state = {"output": ""}
 
-    async def fake(args, cwd=None, input_data=None, user_id=None):
+    async def fake(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         calls.append(list(args))
         assert tuple(args[:2]) in READ_ONLY, f"operação fora da leitura: {args}"
         if args[:2] == ["api", "--include"]:
@@ -340,10 +347,17 @@ def test_raw_fixtures_are_valid_json(path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_truncated_real_output_is_an_error_not_a_crash(monkeypatch) -> None:
+async def test_truncated_real_output_is_an_error_not_a_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     broken = _raw("gh_run_view.json")[:200]
 
-    async def fake(args, cwd=None, input_data=None, user_id=None):
+    async def fake(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         return {"status": "ok", "output": broken}
 
     monkeypatch.setattr(github, "_gh_run", fake)
@@ -354,8 +368,15 @@ async def test_truncated_real_output_is_an_error_not_a_crash(monkeypatch) -> Non
     assert response.status == "error" and response.run is None
 
 
-async def test_a_run_list_payload_is_not_accepted_as_a_run_detail(monkeypatch) -> None:
-    async def fake(args, cwd=None, input_data=None, user_id=None):
+async def test_a_run_list_payload_is_not_accepted_as_a_run_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         return {"status": "ok", "output": _raw("gh_run_list.json")}
 
     monkeypatch.setattr(github, "_gh_run", fake)

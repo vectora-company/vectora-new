@@ -12,7 +12,7 @@ import logging
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from backend.services.context_compaction import (
     _bound_tool_results,
@@ -38,6 +38,10 @@ from backend.services.policy_compiler import PolicySnapshot
 from backend.vtypes import JsonObject
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage
 
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonValue
+    from backend.vtypes.services import StoreEntry
+
 _MEMORY_DOMAINS = {
     "system",
     "short_term",
@@ -49,7 +53,7 @@ _MEMORY_DOMAINS = {
 _MEMORY_TRUST_LEVELS = {"trusted", "verified", "untrusted"}
 
 
-def _persisted_confidence(value: object) -> float:
+def _persisted_confidence(value: JsonValue) -> float:
     """Normaliza confiança externa sem deixar um item corrompido abortar o loop."""
     if not isinstance(value, (int, float, str)):
         return 1.0
@@ -63,7 +67,7 @@ def _persisted_confidence(value: object) -> float:
 
 
 def memory_records_from_backend_items(
-    items: Sequence[object],
+    items: Sequence[StoreEntry],
     *,
     default_scope_id: str,
     default_domain: str = "project",

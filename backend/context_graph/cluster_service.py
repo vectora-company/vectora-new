@@ -13,6 +13,9 @@ CLUSTER_TIMEOUT_SECONDS = 30
 _cluster_semaphore = asyncio.Semaphore(1)
 
 
+from backend.vtypes.contracts import JsonObject
+
+
 class ClusterBusyError(Exception):
     """Raised when another community detection job is already running."""
 
@@ -48,7 +51,7 @@ def _release_when_background_task_finishes(task: asyncio.Task[ClusterResult]) ->
     _cluster_semaphore.release()
 
 
-def _detect(data: dict[str, Any]) -> ClusterResult:
+def _detect(data: JsonObject) -> ClusterResult:
     from backend.context_graph.build import build_from_json
     from backend.context_graph.cluster import cluster, label_communities_by_hub
 
@@ -73,7 +76,7 @@ def _detect(data: dict[str, Any]) -> ClusterResult:
     )
 
 
-async def cluster_graph_data(data: dict[str, Any]) -> ClusterResult:
+async def cluster_graph_data(data: JsonObject) -> ClusterResult:
     """Validate and cluster one graph without mutating its persisted JSON."""
     nodes = data.get("nodes")
     links = data.get("links", data.get("edges", []))

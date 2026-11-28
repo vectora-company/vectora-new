@@ -193,7 +193,7 @@
           "approvals": {
             "items": {
               "additionalProperties": {
-                "$ref": "#/components/schemas/JsonValue"
+                "$ref": "#/components/schemas/JsonValue-Output"
               },
               "type": "object"
             },
@@ -203,7 +203,7 @@
           "artifacts": {
             "items": {
               "additionalProperties": {
-                "$ref": "#/components/schemas/JsonValue"
+                "$ref": "#/components/schemas/JsonValue-Output"
               },
               "type": "object"
             },
@@ -224,7 +224,7 @@
           "commands_run": {
             "items": {
               "additionalProperties": {
-                "$ref": "#/components/schemas/JsonValue"
+                "$ref": "#/components/schemas/JsonValue-Output"
               },
               "type": "object"
             },
@@ -272,7 +272,7 @@
           "evidence": {
             "items": {
               "additionalProperties": {
-                "$ref": "#/components/schemas/JsonValue"
+                "$ref": "#/components/schemas/JsonValue-Output"
               },
               "type": "object"
             },
@@ -282,7 +282,7 @@
           "files_touched": {
             "items": {
               "additionalProperties": {
-                "$ref": "#/components/schemas/JsonValue"
+                "$ref": "#/components/schemas/JsonValue-Output"
               },
               "type": "object"
             },
@@ -365,7 +365,7 @@
           "tests_run": {
             "items": {
               "additionalProperties": {
-                "$ref": "#/components/schemas/JsonValue"
+                "$ref": "#/components/schemas/JsonValue-Output"
               },
               "type": "object"
             },
@@ -500,7 +500,7 @@
           },
           "payload": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
+              "$ref": "#/components/schemas/JsonValue-Output"
             },
             "title": "Payload",
             "type": "object"
@@ -751,9 +751,7 @@
             "type": "string"
           },
           "metadata": {
-            "additionalProperties": true,
-            "title": "Metadata",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Output"
           },
           "success": {
             "default": true,
@@ -804,6 +802,83 @@
           "timestamp"
         ],
         "title": "AuditEntry",
+        "type": "object"
+      },
+      "BackupCategoryResult": {
+        "description": "Resultado da restauração de uma categoria do backup.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "imported",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "count"
+        ],
+        "title": "BackupCategoryResult",
+        "type": "object"
+      },
+      "BackupPreviewPayload": {
+        "description": "Prévia de um arquivo de backup antes da importação.",
+        "properties": {
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "categories": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Categories",
+            "type": "object"
+          },
+          "compatible": {
+            "title": "Compatible",
+            "type": "boolean"
+          },
+          "results": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackupCategoryResult"
+            },
+            "title": "Results",
+            "type": "object"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "storage_mode": {
+            "title": "Storage Mode",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "app_version",
+          "size_bytes",
+          "categories",
+          "compatible",
+          "storage_mode",
+          "results"
+        ],
+        "title": "BackupPreviewPayload",
         "type": "object"
       },
       "BoardColumnOut": {
@@ -1076,6 +1151,40 @@
           "name"
         ],
         "title": "BrowserStopRequest",
+        "type": "object"
+      },
+      "BrowserTabState": {
+        "description": "Estado de uma aba do navegador remoto.",
+        "properties": {
+          "can_go_back": {
+            "title": "Can Go Back",
+            "type": "boolean"
+          },
+          "can_go_forward": {
+            "title": "Can Go Forward",
+            "type": "boolean"
+          },
+          "loading": {
+            "title": "Loading",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "title",
+          "loading",
+          "can_go_back",
+          "can_go_forward"
+        ],
+        "title": "BrowserTabState",
         "type": "object"
       },
       "BrowserViewport": {
@@ -1596,6 +1705,48 @@
           "name"
         ],
         "title": "CodespaceInfo",
+        "type": "object"
+      },
+      "CollectionCount": {
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "count"
+        ],
+        "title": "CollectionCount",
+        "type": "object"
+      },
+      "CollectionList": {
+        "description": "Coleções indexadas e a quantidade de documentos.",
+        "properties": {
+          "collections": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionCount"
+            },
+            "title": "Collections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "collections"
+        ],
+        "title": "CollectionList",
         "type": "object"
       },
       "CommentOut": {
@@ -2248,10 +2399,8 @@
             "type": "string"
           },
           "metadata": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Metadata",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Input",
+            "default": {}
           }
         },
         "required": [
@@ -2479,10 +2628,8 @@
             "type": "string"
           },
           "trigger_config": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Trigger Config",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Input",
+            "default": {}
           },
           "trigger_type": {
             "title": "Trigger Type",
@@ -2738,14 +2885,12 @@
           "output": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/JsonObject-Output"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Output"
+            ]
           },
           "stage_id": {
             "title": "Stage Id",
@@ -2870,6 +3015,24 @@
         "title": "DeleteThreadRequest",
         "type": "object"
       },
+      "DeletedCollection": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "name"
+        ],
+        "title": "DeletedCollection",
+        "type": "object"
+      },
       "DetectResponse": {
         "properties": {
           "configurations": {
@@ -2989,7 +3152,7 @@
             "title": "Error"
           },
           "result": {
-            "title": "Result"
+            "$ref": "#/components/schemas/JsonValue-Output"
           },
           "status": {
             "title": "Status",
@@ -3302,6 +3465,93 @@
         "title": "DirEntry",
         "type": "object"
       },
+      "DmrCancellation": {
+        "description": "Resultado do cancelamento de uma operação.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DmrJobState"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "error"
+        ],
+        "title": "DmrCancellation",
+        "type": "object"
+      },
+      "DmrCapabilities": {
+        "description": "Recursos do host relevantes para executar modelos.",
+        "properties": {
+          "cpus": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpus"
+          },
+          "gpu_backends": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gpu Backends",
+            "type": "array"
+          },
+          "memory_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Bytes"
+          },
+          "runtimes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Runtimes",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cpus",
+          "memory_bytes",
+          "runtimes",
+          "gpu_backends",
+          "warnings"
+        ],
+        "title": "DmrCapabilities",
+        "type": "object"
+      },
       "DmrConfigRequest": {
         "description": "Endpoint local e modelo padrão do Docker Model Runner.",
         "properties": {
@@ -3318,6 +3568,252 @@
         },
         "title": "DmrConfigRequest",
         "type": "object"
+      },
+      "DmrHttpStatus": {
+        "description": "Estado do endpoint HTTP do runner, sem consultar o CLI Docker.",
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "contract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "managed_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Managed Models",
+            "type": "array"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          }
+        },
+        "required": [
+          "configured",
+          "base_url",
+          "model",
+          "reachable",
+          "contract",
+          "models",
+          "managed_models",
+          "detail",
+          "status_code"
+        ],
+        "title": "DmrHttpStatus",
+        "type": "object"
+      },
+      "DmrJobDetail": {
+        "description": "Operação completa, com os metadados registrados.",
+        "properties": {
+          "context_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Size"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonObject-Output"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/DmrOperation"
+          },
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/DmrJobPhase"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "integer"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DmrJobState"
+          }
+        },
+        "required": [
+          "id",
+          "operation",
+          "reference",
+          "context_size",
+          "progress",
+          "phase",
+          "status",
+          "output",
+          "error",
+          "metadata"
+        ],
+        "title": "DmrJobDetail",
+        "type": "object"
+      },
+      "DmrJobList": {
+        "description": "Operações persistidas.",
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/DmrJobDetail"
+            },
+            "title": "Jobs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "jobs"
+        ],
+        "title": "DmrJobList",
+        "type": "object"
+      },
+      "DmrJobOutcome": {
+        "description": "Progresso acompanhado da saída recente e do erro.",
+        "properties": {
+          "context_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Size"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/DmrOperation"
+          },
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/DmrJobPhase"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "integer"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DmrJobState"
+          }
+        },
+        "required": [
+          "id",
+          "operation",
+          "reference",
+          "context_size",
+          "progress",
+          "phase",
+          "status",
+          "output",
+          "error"
+        ],
+        "title": "DmrJobOutcome",
+        "type": "object"
+      },
+      "DmrJobPhase": {
+        "enum": [
+          "queued",
+          "pulling",
+          "configuring",
+          "starting",
+          "checking",
+          "completed",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ],
+        "type": "string"
       },
       "DmrJobRequest": {
         "description": "Operação assíncrona local de preparação ou inicialização.",
@@ -3355,6 +3851,99 @@
         "title": "DmrJobRequest",
         "type": "object"
       },
+      "DmrJobState": {
+        "enum": [
+          "queued",
+          "running",
+          "completed",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ],
+        "type": "string"
+      },
+      "DmrJobSummary": {
+        "description": "Identificação e progresso de uma operação local.",
+        "properties": {
+          "context_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Size"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/DmrOperation"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/DmrJobPhase"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "integer"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DmrJobState"
+          }
+        },
+        "required": [
+          "id",
+          "operation",
+          "reference",
+          "context_size",
+          "progress",
+          "phase",
+          "status"
+        ],
+        "title": "DmrJobSummary",
+        "type": "object"
+      },
+      "DmrModelList": {
+        "description": "Catálogo anunciado pelo endpoint HTTP.",
+        "properties": {
+          "contract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reachable",
+          "contract",
+          "models"
+        ],
+        "title": "DmrModelList",
+        "type": "object"
+      },
       "DmrModelRequest": {
         "description": "Referência Docker/OCI validada antes de chegar ao executor.",
         "properties": {
@@ -3380,6 +3969,322 @@
           "reference"
         ],
         "title": "DmrModelRequest",
+        "type": "object"
+      },
+      "DmrOperation": {
+        "enum": [
+          "prepare",
+          "start"
+        ],
+        "type": "string"
+      },
+      "DmrOperationResult": {
+        "description": "Resultado de uma operação do plugin sobre um modelo.",
+        "properties": {
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "reference",
+          "output"
+        ],
+        "title": "DmrOperationResult",
+        "type": "object"
+      },
+      "DmrStartResult": {
+        "description": "Estado do runner depois de um modelo ficar pronto.",
+        "properties": {
+          "architecture": {
+            "title": "Architecture",
+            "type": "string"
+          },
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/DmrCapabilities"
+          },
+          "cli_available": {
+            "title": "Cli Available",
+            "type": "boolean"
+          },
+          "cli_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cli Detail"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "contract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "managed_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Managed Models",
+            "type": "array"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          },
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "ready",
+              "plugin_unavailable",
+              "docker_unavailable",
+              "stopped"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          }
+        },
+        "required": [
+          "configured",
+          "base_url",
+          "model",
+          "reachable",
+          "contract",
+          "models",
+          "managed_models",
+          "detail",
+          "status_code",
+          "state",
+          "platform",
+          "architecture",
+          "backend",
+          "capabilities",
+          "cli_available",
+          "cli_detail",
+          "status",
+          "reference",
+          "output"
+        ],
+        "title": "DmrStartResult",
+        "type": "object"
+      },
+      "DmrStatus": {
+        "description": "Estado completo do runner, incluindo host e CLI Docker.",
+        "properties": {
+          "architecture": {
+            "title": "Architecture",
+            "type": "string"
+          },
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/DmrCapabilities"
+          },
+          "cli_available": {
+            "title": "Cli Available",
+            "type": "boolean"
+          },
+          "cli_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cli Detail"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "contract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "managed_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Managed Models",
+            "type": "array"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          },
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "ready",
+              "plugin_unavailable",
+              "docker_unavailable",
+              "stopped"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          }
+        },
+        "required": [
+          "configured",
+          "base_url",
+          "model",
+          "reachable",
+          "contract",
+          "models",
+          "managed_models",
+          "detail",
+          "status_code",
+          "state",
+          "platform",
+          "architecture",
+          "backend",
+          "capabilities",
+          "cli_available",
+          "cli_detail"
+        ],
+        "title": "DmrStatus",
         "type": "object"
       },
       "EmbeddingQueueCleanupBody": {
@@ -3504,6 +4409,32 @@
           "node_id"
         ],
         "title": "ExplainRequest",
+        "type": "object"
+      },
+      "ExtensionHealth": {
+        "properties": {
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "state",
+          "running",
+          "tools"
+        ],
+        "title": "ExtensionHealth",
         "type": "object"
       },
       "ExtensionRelease": {
@@ -4947,8 +5878,7 @@
           "edges": {
             "default": [],
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/JsonObject-Output"
             },
             "title": "Edges",
             "type": "array"
@@ -4956,8 +5886,7 @@
           "nodes": {
             "default": [],
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/JsonObject-Output"
             },
             "title": "Nodes",
             "type": "array"
@@ -5155,8 +6084,7 @@
         "properties": {
           "attachments": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/JsonObject-Output"
             },
             "title": "Attachments",
             "type": "array"
@@ -5723,6 +6651,24 @@
         "title": "HuggingFaceStartRequest",
         "type": "object"
       },
+      "IgnoredImport": {
+        "description": "Entrada recusada na prévia de uma configuração externa.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "IgnoredImport",
+        "type": "object"
+      },
       "ImageFallbackModelBody": {
         "properties": {
           "model": {
@@ -6269,7 +7215,75 @@
         "title": "JourneySkill",
         "type": "object"
       },
-      "JsonValue": {},
+      "JsonObject-Input": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue-Input"
+        },
+        "type": "object"
+      },
+      "JsonObject-Output": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue-Output"
+        },
+        "type": "object"
+      },
+      "JsonScalar": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "JsonValue-Input": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/JsonScalar"
+          },
+          {
+            "items": {
+              "$ref": "#/components/schemas/JsonValue-Input"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue-Input"
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "JsonValue-Output": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/JsonScalar"
+          },
+          {
+            "items": {
+              "$ref": "#/components/schemas/JsonValue-Output"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue-Output"
+            },
+            "type": "object"
+          }
+        ]
+      },
       "LaunchConfigModel": {
         "properties": {
           "env": {
@@ -6850,6 +7864,141 @@
         "title": "LlamaCppStatus",
         "type": "object"
       },
+      "LlamacppStartResult": {
+        "description": "Modelo iniciado e confirmado pelo assistente de configuração.",
+        "properties": {
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "executable": {
+            "title": "Executable",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_tag": {
+            "title": "Model Tag",
+            "type": "string"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "running",
+          "executable",
+          "model",
+          "host",
+          "port",
+          "model_tag",
+          "confirmed"
+        ],
+        "title": "LlamacppStartResult",
+        "type": "object"
+      },
+      "LlamacppStatus": {
+        "description": "Estado do processo llama.cpp iniciado pela aplicação.",
+        "properties": {
+          "executable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executable"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "persisted_pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persisted Pid"
+          },
+          "pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pid"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "stale_state": {
+            "title": "Stale State",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "running",
+          "pid",
+          "executable",
+          "model",
+          "host",
+          "port",
+          "persisted_pid",
+          "stale_state"
+        ],
+        "title": "LlamacppStatus",
+        "type": "object"
+      },
       "MCPConnector": {
         "description": "Public marketplace contract for a validated MCP catalog connector.\n\nThe catalog carries installation transport and command metadata, optional\nremote-server URL, publisher attribution, ranking counters, and trust\nstate.  It is the only shape exposed to the API and frontend.",
         "properties": {
@@ -7045,6 +8194,30 @@
         "title": "MarkThreadReadRequest",
         "type": "object"
       },
+      "McpImportPreview": {
+        "properties": {
+          "ignored": {
+            "items": {
+              "$ref": "#/components/schemas/IgnoredImport"
+            },
+            "title": "Ignored",
+            "type": "array"
+          },
+          "valid": {
+            "items": {
+              "$ref": "#/components/schemas/McpServerPreview"
+            },
+            "title": "Valid",
+            "type": "array"
+          }
+        },
+        "required": [
+          "valid",
+          "ignored"
+        ],
+        "title": "McpImportPreview",
+        "type": "object"
+      },
       "McpServer": {
         "properties": {
           "allow_hosts": {
@@ -7122,6 +8295,55 @@
           "name"
         ],
         "title": "McpServer",
+        "type": "object"
+      },
+      "McpServerPreview": {
+        "description": "Servidor MCP reconhecido, sem valores de ambiente.",
+        "properties": {
+          "args": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Args",
+            "type": "array"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "env_vars": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Env Vars",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "transport": {
+            "enum": [
+              "stdio",
+              "http"
+            ],
+            "title": "Transport",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "transport",
+          "command",
+          "args",
+          "url",
+          "env_vars"
+        ],
+        "title": "McpServerPreview",
         "type": "object"
       },
       "MediaLimitsBody": {
@@ -7337,10 +8559,8 @@
             "type": "string"
           },
           "metadata": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Metadata",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Output",
+            "default": {}
           },
           "updated_at": {
             "default": "",
@@ -7387,6 +8607,96 @@
           "name"
         ],
         "title": "MkdirRequest",
+        "type": "object"
+      },
+      "ModelCapabilities": {
+        "description": "Capacidades conhecidas e os modelos que as anunciam.",
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelEntry"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "capabilities",
+          "models"
+        ],
+        "title": "ModelCapabilities",
+        "type": "object"
+      },
+      "ModelEntry": {
+        "description": "Modelo anunciado pelo catálogo unificado.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "capabilities_known": {
+            "title": "Capabilities Known",
+            "type": "boolean"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "string"
+          },
+          "executable_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Executable Capabilities",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "model",
+          "name",
+          "provider",
+          "capabilities",
+          "capabilities_known",
+          "source",
+          "confidence",
+          "available",
+          "executable_capabilities"
+        ],
+        "title": "ModelEntry",
         "type": "object"
       },
       "MoveFsNodeRequest": {
@@ -8313,6 +9623,128 @@
         "title": "ProviderModel",
         "type": "object"
       },
+      "ProviderUsage": {
+        "description": "Consumo de um provider exibido no medidor da interface.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "key_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Limit"
+          },
+          "key_remaining": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Remaining"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "remaining": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "used": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used"
+          }
+        },
+        "required": [
+          "provider",
+          "label",
+          "used",
+          "limit",
+          "remaining",
+          "plan",
+          "unit",
+          "error"
+        ],
+        "title": "ProviderUsage",
+        "type": "object"
+      },
+      "ProviderUsageList": {
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderUsage"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers"
+        ],
+        "title": "ProviderUsageList",
+        "type": "object"
+      },
       "PublishRequest": {
         "properties": {
           "bucket_id": {
@@ -9122,6 +10554,63 @@
           "query"
         ],
         "title": "RagSearchBody",
+        "type": "object"
+      },
+      "RagSearchResults": {
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/JsonObject-Output"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "RagSearchResults",
+        "type": "object"
+      },
+      "RagSettings": {
+        "description": "Settings de RAG ajustáveis em tempo de execução.",
+        "properties": {
+          "embed_model": {
+            "title": "Embed Model",
+            "type": "string"
+          },
+          "ingest_file_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ingest File Types",
+            "type": "array"
+          },
+          "rerank_model": {
+            "title": "Rerank Model",
+            "type": "string"
+          },
+          "reranker_enabled": {
+            "title": "Reranker Enabled",
+            "type": "boolean"
+          },
+          "reranker_top_k": {
+            "title": "Reranker Top K",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reranker_enabled",
+          "reranker_top_k",
+          "rerank_model",
+          "embed_model",
+          "ingest_file_types"
+        ],
+        "title": "RagSettings",
         "type": "object"
       },
       "RagSettingsBody": {
@@ -10053,9 +11542,7 @@
       "SandboxAuditEvent": {
         "properties": {
           "data": {
-            "additionalProperties": true,
-            "title": "Data",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Output"
           },
           "event": {
             "title": "Event",
@@ -10960,12 +12447,63 @@
         ],
         "type": "string"
       },
+      "SkillImportPreview": {
+        "properties": {
+          "ignored": {
+            "items": {
+              "$ref": "#/components/schemas/IgnoredImport"
+            },
+            "title": "Ignored",
+            "type": "array"
+          },
+          "valid": {
+            "items": {
+              "$ref": "#/components/schemas/SkillPreview"
+            },
+            "title": "Valid",
+            "type": "array"
+          }
+        },
+        "required": [
+          "valid",
+          "ignored"
+        ],
+        "title": "SkillImportPreview",
+        "type": "object"
+      },
+      "SkillPreview": {
+        "description": "Skill reconhecida na prévia.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "source"
+        ],
+        "title": "SkillPreview",
+        "type": "object"
+      },
       "SkillResponse": {
         "properties": {
           "skill": {
-            "additionalProperties": true,
-            "title": "Skill",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Output"
           },
           "status": {
             "title": "Status",
@@ -10983,8 +12521,7 @@
         "properties": {
           "skills": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/JsonObject-Output"
             },
             "title": "Skills",
             "type": "array"
@@ -11040,9 +12577,7 @@
       "SmartApprovalAllowlistRequest": {
         "properties": {
           "args": {
-            "additionalProperties": true,
-            "title": "Args",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Input"
           },
           "interrupt_id": {
             "title": "Interrupt Id",
@@ -11289,6 +12824,112 @@
           "status"
         ],
         "title": "StructuredQuestionResponse",
+        "type": "object"
+      },
+      "SttEngines": {
+        "description": "Motores de transcrição detectados.",
+        "properties": {
+          "apple_speech": {
+            "title": "Apple Speech",
+            "type": "boolean"
+          },
+          "embedded": {
+            "title": "Embedded",
+            "type": "boolean"
+          },
+          "embedded_model": {
+            "title": "Embedded Model",
+            "type": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "system": {
+            "title": "System",
+            "type": "boolean"
+          },
+          "system_kind": {
+            "title": "System Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "embedded",
+          "embedded_model",
+          "apple_speech",
+          "system",
+          "system_kind",
+          "language"
+        ],
+        "title": "SttEngines",
+        "type": "object"
+      },
+      "SttModelState": {
+        "properties": {
+          "cached": {
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "cached"
+        ],
+        "title": "SttModelState",
+        "type": "object"
+      },
+      "SttSettings": {
+        "description": "Configuração efetiva de transcrição local.",
+        "properties": {
+          "engines": {
+            "$ref": "#/components/schemas/SttEngines"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/SttModelState"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "system_command": {
+            "title": "System Command",
+            "type": "string"
+          },
+          "system_model": {
+            "title": "System Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "language",
+          "system_command",
+          "system_model",
+          "models",
+          "languages",
+          "engines"
+        ],
+        "title": "SttSettings",
         "type": "object"
       },
       "SymbolCandidate": {
@@ -11763,9 +13404,7 @@
             "type": "string"
           },
           "trigger_config": {
-            "additionalProperties": true,
-            "title": "Trigger Config",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Output"
           },
           "trigger_type": {
             "title": "Trigger Type",
@@ -12312,6 +13951,25 @@
           "enabled"
         ],
         "title": "ToolToggleBody",
+        "type": "object"
+      },
+      "ToolUsageCount": {
+        "description": "Quantidade de turnos que usaram uma ferramenta.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "count"
+        ],
+        "title": "ToolUsageCount",
         "type": "object"
       },
       "TranscribeAudioRequest": {
@@ -12950,10 +14608,8 @@
             "type": "string"
           },
           "metadata": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Metadata",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Input",
+            "default": {}
           }
         },
         "required": [
@@ -13323,14 +14979,12 @@
           "trigger_config": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/JsonObject-Input"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Trigger Config"
+            ]
           }
         },
         "title": "UpdateTaskRequest",
@@ -13369,6 +15023,163 @@
           "thread_id"
         ],
         "title": "UpdateThreadRequest",
+        "type": "object"
+      },
+      "UsageInsight": {
+        "description": "Agregado de uso de uma janela, sem eventos brutos.",
+        "properties": {
+          "estimated_cost_cents": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Cents"
+          },
+          "event_count": {
+            "title": "Event Count",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "most_used_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Most Used Model"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolUsageCount"
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "total_tokens": {
+            "title": "Total Tokens",
+            "type": "integer"
+          },
+          "unknown_cost_events": {
+            "title": "Unknown Cost Events",
+            "type": "integer"
+          },
+          "window_end": {
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "title": "Window Start",
+            "type": "string"
+          },
+          "window_weeks": {
+            "title": "Window Weeks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "window_weeks",
+          "window_start",
+          "window_end",
+          "event_count",
+          "input_tokens",
+          "output_tokens",
+          "total_tokens",
+          "estimated_cost_cents",
+          "unknown_cost_events",
+          "most_used_model",
+          "tools"
+        ],
+        "title": "UsageInsight",
+        "type": "object"
+      },
+      "UsageWindow": {
+        "description": "Consumo dentro de uma janela de tempo.",
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "remaining": {
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "reset_in_seconds": {
+            "title": "Reset In Seconds",
+            "type": "number"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          },
+          "window_seconds": {
+            "title": "Window Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "used",
+          "limit",
+          "remaining",
+          "window_seconds",
+          "reset_in_seconds"
+        ],
+        "title": "UsageWindow",
+        "type": "object"
+      },
+      "UsageWindows": {
+        "description": "Janela curta no topo, mais as janelas de cinco horas e semanal.",
+        "properties": {
+          "five_hour": {
+            "$ref": "#/components/schemas/UsageWindow"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "remaining": {
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "reset_in_seconds": {
+            "title": "Reset In Seconds",
+            "type": "number"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          },
+          "weekly": {
+            "$ref": "#/components/schemas/UsageWindow"
+          },
+          "window_seconds": {
+            "title": "Window Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "used",
+          "limit",
+          "remaining",
+          "window_seconds",
+          "reset_in_seconds",
+          "five_hour",
+          "weekly"
+        ],
+        "title": "UsageWindows",
         "type": "object"
       },
       "UserListResponse": {
@@ -14030,9 +15841,7 @@
       "backend__api__handlers__mcp_marketplace__ImportPreviewRequest": {
         "properties": {
           "payload": {
-            "additionalProperties": true,
-            "title": "Payload",
-            "type": "object"
+            "$ref": "#/components/schemas/JsonObject-Input"
           }
         },
         "required": [
@@ -14119,7 +15928,7 @@
       "backend__api__handlers__skills__ImportPreviewRequest": {
         "properties": {
           "payload": {
-            "title": "Payload"
+            "$ref": "#/components/schemas/JsonValue-Input"
           }
         },
         "required": [
@@ -15741,8 +17550,7 @@
                 "schema": {
                   "additionalProperties": {
                     "items": {
-                      "additionalProperties": true,
-                      "type": "object"
+                      "$ref": "#/components/schemas/JsonObject-Output"
                     },
                     "type": "array"
                   },
@@ -15779,9 +17587,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Transcription Settings Admin Transcription Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SttSettings"
                 }
               }
             },
@@ -15811,9 +17617,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Patch Transcription Settings Admin Transcription Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SttSettings"
                 }
               }
             },
@@ -17693,9 +19497,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Usage Auth Usage Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/UsageWindows"
                 }
               }
             },
@@ -18160,9 +19962,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response History Browser Workbench  Tab Id  History  Direction  Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BrowserTabState"
                 }
               }
             },
@@ -18270,9 +20070,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Navigate Browser Workbench  Tab Id  Navigate Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BrowserTabState"
                 }
               }
             },
@@ -18331,9 +20129,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Open Tab Browser Workbench  Tab Id  Open Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BrowserTabState"
                 }
               }
             },
@@ -18375,9 +20171,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get State Browser Workbench  Tab Id  State Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BrowserTabState"
                 }
               }
             },
@@ -18633,8 +20427,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/JsonObject-Output"
                   },
                   "title": "Response List Contributions Extensions Contributions Get",
                   "type": "array"
@@ -18810,8 +20603,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/JsonObject-Output"
                   },
                   "title": "Response Extension Audit Extensions  Extension Id  Audit Get",
                   "type": "array"
@@ -18950,9 +20742,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Extension Health Extensions  Extension Id  Health Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExtensionHealth"
                 }
               }
             },
@@ -20136,9 +21926,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Preview Import Mcp Import Preview Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/McpImportPreview"
                 }
               }
             },
@@ -21129,9 +22917,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Decision Models Catalog Provider Routing Decision Models Catalog Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -21277,9 +23063,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Set Dmr Config Provider Routing Dmr Config Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrHttpStatus"
                 }
               }
             },
@@ -21311,9 +23095,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Dmr Http Status Provider Routing Dmr Http Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrHttpStatus"
                 }
               }
             },
@@ -21335,9 +23117,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Dmr Models Provider Routing Dmr Models Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrModelList"
                 }
               }
             },
@@ -21377,9 +23157,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Dmr Model Jobs Provider Routing Dmr Models Jobs Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrJobList"
                 }
               }
             },
@@ -21437,9 +23215,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Dmr Model Job Provider Routing Dmr Models Jobs Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrJobSummary"
                 }
               }
             },
@@ -21498,9 +23274,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cancel Dmr Model Job Provider Routing Dmr Models Jobs  Job Id  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrCancellation"
                 }
               }
             },
@@ -21557,9 +23331,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Dmr Model Job Provider Routing Dmr Models Jobs  Job Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrJobDetail"
                 }
               }
             },
@@ -21618,9 +23390,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Retry Dmr Model Job Provider Routing Dmr Models Jobs  Job Id  Retry Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrJobOutcome"
                 }
               }
             },
@@ -21680,9 +23450,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Prepare Dmr Model Provider Routing Dmr Models Prepare Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrOperationResult"
                 }
               }
             },
@@ -21742,9 +23510,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Start Dmr Model Provider Routing Dmr Models Start Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrStartResult"
                 }
               }
             },
@@ -21804,9 +23570,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Stop Dmr Model Provider Routing Dmr Models Stop Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrOperationResult"
                 }
               }
             },
@@ -21875,9 +23639,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Remove Dmr Model Provider Routing Dmr Models  Reference  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -21927,9 +23689,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Dmr Status Provider Routing Dmr Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrStatus"
                 }
               }
             },
@@ -21971,9 +23731,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Test Dmr Connection Provider Routing Dmr Test Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DmrHttpStatus"
                 }
               }
             },
@@ -22120,9 +23878,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Download Huggingface Model Provider Routing Huggingface Download Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -22258,9 +24014,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Install Huggingface Model Provider Routing Huggingface Install Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -22294,8 +24048,7 @@
                 "schema": {
                   "additionalProperties": {
                     "items": {
-                      "additionalProperties": true,
-                      "type": "object"
+                      "$ref": "#/components/schemas/JsonObject-Output"
                     },
                     "type": "array"
                   },
@@ -22397,9 +24150,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Huggingface Model Metadata Provider Routing Huggingface Models  Repo Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -22459,24 +24210,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "title": "Response Start Installed Huggingface Model Provider Routing Huggingface Start Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LlamacppStartResult"
                 }
               }
             },
@@ -22598,9 +24332,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Install Llamacpp Runtime Provider Routing Llamacpp Install Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -22897,8 +24629,7 @@
                 "schema": {
                   "additionalProperties": {
                     "items": {
-                      "additionalProperties": true,
-                      "type": "object"
+                      "$ref": "#/components/schemas/JsonObject-Output"
                     },
                     "type": "array"
                   },
@@ -23061,9 +24792,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cleanup Llamacpp Runtime Versions Provider Routing Llamacpp Runtime Cleanup Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -23123,9 +24852,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Rollback Llamacpp Runtime Provider Routing Llamacpp Runtime Rollback Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -23175,24 +24902,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "title": "Response Start Confirmed Llamacpp Runtime Provider Routing Llamacpp Runtime Start Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LlamacppStatus"
                 }
               }
             },
@@ -23224,9 +24934,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Llamacpp Runtime Status Provider Routing Llamacpp Runtime Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -23276,9 +24984,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Check Llamacpp Runtime Provider Routing Llamacpp Runtime Test Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -23338,9 +25044,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Update Llamacpp Runtime Provider Routing Llamacpp Runtime Update Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },
@@ -23463,24 +25167,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "title": "Response Start Llamacpp Sidecar Provider Routing Llamacpp Sidecar Start Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LlamacppStatus"
                 }
               }
             },
@@ -23512,24 +25199,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "title": "Response Get Llamacpp Sidecar Status Provider Routing Llamacpp Sidecar Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LlamacppStatus"
                 }
               }
             },
@@ -23569,24 +25239,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "title": "Response Stop Llamacpp Sidecar Provider Routing Llamacpp Sidecar Stop Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LlamacppStatus"
                 }
               }
             },
@@ -23706,9 +25359,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Model Capabilities Provider Routing Model Capabilities Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ModelCapabilities"
                 }
               }
             },
@@ -24607,9 +26258,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Collections Rag Collections Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CollectionList"
                 }
               }
             },
@@ -24641,9 +26290,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Delete Collection Rag Collections  Name  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DeletedCollection"
                 }
               }
             },
@@ -24685,9 +26332,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Search Rag Rag Search Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RagSearchResults"
                 }
               }
             },
@@ -24718,9 +26363,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Rag Settings Rag Settings Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RagSettings"
                 }
               }
             },
@@ -24749,9 +26392,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Patch Rag Settings Rag Settings Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RagSettings"
                 }
               }
             },
@@ -24794,9 +26435,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Workspace Rag Summary Rag Workspace Summary Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CollectionList"
                 }
               }
             },
@@ -26154,9 +27793,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Preview Skill Import Skills Import Preview Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SkillImportPreview"
                 }
               }
             },
@@ -26514,9 +28151,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Inspect Local Backup Storage Backup Inspect Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BackupPreviewPayload"
                 }
               }
             },
@@ -26576,9 +28211,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Restore Local Backup Storage Backup Restore Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BackupPreviewPayload"
                 }
               }
             },
@@ -27991,9 +29624,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Weekly Insight Usage Insights Weekly Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/UsageInsight"
                 }
               }
             },
@@ -28047,9 +29678,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Provider Usage Usage Providers Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ProviderUsageList"
                 }
               }
             },
@@ -29440,9 +31069,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "title": "Response Webhook Events Stream Webhook Events Get"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -34110,9 +35737,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Validate Workspace Godot Project Workspaces  Workspace Id  Godot Validate Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/JsonObject-Output"
                 }
               }
             },

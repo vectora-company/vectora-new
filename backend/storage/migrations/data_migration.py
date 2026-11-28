@@ -21,10 +21,16 @@ Uso (CLI):
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rich.console import Console
+
+    from backend.vtypes.storage import (
+        MemoryMigration,
+        PostgresMigration,
+        VectorMigration,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +50,7 @@ async def migrate_to_postgres(
     postgres_dsn: str,
     dry_run: bool = False,
     console: Console | None = None,
-) -> dict[str, Any]:
+) -> PostgresMigration:
     """Migra dados SQLite → Postgres.
 
     Usa ``asyncpg`` COPY binary para máxima performance. Para cada tabela,
@@ -63,7 +69,7 @@ async def migrate_to_postgres(
     import asyncpg
 
     normalized = postgres_dsn.replace("postgresql+asyncpg://", "postgresql://")
-    result: dict[str, Any] = {"tables": {}, "total_rows": 0, "dry_run": dry_run}
+    result: PostgresMigration = {"tables": {}, "total_rows": 0, "dry_run": dry_run}
 
     async with aiosqlite.connect(sqlite_path) as sqlite_conn:
         sqlite_conn.row_factory = aiosqlite.Row
@@ -150,7 +156,7 @@ async def migrate_to_qdrant(
     batch_size: int = 256,
     dry_run: bool = False,
     console: Console | None = None,
-) -> dict[str, Any]:
+) -> VectorMigration:
     """Migra vetores LanceDB → Qdrant em batches.
 
     Args:
@@ -241,7 +247,7 @@ async def migrate_to_pgvector(
     batch_size: int = 256,
     dry_run: bool = False,
     console: Console | None = None,
-) -> dict[str, Any]:
+) -> VectorMigration:
     """Migra vetores LanceDB → Postgres pgvector.
 
     Cria a tabela ``vectora_vectors_<collection>`` se não existir,
@@ -367,7 +373,7 @@ async def migrate_memory_to_native_store(
     sqlite_path: str,
     dry_run: bool = False,
     console: Console | None = None,
-) -> dict[str, Any]:
+) -> MemoryMigration:
     """Migra memórias do store antigo para o store nativo (``get_store()``).
 
     Lê registros da tabela ``memories`` (formato antigo) e os converte
@@ -387,7 +393,7 @@ async def migrate_memory_to_native_store(
 
     from backend.storage.factory import get_store
 
-    result: dict[str, Any] = {
+    result: MemoryMigration = {
         "total": 0,
         "migrated": 0,
         "skipped": 0,

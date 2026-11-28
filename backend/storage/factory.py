@@ -27,11 +27,22 @@ funcionam como fallback garantido independente do banco principal.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+from backend.storage.dsn import describe_dsn
 
 if TYPE_CHECKING:
+    import asyncio
+    from collections.abc import Callable
+
+    import aiosqlite
+    import asyncpg
+    from lancedb.table import AsyncTable
+
     from backend.storage.protocols import StoreBackend
-    from backend.storage.vectorstore.base import VectorStoreHealth
+    from backend.storage.vectorstore.base import VectorStoreBackend, VectorStoreHealth
+    from backend.vtypes.embeddings import EmbeddingModel
+    from backend.vtypes.storage import StorageHealthEntry
 
 logger = logging.getLogger(__name__)
 
@@ -40,16 +51,16 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _store: StoreBackend | None = None  # sempre VectoraStore — ver get_store()
-_pg_pool: Any = None  # asyncpg.Pool (complete mode only)
-_vector_stores: dict[str, Any] = {}  # collection → lancedb.AsyncTable (raw)
-_optimize_tasks: dict[str, Any] = {}  # collection → asyncio.Task (schedule_optimize)
-_vector_store_backend: Any = None  # VectorStoreBackend nativo — 1 por processo
+_pg_pool: asyncpg.Pool | None = None  # só no modo complete
+_vector_stores: dict[str, AsyncTable | None] = {}  # coleção → tabela LanceDB
+_optimize_tasks: dict[str, asyncio.Task[None]] = {}  # coleção → otimização
+_vector_store_backend: VectorStoreBackend | None = None  # 1 por processo
 
 
 class _ConfiguredEmbeddings:
     """Adapter que associa provider/modelo à implementação de embeddings."""
 
-    def __init__(self, inner: Any, provider: str, model: str) -> None:
+    def __init__(self, inner: EmbeddingModel, provider: str, model: str) -> None:
         self.inner = inner
         self.vectora_provider = provider
         self.vectora_model = model
@@ -102,7 +113,7 @@ async def get_store(embedding_model: str | None = None) -> StoreBackend:
 # ---------------------------------------------------------------------------
 
 
-async def get_vector_store_backend() -> Any:
+async def get_vector_store_backend() -> VectorStoreBackend:
     """Retorna (ou cria) o ``VectorStoreBackend`` singleton do processo.
 
     Ponto único de roteamento: ``storage_mode == "lite"`` devolve
@@ -148,7 +159,7 @@ async def get_vector_store(
     collection: str = "articles",
     *,
     path: str | None = None,
-) -> Any:
+) -> AsyncTable | None:
     """Retorna (ou cria) o ``lancedb.AsyncTable`` para ``collection``.
 
     Usado pelo background worker e pelos nós de RAG que operam na API baixo nível
@@ -196,7 +207,9 @@ async def get_vector_store(
     return table
 
 
-def _build_cohere_embeddings(model_override: str | None = None) -> Any:
+def _build_cohere_embeddings(
+    model_override: str | None = None,
+) -> _ConfiguredEmbeddings | None:
     """``VectoraCohereEmbeddings`` (nativo) se a key Cohere estiver configurada."""
     try:
         from backend.llm.cohere.client import CohereClient
@@ -214,7 +227,9 @@ def _build_cohere_embeddings(model_override: str | None = None) -> Any:
         return None
 
 
-def _build_openai_embeddings(model_override: str | None = None) -> Any:
+def _build_openai_embeddings(
+    model_override: str | None = None,
+) -> _ConfiguredEmbeddings | None:
     """Embeddings via a credencial OpenAI já usada pelo provider de chat."""
     try:
         from backend.llm.openai.client import OpenAIClient
@@ -236,7 +251,9 @@ def _build_openai_embeddings(model_override: str | None = None) -> Any:
         return None
 
 
-def _build_google_embeddings(model_override: str | None = None) -> Any:
+def _build_google_embeddings(
+    model_override: str | None = None,
+) -> _ConfiguredEmbeddings | None:
     """Embeddings via Gemini, diferenciando consultas e documentos."""
     try:
         from backend.llm.google.client import GoogleGenAIClient
@@ -258,7 +275,9 @@ def _build_google_embeddings(model_override: str | None = None) -> Any:
         return None
 
 
-def _build_voyage_embeddings(model_override: str | None = None) -> Any:
+def _build_voyage_embeddings(
+    model_override: str | None = None,
+) -> _ConfiguredEmbeddings | None:
     """``VectoraVoyageEmbeddings`` (nativo) se a key VoyageAI estiver configurada."""
     try:
         from backend.llm.voyage.client import VoyageClient
@@ -276,7 +295,9 @@ def _build_voyage_embeddings(model_override: str | None = None) -> Any:
         return None
 
 
-def _build_ollama_embeddings(model_override: str | None = None) -> Any:
+def _build_ollama_embeddings(
+    model_override: str | None = None,
+) -> _ConfiguredEmbeddings | None:
     """``OllamaEmbeddings`` nativo (``POST /api/embed``) se
     ``ollama_embedding_model`` (ou ``model_override``, vindo de
     ``rag_settings.embed_model`` em runtime) estiver configurado."""
@@ -300,7 +321,9 @@ def _build_ollama_embeddings(model_override: str | None = None) -> Any:
         return None
 
 
-def _build_openrouter_embeddings(model_override: str | None = None) -> Any:
+def _build_openrouter_embeddings(
+    model_override: str | None = None,
+) -> _ConfiguredEmbeddings | None:
     """``OpenRouterEmbeddings`` nativo — expõe `input_type` (modelos
     assimétricos precisam saber se o texto é consulta ou documento) e
     `usage.cost`, que o `OpenAIEmbeddings` com base_url trocado descartava.
@@ -324,7 +347,9 @@ def _build_openrouter_embeddings(model_override: str | None = None) -> Any:
         return None
 
 
-def _build_llamacpp_embeddings(model_override: str | None = None) -> Any:
+def _build_llamacpp_embeddings(
+    model_override: str | None = None,
+) -> _ConfiguredEmbeddings | None:
     """Usa o endpoint OpenAI-compatible de embeddings do llama.cpp."""
     try:
         from backend.llm.openai.client import OpenAIClient
@@ -351,7 +376,7 @@ def _build_llamacpp_embeddings(model_override: str | None = None) -> Any:
 
 def _build_openai_compatible_embeddings(
     provider: str, base_url: str | None, api_key: str, model: str | None
-) -> Any:
+) -> _ConfiguredEmbeddings | None:
     """Adapter de embeddings OpenAI-compatible para routers/runtime locais."""
     if not base_url or not model:
         return None
@@ -364,7 +389,7 @@ def _build_openai_compatible_embeddings(
     )
 
 
-def _build_lc_embeddings() -> Any:
+def _build_lc_embeddings() -> _ConfiguredEmbeddings | None:
     """Constrói o provider/modelo de embedding explicitamente selecionado.
 
     O identificador selecionado em ``rag_settings.embed_model`` é canônico
@@ -382,7 +407,7 @@ def _build_lc_embeddings() -> Any:
     if not runtime_pref or not runtime_model:
         return None
 
-    builders: dict[str, Any] = {
+    builders: dict[str, Callable[[], _ConfiguredEmbeddings | None]] = {
         "cohere": lambda: _build_cohere_embeddings(runtime_model),
         "voyage": lambda: _build_voyage_embeddings(runtime_model),
         "openai": lambda: _build_openai_embeddings(runtime_model),
@@ -435,14 +460,14 @@ class EmbeddingDimensionMismatchError(Exception):
     configurada agora — reindexação necessária antes de buscar/inserir."""
 
 
-async def _embedding_meta_db() -> Any:
+async def _embedding_meta_db() -> aiosqlite.Connection:
     """Executa a operação embedding meta db."""
     from backend.api.handlers.threads import _get_db as _threads_db
 
     return await _threads_db()
 
 
-async def _ensure_embedding_meta_table(db: Any) -> None:
+async def _ensure_embedding_meta_table(db: aiosqlite.Connection) -> None:
     """Executa a operação ensure embedding meta table."""
     await db.execute("""
         CREATE TABLE IF NOT EXISTS embedding_index_meta (
@@ -501,7 +526,7 @@ async def _check_embedding_dimension(
 # ---------------------------------------------------------------------------
 
 
-async def _ensure_postgres_schema(pool: Any) -> None:
+async def _ensure_postgres_schema(pool: asyncpg.Pool) -> None:
     """Aplica migrations Postgres pendentes via PostgresMigrationRunner."""
     from backend.storage.migrations.postgres_runner import PostgresMigrationRunner
 
@@ -514,7 +539,7 @@ async def _ensure_postgres_schema(pool: Any) -> None:
         logger.warning("storage/factory: erro ao garantir schema Postgres: %s", exc)
 
 
-async def get_pg_pool(dsn: str | None = None) -> Any:
+async def get_pg_pool(dsn: str | None = None) -> asyncpg.Pool:
     """Retorna (ou cria) o pool asyncpg compartilhado do modo complete.
 
     O pool é um singleton por processo — criado na primeira chamada e
@@ -553,7 +578,9 @@ async def get_pg_pool(dsn: str | None = None) -> Any:
 
     _pg_pool = await asyncpg.create_pool(normalized, min_size=2, max_size=20)
     await _ensure_postgres_schema(_pg_pool)
-    logger.debug("storage/factory: asyncpg pool criado dsn=%s", normalized[:30] + "…")
+    logger.debug(
+        "storage/factory: asyncpg pool criado destino=%s", describe_dsn(normalized)
+    )
     return _pg_pool
 
 
@@ -571,7 +598,7 @@ async def close_pg_pool() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def storage_health() -> dict[str, Any]:
+async def storage_health() -> dict[str, StorageHealthEntry]:
     """Retorna o status de saúde de todos os backends configurados.
 
     Usado pelo endpoint ``GET /admin/storage`` (F10) e pelo CLI
@@ -580,7 +607,7 @@ async def storage_health() -> dict[str, Any]:
     Returns:
         ``{"checkpointer": {...}, "store": {...}, "lancedb": {...}, ...}``
     """
-    result: dict[str, Any] = {}
+    result: dict[str, StorageHealthEntry] = {}
 
     # Checkpointer — testa se o arquivo .db é acessível
     try:
@@ -615,9 +642,15 @@ async def storage_health() -> dict[str, Any]:
 
         vs_backend = await get_vector_store_backend()
         vs_health: VectorStoreHealth = await vs_backend.health()
-        health_dict = vs_health.model_dump(exclude_none=True)
-        if "error" not in health_dict:
-            health_dict["error"] = None
+        health_dict: StorageHealthEntry = {"error": vs_health.error}
+        if vs_health.ok is not None:
+            health_dict["ok"] = vs_health.ok
+        if vs_health.internal is not None:
+            health_dict["internal"] = vs_health.internal
+        if vs_health.tables is not None:
+            health_dict["tables"] = vs_health.tables
+        if vs_health.collections is not None:
+            health_dict["collections"] = vs_health.collections
         if isinstance(vs_backend, QdrantBackend):
             result["qdrant"] = health_dict
             result["lancedb"] = {

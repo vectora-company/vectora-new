@@ -16,7 +16,7 @@ import logging
 import shutil
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any, Final
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -31,6 +31,11 @@ from backend.extensions.models import (
     effective_contribution_id,
 )
 from backend.extensions.store import ExtensionStore
+
+if TYPE_CHECKING:
+    from backend.tools.context import ToolContext
+    from backend.vtypes.contracts import JsonObject
+    from backend.vtypes.extensions import ExtensionClient, ExtensionHealth
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +113,7 @@ class ExtensionHost:
         self,
         store: ExtensionStore,
         *,
-        client_factory: Callable[[], Any] | None = None,
+        client_factory: Callable[[], ExtensionClient] | None = None,
         startup_timeout: float = _STARTUP_TIMEOUT_S,
         call_timeout: float = _CALL_TIMEOUT_S,
     ) -> None:
@@ -117,7 +122,7 @@ class ExtensionHost:
         self._startup_timeout = startup_timeout
         self._call_timeout = call_timeout
         self._records = store.load()
-        self._clients: dict[str, Any] = {}
+        self._clients: dict[str, ExtensionClient] = {}
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
@@ -137,10 +142,10 @@ class ExtensionHost:
             raise ExtensionError("not_found", "Extensão não encontrada.")
         return record
 
-    def audit(self, extension_id: str | None = None) -> list[dict[str, Any]]:
+    def audit(self, extension_id: str | None = None) -> list[JsonObject]:
         return self._store.read_audit(extension_id)
 
-    def contributions(self) -> list[dict[str, Any]]:
+    def contributions(self) -> list[JsonObject]:
         """Contribuições das extensões ativas, com id efetivo sem colisão."""
         return [
             {
@@ -311,10 +316,10 @@ class ExtensionHost:
             raise ExtensionError("invalid", "Arquivo acima do limite.")
         return target
 
-    async def health(self, extension_id: str) -> dict[str, Any]:
+    async def health(self, extension_id: str) -> ExtensionHealth:
         record = self.get(extension_id)
         client = self._clients.get(extension_id)
-        result: dict[str, Any] = {
+        result: ExtensionHealth = {
             "state": record.state.value,
             "running": client is not None,
             "tools": sorted(client.tools()) if client is not None else [],
@@ -325,11 +330,11 @@ class ExtensionHost:
         self,
         extension_id: str,
         tool_name: str,
-        arguments: dict[str, Any],
+        arguments: JsonObject,
         *,
         workspace_id: str,
         actor: str,
-        ctx: Any = None,
+        ctx: ToolContext | None = None,
     ) -> str:
         """Despacha uma tool de extensão com os argumentos explícitos da chamada."""
         record = self.get(extension_id)
@@ -431,12 +436,12 @@ class ExtensionHost:
             raise
         await self._stop(extension_id)
         command = _resolve_command(release)
-        connection = {
+        connection: JsonObject = {
             "transport": "stdio",
             "command": command,
-            "args": list(release.args),
+            "args": [*release.args],
             "require_sandbox": True,
-            "allow_hosts": list(record.grants.allow_hosts),
+            "allow_hosts": [*record.grants.allow_hosts],
             "env": {},
         }
         client = self._client_factory()
@@ -504,14 +509,14 @@ def _resolve_command(release: ExtensionRelease) -> str:
     return release.command
 
 
-async def _close(client: Any) -> None:
+async def _close(client: ExtensionClient) -> None:
     try:
         await client.aclose()
     except Exception:
         logger.debug("extensão: erro ao encerrar o cliente (ignorado)")
 
 
-def _default_client() -> Any:
+def _default_client() -> ExtensionClient:
     from backend.tools.mcp import VectoraMCPClient
 
     return VectoraMCPClient()

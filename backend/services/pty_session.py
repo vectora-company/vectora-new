@@ -24,13 +24,19 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from backend.sandbox.policy import SandboxPolicy
+    from backend.vtypes.terminal import (
+        PtyBackend,
+        PtyProcess,
+        ScrollbackWindow,
+        TerminalInputResult,
+    )
 
 logger = logging.getLogger(__name__)
 
 _IS_WINDOWS = platform.system() == "Windows"
 
 
-def _load_pty_backend() -> Any:
+def _load_pty_backend() -> PtyBackend | None:
     """Carrega o backend de PTY da plataforma: pywinpty no Windows, ptyprocess fora.
 
     Import dinâmico via importlib: as libs são mutuamente exclusivas por SO e não
@@ -47,7 +53,7 @@ def _load_pty_backend() -> Any:
         return None
 
 
-_Backend: Any = _load_pty_backend()
+_Backend = _load_pty_backend()
 
 
 def _default_shell() -> list[str]:
@@ -83,7 +89,7 @@ class PtySession:
         terminal_id: str,
         workspace_id: str,
         thread_id: str,
-        proc: Any,
+        proc: PtyProcess,
         user_id: str = "local",
     ) -> None:
         self.terminal_id = terminal_id
@@ -264,7 +270,7 @@ class PtySession:
         with contextlib.suppress(ValueError):
             self._subscribers.remove(q)
 
-    def read_since(self, cursor: int | None, max_bytes: int = 8192) -> dict[str, Any]:
+    def read_since(self, cursor: int | None, max_bytes: int = 8192) -> ScrollbackWindow:
         """Lê uma janela não consumidora do scrollback usando cursor absoluto.
 
         O cursor é a quantidade total de bytes emitidos pela sessão. Como o
@@ -319,7 +325,7 @@ class PtySession:
             logger.debug("pty_session: write falhou %s", self.terminal_id)
             return False
 
-    def write_input(self, data: bytes, request_id: str) -> dict[str, Any]:
+    def write_input(self, data: bytes, request_id: str) -> TerminalInputResult:
         """Escreve uma entrada idempotente e devolve estado observável."""
         if not request_id:
             return {"status": "error", "code": "request_id_required"}

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
 from backend.llm.openrouter.stt import transcribe_bytes
@@ -28,8 +29,8 @@ def _client(handler) -> OpenRouterClient:
 
 class TestTranscricao:
     @pytest.mark.asyncio
-    async def test_audio_curto_devolve_o_texto(self):
-        def handler(_req):
+    async def test_audio_curto_devolve_o_texto(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"text": "  olá mundo  "})
 
         texto = await transcribe_bytes(
@@ -44,7 +45,7 @@ class TestTranscricao:
         assert texto == "olá mundo"
 
     @pytest.mark.asyncio
-    async def test_manda_multipart_com_arquivo_e_nao_json(self):
+    async def test_manda_multipart_com_arquivo_e_nao_json(self) -> None:
         """O endpoint é multipart; mandar JSON aqui rende 400 do provider."""
         capturado: dict[str, str] = {}
 
@@ -66,7 +67,7 @@ class TestTranscricao:
         assert "openai/whisper-1" in capturado["corpo"]
 
     @pytest.mark.asyncio
-    async def test_idioma_opcional_vai_junto_quando_informado(self):
+    async def test_idioma_opcional_vai_junto_quando_informado(self) -> None:
         capturado: dict[str, str] = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -85,11 +86,11 @@ class TestTranscricao:
         assert "pt" in capturado["corpo"]
 
     @pytest.mark.asyncio
-    async def test_resposta_sem_text_vira_erro_tipado(self):
+    async def test_resposta_sem_text_vira_erro_tipado(self) -> None:
         """Erro/borda: sem este corte a transcrição vira string vazia e o
         usuário acha que o áudio estava mudo, em vez de saber que falhou."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"task": "transcribe"})
 
         with pytest.raises(OpenRouterResponseError, match="text"):
@@ -102,8 +103,8 @@ class TestTranscricao:
             )
 
     @pytest.mark.asyncio
-    async def test_text_vazio_tambem_falha(self):
-        def handler(_req):
+    async def test_text_vazio_tambem_falha(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"text": "   "})
 
         with pytest.raises(OpenRouterResponseError):
@@ -116,7 +117,7 @@ class TestTranscricao:
             )
 
     @pytest.mark.asyncio
-    async def test_arquivo_vazio_nem_chega_a_chamar_a_api(self):
+    async def test_arquivo_vazio_nem_chega_a_chamar_a_api(self) -> None:
         """Erro/borda: gravação que falhou devolve 0 byte. Mandar assim gasta
         crédito pra receber erro do provider."""
         chamou = False
@@ -137,10 +138,10 @@ class TestTranscricao:
         assert not chamou
 
     @pytest.mark.asyncio
-    async def test_402_vira_erro_de_credito_e_nao_transcricao_vazia(self):
+    async def test_402_vira_erro_de_credito_e_nao_transcricao_vazia(self) -> None:
         from backend.llm.openrouter.client import OpenRouterCreditError
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(402, json={"error": {"message": "no credits"}})
 
         with pytest.raises(OpenRouterCreditError):
@@ -157,7 +158,9 @@ class TestCadeiaDeTranscricao:
     """`transcribe_audio` escolhe o provider pela chave configurada."""
 
     @pytest.mark.asyncio
-    async def test_sem_openai_e_sem_google_usa_openrouter(self, monkeypatch):
+    async def test_sem_openai_e_sem_google_usa_openrouter(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.llm import transcription
         from backend.settings import settings as _s
 
@@ -172,7 +175,7 @@ class TestCadeiaDeTranscricao:
             "backend.settings.configured_gateway_model", configured_model
         )
 
-        async def _fake(_client, **kwargs):
+        async def _fake(_client, **kwargs: bytes | str | None) -> str:
             assert kwargs["model"] == "whisper"
             return "transcrito via openrouter"
 
@@ -189,7 +192,9 @@ class TestCadeiaDeTranscricao:
         assert texto == "transcrito via openrouter"
 
     @pytest.mark.asyncio
-    async def test_sem_nenhuma_chave_continua_com_erro_claro(self, monkeypatch):
+    async def test_sem_nenhuma_chave_continua_com_erro_claro(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: sem nenhum provider de STT configurado, o erro
         identifica que falta chave, independente de qual provider seria
         usado."""
@@ -214,7 +219,9 @@ class TestCadeiaDeTranscricao:
             )
 
     @pytest.mark.asyncio
-    async def test_openrouter_sem_modelo_de_stt_nao_entra_na_cadeia(self, monkeypatch):
+    async def test_openrouter_sem_modelo_de_stt_nao_entra_na_cadeia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: key configurada mas sem modelo de STT escolhido — a
         capacidade não está disponível, e o erro tem que dizer isso."""
         from backend.llm import transcription
@@ -231,7 +238,7 @@ class TestCadeiaDeTranscricao:
             "backend.settings.configured_gateway_model", configured_model
         )
 
-        async def _fake(_client, **kwargs):
+        async def _fake(_client, **kwargs: bytes | str | None) -> str:
             assert kwargs["model"] == "whisper"
             return "transcrito"
 

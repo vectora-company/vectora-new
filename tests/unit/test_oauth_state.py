@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.middleware.base import _CachedRequest
 
 from backend.api.handlers.oauth import router
 from backend.services import oauth_state
@@ -83,7 +84,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     app = FastAPI()
     app.include_router(router)
 
-    def attach_user(request):
+    def attach_user(request: _CachedRequest) -> None:
         request.state.user = SimpleNamespace(id="user-123")
 
     app.middleware("http")(lambda req, call_next: (attach_user(req), call_next(req))[1])

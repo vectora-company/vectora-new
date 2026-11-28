@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import asyncio
 import threading
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Event
 
 import aiosqlite
 import pytest
 
+from backend.services.artifact_retention import ArtifactGcResult
 from backend.services.storage_maintenance import run_storage_maintenance
 
 
@@ -67,7 +71,7 @@ async def test_maintenance_rejeita_retencao_invalida(tmp_path: Path) -> None:
 
 
 async def test_maintenance_cancellation_stops_artifact_worker(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Verifica o comportamento de maintenance cancellation stops artifact worker."""
     import backend.services.storage_maintenance as maintenance_module
@@ -76,7 +80,9 @@ async def test_maintenance_cancellation_stops_artifact_worker(
     started = threading.Event()
     stopped = threading.Event()
 
-    def slow_collect(*args, stop_event=None, **kwargs):
+    def slow_collect(
+        *args: Path, stop_event: Event | None = None, **kwargs
+    ) -> ArtifactGcResult:
         """Executa a operação slow collect."""
         started.set()
         while stop_event is None or not stop_event.is_set():

@@ -12,15 +12,23 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, create_model, field_validator
+from pydantic import BaseModel, field_validator
+from pydantic.fields import FieldInfo
 
 from backend.context_graph.security import validate_url
 from backend.rbac import tool_policy
 from backend.services import extension_trust, mcp_policy
+from backend.tools.context import ToolContext
 from backend.tools.mcp import VectoraMCPClient
-from backend.tools.registry import ToolExtras, ToolSpec
+from backend.tools.registry import ToolExtras, ToolSpec, build_args_model
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+if TYPE_CHECKING:
+    from mcp.types import Tool as MCPTool
+
+    from backend.vtypes.tools import Annotation
 
 logger = logging.getLogger(__name__)
 
@@ -347,7 +355,7 @@ async def health_check(server: McpServer) -> dict:
         await client.aclose()
 
 
-_JSON_SCHEMA_TYPES: dict[str, Any] = {
+_JSON_SCHEMA_TYPES: dict[str, type] = {
     "string": str,
     "integer": int,
     "number": float,
@@ -358,28 +366,34 @@ _JSON_SCHEMA_TYPES: dict[str, Any] = {
 
 
 def _args_model_from_input_schema(
-    tool_name: str, input_schema: dict | None
+    tool_name: str, input_schema: JsonObject | None
 ) -> type[BaseModel]:
     """Constrói um ``BaseModel`` dinâmico a partir do JSON Schema que um
     servidor MCP publica em ``Tool.input_schema`` — mapeamento raso (tipos
     primitivos + array/object), o suficiente pro schema que o LLM recebe
     pra chamar a tool remota."""
-    properties: dict[str, Any] = (input_schema or {}).get("properties", {}) or {}
-    required = set((input_schema or {}).get("required", []) or [])
-    fields: dict[str, Any] = {}
-    for prop_name, prop_schema in properties.items():
-        py_type = _JSON_SCHEMA_TYPES.get((prop_schema or {}).get("type", ""), Any)
+    raw_properties = (input_schema or {}).get("properties")
+    properties = raw_properties if isinstance(raw_properties, dict) else {}
+    raw_required = (input_schema or {}).get("required")
+    required = set(raw_required) if isinstance(raw_required, list) else set()
+    fields: dict[str, tuple[Annotation, FieldInfo]] = {}
+    for prop_name, raw_schema in properties.items():
+        prop_schema = raw_schema if isinstance(raw_schema, dict) else {}
+        py_type = _JSON_SCHEMA_TYPES.get(str(prop_schema.get("type", "")), JsonValue)
         if prop_name in required:
-            fields[prop_name] = (py_type, ...)
+            fields[prop_name] = (py_type, FieldInfo())
         else:
-            fields[prop_name] = (py_type | None, (prop_schema or {}).get("default"))
-    return create_model(f"{tool_name}Args", **fields)
+            fields[prop_name] = (
+                py_type | None,
+                FieldInfo(default=prop_schema.get("default")),
+            )
+    return build_args_model(f"{tool_name}Args", fields)
 
 
 def _remote_tool_spec(
     server_name: str,
-    connection: dict,
-    mcp_tool: Any,
+    connection: JsonObject,
+    mcp_tool: MCPTool,
     user_id: str,
     workspace_id: str = "",
 ) -> ToolSpec:
@@ -388,7 +402,7 @@ def _remote_tool_spec(
     tool (nenhum estado de sessão é mantido entre chamadas)."""
     tool_name = mcp_tool.name
 
-    async def _handler(**kwargs: Any) -> str:
+    async def _handler(**kwargs: JsonValue | ToolContext) -> str:
         tool_context = kwargs.pop(_PLUGIN_CTX_PARAM, None)
         decision = mcp_policy.evaluate(server_name, workspace_id or None)
         if not decision.allowed:
@@ -405,7 +419,16 @@ def _remote_tool_spec(
         try:
             async with asyncio.timeout(_HEALTH_TIMEOUT_S):
                 await client.connect({server_name: connection}, strict=True)
-                return await client.call_tool(tool_name, kwargs, tool_context)
+                arguments = {
+                    name: value
+                    for name, value in kwargs.items()
+                    if not isinstance(value, ToolContext)
+                }
+                return await client.call_tool(
+                    tool_name,
+                    arguments,
+                    tool_context if isinstance(tool_context, ToolContext) else None,
+                )
         except TimeoutError:
             return f"Erro: tool MCP '{tool_name}' excedeu {_HEALTH_TIMEOUT_S}s."
         except Exception as exc:

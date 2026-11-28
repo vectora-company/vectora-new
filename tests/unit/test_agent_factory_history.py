@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from backend.services import agent_factory
-from backend.vtypes.message import ContentBlock, MessageRole
+from backend.vtypes.message import ContentBlock, MessageRole, ToolCall
 
 
 class _SnapshotMessage:
@@ -16,7 +16,7 @@ class _SnapshotMessage:
         self.role = MessageRole.ASSISTANT
         self.content = [ContentBlock(kind="text", text=text)]
         self.is_error = is_error
-        self.tool_calls: list[object] = []
+        self.tool_calls: list[ToolCall] = []
 
     def text(self) -> str:
         """Expose the message text through the provider-shaped interface."""

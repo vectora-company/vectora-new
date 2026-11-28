@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from aiosqlite import Connection
 from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 
@@ -18,12 +20,15 @@ from backend.api.handlers.threads import (
     get_smart_approval_allowlist,
     remove_smart_approval_allowlist,
 )
+from backend.persistence.native.session_store import SessionStore
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.workspace import Workspace
+from backend.workspace.runtime_settings import RuntimeSettings
 
 
 class _FakeRequestImpl:
     class _State:
-        user: object | None = None
+        user: SimpleNamespace | None = None
 
     def __init__(self) -> None:
         self.state = self._State()
@@ -40,7 +45,7 @@ def _authenticated_request(user_id: str = "user-1") -> Request:
 
 
 def _grant_request(
-    *, workspace_id: str = "ws1", args: dict[str, object] | None = None
+    *, workspace_id: str = "ws1", args: JsonObject | None = None
 ) -> SmartApprovalAllowlistRequest:
     return SmartApprovalAllowlistRequest(
         workspace_id=workspace_id,
@@ -52,11 +57,13 @@ def _grant_request(
     )
 
 
-def _install_pending(monkeypatch, body: SmartApprovalAllowlistRequest) -> None:
+def _install_pending(
+    monkeypatch: pytest.MonkeyPatch, body: SmartApprovalAllowlistRequest
+) -> None:
     from backend.api.handlers import threads
 
     class Store:
-        async def get_pending_approval(self, _thread_id: str) -> dict[str, object]:
+        async def get_pending_approval(self, _thread_id: str) -> JsonObject:
             return {
                 "interrupt_id": body.interrupt_id,
                 "run_id": body.run_id,
@@ -82,7 +89,9 @@ def _install_pending(monkeypatch, body: SmartApprovalAllowlistRequest) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _runtime_settings_isolado(tmp_path, monkeypatch):
+def _runtime_settings_isolado(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> RuntimeSettings:
     from backend.workspace.runtime_settings import RuntimeSettings
 
     isolado = RuntimeSettings(tmp_path / "rt.db")
@@ -93,7 +102,7 @@ def _runtime_settings_isolado(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_add_e_remove_via_endpoint(monkeypatch):
+async def test_add_e_remove_via_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     body = _grant_request()
     _install_pending(monkeypatch, body)
     resposta = await add_smart_approval_allowlist(
@@ -129,7 +138,7 @@ async def test_get_workspace_desconhecido_no_modo_local_usa_store() -> None:
 
 
 @pytest.mark.asyncio
-async def test_regra_longa_usa_id_opaco_e_pode_ser_revogada():
+async def test_regra_longa_usa_id_opaco_e_pode_ser_revogada() -> None:
     from backend.services.smart_approval import add_to_allowlist
 
     comando = "x" * 200
@@ -147,7 +156,9 @@ async def test_regra_longa_usa_id_opaco_e_pode_ser_revogada():
 
 
 @pytest.mark.asyncio
-async def test_workspace_vazio_vira_400_nao_500(monkeypatch):
+async def test_workspace_vazio_vira_400_nao_500(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: `ValueError` do módulo vira HTTP 400 com mensagem clara,
     não um 500 cru que não diz o que corrigir."""
     from fastapi import HTTPException
@@ -166,7 +177,7 @@ async def test_workspace_vazio_vira_400_nao_500(monkeypatch):
 @pytest.mark.parametrize("operation", ["add", "remove"])
 @pytest.mark.parametrize("failure", ["write", "commit"])
 async def test_persistence_failure_returns_503_and_rolls_back(
-    _runtime_settings_isolado,
+    _runtime_settings_isolado: RuntimeSettings,
     monkeypatch: pytest.MonkeyPatch,
     operation: str,
     failure: str,
@@ -188,7 +199,7 @@ async def test_persistence_failure_returns_503_and_rolls_back(
 
     class FailingConnection:
         def execute(
-            self, sql: str, parameters: tuple[object, ...] = ()
+            self, sql: str, parameters: tuple[str | int | None, ...] = ()
         ) -> sqlite3.Cursor:
             if failure == "write" and sql.startswith("INSERT INTO app_settings"):
                 raise sqlite3.OperationalError("simulated write failure")
@@ -237,7 +248,9 @@ async def test_persistence_failure_returns_503_and_rolls_back(
 
 
 @pytest.mark.asyncio
-async def test_endpoints_rejeitam_workspace_nao_autorizado(monkeypatch):
+async def test_endpoints_rejeitam_workspace_nao_autorizado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from fastapi import HTTPException
 
     monkeypatch.setattr(
@@ -310,7 +323,7 @@ async def test_endpoints_rejeitam_workspace_de_outro_usuario(
 
 
 @pytest.mark.asyncio
-async def test_mutacoes_concorrentes_preservam_todas_as_regras():
+async def test_mutacoes_concorrentes_preservam_todas_as_regras() -> None:
     from backend.services.smart_approval import add_to_allowlist, get_allowlist
 
     with ThreadPoolExecutor(max_workers=8) as executor:
@@ -330,19 +343,21 @@ async def test_mutacoes_concorrentes_preservam_todas_as_regras():
 
 
 @pytest.mark.asyncio
-async def test_auditoria_de_mutacao_nao_expoe_assinatura(monkeypatch):
+async def test_auditoria_de_mutacao_nao_expoe_assinatura(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.rbac import auth
 
     monkeypatch.setattr(
         "backend.api.handlers.workspaces.require_workspace_access",
         lambda _workspace_id, _request: SimpleNamespace(id="workspace"),
     )
-    eventos: list[dict[str, object]] = []
+    eventos: list[JsonObject] = []
 
     async def fake_db():
         return object()
 
-    async def fake_audit(_db, _user_id, action, **kwargs):
+    async def fake_audit(_db, _user_id, action, **kwargs) -> None:
         eventos.append({"action": action, **kwargs})
 
     monkeypatch.setattr(auth, "get_db_for_audit", fake_db)
@@ -369,7 +384,7 @@ async def test_auditoria_de_mutacao_nao_expoe_assinatura(monkeypatch):
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path):
     from backend.persistence.native.session_store import SessionStore
     from backend.storage.sqlite.pool import AsyncConnectionPool
 
@@ -387,8 +402,8 @@ async def session_store(tmp_path):
 
 @pytest.mark.asyncio
 async def test_authenticated_http_grant_reaches_durable_executor_without_auth_bypass(
-    tmp_path, monkeypatch, session_store
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, session_store: SessionStore
+) -> None:
     import aiosqlite
 
     from backend.api.handlers import threads
@@ -408,7 +423,7 @@ async def test_authenticated_http_grant_reaches_durable_executor_without_auth_by
         db.row_factory = aiosqlite.Row
         await auth._ensure_schema(db)
 
-        async def get_db():
+        async def get_db() -> Connection:
             return db
 
         monkeypatch.setattr(auth, "_get_db", get_db)
@@ -448,7 +463,7 @@ async def test_authenticated_http_grant_reaches_durable_executor_without_auth_by
             args=body.args,
         )
 
-        async def get_store():
+        async def get_store() -> SessionStore:
             return session_store
 
         monkeypatch.setattr(threads, "_get_session_store", get_store)

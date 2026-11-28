@@ -10,11 +10,15 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
 McpPolicyScope = Literal["instance", "workspace"]
+
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 
 class McpPolicyRule(BaseModel):
@@ -123,7 +127,7 @@ def _publish_change() -> None:
 
 def apply_remote_version(
     version: int,
-    rules: list[dict[str, object]] | None = None,
+    rules: list[JsonObject] | None = None,
     origin: str | None = None,
 ) -> None:
     """Aplica um snapshot remoto antes de invalidar os caches dependentes."""

@@ -16,7 +16,7 @@ from backend.tools.thinking import sequential_thinking
 
 
 @pytest.mark.asyncio
-async def test_sequential_thinking_returns_json():
+async def test_sequential_thinking_returns_json() -> None:
     """Deve retornar JSON válido."""
     result = await sequential_thinking(
         thought="Preciso analisar o código",
@@ -28,7 +28,7 @@ async def test_sequential_thinking_returns_json():
 
 
 @pytest.mark.asyncio
-async def test_sequential_thinking_includes_thought():
+async def test_sequential_thinking_includes_thought() -> None:
     """O JSON de retorno deve conter o thought e o número."""
     result = await sequential_thinking(
         thought="Analise inicial", thought_number=1, total_thoughts=2
@@ -39,7 +39,7 @@ async def test_sequential_thinking_includes_thought():
 
 
 @pytest.mark.asyncio
-async def test_sequential_thinking_final_thought_flag():
+async def test_sequential_thinking_final_thought_flag() -> None:
     """Último pensamento: is_final=True quando thought_number == total_thoughts."""
     result = await sequential_thinking(
         thought="Conclusão", thought_number=3, total_thoughts=3
@@ -49,7 +49,7 @@ async def test_sequential_thinking_final_thought_flag():
 
 
 @pytest.mark.asyncio
-async def test_sequential_thinking_non_final_thought():
+async def test_sequential_thinking_non_final_thought() -> None:
     """Pensamento intermediário: is_final=False."""
     result = await sequential_thinking(
         thought="Pensando...", thought_number=1, total_thoughts=5
@@ -59,7 +59,7 @@ async def test_sequential_thinking_non_final_thought():
 
 
 @pytest.mark.asyncio
-async def test_sequential_thinking_with_revision():
+async def test_sequential_thinking_with_revision() -> None:
     """Revisão de pensamento anterior deve ser registrada."""
     result = await sequential_thinking(
         thought="Revisei e corrigi meu entendimento",
@@ -74,7 +74,7 @@ async def test_sequential_thinking_with_revision():
 
 
 @pytest.mark.asyncio
-async def test_sequential_thinking_branching():
+async def test_sequential_thinking_branching() -> None:
     """Branch de raciocínio deve registrar a bifurcação."""
     result = await sequential_thinking(
         thought="Explorar alternativa B",
@@ -88,7 +88,7 @@ async def test_sequential_thinking_branching():
 
 
 @pytest.mark.asyncio
-async def test_sequential_thinking_invalid_numbers_error():
+async def test_sequential_thinking_invalid_numbers_error() -> None:
     """thought_number > total_thoughts deve retornar erro."""
     result = await sequential_thinking(
         thought="Erro", thought_number=5, total_thoughts=3

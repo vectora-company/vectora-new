@@ -4,22 +4,30 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
 
 from backend.api.handlers import github
+from backend.vtypes.contracts import JsonObject, JsonValue
+from tests.fake_requests import fake_request
 
 
-def _request(user_id: str | None = "alice"):
+def _request(user_id: str | None = "alice") -> MagicMock:
     user = SimpleNamespace(id=user_id) if user_id else None
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    return fake_request(state=SimpleNamespace(user=user))
 
 
-def _fake_gh(monkeypatch, result: dict):
+def _fake_gh(monkeypatch: pytest.MonkeyPatch, result: dict):
     calls: list[tuple[list[str], str | None]] = []
 
-    async def fake(args, cwd=None, input_data=None, user_id=None):
+    async def fake(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         calls.append((args, user_id))
         return result
 
@@ -51,7 +59,7 @@ def test_checks_summary_counts_each_outcome() -> None:
 
 
 async def test_pulls_are_listed_with_review_and_without_checks_payload(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     payload = [
         {
@@ -85,7 +93,9 @@ async def test_pulls_are_listed_with_review_and_without_checks_payload(
     assert calls[0][1] == "alice"
 
 
-async def test_issues_are_listed_with_labels_and_comment_count(monkeypatch) -> None:
+async def test_issues_are_listed_with_labels_and_comment_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     payload = [
         {
             "number": 3,
@@ -110,7 +120,9 @@ async def test_issues_are_listed_with_labels_and_comment_count(monkeypatch) -> N
     assert "q=repo:o/r is:issue state:open" in calls[0][0]
 
 
-async def test_empty_repository_list_is_distinct_from_unknown(monkeypatch) -> None:
+async def test_empty_repository_list_is_distinct_from_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _fake_gh(monkeypatch, {"status": "ok", "output": "[]"})
 
     response = await github.list_pulls(_request(), state="open", workspace_id=None)
@@ -129,7 +141,9 @@ async def test_empty_repository_list_is_distinct_from_unknown(monkeypatch) -> No
         ("GraphQL: Could not resolve to a Repository", "error"),
     ],
 )
-async def test_gh_failures_are_classified(monkeypatch, message, expected) -> None:
+async def test_gh_failures_are_classified(
+    monkeypatch: pytest.MonkeyPatch, message: str, expected: str
+) -> None:
     _fake_gh(monkeypatch, {"status": "error", "message": message})
 
     response = await github.list_pulls(_request(), state="open", workspace_id=None)
@@ -141,7 +155,7 @@ async def test_gh_failures_are_classified(monkeypatch, message, expected) -> Non
     assert response.message == message
 
 
-async def test_invalid_gh_output_is_an_error(monkeypatch) -> None:
+async def test_invalid_gh_output_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_gh(monkeypatch, {"status": "ok", "output": "not json"})
 
     response = await github.list_issues(_request(), state="open", workspace_id=None)
@@ -157,10 +171,12 @@ async def test_requires_an_authenticated_user() -> None:
     assert error.value.status_code == 401
 
 
-async def test_rate_gate_stops_repeated_github_cli_reads(monkeypatch) -> None:
+async def test_rate_gate_stops_repeated_github_cli_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = 0
 
-    async def rate_limited(*_args, **_kwargs):
+    async def rate_limited(*_args: list[str], **_kwargs: str) -> JsonObject:
         nonlocal calls
         calls += 1
         return {
@@ -224,7 +240,7 @@ PULL_VIEW = {
 
 
 async def test_pull_detail_returns_body_comments_commits_and_files(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = _fake_gh(monkeypatch, {"status": "ok", "output": json.dumps(PULL_VIEW)})
 
@@ -250,7 +266,9 @@ async def test_pull_detail_returns_body_comments_commits_and_files(
     assert [(f.path, f.additions) for f in pull.files] == [("a.ts", 30)]
 
 
-async def test_pull_detail_survives_missing_optional_fields(monkeypatch) -> None:
+async def test_pull_detail_survives_missing_optional_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _fake_gh(
         monkeypatch,
         {
@@ -268,7 +286,7 @@ async def test_pull_detail_survives_missing_optional_fields(monkeypatch) -> None
 
 
 async def test_pull_detail_reports_gh_unavailable_not_an_empty_pull(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _fake_gh(monkeypatch, {"status": "error", "message": "gh not found in PATH"})
 
@@ -279,7 +297,9 @@ async def test_pull_detail_reports_gh_unavailable_not_an_empty_pull(
 
 
 @pytest.mark.parametrize("output", ["", "nope", "[]", '{"title": "sem numero"}'])
-async def test_pull_detail_rejects_invalid_payloads(monkeypatch, output) -> None:
+async def test_pull_detail_rejects_invalid_payloads(
+    monkeypatch: pytest.MonkeyPatch, output: str
+) -> None:
     _fake_gh(monkeypatch, {"status": "ok", "output": output})
 
     response = await github.get_pull(_request(), 7, None)
@@ -288,7 +308,9 @@ async def test_pull_detail_rejects_invalid_payloads(monkeypatch, output) -> None
     assert response.pull is None
 
 
-async def test_pull_detail_requires_an_authenticated_user(monkeypatch) -> None:
+async def test_pull_detail_requires_an_authenticated_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _fake_gh(monkeypatch, {"status": "ok", "output": "{}"})
 
     with pytest.raises(HTTPException) as error:
@@ -297,7 +319,9 @@ async def test_pull_detail_requires_an_authenticated_user(monkeypatch) -> None:
     assert error.value.status_code == 401
 
 
-async def test_issue_detail_returns_body_labels_and_comments(monkeypatch) -> None:
+async def test_issue_detail_returns_body_labels_and_comments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     payload = {
         "number": 3,
         "title": "bug no chat",
@@ -329,7 +353,7 @@ async def test_issue_detail_returns_body_labels_and_comments(monkeypatch) -> Non
     assert [c.body for c in issue.comments] == ["ok"]
 
 
-async def test_issue_detail_reports_errors(monkeypatch) -> None:
+async def test_issue_detail_reports_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_gh(monkeypatch, {"status": "error", "message": "could not resolve"})
 
     response = await github.get_issue(_request(), 3, None)
@@ -339,7 +363,9 @@ async def test_issue_detail_reports_errors(monkeypatch) -> None:
 
 
 def test_comment_list_is_capped() -> None:
-    many = [{"author": {"login": "a"}, "body": str(i)} for i in range(500)]
+    many: list[JsonValue] = [
+        {"author": {"login": "a"}, "body": str(i)} for i in range(500)
+    ]
 
     assert len(github._comments(many)) == 100
 
@@ -348,7 +374,9 @@ def test_comment_list_is_capped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_leitura_repetida_usa_o_cache_e_chama_o_gh_uma_vez(monkeypatch):
+async def test_leitura_repetida_usa_o_cache_e_chama_o_gh_uma_vez(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = _fake_gh(monkeypatch, {"status": "ok", "output": "[]"})
 
     first = await github._gh_read(["pr", "list"], cwd="/w", user_id="u1")
@@ -359,7 +387,9 @@ async def test_leitura_repetida_usa_o_cache_e_chama_o_gh_uma_vez(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cache_nao_mistura_usuarios_nem_argumentos(monkeypatch):
+async def test_cache_nao_mistura_usuarios_nem_argumentos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = _fake_gh(monkeypatch, {"status": "ok", "output": "[]"})
 
     await github._gh_read(["pr", "list"], cwd="/w", user_id="u1")
@@ -370,7 +400,7 @@ async def test_cache_nao_mistura_usuarios_nem_argumentos(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_erro_nao_fica_em_cache(monkeypatch):
+async def test_erro_nao_fica_em_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _fake_gh(monkeypatch, {"status": "error", "message": "boom"})
 
     await github._gh_read(["pr", "list"], cwd="/w", user_id="u1")
@@ -380,12 +410,19 @@ async def test_erro_nao_fica_em_cache(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_chamadas_simultaneas_iguais_compartilham_uma_execucao(monkeypatch):
+async def test_chamadas_simultaneas_iguais_compartilham_uma_execucao(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import asyncio
 
     started = 0
 
-    async def slow(args, cwd=None, input_data=None, user_id=None):
+    async def slow(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         nonlocal started
         started += 1
         await asyncio.sleep(0.01)
@@ -401,7 +438,7 @@ async def test_chamadas_simultaneas_iguais_compartilham_uma_execucao(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_cache_expira_depois_do_ttl(monkeypatch):
+async def test_cache_expira_depois_do_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _fake_gh(monkeypatch, {"status": "ok", "output": "[]"})
     clock = [100.0]
     monkeypatch.setattr(github.time, "monotonic", lambda: clock[0])
@@ -421,7 +458,7 @@ def test_failure_uses_structured_gh_unavailable_code() -> None:
 
 
 async def test_github_list_sends_etag_and_reuses_body_on_not_modified(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[list[str]] = []
     responses = [
@@ -458,11 +495,13 @@ async def test_github_list_sends_etag_and_reuses_body_on_not_modified(
     assert calls[1][-2:] == ["--header", 'If-None-Match: "v1"']
 
 
-async def test_github_etag_cache_is_isolated_by_credential_epoch(monkeypatch) -> None:
+async def test_github_etag_cache_is_isolated_by_credential_epoch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     epochs = iter(["first", "second"])
     calls: list[list[str]] = []
 
-    async def changing_epoch(_user_id):
+    async def changing_epoch(_user_id: str) -> str:
         return next(epochs)
 
     async def fake(args, cwd=None, input_data=None, user_id=None):
@@ -483,10 +522,12 @@ async def test_github_etag_cache_is_isolated_by_credential_epoch(monkeypatch) ->
     assert all("--header" not in args for args in calls)
 
 
-async def test_github_api_rate_gate_uses_reset_time(monkeypatch) -> None:
+async def test_github_api_rate_gate_uses_reset_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = 0
 
-    async def limited(*_args, **_kwargs):
+    async def limited(*_args: list[str], **_kwargs: str) -> JsonObject:
         nonlocal calls
         calls += 1
         return {

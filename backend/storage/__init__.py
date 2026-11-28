@@ -15,6 +15,8 @@ específico é necessário.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 __all__ = [
     "get_store",
     "get_vector_store",
@@ -23,7 +25,11 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> object:
+if TYPE_CHECKING:
+    from types import FunctionType
+
+
+def __getattr__(name: str) -> FunctionType:
     if name in (
         "get_store",
         "get_vector_store",

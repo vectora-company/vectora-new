@@ -10,17 +10,20 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
 from backend.services.pty_registry import pty_registry
 from backend.tools.context import ctx_from_config
 from backend.tools.fs import _pending_terminal, _terminal_submit_suffix, terminal
+from backend.vtypes import Workspace
 from backend.workspace.workspace import WorkspaceRegistry
 
 
 @pytest.fixture
-def _workspace(tmp_path, monkeypatch):
+def _workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Workspace:
     """Workspace real e confiável, registrado num registry isolado.
 
     Sem isso, ``_active_workspace`` cai no fallback ``get_or_create()``
@@ -42,7 +45,7 @@ def _config(workspace_id: str, thread_id: str = "t1") -> dict:
 
 
 @pytest.fixture(autouse=True)
-def _clear_pending():
+def _clear_pending() -> Iterator[None]:
     _pending_terminal.clear()
     yield
     _pending_terminal.clear()
@@ -50,8 +53,8 @@ def _clear_pending():
 
 @pytest.mark.asyncio
 async def test_terminal_command_idle_waiting_input_then_resumed_via_stdin(
-    monkeypatch, _workspace
-):
+    monkeypatch: pytest.MonkeyPatch, _workspace: Workspace
+) -> None:
     """Comando que fica esperando input registra pendência e é retomado com stdin_input."""
     monkeypatch.setattr("backend.tools.fs._IDLE_TIMEOUT", 0.1)
     monkeypatch.setattr("backend.tools.fs._HARD_TIMEOUT", 5.0)
@@ -78,7 +81,9 @@ async def test_terminal_command_idle_waiting_input_then_resumed_via_stdin(
 
 
 @pytest.mark.asyncio
-async def test_terminal_stdin_input_without_pending_process_returns_error(_workspace):
+async def test_terminal_stdin_input_without_pending_process_returns_error(
+    _workspace: Workspace,
+) -> None:
     """stdin_input sem nenhum comando pendente na thread é um erro claro, não um crash."""
     result = await terminal(
         stdin_input="ola",
@@ -90,21 +95,25 @@ async def test_terminal_stdin_input_without_pending_process_returns_error(_works
 
 
 @pytest.mark.asyncio
-async def test_terminal_without_command_or_stdin_input_returns_error(_workspace):
+async def test_terminal_without_command_or_stdin_input_returns_error(
+    _workspace: Workspace,
+) -> None:
     result = await terminal(ctx=ctx_from_config(_config(_workspace.id, "t2")))
 
     assert result.startswith("Error:")
 
 
 @pytest.mark.asyncio
-async def test_terminal_reuses_attached_workbench_pty(monkeypatch, _workspace):
+async def test_terminal_reuses_attached_workbench_pty(
+    monkeypatch: pytest.MonkeyPatch, _workspace: Workspace
+) -> None:
     """Depois do attach, a tool terminal escreve no PTY que a UI exibe."""
 
     class SharedSession:
         terminal_id = "workbench-terminal"
         thread_id = "shared-thread"
 
-        def write_input(self, data, request_id):
+        def write_input(self, data: bytes, request_id: str) -> dict[str, str]:
             self.data = data
             self.request_id = request_id
             return {"status": "accepted", "terminal_id": self.terminal_id}
@@ -125,14 +134,18 @@ async def test_terminal_reuses_attached_workbench_pty(monkeypatch, _workspace):
     assert session.data == b"git status" + expected_suffix
 
 
-def test_shared_terminal_uses_enter_for_windows_pty(monkeypatch) -> None:
+def test_shared_terminal_uses_enter_for_windows_pty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """ConPTY receives CR so a dispatched command is actually submitted."""
     monkeypatch.setattr("backend.tools.fs.platform.system", lambda: "Windows")
     assert _terminal_submit_suffix() == "\r"
 
 
 @pytest.mark.asyncio
-async def test_terminal_accepts_output_line_larger_than_asyncio_limit(_workspace):
+async def test_terminal_accepts_output_line_larger_than_asyncio_limit(
+    _workspace: Workspace,
+) -> None:
     """Saída sem newline dentro do limite do StreamReader não quebra o tool."""
     script = "print('x' * 200000, end='')"
     command = f'{sys.executable} -c "{script}"'

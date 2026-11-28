@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
+from typing import NoReturn
 
 import pytest
 
@@ -17,7 +19,7 @@ from backend.scheduling.mq import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_singleton(_no_nats_sidecar):
+def _reset_singleton(_no_nats_sidecar: None) -> Iterator[None]:
     reset_mq()
     yield
     reset_mq()
@@ -109,7 +111,7 @@ async def test_redis_mq_handler_falha_fica_pendente() -> None:
     mq = _fake_redis_mq()
     stop = asyncio.Event()
 
-    async def broken(msg: StreamMessage) -> None:
+    async def broken(msg: StreamMessage) -> NoReturn:
         stop.set()
         raise RuntimeError("boom")
 

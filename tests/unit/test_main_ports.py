@@ -25,18 +25,18 @@ def _is_bindable(port: int) -> bool:
 
 
 class TestFindFreePort:
-    def test_returns_valid_free_port_without_preference(self):
+    def test_returns_valid_free_port_without_preference(self) -> None:
         port = _find_free_port()
         assert isinstance(port, int)
         assert 1 <= port <= 65535
         assert _is_bindable(port)
 
-    def test_returns_preferred_when_available(self):
+    def test_returns_preferred_when_available(self) -> None:
         # Descobre uma porta livre e pede ela como preferida.
         free = _find_free_port()
         assert _find_free_port(free) == free
 
-    def test_falls_back_when_preferred_is_busy(self):
+    def test_falls_back_when_preferred_is_busy(self) -> None:
         # Ocupa uma porta e confirma que o helper devolve OUTRA porta livre.
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
             occupied.bind(("127.0.0.1", 0))

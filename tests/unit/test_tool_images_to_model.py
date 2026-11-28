@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -11,6 +12,7 @@ from backend.services.media_hydration import (
     hydrate_media_blocks,
     max_recent_tool_images,
 )
+from backend.tools.registry import ToolSpec
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -18,6 +20,7 @@ from backend.vtypes.message import (
     VMessage,
     VMessageChunk,
 )
+from tests.json_values import as_list, dig
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 16
 PNG_URL = "data:image/png;base64," + base64.b64encode(PNG).decode()
@@ -56,11 +59,11 @@ def test_anthropic_tool_result_leva_imagem() -> None:
     from backend.llm.anthropic.chat_client import _to_anthropic_messages
 
     _system, messages = _to_anthropic_messages([_assistant("c1"), _tool("c1")])
-    result = messages[1]["content"][0]
-    assert result["type"] == "tool_result"
-    assert result["content"][0] == {"type": "text", "text": '{"status": "ok"}'}
-    assert result["content"][1]["type"] == "image"
-    assert result["content"][1]["source"]["media_type"] == "image/png"
+    result = dig(messages[1], "content", 0)
+    assert dig(result, "type") == "tool_result"
+    assert dig(result, "content", 0) == {"type": "text", "text": '{"status": "ok"}'}
+    assert dig(result, "content", 1, "type") == "image"
+    assert dig(result, "content", 1, "source", "media_type") == "image/png"
 
 
 def test_openai_function_call_output_leva_input_image() -> None:
@@ -89,7 +92,11 @@ def test_openrouter_imagem_vai_em_mensagem_de_usuario_depois_das_tools() -> None
     roles = [message["role"] for message in payload]
     assert roles == ["assistant", "tool", "tool", "user"]
     assert payload[1]["content"] == '{"status": "ok"}'
-    images = [part for part in payload[3]["content"] if part["type"] == "image_url"]
+    images = [
+        part
+        for part in as_list(dig(payload[3], "content"))
+        if dig(part, "type") == "image_url"
+    ]
     assert len(images) == 2
 
 
@@ -98,9 +105,9 @@ def test_so_as_imagens_de_ferramenta_mais_recentes_sao_carregadas() -> None:
     messages = [_tool(f"c{i}", image_url=None, asset=f"a{i}") for i in range(total)]
     reads: list[str] = []
 
-    def reader(asset_id: str, **_kwargs: object) -> tuple[object, bytes]:
+    def reader(asset_id: str, **_kwargs: str) -> tuple[None, bytes]:
         reads.append(asset_id)
-        return object(), PNG
+        return None, PNG
 
     sent = hydrate_media_blocks(
         messages, user_id="u", workspace_id="", thread_id="t", reader=reader
@@ -130,12 +137,17 @@ async def test_provider_que_recusa_imagem_de_ferramenta_recebe_o_turno_sem_ela(
     class _Client:
         calls = 0
 
-        async def agenerate(self, messages, **_kwargs):
+        async def agenerate(self, messages: list[VMessage], **_kwargs) -> VMessage:
             raise NotImplementedError
 
         async def astream(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> AsyncIterator[VMessageChunk]:
             received.append(list(messages))
             _Client.calls += 1
             if _Client.calls == 1:
@@ -144,7 +156,7 @@ async def test_provider_que_recusa_imagem_de_ferramenta_recebe_o_turno_sem_ela(
                 )
             yield VMessageChunk(delta_text="ok")
 
-    async def candidates(*_args: object, **_kwargs: object) -> list[str]:
+    async def candidates[**P](*_args: P.args, **_kwargs: P.kwargs) -> list[str]:
         return ["openrouter:modelo"]
 
     monkeypatch.setattr("backend.llm.fallback_chat_client._candidates", candidates)

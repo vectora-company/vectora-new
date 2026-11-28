@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 
+from backend.vtypes.contracts import JsonObject
 from backend.workspace.skills_lock import (
     Version,
     read_lockfile,
@@ -11,14 +15,14 @@ from backend.workspace.skills_lock import (
 )
 
 
-def test_resolves_transitive_dependencies_deterministically(tmp_path) -> None:
+def test_resolves_transitive_dependencies_deterministically(tmp_path: Path) -> None:
     candidates = {
         "app": ("1.0.0", {"base": "^1.0.0"}),
         "base": ("1.2.0", {}),
     }
     assert resolve_dependencies(candidates) == ["base", "app"]
     lock = tmp_path / ".vectora" / "skills.lock.json"
-    entry: dict[str, object] = {
+    entry: JsonObject = {
         "version": "1.0.0",
         "source": "local",
         "revision": "r1",
@@ -85,7 +89,7 @@ def test_resolve_revisita_dependencias_quando_a_versao_muda() -> None:
         resolve_dependencies(candidates)
 
 
-def test_lockfile_rejeita_entrada_nula_ou_campos_desconhecidos(tmp_path) -> None:
+def test_lockfile_rejeita_entrada_nula_ou_campos_desconhecidos(tmp_path: Path) -> None:
     path = tmp_path / "skills.lock.json"
     path.write_text(
         '{"format_version": 1, "skills": {"broken": null}}', encoding="utf-8"
@@ -126,7 +130,7 @@ def test_lockfile_rejeita_entrada_nula_ou_campos_desconhecidos(tmp_path) -> None
         )
 
 
-def test_escritores_concorrentes_publicam_lockfile_valido(tmp_path) -> None:
+def test_escritores_concorrentes_publicam_lockfile_valido(tmp_path: Path) -> None:
     path = tmp_path / "skills.lock.json"
 
     def publish(index: int) -> None:

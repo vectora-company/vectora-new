@@ -26,7 +26,10 @@ VALID_SEMANTIC_FILE_TYPES = frozenset(
 _SEMANTIC_ID_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
 
 
-def validate_semantic_fragment(fragment: object) -> list[str]:
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+
+def validate_semantic_fragment(fragment: JsonValue) -> list[str]:
     """Retorna erros de validação para um fragmento semântico não-confiável.
 
     Lista vazia = válido. Rejeita JSON malformado, IDs inválidos, tamanhos
@@ -114,7 +117,7 @@ def validate_semantic_fragment(fragment: object) -> list[str]:
     return errors
 
 
-def load_validated_semantic_fragment(path: Path) -> tuple[dict | None, list[str]]:
+def load_validated_semantic_fragment(path: Path) -> tuple[JsonObject | None, list[str]]:
     """Carrega e valida fragmento semântico, rejeitando arquivos gigantes antes do parse."""
     try:
         size = path.stat().st_size
@@ -132,7 +135,7 @@ def load_validated_semantic_fragment(path: Path) -> tuple[dict | None, list[str]
     return (None, errors) if errors else (fragment, [])
 
 
-def _validate_semantic_id(errors: list[str], field: str, value: object) -> None:
+def _validate_semantic_id(errors: list[str], field: str, value: JsonValue) -> None:
     if not isinstance(value, str):
         errors.append(f"{field} must be a string")
         return
@@ -147,7 +150,7 @@ def _validate_semantic_id(errors: list[str], field: str, value: object) -> None:
         errors.append(f"{field} contains unsupported characters")
 
 
-def sanitize_semantic_fragment(fragment: dict) -> dict:
+def sanitize_semantic_fragment(fragment: JsonObject) -> JsonObject:
     """Remove nós-prosa do LLM e converte rationale_for em atributos.
 
     Quatro passes:
@@ -158,32 +161,33 @@ def sanitize_semantic_fragment(fragment: dict) -> dict:
     """
     _invalid_ft = frozenset({"rationale", "concept"})
 
-    nodes: list[dict] = fragment.get("nodes", [])
-    edges: list[dict] = fragment.get("edges", [])
-    hyperedges: list[dict] = fragment.get("hyperedges", []) or []
+    nodes = _objects(fragment.get("nodes"))
+    edges = _objects(fragment.get("edges"))
+    raw_hyperedges = fragment.get("hyperedges")
+    hyperedges = raw_hyperedges if isinstance(raw_hyperedges, list) else []
 
-    node_by_id: dict[str, dict] = {}
+    node_by_id: dict[str, JsonObject] = {}
     for n in nodes:
-        nid = n.get("id", "")
+        nid = _text(n, "id")
         if nid:
             node_by_id[nid] = n
 
     rationale_for_sources: set[str] = set()
     for e in edges:
         if e.get("relation") == "rationale_for":
-            src = e.get("source", "")
+            src = _text(e, "source")
             if src:
                 rationale_for_sources.add(src)
 
-    rationale_candidates: list[dict] = []
+    rationale_candidates: list[JsonObject] = []
     remove_ids: set[str] = set()
-    keep_nodes: list[dict] = []
+    keep_nodes: list[JsonObject] = []
     for n in nodes:
-        nid = n.get("id", "")
+        nid = _text(n, "id")
         if not nid:
             continue
         ft = n.get("file_type", "")
-        label = n.get("label", "")
+        label = _text(n, "label")
         if ft in _invalid_ft:
             if _is_sentence_like_rationale_label(label):
                 rationale_candidates.append(n)
@@ -197,14 +201,14 @@ def sanitize_semantic_fragment(fragment: dict) -> dict:
 
     rationale_attrs: dict[str, list[str]] = {}
     for rn in rationale_candidates:
-        rn_id = rn.get("id", "")
-        text = rn.get("label", "").strip()
+        rn_id = _text(rn, "id")
+        text = _text(rn, "label").strip()
         for e in edges:
             if e.get("relation") != "rationale_for":
                 continue
             if e.get("source") != rn_id:
                 continue
-            target_id = e.get("target", "")
+            target_id = _text(e, "target")
             if target_id not in node_by_id or target_id in remove_ids:
                 continue
             rationale_attrs.setdefault(target_id, []).append(text)
@@ -213,17 +217,17 @@ def sanitize_semantic_fragment(fragment: dict) -> dict:
         if target_id in node_by_id and target_id not in remove_ids:
             _append_rationale_attr(node_by_id[target_id], texts)
 
-    keep_edges: list[dict] = []
+    keep_edges: list[JsonObject] = []
     for e in edges:
-        src = e.get("source", "")
-        tgt = e.get("target", "")
+        src = _text(e, "source")
+        tgt = _text(e, "target")
         if src in remove_ids or tgt in remove_ids:
             continue
         keep_edges.append(e)
 
-    surviving_ids: set[str] = {n.get("id", "") for n in keep_nodes}
+    surviving_ids = {_text(n, "id") for n in keep_nodes}
     surviving_ids.discard("")
-    keep_hyperedges: list[dict] = []
+    keep_hyperedges: list[JsonObject] = []
     for he in hyperedges:
         if not isinstance(he, dict):
             continue
@@ -246,6 +250,18 @@ def sanitize_semantic_fragment(fragment: dict) -> dict:
     return fragment
 
 
+def _objects(value: JsonValue) -> list[JsonObject]:
+    """Itens que são objetos; o modelo pode devolver qualquer JSON."""
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _text(item: JsonObject, key: str) -> str:
+    value = item.get(key)
+    return value if isinstance(value, str) else ""
+
+
 def _is_sentence_like_rationale_label(label: str) -> bool:
     """Retorna True se label parece prosa/rationale e não um nome de entidade.
 
@@ -261,8 +277,8 @@ def _is_sentence_like_rationale_label(label: str) -> bool:
     return bool(re.search(r"[.!?:]", label))
 
 
-def _append_rationale_attr(node: dict, texts: list[str]) -> None:
-    existing = node.get("rationale", "")
+def _append_rationale_attr(node: JsonObject, texts: list[str]) -> None:
+    existing = _text(node, "rationale")
     new_text = "\n\n".join(texts).strip()
     if existing:
         node["rationale"] = existing + "\n\n" + new_text

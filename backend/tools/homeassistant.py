@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from collections.abc import Awaitable, Callable
 
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,8 @@ async def ha_request(
     method: str,
     path: str,
     *,
-    payload: dict | None = None,
-) -> Any:
+    payload: JsonObject | None = None,
+) -> JsonValue:
     """Chamada crua à API do HA. Levanta; quem trata é a tool."""
     url, token = _credenciais()
     if not url or not token:
@@ -102,7 +103,7 @@ async def ha_list_entities(
             return _erro("Home Assistant devolveu /api/states fora do formato de lista")
 
         prefixo = f"{domain.strip()}." if domain.strip() else ""
-        entidades = [
+        entidades: list[JsonObject] = [
             {
                 "entity_id": e.get("entity_id"),
                 "state": e.get("state"),
@@ -112,7 +113,7 @@ async def ha_list_entities(
             if isinstance(e, dict) and str(e.get("entity_id", "")).startswith(prefixo)
         ]
 
-        saida: dict[str, Any] = {"entities": entidades}
+        saida: JsonObject = {"entities": [*entidades]}
         if prefixo and not entidades:
             # Lista vazia sem aviso faria o LLM concluir que a casa não tem
             # nenhum dispositivo desse tipo — pode ser só o domínio errado.
@@ -191,8 +192,14 @@ async def ha_list_services(
         alvo = domain.strip()
         for item in catalogo:
             if isinstance(item, dict) and item.get("domain") == alvo:
+                services = item.get("services")
+                names = (
+                    sorted(str(name) for name in services)
+                    if isinstance(services, dict | list)
+                    else []
+                )
                 return json.dumps(
-                    {"domain": alvo, "services": sorted(item.get("services") or {})},
+                    {"domain": alvo, "services": names},
                     ensure_ascii=False,
                 )
         return json.dumps(
@@ -220,7 +227,7 @@ async def ha_call_service(
     domain: str,
     service: str,
     entity_id: str = "",
-    data: dict | None = None,
+    data: JsonObject | None = None,
 ) -> str:
     """Chama um serviço do Home Assistant — age nos dispositivos de verdade.
 
@@ -241,7 +248,7 @@ async def ha_call_service(
         if not domain.strip() or not service.strip():
             return _erro("domain e service são obrigatórios")
 
-        payload: dict[str, Any] = dict(data or {})
+        payload: JsonObject = dict(data or {})
         if entity_id.strip():
             payload["entity_id"] = entity_id.strip()
 
@@ -261,7 +268,7 @@ async def ha_call_service(
         return _erro(str(exc))
 
 
-HOME_ASSISTANT_TOOLS: list[Any] = [
+HOME_ASSISTANT_TOOLS: list[Callable[..., Awaitable[str]]] = [
     ha_list_entities,
     ha_get_state,
     ha_list_services,

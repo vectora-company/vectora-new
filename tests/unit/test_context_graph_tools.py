@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, _patch, patch
 
 import pytest
 
@@ -53,7 +53,7 @@ def _ctx(workspace_id: str = "") -> ToolContext:
     return ToolContext(workspace_id=workspace_id)
 
 
-def _patch_registry(ws_mock):
+def _patch_registry(ws_mock: MagicMock | None) -> _patch:
     registry = MagicMock()
     registry.get = MagicMock(return_value=ws_mock)
     return patch("backend.workspace.workspace.workspace_registry", registry)
@@ -65,7 +65,7 @@ def _patch_registry(ws_mock):
 
 
 @pytest.mark.asyncio
-async def test_graph_query_found(tmp_path):
+async def test_graph_query_found(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_query
 
     ws, _ = _make_ws(tmp_path)
@@ -76,7 +76,7 @@ async def test_graph_query_found(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_query_not_found(tmp_path):
+async def test_graph_query_not_found(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_query
 
     ws, _ = _make_ws(tmp_path)
@@ -86,7 +86,7 @@ async def test_graph_query_not_found(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_query_no_workspace():
+async def test_graph_query_no_workspace() -> None:
     from backend.tools.context_graph import graph_query
 
     with _patch_registry(None):
@@ -95,7 +95,7 @@ async def test_graph_query_no_workspace():
 
 
 @pytest.mark.asyncio
-async def test_graph_query_no_graph_file(tmp_path):
+async def test_graph_query_no_graph_file(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_query
 
     ws = MagicMock()
@@ -111,7 +111,7 @@ async def test_graph_query_no_graph_file(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_explain_found(tmp_path):
+async def test_graph_explain_found(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_explain
 
     ws, _ = _make_ws(tmp_path)
@@ -121,7 +121,7 @@ async def test_graph_explain_found(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_explain_not_found(tmp_path):
+async def test_graph_explain_not_found(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_explain
 
     ws, _ = _make_ws(tmp_path)
@@ -136,7 +136,7 @@ async def test_graph_explain_not_found(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_path_found(tmp_path):
+async def test_graph_path_found(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_path
 
     ws, _ = _make_ws(tmp_path)
@@ -146,7 +146,7 @@ async def test_graph_path_found(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_path_no_path(tmp_path):
+async def test_graph_path_no_path(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_path
 
     ws, graph_file = _make_ws(tmp_path)
@@ -168,7 +168,7 @@ async def test_graph_path_no_path(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_path_nonexistent_node(tmp_path):
+async def test_graph_path_nonexistent_node(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_path
 
     ws, _ = _make_ws(tmp_path)
@@ -183,7 +183,7 @@ async def test_graph_path_nonexistent_node(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_build_knowledge_graph_no_workspace():
+async def test_build_knowledge_graph_no_workspace() -> None:
     from backend.tools.context_graph import build_knowledge_graph
 
     result = await build_knowledge_graph(_ctx())
@@ -191,7 +191,7 @@ async def test_build_knowledge_graph_no_workspace():
 
 
 @pytest.mark.asyncio
-async def test_build_knowledge_graph_success(tmp_path):
+async def test_build_knowledge_graph_success(tmp_path: Path) -> None:
     from backend.tools.context_graph import build_knowledge_graph
 
     ws, _ = _make_ws(tmp_path)
@@ -221,7 +221,7 @@ async def test_build_knowledge_graph_success(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_affected_seed_not_found(tmp_path):
+async def test_graph_affected_seed_not_found(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_affected
 
     ws, _ = _make_ws(tmp_path)
@@ -231,7 +231,7 @@ async def test_graph_affected_seed_not_found(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_affected_seed_found(tmp_path):
+async def test_graph_affected_seed_found(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_affected
 
     ws, _ = _make_ws(tmp_path)
@@ -241,7 +241,7 @@ async def test_graph_affected_seed_found(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_cluster_returns_workspace_communities(tmp_path):
+async def test_graph_cluster_returns_workspace_communities(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_cluster
 
     ws, _ = _make_ws(tmp_path)
@@ -254,14 +254,14 @@ async def test_graph_cluster_returns_workspace_communities(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_cluster_requires_workspace():
+async def test_graph_cluster_requires_workspace() -> None:
     from backend.tools.context_graph import graph_cluster
 
     assert await graph_cluster(_ctx()) == "Erro: nenhum workspace ativo."
 
 
 @pytest.mark.asyncio
-async def test_graph_cluster_handles_missing_graph(tmp_path):
+async def test_graph_cluster_handles_missing_graph(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_cluster
 
     ws = MagicMock()
@@ -273,7 +273,7 @@ async def test_graph_cluster_handles_missing_graph(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_cluster_reports_size_limit(tmp_path):
+async def test_graph_cluster_reports_size_limit(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_cluster
 
     ws, graph_file = _make_ws(tmp_path)
@@ -293,7 +293,7 @@ async def test_graph_cluster_reports_size_limit(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_update_calls_pipeline_with_update_true(tmp_path):
+async def test_graph_update_calls_pipeline_with_update_true(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_update
 
     ws, _ = _make_ws(tmp_path)
@@ -324,7 +324,7 @@ async def test_graph_update_calls_pipeline_with_update_true(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_query_by_label(tmp_path):
+async def test_graph_query_by_label(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_query
 
     ws, _ = _make_ws(tmp_path)
@@ -334,7 +334,7 @@ async def test_graph_query_by_label(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_query_top_k_limits(tmp_path):
+async def test_graph_query_top_k_limits(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_query
 
     ws, _ = _make_ws(tmp_path)
@@ -344,7 +344,7 @@ async def test_graph_query_top_k_limits(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_query_invalid_json(tmp_path):
+async def test_graph_query_invalid_json(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_query
 
     ws, graph_file = _make_ws(tmp_path)
@@ -360,7 +360,7 @@ async def test_graph_query_invalid_json(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_explain_no_workspace():
+async def test_graph_explain_no_workspace() -> None:
     from backend.tools.context_graph import graph_explain
 
     with _patch_registry(None):
@@ -369,7 +369,7 @@ async def test_graph_explain_no_workspace():
 
 
 @pytest.mark.asyncio
-async def test_graph_explain_by_label(tmp_path):
+async def test_graph_explain_by_label(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_explain
 
     ws, _ = _make_ws(tmp_path)
@@ -384,7 +384,7 @@ async def test_graph_explain_by_label(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_path_no_workspace():
+async def test_graph_path_no_workspace() -> None:
     from backend.tools.context_graph import graph_path
 
     with _patch_registry(None):
@@ -393,7 +393,7 @@ async def test_graph_path_no_workspace():
 
 
 @pytest.mark.asyncio
-async def test_graph_path_source_nonexistent(tmp_path):
+async def test_graph_path_source_nonexistent(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_path
 
     ws, _ = _make_ws(tmp_path)
@@ -408,7 +408,7 @@ async def test_graph_path_source_nonexistent(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_affected_no_workspace():
+async def test_graph_affected_no_workspace() -> None:
     from backend.tools.context_graph import graph_affected
 
     with _patch_registry(None):
@@ -417,7 +417,7 @@ async def test_graph_affected_no_workspace():
 
 
 @pytest.mark.asyncio
-async def test_graph_affected_depth_param(tmp_path):
+async def test_graph_affected_depth_param(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_affected
 
     ws, _ = _make_ws(tmp_path)
@@ -432,7 +432,7 @@ async def test_graph_affected_depth_param(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_update_no_workspace():
+async def test_graph_update_no_workspace() -> None:
     from backend.tools.context_graph import graph_update
 
     with _patch_registry(None):
@@ -441,7 +441,7 @@ async def test_graph_update_no_workspace():
 
 
 @pytest.mark.asyncio
-async def test_graph_update_pipeline_error(tmp_path):
+async def test_graph_update_pipeline_error(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_update
 
     ws, _ = _make_ws(tmp_path)
@@ -460,7 +460,7 @@ async def test_graph_update_pipeline_error(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_build_pipeline_error(tmp_path):
+async def test_build_pipeline_error(tmp_path: Path) -> None:
     from backend.tools.context_graph import build_knowledge_graph
 
     ws, _ = _make_ws(tmp_path)
@@ -479,7 +479,7 @@ async def test_build_pipeline_error(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_build_shows_god_nodes(tmp_path):
+async def test_build_shows_god_nodes(tmp_path: Path) -> None:
     from backend.tools.context_graph import build_knowledge_graph
 
     ws, _ = _make_ws(tmp_path)
@@ -503,7 +503,7 @@ async def test_build_shows_god_nodes(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_build_ast_mode_passed_to_pipeline(tmp_path):
+async def test_build_ast_mode_passed_to_pipeline(tmp_path: Path) -> None:
     from backend.tools.context_graph import build_knowledge_graph
 
     ws, _ = _make_ws(tmp_path)
@@ -532,7 +532,7 @@ async def test_build_ast_mode_passed_to_pipeline(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_cancel_build_no_workspace():
+async def test_graph_cancel_build_no_workspace() -> None:
     from backend.tools.context_graph import graph_cancel_build
 
     result = await graph_cancel_build(_ctx())
@@ -540,7 +540,7 @@ async def test_graph_cancel_build_no_workspace():
 
 
 @pytest.mark.asyncio
-async def test_graph_cancel_build_sem_build_em_andamento():
+async def test_graph_cancel_build_sem_build_em_andamento() -> None:
     from backend.tools.context_graph import graph_cancel_build
 
     with patch("backend.api.handlers.context_graph._active_builds", {}):
@@ -549,7 +549,9 @@ async def test_graph_cancel_build_sem_build_em_andamento():
 
 
 @pytest.mark.asyncio
-async def test_graph_resolve_symbol_reports_ambiguity_without_choosing(tmp_path):
+async def test_graph_resolve_symbol_reports_ambiguity_without_choosing(
+    tmp_path: Path,
+) -> None:
     from backend.tools.context_graph import graph_resolve_symbol
 
     ws, graph_file = _make_ws(tmp_path)
@@ -581,7 +583,9 @@ async def test_graph_resolve_symbol_reports_ambiguity_without_choosing(tmp_path)
 
 
 @pytest.mark.asyncio
-async def test_graph_resolve_symbol_handles_missing_and_bad_input(tmp_path):
+async def test_graph_resolve_symbol_handles_missing_and_bad_input(
+    tmp_path: Path,
+) -> None:
     from backend.tools.context_graph import graph_resolve_symbol
 
     ws, graph_file = _make_ws(tmp_path)
@@ -594,14 +598,14 @@ async def test_graph_resolve_symbol_handles_missing_and_bad_input(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_cancel_build_cancela_task_ativa(tmp_path):
+async def test_graph_cancel_build_cancela_task_ativa(tmp_path: Path) -> None:
     from backend.tools.context_graph import graph_cancel_build
 
     ws, _ = _make_ws(tmp_path)
     status_file = tmp_path / ".vectora" / "context-graph" / "build_status.json"
     status_file.write_text("{}", encoding="utf-8")
 
-    async def _never_finishes():
+    async def _never_finishes() -> None:
         import asyncio
 
         await asyncio.sleep(999)
@@ -623,10 +627,10 @@ async def test_graph_cancel_build_cancela_task_ativa(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_graph_cancel_build_task_ja_concluida_nao_conta_como_ativa():
+async def test_graph_cancel_build_task_ja_concluida_nao_conta_como_ativa() -> None:
     from backend.tools.context_graph import graph_cancel_build
 
-    async def _noop():
+    async def _noop() -> None:
         return None
 
     task = None

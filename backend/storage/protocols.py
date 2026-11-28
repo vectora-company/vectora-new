@@ -15,9 +15,11 @@ Cada Protocol tem um método ``health() -> HealthResult`` que retorna
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.storage import HealthResult
+from backend.vtypes.store import AgentStore
 
 
 def _ok() -> HealthResult:
@@ -36,40 +38,13 @@ def _err(msg: str) -> HealthResult:
 
 
 @runtime_checkable
-class StoreBackend(Protocol):
+class StoreBackend(AgentStore, Protocol):
     """Backend de store para memórias e knowledge do agente.
 
     Implementações:
         lite     — ``InMemoryStore`` com índice Cohere (F5)
         complete — ``AsyncPostgresStore`` com pgvector (F5)
     """
-
-    async def aget(self, namespace: tuple[str, ...], key: str) -> Any:
-        """Retorna o item ou None."""
-        ...
-
-    async def aput(
-        self,
-        namespace: tuple[str, ...],
-        key: str,
-        value: dict[str, Any],
-    ) -> None:
-        """Grava ou sobrescreve o item."""
-        ...
-
-    async def adelete(self, namespace: tuple[str, ...], key: str) -> None:
-        """Remove o item (sem erro se não existir)."""
-        ...
-
-    async def asearch(
-        self,
-        namespace: tuple[str, ...],
-        *,
-        query: str | None = None,
-        limit: int = 10,
-    ) -> list[Any]:
-        """Busca itens por namespace, com busca semântica opcional."""
-        ...
 
     async def health(self) -> HealthResult:
         """Verifica se o backend está acessível."""
@@ -139,11 +114,11 @@ class QueueDB(Protocol):
         complete — Postgres via ``SELECT … FOR UPDATE SKIP LOCKED`` (F8)
     """
 
-    async def enqueue(self, task: dict[str, Any]) -> str:
+    async def enqueue(self, text: str | JsonObject) -> str:
         """Enfileira uma tarefa e retorna o ID."""
         ...
 
-    async def dequeue(self, limit: int = 1) -> list[dict[str, Any]]:
+    async def dequeue(self, limit: int = 1) -> list[JsonObject]:
         """Retira até ``limit`` tarefas da fila (FIFO)."""
         ...
 

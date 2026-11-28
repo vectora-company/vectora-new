@@ -26,6 +26,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from backend.services.desktop_windows import (
@@ -36,6 +37,10 @@ from backend.services.desktop_windows import (
 )
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
+    from backend.vtypes.desktop import NativeWindow
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +79,7 @@ def _computer_use_enabled(workspace_id: str) -> bool:
         return False
 
 
-def _native_window_handle(native: object) -> int:
+def _native_window_handle(native: NativeWindow) -> int:
     """Obtém o HWND validado; falha fechado quando a API não existe."""
     import platform
 
@@ -154,7 +159,7 @@ async def _audit_event(
         logger.debug("computer_use: auditoria indisponível", extra={"action": action})
 
 
-def _window_payload(info: WindowInfo) -> dict[str, object]:
+def _window_payload(info: WindowInfo) -> JsonObject:
     return {
         "window_id": info.window_id,
         "title": info.title,

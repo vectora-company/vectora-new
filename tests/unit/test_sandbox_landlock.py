@@ -5,6 +5,7 @@ dev nesta máquina) — cobrem a lógica de orquestração e degradação."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,7 +14,7 @@ from backend.sandbox import landlock
 
 
 @pytest.fixture(autouse=True)
-def _ensure_linux_os_constants(monkeypatch):
+def _ensure_linux_os_constants(monkeypatch: pytest.MonkeyPatch) -> None:
     # O_PATH/O_CLOEXEC só existem em `os` no Linux — este dev roda em
     # Windows, então garantimos que os testes exercitam a lógica real do
     # módulo (que roda em Linux/WSL2 em produção) sem depender do SO local.
@@ -28,12 +29,14 @@ def _ensure_linux_os_constants(monkeypatch):
     )
 
 
-def _fake_libc(create_rc=3, add_rule_rc=0, restrict_rc=0):
+def _fake_libc(
+    create_rc: int = 3, add_rule_rc: int = 0, restrict_rc: int = 0
+) -> MagicMock:
     """`syscall()` mockado — dispatcha pelo primeiro arg (número da
     syscall) igual ao `_SYSCALL_NUMBERS["x86_64"]` real."""
     create_nr, add_rule_nr, restrict_nr = landlock._SYSCALL_NUMBERS["x86_64"]
 
-    def _syscall(nr, *args):
+    def _syscall(nr: int, *args) -> int:
         if nr == create_nr:
             return create_rc
         if nr == add_rule_nr:
@@ -48,7 +51,9 @@ def _fake_libc(create_rc=3, add_rule_rc=0, restrict_rc=0):
     return libc
 
 
-def test_arquitetura_nao_mapeada_degrada_sem_chamar_syscall(monkeypatch):
+def test_arquitetura_nao_mapeada_degrada_sem_chamar_syscall(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(landlock.platform, "machine", lambda: "riscv64")
 
     result = landlock.apply_landlock(rw_paths=["/ws"], ro_paths=[])
@@ -56,7 +61,9 @@ def test_arquitetura_nao_mapeada_degrada_sem_chamar_syscall(monkeypatch):
     assert result is False
 
 
-def test_happy_path_aplica_regras_e_restringe(monkeypatch, tmp_path):
+def test_happy_path_aplica_regras_e_restringe(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(landlock.platform, "machine", lambda: "x86_64")
     libc = _fake_libc()
     monkeypatch.setattr(landlock.ctypes, "CDLL", lambda *_a, **_k: libc)
@@ -73,7 +80,9 @@ def test_happy_path_aplica_regras_e_restringe(monkeypatch, tmp_path):
     assert close_mock.call_count == 3  # 2 paths (rw+ro) + ruleset_fd
 
 
-def test_create_ruleset_falhando_retorna_false_sem_lancar(monkeypatch):
+def test_create_ruleset_falhando_retorna_false_sem_lancar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(landlock.platform, "machine", lambda: "x86_64")
     libc = _fake_libc(create_rc=-1)
     monkeypatch.setattr(landlock.ctypes, "CDLL", lambda *_a, **_k: libc)
@@ -85,7 +94,9 @@ def test_create_ruleset_falhando_retorna_false_sem_lancar(monkeypatch):
     libc.prctl.assert_not_called()
 
 
-def test_restrict_self_falhando_retorna_false(monkeypatch, tmp_path):
+def test_restrict_self_falhando_retorna_false(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(landlock.platform, "machine", lambda: "x86_64")
     libc = _fake_libc(restrict_rc=1)
     monkeypatch.setattr(landlock.ctypes, "CDLL", lambda *_a, **_k: libc)
@@ -98,7 +109,9 @@ def test_restrict_self_falhando_retorna_false(monkeypatch, tmp_path):
     assert result is False
 
 
-def test_path_inexistente_e_ignorado_sem_quebrar_o_resto(monkeypatch, tmp_path):
+def test_path_inexistente_e_ignorado_sem_quebrar_o_resto(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     # Erro/borda: um rw_path que não existe no sistema (ex. path já
     # removido) não deve impedir as outras regras nem o restrict_self.
     monkeypatch.setattr(landlock.platform, "machine", lambda: "x86_64")
@@ -106,7 +119,7 @@ def test_path_inexistente_e_ignorado_sem_quebrar_o_resto(monkeypatch, tmp_path):
     monkeypatch.setattr(landlock.ctypes, "CDLL", lambda *_a, **_k: libc)
     monkeypatch.setattr(landlock.ctypes, "get_errno", lambda: 0)
 
-    def _fake_open(path, _flags):
+    def _fake_open(path: str, _flags: int) -> int:
         if path == "/nao/existe":
             raise OSError("no such file")
         return 7
@@ -121,7 +134,9 @@ def test_path_inexistente_e_ignorado_sem_quebrar_o_resto(monkeypatch, tmp_path):
     assert result is True
 
 
-def test_add_rule_falhando_pra_um_path_nao_impede_restrict_self(monkeypatch, tmp_path):
+def test_add_rule_falhando_pra_um_path_nao_impede_restrict_self(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     # add_rule falhar pra 1 path é um aviso, não motivo pra abortar o
     # resto — o processo ainda fica mais restrito do que sem Landlock.
     monkeypatch.setattr(landlock.platform, "machine", lambda: "x86_64")
@@ -142,13 +157,13 @@ def test_add_rule_falhando_pra_um_path_nao_impede_restrict_self(monkeypatch, tmp
     )
 
 
-def test_access_fs_read_only_nao_inclui_write_nem_make(tmp_path):
+def test_access_fs_read_only_nao_inclui_write_nem_make(tmp_path: Path) -> None:
     assert landlock.ACCESS_FS_READ_ONLY & landlock._ACCESS_FS_WRITE_FILE == 0
     assert landlock.ACCESS_FS_READ_ONLY & landlock._ACCESS_FS_MAKE_REG == 0
     assert landlock.ACCESS_FS_READ_ONLY & landlock._ACCESS_FS_READ_FILE != 0
 
 
-def test_access_fs_v1_all_inclui_todos_os_13_direitos():
+def test_access_fs_v1_all_inclui_todos_os_13_direitos() -> None:
     bits = [1 << i for i in range(13)]
     combined = 0
     for b in bits:
@@ -162,15 +177,18 @@ def test_access_fs_v1_all_inclui_todos_os_13_direitos():
 
 
 def _fake_libc_fs_and_net(
-    fs_create_rc=3, net_create_rc=4, add_rule_rc=0, restrict_rc=0
-):
+    fs_create_rc: int = 3,
+    net_create_rc: int = 4,
+    add_rule_rc: int = 0,
+    restrict_rc: int = 0,
+) -> MagicMock:
     """Como `_fake_libc`, mas distingue a 1ª chamada de `create_ruleset`
     (FS) da 2ª (rede) — `apply_landlock` com `allow_tcp_ports` faz dois
     rulesets Landlock separados, mesmos números de syscall pros dois."""
     create_nr, add_rule_nr, restrict_nr = landlock._SYSCALL_NUMBERS["x86_64"]
     state = {"create_calls": 0}
 
-    def _syscall(nr, *args):
+    def _syscall(nr: int, *args) -> int:
         if nr == create_nr:
             state["create_calls"] += 1
             return fs_create_rc if state["create_calls"] == 1 else net_create_rc
@@ -186,7 +204,9 @@ def _fake_libc_fs_and_net(
     return libc
 
 
-def test_allow_tcp_ports_happy_aplica_ruleset_de_rede_separado(monkeypatch, tmp_path):
+def test_allow_tcp_ports_happy_aplica_ruleset_de_rede_separado(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(landlock.platform, "machine", lambda: "x86_64")
     libc = _fake_libc_fs_and_net()
     monkeypatch.setattr(landlock.ctypes, "CDLL", lambda *_a, **_k: libc)
@@ -211,7 +231,9 @@ def test_allow_tcp_ports_happy_aplica_ruleset_de_rede_separado(monkeypatch, tmp_
     assert len(net_port_rule_calls) == 2  # uma por porta
 
 
-def test_allow_tcp_ports_kernel_sem_v4_e_fail_closed(monkeypatch, tmp_path):
+def test_allow_tcp_ports_kernel_sem_v4_e_fail_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Kernel sem suporte a ABI V4 (2ª create_ruleset falha) com portas
     pedidas: fail-closed — `apply_landlock` retorna False mesmo com o
     ruleset de filesystem aplicado com sucesso, nunca reporta sucesso
@@ -230,7 +252,9 @@ def test_allow_tcp_ports_kernel_sem_v4_e_fail_closed(monkeypatch, tmp_path):
     assert result is False
 
 
-def test_allow_tcp_ports_vazio_nao_tenta_ruleset_de_rede(monkeypatch, tmp_path):
+def test_allow_tcp_ports_vazio_nao_tenta_ruleset_de_rede(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """`allow_tcp_ports=()` (default) mantém o comportamento anterior a
     esta feature — nenhuma tentativa de ABI V4, um único ruleset criado."""
     monkeypatch.setattr(landlock.platform, "machine", lambda: "x86_64")
@@ -248,6 +272,6 @@ def test_allow_tcp_ports_vazio_nao_tenta_ruleset_de_rede(monkeypatch, tmp_path):
     assert len(create_calls) == 1
 
 
-def test_access_net_v4_all_inclui_bind_e_connect_tcp():
+def test_access_net_v4_all_inclui_bind_e_connect_tcp() -> None:
     assert landlock.ACCESS_NET_V4_ALL & landlock._ACCESS_NET_BIND_TCP != 0
     assert landlock.ACCESS_NET_V4_ALL & landlock._ACCESS_NET_CONNECT_TCP != 0

@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.llm.voyage.client import VoyageClient
 from backend.vtypes.documents import Document
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +28,7 @@ class VectoraVoyageRerank:
         self.top_k = top_k
 
     async def acompress_documents(
-        self, documents: Any, query: str, callbacks: Any = None
+        self, documents: Iterable[Document], query: str, callbacks: None = None
     ) -> list[Document]:
         docs = list(documents)
         if not docs:
@@ -66,6 +69,6 @@ class VectoraVoyageRerank:
         return saida
 
     def compress_documents(
-        self, documents: Any, query: str, callbacks: Any = None
+        self, documents: Iterable[Document], query: str, callbacks: None = None
     ) -> list[Document]:
         return asyncio.run(self.acompress_documents(documents, query, callbacks))

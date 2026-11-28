@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonValue
 
 _SHORTLOG_LINE = re.compile(r"^\s*(\d+)\s+(.*?)\s*<([^>]+)>\s*$")
 _NOREPLY = re.compile(
@@ -91,13 +94,15 @@ def parse_gh_contributors(raw: str) -> list[GitPerson]:
 def parse_gh_user(raw: str) -> GitPerson | None:
     """Lê a saída JSON de ``gh api users/<login>``."""
     try:
-        data: Any = json.loads(raw)
+        data: JsonValue = json.loads(raw)
     except ValueError:
         return None
     if not isinstance(data, dict) or data.get("type") == "Bot":
         return None
     login, user_id = data.get("login"), data.get("id")
-    if not isinstance(login, str) or not user_id:
+    if not isinstance(login, str) or not isinstance(user_id, int | str):
+        return None
+    if not user_id:
         return None
     name = data.get("name")
     return github_person(login, user_id, name if isinstance(name, str) else None)

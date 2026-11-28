@@ -14,13 +14,16 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from backend.engine.hitl import REQUIRE_APPROVAL
 from backend.rbac import tool_policy
 from backend.services.egress_policy import EgressPolicy, is_url_allowed
 from backend.services.mcp_policy import evaluate as evaluate_mcp
 from backend.tools.context import ToolContext
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +121,7 @@ class PolicySnapshot:
         return True, ""
 
     def validate_call(  # noqa: PLR0911
-        self, tool_name: str, args: dict[str, Any]
+        self, tool_name: str, args: JsonObject
     ) -> tuple[bool, str]:
         """Validação estrita de pré-execução para argumentos e destinos de rede."""
         allowed, reason = self.is_tool_allowed(tool_name)

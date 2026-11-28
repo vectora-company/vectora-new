@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from collections.abc import Coroutine
-from typing import Any
+from typing import Any, NoReturn
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,10 +13,10 @@ from backend.transport.base import RunResult
 from backend.transport.codespace import CodespaceTransport
 
 
-async def _timed_out(
-    awaitable: Coroutine[Any, Any, Any],
+async def _timed_out[T](
+    awaitable: Coroutine[None, None, T],
     timeout: float,  # noqa: ASYNC109
-) -> None:
+) -> NoReturn:
     awaitable.close()
     raise TimeoutError(f"timeout={timeout}")
 
@@ -28,7 +28,9 @@ def transport() -> CodespaceTransport:
     )
 
 
-async def test_read_file_returns_bounded_bytes(transport, monkeypatch):
+async def test_read_file_returns_bounded_bytes(
+    transport: CodespaceTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
     binary = b"\x00\xffcontent"
     run = AsyncMock(
         return_value=RunResult(0, base64.b64encode(binary).decode("ascii"), "")
@@ -40,8 +42,8 @@ async def test_read_file_returns_bounded_bytes(transport, monkeypatch):
 
 
 async def test_list_dir_preserves_names_with_spaces_and_file_sizes(
-    transport, monkeypatch
-):
+    transport: CodespaceTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
     run = AsyncMock(
         return_value=RunResult(
             0,
@@ -60,7 +62,9 @@ async def test_list_dir_preserves_names_with_spaces_and_file_sizes(
     ]
 
 
-async def test_ensure_started_succeeds_without_host_gh(monkeypatch):
+async def test_ensure_started_succeeds_without_host_gh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     process = AsyncMock()
     process.returncode = 0
     monkeypatch.setattr(
@@ -73,7 +77,9 @@ async def test_ensure_started_succeeds_without_host_gh(monkeypatch):
     process.wait.assert_awaited_once()
 
 
-async def test_ensure_started_timeout_kills_process(monkeypatch):
+async def test_ensure_started_timeout_kills_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     process = AsyncMock()
     process.wait = AsyncMock(return_value=0)
     process.kill = AsyncMock()
@@ -89,7 +95,9 @@ async def test_ensure_started_timeout_kills_process(monkeypatch):
     process.wait.assert_awaited_once()
 
 
-async def test_run_reports_missing_gh_cli(transport, monkeypatch):
+async def test_run_reports_missing_gh_cli(
+    transport: CodespaceTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(
         codespace,
         "ensure_started",
@@ -102,7 +110,9 @@ async def test_run_reports_missing_gh_cli(transport, monkeypatch):
     assert "não encontrado" in result.stderr
 
 
-async def test_run_reports_ssh_timeout(transport, monkeypatch):
+async def test_run_reports_ssh_timeout(
+    transport: CodespaceTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
     process = AsyncMock()
     process.communicate = AsyncMock()
     process.kill = AsyncMock()
@@ -123,7 +133,9 @@ async def test_run_reports_ssh_timeout(transport, monkeypatch):
     process.wait.assert_awaited_once()
 
 
-async def test_read_file_surfaces_missing_file(transport, monkeypatch):
+async def test_read_file_surfaces_missing_file(
+    transport: CodespaceTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(
         transport,
         "run",
@@ -136,8 +148,8 @@ async def test_read_file_surfaces_missing_file(transport, monkeypatch):
 
 @pytest.mark.parametrize("operation", ["list_dir", "read_file", "write_file"])
 async def test_filesystem_operations_surface_cli_failure(
-    transport, monkeypatch, operation
-):
+    transport: CodespaceTransport, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
     monkeypatch.setattr(
         transport,
         "run",

@@ -8,9 +8,12 @@ com ``VMessage``.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 
 from backend.api.handlers import threads as threads_mod
+from backend.vtypes import VMessage
 from backend.vtypes.message import MessageRole, text_message
 
 
@@ -18,12 +21,12 @@ class _FakeLLM:
     def __init__(self, content: str) -> None:
         self._content = content
 
-    async def agenerate(self, _messages, **_kwargs):
+    async def agenerate(self, _messages: list[VMessage], **_kwargs) -> VMessage:
         return text_message(MessageRole.ASSISTANT, self._content)
 
 
 @pytest.mark.asyncio
-async def test_ai_title_happy(monkeypatch):
+async def test_ai_title_happy(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "backend.services.utils.load_native_llm",
         lambda: _FakeLLM("Plano de migração do banco"),
@@ -33,7 +36,9 @@ async def test_ai_title_happy(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ai_title_trims_to_six_words_and_strips(monkeypatch):
+async def test_ai_title_trims_to_six_words_and_strips(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "backend.services.utils.load_native_llm",
         lambda: _FakeLLM('"Uma sete oito nove dez onze doze".'),
@@ -44,8 +49,10 @@ async def test_ai_title_trims_to_six_words_and_strips(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ai_title_fallback_on_llm_failure(monkeypatch):
-    def _boom():
+async def test_ai_title_fallback_on_llm_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _boom() -> NoReturn:
         raise RuntimeError("provider down")
 
     monkeypatch.setattr("backend.services.utils.load_native_llm", _boom)
@@ -54,8 +61,8 @@ async def test_ai_title_fallback_on_llm_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ai_title_fallback_empty_user(monkeypatch):
-    def _boom():
+async def test_ai_title_fallback_empty_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom() -> NoReturn:
         raise RuntimeError("provider down")
 
     monkeypatch.setattr("backend.services.utils.load_native_llm", _boom)

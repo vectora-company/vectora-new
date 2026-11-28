@@ -54,7 +54,10 @@ class FileSlice:
 Unit = "Path | FileSlice"
 
 
-def unit_path(unit: Path | FileSlice) -> Path:
+type FileUnit = Path | FileSlice
+
+
+def unit_path(unit: FileUnit) -> Path:
     """The on-disk path a unit belongs to (the parent file for a slice)."""
     return unit.path if isinstance(unit, FileSlice) else unit
 

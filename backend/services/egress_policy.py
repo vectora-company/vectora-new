@@ -13,12 +13,17 @@ import logging
 import socket
 from collections.abc import Sequence
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
 from backend.browser.ssrf_guard import _is_blocked_ip
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from backend.vtypes.contracts import JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +58,16 @@ BACKEND_EGRESS_CAPABILITIES: dict[str, BackendEgressCapability] = {
 }
 
 
+type AddrInfo = tuple[
+    int,
+    int,
+    int,
+    str,
+    tuple[str, int] | tuple[str, int, int, int] | tuple[int, bytes],
+]
+"""Entrada devolvida por ``getaddrinfo``."""
+
+
 class EgressPolicy(BaseModel):
     """Política de restrição de tráfego de saída para um workspace ou execução."""
 
@@ -66,7 +81,7 @@ class EgressPolicy(BaseModel):
     @classmethod
     def for_workspace(cls, workspace_id: str | None) -> EgressPolicy:
         """Carrega a política persistida do workspace, com fallback seguro."""
-        raw: object = None
+        raw: JsonValue = None
         try:
             from backend.workspace.runtime_settings import runtime_settings
 
@@ -96,7 +111,7 @@ class EgressPolicy(BaseModel):
             "allow_localhost_dev_ports",
         }
         values = {key: value for key, value in raw.items() if key in allowed}
-        return cls(workspace_id=workspace_id, **values)
+        return cls.model_validate({**values, "workspace_id": workspace_id})
 
     def requires_network_restriction(self) -> bool:
         """Indica se a política impõe restrições ativas de saída."""
@@ -127,7 +142,7 @@ def _validate_addr_infos_and_port(
     host: str,
     port: int,
     pol: EgressPolicy,
-    addr_infos: list[tuple[Any, ...]],
+    addr_infos: Sequence[AddrInfo],
 ) -> tuple[bool, str, str | None]:
     """Executa a operação validate addr infos and port."""
     is_loopback_target = False

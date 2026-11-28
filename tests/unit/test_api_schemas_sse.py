@@ -20,14 +20,14 @@ import pytest
 
 
 class TestTokenEvent:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         from backend.api.schemas import TokenEvent
 
         e = TokenEvent(content="hello")
         assert e.content == "hello"
         assert e.node == ""
 
-    def test_with_node(self):
+    def test_with_node(self) -> None:
         from backend.api.schemas import TokenEvent
 
         e = TokenEvent(content="world", node="invoke_llm")
@@ -35,7 +35,7 @@ class TestTokenEvent:
 
 
 class TestToolCallEvent:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         from backend.api.schemas import ToolCallEvent
 
         e = ToolCallEvent(
@@ -48,7 +48,7 @@ class TestToolCallEvent:
         assert e.destructive is False
         assert e.icon == "tool"
 
-    def test_destructive_flag(self):
+    def test_destructive_flag(self) -> None:
         from backend.api.schemas import ToolCallEvent
 
         e = ToolCallEvent(
@@ -63,13 +63,13 @@ class TestToolCallEvent:
 
 
 class TestToolResultEvent:
-    def test_success(self):
+    def test_success(self) -> None:
         from backend.api.schemas import ToolResultEvent
 
         e = ToolResultEvent(tool_call_id="tc-1", content_json='"ok"')
         assert e.is_error is False
 
-    def test_error(self):
+    def test_error(self) -> None:
         from backend.api.schemas import ToolResultEvent
 
         e = ToolResultEvent(tool_call_id="tc-1", content_json='"err"', is_error=True)
@@ -77,13 +77,13 @@ class TestToolResultEvent:
 
 
 class TestNodeEvent:
-    def test_started(self):
+    def test_started(self) -> None:
         from backend.api.schemas import NodeEvent
 
         e = NodeEvent(node="orchestrator", status="started")
         assert e.duration_ms == 0
 
-    def test_finished_with_duration(self):
+    def test_finished_with_duration(self) -> None:
         from backend.api.schemas import NodeEvent
 
         e = NodeEvent(node="search_agent", status="finished", duration_ms=1234)
@@ -91,7 +91,7 @@ class TestNodeEvent:
 
 
 class TestDoneEvent:
-    def test_basic(self):
+    def test_basic(self) -> None:
         from backend.api.schemas import DoneEvent
 
         e = DoneEvent(thread_id="t-1", run_id="run-1", message_id=42)
@@ -101,19 +101,19 @@ class TestDoneEvent:
 
 
 class TestErrorEvent:
-    def test_default_code(self):
+    def test_default_code(self) -> None:
         from backend.api.schemas import ErrorEvent
 
         e = ErrorEvent(message="algo falhou")
         assert e.code == "INTERNAL"
 
-    def test_custom_code(self):
+    def test_custom_code(self) -> None:
         from backend.api.schemas import ErrorEvent
 
         e = ErrorEvent(message="timeout", code="TIMEOUT")
         assert e.code == "TIMEOUT"
 
-    def test_severity_default_is_terminal_error(self):
+    def test_severity_default_is_terminal_error(self) -> None:
         from backend.api.schemas import ErrorEvent, encode_event
 
         assert ErrorEvent(message="x").severity == "error"
@@ -122,7 +122,7 @@ class TestErrorEvent:
 
 
 class TestHITLEvent:
-    def test_fields(self):
+    def test_fields(self) -> None:
         from backend.api.schemas import HITLEvent
 
         e = HITLEvent(
@@ -139,7 +139,7 @@ class TestHITLEvent:
 
 
 class TestMessageBreakEvent:
-    def test_encode_type_discriminator(self):
+    def test_encode_type_discriminator(self) -> None:
         from backend.api.schemas import MessageBreakEvent, encode_event
 
         line = encode_event(MessageBreakEvent())
@@ -148,12 +148,12 @@ class TestMessageBreakEvent:
         data = json.loads(line.removeprefix("data: ").strip())
         assert data["type"] == "message_break"
 
-    def test_no_extra_fields(self):
+    def test_no_extra_fields(self) -> None:
         from backend.api.schemas import MessageBreakEvent
 
         assert MessageBreakEvent().model_dump() == {}
 
-    def test_in_serializable_list(self):
+    def test_in_serializable_list(self) -> None:
         from backend.api.schemas import MessageBreakEvent, encode_event
 
         line = encode_event(MessageBreakEvent())
@@ -162,7 +162,7 @@ class TestMessageBreakEvent:
 
 
 class TestUIMetricsEvent:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         from backend.api.schemas import UIMetricsEvent
 
         e = UIMetricsEvent()
@@ -177,19 +177,19 @@ class TestUIMetricsEvent:
 
 
 class TestEncodeEvent:
-    def test_format_starts_with_data_prefix(self):
+    def test_format_starts_with_data_prefix(self) -> None:
         from backend.api.schemas import TokenEvent, encode_event
 
         line = encode_event(TokenEvent(content="hi"))
         assert line.startswith("data: ")
 
-    def test_format_ends_with_double_newline(self):
+    def test_format_ends_with_double_newline(self) -> None:
         from backend.api.schemas import DoneEvent, encode_event
 
         line = encode_event(DoneEvent(thread_id="t-1"))
         assert line.endswith("\n\n")
 
-    def test_type_discriminator_token(self):
+    def test_type_discriminator_token(self) -> None:
         from backend.api.schemas import TokenEvent, encode_event
 
         line = encode_event(TokenEvent(content="x"))
@@ -197,7 +197,7 @@ class TestEncodeEvent:
         assert data["type"] == "token"
         assert data["content"] == "x"
 
-    def test_type_discriminator_tool_call(self):
+    def test_type_discriminator_tool_call(self) -> None:
         from backend.api.schemas import ToolCallEvent, encode_event
 
         e = ToolCallEvent(tool_name="search", tool_call_id="1", args_json="{}")
@@ -205,7 +205,7 @@ class TestEncodeEvent:
         assert data["type"] == "tool_call"
         assert data["tool_name"] == "search"
 
-    def test_type_discriminator_done(self):
+    def test_type_discriminator_done(self) -> None:
         from backend.api.schemas import DoneEvent, encode_event
 
         data = json.loads(
@@ -214,7 +214,7 @@ class TestEncodeEvent:
         assert data["type"] == "done"
         assert data["thread_id"] == "t-99"
 
-    def test_type_discriminator_error(self):
+    def test_type_discriminator_error(self) -> None:
         from backend.api.schemas import ErrorEvent, encode_event
 
         data = json.loads(
@@ -223,7 +223,7 @@ class TestEncodeEvent:
         assert data["type"] == "error"
         assert data["message"] == "boom"
 
-    def test_type_discriminator_node(self):
+    def test_type_discriminator_node(self) -> None:
         from backend.api.schemas import NodeEvent, encode_event
 
         data = json.loads(
@@ -234,7 +234,7 @@ class TestEncodeEvent:
         assert data["type"] == "node"
         assert data["node"] == "rag_agent"
 
-    def test_all_event_types_are_serializable(self):
+    def test_all_event_types_are_serializable(self) -> None:
         from backend.api.schemas import (
             DoneEvent,
             ErrorEvent,
@@ -271,21 +271,21 @@ class TestEncodeEvent:
 
 
 class TestChatModels:
-    def test_stream_chat_request_defaults(self):
+    def test_stream_chat_request_defaults(self) -> None:
         from backend.api.schemas import StreamChatRequest
 
         r = StreamChatRequest(content="oi")
         assert r.thread_id == ""
         assert r.config.recursion_limit == 50
 
-    def test_chat_config_defaults(self):
+    def test_chat_config_defaults(self) -> None:
         from backend.api.schemas import ChatConfig
 
         c = ChatConfig()
         assert c.model == ""
         assert c.llm_provider == ""
 
-    def test_thread_model(self):
+    def test_thread_model(self) -> None:
         from backend.api.schemas import Thread
 
         t = Thread(id="t-1", created_at="2024-01-01", updated_at="2024-01-02")
@@ -293,7 +293,7 @@ class TestChatModels:
 
 
 class TestToolSchema:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         from backend.api.schemas import ToolSchema
 
         ts = ToolSchema(name="my_tool", description="does stuff")
@@ -305,13 +305,13 @@ class TestToolSchema:
 
 
 class TestAuthSchemas:
-    def test_signup_request(self):
+    def test_signup_request(self) -> None:
         from backend.api.schemas import SignupRequest
 
         r = SignupRequest(email="a@b.com", password="pass")
         assert r.email == "a@b.com"
 
-    def test_user_response_from_user(self):
+    def test_user_response_from_user(self) -> None:
         from backend.api.schemas import UserResponse
         from backend.rbac.auth import User
 
@@ -326,7 +326,7 @@ class TestAuthSchemas:
         assert ur.role == "member"
         assert ur.last_login_at is None
 
-    def test_token_response_fields(self):
+    def test_token_response_fields(self) -> None:
         from backend.api.schemas import TokenResponse, UserResponse
 
         tr = TokenResponse(
@@ -337,13 +337,13 @@ class TestAuthSchemas:
         assert tr.token_type == "bearer"
         assert tr.access_token == "acc"
 
-    def test_has_users_response(self):
+    def test_has_users_response(self) -> None:
         from backend.api.schemas import HasUsersResponse
 
         assert HasUsersResponse(exists=True).exists is True
         assert HasUsersResponse(exists=False).exists is False
 
-    def test_audit_entry(self):
+    def test_audit_entry(self) -> None:
         from backend.api.schemas import AuditEntry
 
         e = AuditEntry(id="a-1", action="signin", timestamp="2024-01-01")

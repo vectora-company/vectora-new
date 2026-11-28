@@ -24,7 +24,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -38,6 +38,9 @@ from backend.services.license import (
     validate_license_async,
     write_token_to_config,
 )
+
+if TYPE_CHECKING:
+    from backend.rbac.auth import User
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +56,7 @@ DEFAULT_CONNECT_URL = "https://services.vectora.company/license/agent-login"
 HTTP_TIMEOUT = 10.0
 
 
-def _require_root(request: Request) -> Any:
+def _require_root(request: Request) -> User:
     """Lança 401/403 se o usuário da request não é root (espelha admin.py)."""
     user = getattr(request.state, "user", None)
     if user is None:

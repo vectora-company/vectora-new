@@ -8,7 +8,9 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+
+from backend.vtypes.context_graph import SymbolCandidateRecord, SymbolResolution
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 from .ids import make_id as _shared_make_id
 from .security import sanitize_metadata
@@ -31,7 +33,7 @@ def normalise_callable_label(label: str) -> str:
     return label.strip().strip("()").lstrip(".").lower()
 
 
-def node_is_resolvable_symbol(node: dict[str, Any]) -> bool:
+def node_is_resolvable_symbol(node: JsonObject) -> bool:
     """Return True when a node is suitable for deterministic symbol lookup.
 
     Requires ``file_type == "code"`` as the positive gate — only code-class
@@ -52,7 +54,7 @@ def node_is_resolvable_symbol(node: dict[str, Any]) -> bool:
     return bool(normalise_callable_label(label))
 
 
-def build_label_index(nodes: list[dict[str, Any]]) -> dict[str, list[str]]:
+def build_label_index(nodes: list[JsonObject]) -> dict[str, list[str]]:
     """Build label -> node id list for conservative cross-file resolution."""
 
     index: dict[str, list[str]] = {}
@@ -70,15 +72,15 @@ def build_label_index(nodes: list[dict[str, Any]]) -> dict[str, list[str]]:
 
 
 def resolve_graph_symbol(
-    nodes: list[dict[str, Any]], query: str, *, limit: int = 20
-) -> dict[str, Any]:
+    nodes: list[JsonObject], query: str, *, limit: int = 20
+) -> SymbolResolution:
     """Resolve an exact code identifier without guessing among duplicates."""
     normalized = unicodedata.normalize("NFKC", query).strip()
     normalized = re.sub(r"\s*\([^()]*\)\s*$", "", normalized).strip().lstrip(".")
     normalized = normalized.lower()
     if not normalized or len(normalized) > 200:
         raise ValueError("A busca deve conter de 1 a 200 caracteres")
-    candidates: list[dict[str, Any]] = []
+    candidates: list[SymbolCandidateRecord] = []
     for node in nodes:
         if not node_is_resolvable_symbol(node):
             continue
@@ -108,7 +110,7 @@ def resolve_graph_symbol(
     }
 
 
-def existing_edge_pairs(edges: list[dict[str, Any]]) -> set[tuple[str, str, str]]:
+def existing_edge_pairs(edges: list[JsonObject]) -> set[tuple[str, str, str]]:
     """Return all existing source/target/relation edge triples.
 
     Includes relation so that a prior "contains" or "method" edge does not
@@ -125,18 +127,17 @@ def existing_edge_pairs(edges: list[dict[str, Any]]) -> set[tuple[str, str, str]
     return triples
 
 
-def iter_raw_calls(per_file: Sequence[object]) -> list[dict[str, Any]]:
+def iter_raw_calls(per_file: Sequence[JsonValue]) -> list[JsonObject]:
     """Return raw calls from all per-file extraction fragments.
 
-    Parameter is ``Sequence[object]`` (not ``Sequence[dict[str, Any] | None]``)
-    because external extraction output may contain arbitrary deserialized
+    Parameter is ``Sequence[JsonValue]`` because external extraction output may contain arbitrary deserialized
     JSON. Defensive against malformed fragments: non-dict per-file entries
     are skipped, non-list ``raw_calls`` are treated as empty, and non-dict
     items inside the list are silently dropped. The downstream resolvers
     assume every returned item is a dict and they expect this guarantee.
     """
 
-    calls: list[dict[str, Any]] = []
+    calls: list[JsonObject] = []
     for result in per_file:
         if not isinstance(result, dict):
             continue
@@ -206,7 +207,7 @@ def parse_python_import_aliases(path: Path) -> dict[str, ImportedSymbol]:
     return aliases
 
 
-def _node_source_stem(node: dict[str, Any]) -> str:
+def _node_source_stem(node: JsonObject) -> str:
     """Return the stem of a node's source file."""
 
     source_file = str(node.get("source_file", ""))
@@ -216,7 +217,7 @@ def _node_source_stem(node: dict[str, Any]) -> str:
 
 
 def build_python_symbol_index(
-    nodes: list[dict[str, Any]],
+    nodes: list[JsonObject],
 ) -> dict[tuple[str, str], list[str]]:
     """Build ``(module_stem, normalized_symbol_name) -> node_ids``.
 
@@ -257,18 +258,18 @@ def find_unique_python_symbol(
 
 
 def resolve_python_import_guided_calls(
-    per_file: Sequence[object],
+    per_file: Sequence[JsonValue],
     paths: Sequence[Path],
-    all_nodes: list[dict[str, Any]],
-    all_edges: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
+    all_nodes: list[JsonObject],
+    all_edges: list[JsonObject],
+) -> list[JsonObject]:
     """Resolve raw Python calls using explicit import evidence.
 
     Only ``from module import symbol [as alias]`` forms are handled. Member calls
     remain skipped because the current raw call fact does not carry receiver
     information.
 
-    Parameter ``per_file`` is ``Sequence[object]`` because external extraction
+    Parameter ``per_file`` is ``Sequence[JsonValue]`` because external extraction
     output may contain arbitrary deserialized JSON. Non-dict slots are
     treated as empty fragments, and indices past ``len(per_file)`` are also
     treated as empty (paths longer than per_file is tolerated).
@@ -281,15 +282,15 @@ def resolve_python_import_guided_calls(
     #     also OK; the zip-like behavior is what callers expect)
     #   - non-dict per_file slots fall back to the empty fragment so the
     #     downstream `.get("raw_calls", [])` lookup never raises
-    result_by_file: dict[str, dict[str, Any]] = {}
+    result_by_file: dict[str, JsonObject] = {}
     for index, path in enumerate(paths):
         if path.suffix != ".py":
             continue
-        slot: Any = per_file[index] if index < len(per_file) else None
+        slot = per_file[index] if index < len(per_file) else None
         result_by_file[str(path)] = (
             slot if isinstance(slot, dict) else {"nodes": [], "edges": []}
         )
-    resolved_edges: list[dict[str, Any]] = []
+    resolved_edges: list[JsonObject] = []
 
     for path in paths:
         if path.suffix != ".py":
@@ -351,10 +352,10 @@ def resolve_python_import_guided_calls(
 
 
 def resolve_cross_file_raw_calls(
-    per_file: Sequence[dict[str, Any] | None],
-    all_nodes: list[dict[str, Any]],
-    all_edges: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
+    per_file: Sequence[JsonValue],
+    all_nodes: list[JsonObject],
+    all_edges: list[JsonObject],
+) -> list[JsonObject]:
     """Resolve unqualified raw calls conservatively after all files are known.
 
     This intentionally preserves Context Graph's existing behavior:
@@ -366,7 +367,7 @@ def resolve_cross_file_raw_calls(
 
     label_index = build_label_index(all_nodes)
     known_pairs = existing_edge_pairs(all_edges)
-    resolved: list[dict[str, Any]] = []
+    resolved: list[JsonObject] = []
 
     for raw_call in iter_raw_calls(per_file):
         callee = str(raw_call.get("callee", "")).strip()
@@ -436,11 +437,11 @@ def _file_node_id_for_path(path: Path, root: Path) -> str:
 
 
 def resolve_bash_source_edges(
-    per_file: Sequence[dict | None],
+    per_file: Sequence[JsonValue],
     paths: Sequence[Path],
     root: Path,
-    existing_edges: list[dict] | None = None,
-) -> list[dict]:
+    existing_edges: list[JsonObject] | None = None,
+) -> list[JsonObject]:
     """Resolve Bash source/import edges and source-backed function calls.
 
     Defensive against malformed extraction fragments: non-dict ``per_file``

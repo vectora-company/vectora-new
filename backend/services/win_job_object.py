@@ -75,7 +75,7 @@ class _JobObjectExtendedLimitInformation(ctypes.Structure):
     ]
 
 
-def _kernel32() -> Any:
+def _kernel32() -> ctypes.CDLL:
     """`ctypes.windll.kernel32` com `argtypes`/`restype` explícitos nas
     funções usadas aqui — sem isso, ctypes assume `c_int` (32 bits) pra
     todo handle, o que trunca/corrompe silenciosamente valores de HANDLE

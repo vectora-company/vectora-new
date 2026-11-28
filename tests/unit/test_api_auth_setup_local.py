@@ -19,7 +19,9 @@ from backend.workspace.runtime_settings import RuntimeSettings
 
 
 @pytest.fixture(autouse=True)
-def _isolated_runtime_settings(tmp_path: Path, monkeypatch):
+def _isolated_runtime_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> RuntimeSettings:
     """Isola cada teste com um RuntimeSettings próprio (nunca toca o real)."""
     from backend.workspace import runtime_settings as rs_module
 
@@ -35,21 +37,23 @@ def _async_bool(value: bool):
     return _inner()
 
 
-def test_setup_local_exige_ausencia_de_usuarios():
+def test_setup_local_exige_ausencia_de_usuarios() -> None:
     with patch("backend.rbac.auth.has_users", lambda: _async_bool(True)):
         with pytest.raises(HTTPException) as exc:
             asyncio.run(setup_local_endpoint(SetupLocalRequest(name="Bruno")))
     assert exc.value.status_code == 409
 
 
-def test_setup_local_nome_obrigatorio():
+def test_setup_local_nome_obrigatorio() -> None:
     with patch("backend.rbac.auth.has_users", lambda: _async_bool(False)):
         with pytest.raises(HTTPException) as exc:
             asyncio.run(setup_local_endpoint(SetupLocalRequest(name="   ")))
     assert exc.value.status_code == 422
 
 
-def test_setup_local_persiste_e_desabilita_auth(_isolated_runtime_settings):
+def test_setup_local_persiste_e_desabilita_auth(
+    _isolated_runtime_settings: RuntimeSettings,
+) -> None:
     with patch("backend.rbac.auth.has_users", lambda: _async_bool(False)):
         result = asyncio.run(
             setup_local_endpoint(SetupLocalRequest(name="Bruno", company="Vectora"))
@@ -61,7 +65,9 @@ def test_setup_local_persiste_e_desabilita_auth(_isolated_runtime_settings):
     assert _isolated_runtime_settings.local_user_company == "Vectora"
 
 
-def test_setup_local_nao_toca_env_file(_isolated_runtime_settings, tmp_path: Path):
+def test_setup_local_nao_toca_env_file(
+    _isolated_runtime_settings: RuntimeSettings, tmp_path: Path
+) -> None:
     """auth_required e nome/empresa vão só pro app_settings — nada no .env."""
     env_file = tmp_path / ".env"
     with patch("backend.rbac.auth.has_users", lambda: _async_bool(False)):
@@ -69,7 +75,9 @@ def test_setup_local_nao_toca_env_file(_isolated_runtime_settings, tmp_path: Pat
     assert not env_file.exists()
 
 
-def test_setup_local_empresa_opcional_vai_pro_store(_isolated_runtime_settings):
+def test_setup_local_empresa_opcional_vai_pro_store(
+    _isolated_runtime_settings: RuntimeSettings,
+) -> None:
     with patch("backend.rbac.auth.has_users", lambda: _async_bool(False)):
         result = asyncio.run(setup_local_endpoint(SetupLocalRequest(name="Bruno")))
 
@@ -78,7 +86,9 @@ def test_setup_local_empresa_opcional_vai_pro_store(_isolated_runtime_settings):
     assert _isolated_runtime_settings.local_user_company == ""
 
 
-def test_setup_local_persiste_username_normalizado(_isolated_runtime_settings):
+def test_setup_local_persiste_username_normalizado(
+    _isolated_runtime_settings: RuntimeSettings,
+) -> None:
     with patch("backend.rbac.auth.has_users", lambda: _async_bool(False)):
         result = asyncio.run(
             setup_local_endpoint(
@@ -90,7 +100,9 @@ def test_setup_local_persiste_username_normalizado(_isolated_runtime_settings):
     assert _isolated_runtime_settings.local_username == "brunosoares"
 
 
-def test_setup_local_username_ausente_nao_quebra(_isolated_runtime_settings):
+def test_setup_local_username_ausente_nao_quebra(
+    _isolated_runtime_settings: RuntimeSettings,
+) -> None:
     """Regressão: request sem username continua funcionando (fallback pro slugify)."""
     with patch("backend.rbac.auth.has_users", lambda: _async_bool(False)):
         result = asyncio.run(setup_local_endpoint(SetupLocalRequest(name="Bruno")))
@@ -104,7 +116,7 @@ def test_setup_local_username_ausente_nao_quebra(_isolated_runtime_settings):
 # ---------------------------------------------------------------------------
 
 
-def test_setup_complete_falso_em_instalacao_virgem():
+def test_setup_complete_falso_em_instalacao_virgem() -> None:
     """Sem usuários E sem perfil local: o wizard ainda precisa rodar."""
     from backend.rbac.auth import setup_complete
 
@@ -112,7 +124,9 @@ def test_setup_complete_falso_em_instalacao_virgem():
         assert asyncio.run(setup_complete()) is False
 
 
-def test_setup_complete_verdadeiro_apos_setup_local(_isolated_runtime_settings):
+def test_setup_complete_verdadeiro_apos_setup_local(
+    _isolated_runtime_settings: RuntimeSettings,
+) -> None:
     """Regressão: o modo local NÃO cria linha em `users` (por design, ver
     docstring de `setup_local_endpoint`), então `has_users()` sozinho diz
     "não configurado" para sempre — e o boot repetia o aviso de setup
@@ -126,7 +140,7 @@ def test_setup_complete_verdadeiro_apos_setup_local(_isolated_runtime_settings):
         assert asyncio.run(setup_complete()) is True
 
 
-def test_setup_complete_verdadeiro_com_usuarios_cadastrados():
+def test_setup_complete_verdadeiro_com_usuarios_cadastrados() -> None:
     """Modo servidor/VPS: existe usuário na tabela, nada de perfil local."""
     from backend.rbac.auth import setup_complete
 
@@ -134,7 +148,9 @@ def test_setup_complete_verdadeiro_com_usuarios_cadastrados():
         assert asyncio.run(setup_complete()) is True
 
 
-def test_setup_complete_ignora_perfil_local_vazio(_isolated_runtime_settings):
+def test_setup_complete_ignora_perfil_local_vazio(
+    _isolated_runtime_settings: RuntimeSettings,
+) -> None:
     """Erro/borda: chave gravada com nome em branco não conta como setup
     concluído — senão um write parcial silenciaria o wizard para sempre."""
     from backend.rbac.auth import setup_complete

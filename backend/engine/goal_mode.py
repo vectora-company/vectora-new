@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from backend.engine.conversation_loop import resume_conversation, run_conversation
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage, text_message
 
 if TYPE_CHECKING:
@@ -102,7 +103,7 @@ class GoalOutcome:
     final_message: VMessage | None = None
 
 
-def _parse_judge_json(texto: str) -> dict[str, Any]:
+def _parse_judge_json(texto: str) -> JsonObject:
     """Extrai o JSON `{"cumprido", "motivo"}` da resposta do judge —
     tolera o modelo envolver o JSON em texto/markdown ao redor."""
     try:
@@ -247,7 +248,7 @@ async def evaluate_goal_with_systemone(
     - `"unavailable"`: harness desligado, em modo shadow, ou falha de inferência.
     """
     gates_ok = all(g.passed for g in gate_results)
-    gate_summary = [
+    gate_summary: list[JsonObject] = [
         {
             "command": " ".join(g.command),
             "passed": g.passed,
@@ -511,7 +512,7 @@ async def resume_goal(
     goal: str,
     loop_config: LoopConfig,
     decision: str,
-    edited_args: dict[str, Any] | None = None,
+    edited_args: JsonObject | None = None,
     quality_gates: list[list[str]] | None = None,
     max_goal_turns: int = 20,
     should_require_approval: Callable[..., bool] | None,

@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
-from typing import cast
+from typing import NoReturn, cast
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
@@ -62,7 +62,7 @@ def test_archive_failure_does_not_change_effective_state(
     root_path.mkdir()
     root = registry.add(str(root_path), "Workspace", "admin")
 
-    def fail_save(_roots: dict[str, SafeRoot]) -> None:
+    def fail_save(_roots: dict[str, SafeRoot]) -> NoReturn:
         raise SafeRootPersistenceError("disk full")
 
     monkeypatch.setattr(registry, "_save_roots", fail_save)
@@ -135,7 +135,7 @@ def test_lock_setup_failure_is_reported_as_persistence_error(
 
     def fail_mkdir(
         _path: Path, *, mode: int = 0o777, parents: bool = False, exist_ok: bool = False
-    ) -> None:
+    ) -> NoReturn:
         raise OSError("permission denied")
 
     monkeypatch.setattr(Path, "mkdir", fail_mkdir)
@@ -191,7 +191,7 @@ def test_registry_operation_errors_are_not_relabelled_as_storage_failures(
     )
     registry = SafeRootRegistry()
 
-    def fail_transaction() -> None:
+    def fail_transaction() -> NoReturn:
         raise ValueError("invalid transaction")
 
     monkeypatch.setattr(registry, "_ensure_builtin", fail_transaction)

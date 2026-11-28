@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from types import TracebackType
+from typing import NoReturn
 
 import httpx
 import pytest
@@ -14,13 +17,15 @@ from backend.services import registry_client
 
 
 @pytest.fixture(autouse=True)
-def _isolated_cache(tmp_path, monkeypatch):
+def _isolated_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry_client, "CACHE_DIR", tmp_path / "registry_cache")
 
 
 @pytest.mark.asyncio
-async def test_fetch_catalog_success_writes_cache_and_returns_entries(monkeypatch):
-    async def _fake_get(self, url, **kwargs):
+async def test_fetch_catalog_success_writes_cache_and_returns_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         return httpx.Response(
             200,
             json={"entries": [{"id": "filesystem"}]},
@@ -39,12 +44,14 @@ async def test_fetch_catalog_success_writes_cache_and_returns_entries(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_fetch_catalog_network_error_falls_back_to_existing_cache(monkeypatch):
+async def test_fetch_catalog_network_error_falls_back_to_existing_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     registry_client._write_cache(
         "mcp", [{"id": "cached-entry", "catalog_source": "official"}]
     )
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -56,9 +63,9 @@ async def test_fetch_catalog_network_error_falls_back_to_existing_cache(monkeypa
 
 @pytest.mark.asyncio
 async def test_fetch_catalog_no_network_no_cache_returns_empty_list_not_exception(
-    monkeypatch,
-):
-    async def _fake_get(self, url, **kwargs):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -70,8 +77,8 @@ async def test_fetch_catalog_no_network_no_cache_returns_empty_list_not_exceptio
 
 @pytest.mark.asyncio
 async def test_fetch_catalog_cache_within_offline_ttl_but_past_online_ttl_is_served(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Dentro do TTL de 48h (offline) mas fora do TTL de 6h (online) — ainda
     # é servido: "stale mas utilizável" é o contrato de fallback gracioso.
     stale_but_usable = {
@@ -83,7 +90,7 @@ async def test_fetch_catalog_cache_within_offline_ttl_but_past_online_ttl_is_ser
         json.dumps(stale_but_usable), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -95,8 +102,8 @@ async def test_fetch_catalog_cache_within_offline_ttl_but_past_online_ttl_is_ser
 
 @pytest.mark.asyncio
 async def test_fetch_catalog_cache_expired_beyond_offline_ttl_is_not_used(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Erro/borda: cache além de 48h não é mais confiável — deve degradar pra
     # lista vazia em vez de servir dado potencialmente muito desatualizado.
     expired = {
@@ -106,7 +113,7 @@ async def test_fetch_catalog_cache_expired_beyond_offline_ttl_is_not_used(
     registry_client._cache_path("mcp").parent.mkdir(parents=True, exist_ok=True)
     registry_client._cache_path("mcp").write_text(json.dumps(expired), encoding="utf-8")
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -116,7 +123,7 @@ async def test_fetch_catalog_cache_expired_beyond_offline_ttl_is_not_used(
     assert entries == []
 
 
-def test_clear_registry_cache_removes_all_kinds():
+def test_clear_registry_cache_removes_all_kinds() -> None:
     registry_client._write_cache("mcp", [{"id": "a"}])
     registry_client._write_cache("skills", [{"id": "b"}])
     registry_client._write_cache("mcp_official", [{"id": "c"}])
@@ -175,12 +182,14 @@ def _remote_only_server(name: str) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_fetch_official_mcp_registry_maps_npm_stdio_servers(monkeypatch):
+async def test_fetch_official_mcp_registry_maps_npm_stdio_servers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     page = _official_page(
         [_npm_stdio_server("com.example/foo", "foo-mcp-server", ["FOO_API_KEY"])]
     )
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url: str, params: dict[str, str] | None = None, **kwargs):
         return httpx.Response(200, json=page, request=httpx.Request("GET", url))
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -196,7 +205,9 @@ async def test_fetch_official_mcp_registry_maps_npm_stdio_servers(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fetch_official_mcp_registry_skips_remote_only_servers(monkeypatch):
+async def test_fetch_official_mcp_registry_skips_remote_only_servers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Erro/borda: servers sem pacote npm/stdio (só `remotes`) não são
     # instaláveis pelo fluxo atual — devem ser filtrados, não quebrar.
     page = _official_page(
@@ -206,7 +217,7 @@ async def test_fetch_official_mcp_registry_skips_remote_only_servers(monkeypatch
         ]
     )
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url: str, params: dict[str, str] | None = None, **kwargs):
         return httpx.Response(200, json=page, request=httpx.Request("GET", url))
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -217,7 +228,9 @@ async def test_fetch_official_mcp_registry_skips_remote_only_servers(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_fetch_official_mcp_registry_paginates_via_cursor(monkeypatch):
+async def test_fetch_official_mcp_registry_paginates_via_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     page1 = _official_page(
         [_npm_stdio_server("com.example/a", "a-mcp")], next_cursor="com.example/a"
     )
@@ -226,7 +239,7 @@ async def test_fetch_official_mcp_registry_paginates_via_cursor(monkeypatch):
     )
     calls: list[dict] = []
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url: str, params: dict[str, str] | None = None, **kwargs):
         calls.append(dict(params or {}))
         page = page1 if len(calls) == 1 else page2
         return httpx.Response(200, json=page, request=httpx.Request("GET", url))
@@ -242,11 +255,11 @@ async def test_fetch_official_mcp_registry_paginates_via_cursor(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fetch_official_mcp_registry_network_error_falls_back_to_cache(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     registry_client._write_cache("mcp_official", [{"id": "cached"}])
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url, params=None, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -258,8 +271,8 @@ async def test_fetch_official_mcp_registry_network_error_falls_back_to_cache(
 
 @pytest.mark.asyncio
 async def test_fetch_official_mcp_registry_expired_cache_returns_empty_list(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     expired = {
         "entries": [{"id": "cached-too-old"}],
         "fetched_at": (datetime.now(UTC) - timedelta(hours=200)).isoformat(),
@@ -271,7 +284,9 @@ async def test_fetch_official_mcp_registry_expired_cache_returns_empty_list(
         json.dumps(expired), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(
+        self, url: str, params: dict[str, str] | None = None, **kwargs
+    ) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -283,8 +298,8 @@ async def test_fetch_official_mcp_registry_expired_cache_returns_empty_list(
 
 @pytest.mark.asyncio
 async def test_fetch_official_mcp_registry_duplicate_id_across_pages_not_duplicated(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Duplicado: o mesmo id aparecendo em duas páginas (ou pacotes distintos
     # do mesmo server) não deve virar entrada repetida — dict por id dedupe.
     page1 = _official_page(
@@ -296,7 +311,7 @@ async def test_fetch_official_mcp_registry_duplicate_id_across_pages_not_duplica
     )
     calls: list[dict] = []
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url: str, params: dict[str, str] | None = None, **kwargs):
         calls.append(dict(params or {}))
         page = page1 if len(calls) == 1 else page2
         return httpx.Response(200, json=page, request=httpx.Request("GET", url))
@@ -312,9 +327,11 @@ async def test_fetch_official_mcp_registry_duplicate_id_across_pages_not_duplica
 
 @pytest.mark.asyncio
 async def test_fetch_official_mcp_registry_no_network_no_cache_returns_empty(
-    monkeypatch,
-):
-    async def _fake_get(self, url, params=None, **kwargs):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_get(
+        self, url: str, params: dict[str, str] | None = None, **kwargs
+    ) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -325,13 +342,15 @@ async def test_fetch_official_mcp_registry_no_network_no_cache_returns_empty(
 
 
 @pytest.mark.asyncio
-async def test_fetch_catalog_corrupted_cache_file_is_ignored_not_raised(monkeypatch):
+async def test_fetch_catalog_corrupted_cache_file_is_ignored_not_raised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Erro/borda: cache local corrompido (JSON inválido) não deve quebrar o
     # fluxo — é tratado como "sem cache" e a falha de rede vira lista vazia.
     registry_client._cache_path("mcp").parent.mkdir(parents=True, exist_ok=True)
     registry_client._cache_path("mcp").write_text("{not valid json", encoding="utf-8")
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -342,7 +361,9 @@ async def test_fetch_catalog_corrupted_cache_file_is_ignored_not_raised(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_fetch_catalog_empty_entries_from_remote_overwrites_cache(monkeypatch):
+async def test_fetch_catalog_empty_entries_from_remote_overwrites_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Cache expirado (fora do TTL online) — precisa tocar rede, não é servido
     # pelo fast path cache-first.
     stale = {
@@ -354,7 +375,7 @@ async def test_fetch_catalog_empty_entries_from_remote_overwrites_cache(monkeypa
         json.dumps(stale), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         return httpx.Response(
             200, json={"entries": []}, request=httpx.Request("GET", url)
         )
@@ -371,8 +392,8 @@ async def test_fetch_catalog_empty_entries_from_remote_overwrites_cache(monkeypa
 
 @pytest.mark.asyncio
 async def test_fetch_catalog_fresh_cache_is_served_without_touching_network(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     registry_client._write_cache(
         "mcp", [{"id": "fresh-cached", "catalog_source": "official"}]
     )
@@ -397,8 +418,8 @@ async def test_fetch_catalog_fresh_cache_is_served_without_touching_network(
 
 @pytest.mark.asyncio
 async def test_fetch_official_mcp_registry_fresh_cache_is_served_without_network(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     registry_client._write_cache("mcp_official", [{"id": "fresh-cached"}])
     called = False
 
@@ -418,7 +439,9 @@ async def test_fetch_official_mcp_registry_fresh_cache_is_served_without_network
 
 
 @pytest.mark.asyncio
-async def test_fetch_catalog_http_error_status_falls_back_to_cache(monkeypatch):
+async def test_fetch_catalog_http_error_status_falls_back_to_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     registry_client._write_cache(
         "mcp", [{"id": "cached-entry", "catalog_source": "official"}]
     )
@@ -436,7 +459,9 @@ async def test_fetch_catalog_http_error_status_falls_back_to_cache(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fetch_catalog_pro_required_does_not_serve_cached_entries(monkeypatch):
+async def test_fetch_catalog_pro_required_does_not_serve_cached_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     stale_cache = {
         "entries": [{"id": "cached-entry", "catalog_source": "official"}],
         "fetched_at": (datetime.now(UTC) - timedelta(hours=20)).isoformat(),
@@ -446,7 +471,7 @@ async def test_fetch_catalog_pro_required_does_not_serve_cached_entries(monkeypa
         json.dumps(stale_cache), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         return httpx.Response(
             403, json={"error": "pro_required"}, request=httpx.Request("GET", url)
         )
@@ -456,7 +481,7 @@ async def test_fetch_catalog_pro_required_does_not_serve_cached_entries(monkeypa
     assert await registry_client.fetch_catalog("mcp") == []
 
 
-def test_clear_registry_cache_when_nothing_cached_does_not_raise():
+def test_clear_registry_cache_when_nothing_cached_does_not_raise() -> None:
     # Erro/borda: limpar cache sem nenhum arquivo existente é no-op seguro.
     registry_client.clear_registry_cache()
 
@@ -464,7 +489,9 @@ def test_clear_registry_cache_when_nothing_cached_does_not_raise():
 
 
 @pytest.mark.asyncio
-async def test_fetch_catalog_descarta_cache_mcp_legado_e_atualiza(monkeypatch):
+async def test_fetch_catalog_descarta_cache_mcp_legado_e_atualiza(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     legacy = {
         "entries": [{"id": "old", "name": "Old"}],
         "fetched_at": datetime.now(UTC).isoformat(),
@@ -482,10 +509,17 @@ async def test_fetch_catalog_descarta_cache_mcp_legado_e_atualiza(monkeypatch):
         async def __aenter__(self) -> Client:
             return self
 
-        async def __aexit__(self, *_args: object) -> None:
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None:
             return None
 
-        async def get(self, _url: str, **_kwargs: object) -> Response:
+        async def get[**P](
+            self, _url: str, *_args: P.args, **_kwargs: P.kwargs
+        ) -> Response:
             return Response()
 
     monkeypatch.setattr(registry_client, "_read_cache", lambda _kind: legacy)
@@ -498,12 +532,14 @@ async def test_fetch_catalog_descarta_cache_mcp_legado_e_atualiza(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fetch_catalog_le_a_library_e_normaliza_as_entradas(monkeypatch):
+async def test_fetch_catalog_le_a_library_e_normaliza_as_entradas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A Library responde com `slug`, `origin` e `rank`; o app usa `id`,
     `catalog_source` e `stars_count`."""
     calls: list[str] = []
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         calls.append(url)
         return httpx.Response(
             200,
@@ -541,10 +577,12 @@ async def test_fetch_catalog_le_a_library_e_normaliza_as_entradas(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fetch_catalog_status_usa_a_rota_de_status_da_library(monkeypatch):
+async def test_fetch_catalog_status_usa_a_rota_de_status_da_library(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[str] = []
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         calls.append(url)
         return httpx.Response(
             200,

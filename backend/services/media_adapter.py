@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from backend.rbac.tool_policy import is_allowed
 from backend.services.media_billing import apply_media_billing_source
 from backend.settings import settings
 from backend.tools.context import ToolContext
 from backend.tools.registry import TOOL_REGISTRY, ToolSpec
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 MEDIA_TOOL_NAMES = frozenset(
     {"generate_image", "text_to_speech", "generate_video", "analyze_video"}
@@ -45,9 +48,7 @@ def media_specs(user_id: str = "local") -> list[ToolSpec]:
     ]
 
 
-async def invoke_media(
-    name: str, arguments: dict[str, Any], context: ToolContext
-) -> str:
+async def invoke_media(name: str, arguments: JsonObject, context: ToolContext) -> str:
     """Validate policy, arguments and invoke one registered media tool."""
     if name not in MEDIA_TOOL_NAMES:
         return f"Error: tool de mídia desconhecida: {name}"

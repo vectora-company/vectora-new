@@ -9,49 +9,49 @@ import pytest
 
 
 class TestValidateExtraction:
-    def test_non_dict_returns_error(self):
+    def test_non_dict_returns_error(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction({"nodes": None})
         assert any(e for e in errors)
 
-    def test_missing_nodes_key(self):
+    def test_missing_nodes_key(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction({"edges": []})
         assert any("nodes" in e for e in errors)
 
-    def test_nodes_not_list(self):
+    def test_nodes_not_list(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction({"nodes": "bad", "edges": []})
         assert any("list" in e for e in errors)
 
-    def test_missing_edges_key(self):
+    def test_missing_edges_key(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction({"nodes": []})
         assert any("edges" in e for e in errors)
 
-    def test_edges_not_list(self):
+    def test_edges_not_list(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction({"nodes": [], "edges": 42})
         assert any("list" in e for e in errors)
 
-    def test_accepts_links_as_edges_fallback(self):
+    def test_accepts_links_as_edges_fallback(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction({"nodes": [], "links": []})
         assert not any("edges" in e for e in errors)
 
-    def test_node_not_dict_returns_error(self):
+    def test_node_not_dict_returns_error(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction({"nodes": ["not_a_dict"], "edges": []})
         assert any("object" in e for e in errors)
 
-    def test_node_missing_required_field(self):
+    def test_node_missing_required_field(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         # Missing 'id' among others
@@ -63,7 +63,7 @@ class TestValidateExtraction:
         )
         assert any("missing required field" in e for e in errors)
 
-    def test_node_invalid_file_type(self):
+    def test_node_invalid_file_type(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction(
@@ -81,7 +81,7 @@ class TestValidateExtraction:
         )
         assert any("invalid file_type" in e for e in errors)
 
-    def test_valid_node_all_file_types(self):
+    def test_valid_node_all_file_types(self) -> None:
         from backend.context_graph.validate import (
             VALID_FILE_TYPES,
             validate_extraction,
@@ -104,13 +104,13 @@ class TestValidateExtraction:
             ft_errors = [e for e in errors if "file_type" in e]
             assert not ft_errors, f"file_type={ft!r} should be valid"
 
-    def test_edge_not_dict_returns_error(self):
+    def test_edge_not_dict_returns_error(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction({"nodes": [], "edges": [42]})
         assert any("object" in e for e in errors)
 
-    def test_edge_missing_required_fields(self):
+    def test_edge_missing_required_fields(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction(
@@ -121,7 +121,7 @@ class TestValidateExtraction:
         )
         assert any("missing required field" in e for e in errors)
 
-    def test_edge_invalid_confidence(self):
+    def test_edge_invalid_confidence(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction(
@@ -153,7 +153,7 @@ class TestValidateExtraction:
         )
         assert any("invalid confidence" in e for e in errors)
 
-    def test_edge_source_not_in_nodes(self):
+    def test_edge_source_not_in_nodes(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction(
@@ -179,7 +179,7 @@ class TestValidateExtraction:
         )
         assert any("does not match any node id" in e for e in errors)
 
-    def test_edge_target_not_in_nodes(self):
+    def test_edge_target_not_in_nodes(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction(
@@ -205,13 +205,13 @@ class TestValidateExtraction:
         )
         assert any("does not match any node id" in e for e in errors)
 
-    def test_valid_extraction_empty(self):
+    def test_valid_extraction_empty(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction({"nodes": [], "edges": []})
         assert errors == []
 
-    def test_valid_extraction_complete(self):
+    def test_valid_extraction_complete(self) -> None:
         from backend.context_graph.validate import validate_extraction
 
         errors = validate_extraction(
@@ -245,13 +245,13 @@ class TestValidateExtraction:
 
 
 class TestAssertValid:
-    def test_raises_on_invalid(self):
+    def test_raises_on_invalid(self) -> None:
         from backend.context_graph.validate import assert_valid
 
         with pytest.raises(ValueError, match=r"error\(s\)"):
             assert_valid({"nodes": [], "edges": 42})
 
-    def test_does_not_raise_on_valid(self):
+    def test_does_not_raise_on_valid(self) -> None:
         from backend.context_graph.validate import assert_valid
 
         assert_valid({"nodes": [], "edges": []})  # should not raise

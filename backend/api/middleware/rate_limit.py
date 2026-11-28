@@ -22,7 +22,6 @@ distribuído (Redis) é religado em ``attach_limiter`` quando disponível.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import FastAPI, Request
 from slowapi import Limiter
@@ -75,6 +74,6 @@ def attach_limiter(app: FastAPI) -> None:
         logger.warning("rate_limit: slowapi não disponível: %s", exc)
 
 
-def get_limiter(request: Request) -> Any:
+def get_limiter(request: Request) -> Limiter | None:
     """Retorna o limiter do state do app (helper para handlers)."""
     return getattr(request.app.state, "limiter", None)

@@ -17,6 +17,7 @@ import httpx
 import pytest
 
 from backend.services import docker_model_runner as dmr
+from backend.vtypes.contracts import JsonObject
 
 
 def test_docker_executable_prefers_absolute_path_entry(
@@ -136,7 +137,7 @@ async def test_docker_host_info_reports_runtime_and_gpu_capabilities(
             """Executa a operação wait."""
             return
 
-    async def create(*args: str, **kwargs: object) -> Process:
+    async def create(*args: str, **kwargs: int | bool | None) -> Process:
         """Executa a operação create."""
         assert args == ("docker", "info", "--format", "{{json .}}")
         assert kwargs.get("shell") is None
@@ -238,11 +239,11 @@ async def test_provider_status_probes_default_endpoint_without_saved_config(
         """Executa a operação fake available."""
         return True, "Docker Model Runner"
 
-    async def fake_probe(*args: object, **kwargs: object) -> dmr.DmrProbe:
+    async def fake_probe[**P](*args: P.args, **kwargs: P.kwargs) -> dmr.DmrProbe:
         """Executa a operação fake probe."""
         return dmr.DmrProbe(True, "openai", ("hf.co/Qwen/Qwen3-0.6B",))
 
-    async def fake_host_info() -> dict[str, object]:
+    async def fake_host_info() -> JsonObject:
         """Executa a operação fake host info."""
         return {
             "os": "linux",
@@ -290,7 +291,7 @@ async def test_provider_http_status_does_not_require_docker_cli(
     from backend.api.handlers import provider_routing
     from backend.settings import settings
 
-    async def fake_probe(*args: object, **kwargs: object) -> dmr.DmrProbe:
+    async def fake_probe[**P](*args: P.args, **kwargs: P.kwargs) -> dmr.DmrProbe:
         """Executa a operação fake probe."""
         return dmr.DmrProbe(True, "openai", ("hf.co/Qwen/Qwen3-0.6B",))
 
@@ -346,7 +347,7 @@ async def test_provider_status_distinguishes_missing_model_runner_plugin(
         """Executa a operação fake available."""
         return False, "docker: unknown command: model"
 
-    async def fake_probe(*args: object, **kwargs: object) -> dmr.DmrProbe:
+    async def fake_probe[**P](*args: P.args, **kwargs: P.kwargs) -> dmr.DmrProbe:
         """Executa a operação fake probe."""
         return dmr.DmrProbe(False, None, (), "endpoint indisponível")
 
@@ -383,7 +384,7 @@ async def test_run_docker_model_uses_exec_without_shell(
             """Executa a operação wait."""
             return
 
-    async def create(*args: str, **kwargs: object) -> Process:
+    async def create(*args: str, **kwargs: int | bool | None) -> Process:
         """Executa a operação create."""
         calls.append((args, bool(kwargs.get("shell"))))
         return Process()

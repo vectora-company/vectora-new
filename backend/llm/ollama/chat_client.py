@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any
 
 from backend.llm.media_parts import AcceptedMedia, prepare_content
 from backend.llm.ollama.client import OllamaClient, OllamaResponseError
+from backend.llm.tool_schema import chat_completions_tool
+from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -43,7 +45,6 @@ _ROLE_POR_TIPO = {
     MessageRole.TOOL: "tool",
 }
 
-_INVALID: object = object()
 _TOOL_CALL_TAG_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 
 # Small local models degrade sharply when Ollama receives the complete Vectora
@@ -269,16 +270,18 @@ def _split_conteudo(
     return "".join(texto_partes), imagens
 
 
-def _to_ollama_message(msg: VMessage, accepted: AcceptedMedia | None = None) -> dict:
+def _to_ollama_message(
+    msg: VMessage, accepted: AcceptedMedia | None = None
+) -> JsonObject:
     role = _ROLE_POR_TIPO.get(msg.role)
     if role is None:
         erro = f"Mensagem de role {msg.role!r} não tem equivalente no Ollama"
         raise ValueError(erro)
 
     texto, imagens = _split_conteudo(msg, accepted)
-    saida: dict[str, Any] = {"role": role, "content": texto}
+    saida: JsonObject = {"role": role, "content": texto}
     if imagens:
-        saida["images"] = imagens
+        saida["images"] = [*imagens]
 
     if role == "assistant" and msg.tool_calls:
         saida["tool_calls"] = [
@@ -288,25 +291,28 @@ def _to_ollama_message(msg: VMessage, accepted: AcceptedMedia | None = None) -> 
     return saida
 
 
-def _parse_tool_calls(bruto: list) -> list[ToolCall]:
+def _parse_tool_calls(bruto: list[JsonValue]) -> list[ToolCall]:
     """`arguments` vem como objeto no Ollama moderno e como string no
     antigo — aceitar os dois evita quebrar contra servidor desatualizado."""
     chamadas: list[ToolCall] = []
     for item in bruto or []:
-        funcao = item.get("function") or {}
+        entry = item if isinstance(item, dict) else {}
+        function = entry.get("function")
+        funcao = function if isinstance(function, dict) else {}
         args = funcao.get("arguments")
         raw = args if isinstance(args, str) else None
         if isinstance(args, str):
             try:
                 args = json.loads(args)
             except json.JSONDecodeError:
-                args = _INVALID
+                # O texto original segue em ``raw`` para o erro de leitura.
+                args = None
         elif args is None:
             args = {}
         chamadas.append(
             ToolCall(
-                id=item.get("id") or "",
-                name=funcao.get("name", ""),
+                id=str(entry.get("id") or ""),
+                name=str(funcao.get("name") or ""),
                 args=coerce_json_object(args, raw=raw),
             )
         )
@@ -366,6 +372,13 @@ def _parse_textual_tool_calls(content: str) -> list[ToolCall]:
     return parsed
 
 
+_LOCAL_MODEL_GUIDANCE = (
+    "\n\nLocal model guidance: use `terminal` for one-shot shell commands. "
+    "Use the browser tools directly for navigation and reading; "
+    "do not open or manage an interactive PTY."
+)
+
+
 class OllamaChatClient:
     """Chat client nativo do Ollama — implementa o Protocol ``ChatClient``,
     async-only (CLAUDE.md regra 10)."""
@@ -399,9 +412,9 @@ class OllamaChatClient:
                 str(ollama_messages[0].get("content") or "")
             )
             _compact_tool_results(ollama_messages)
-        corpo: dict[str, Any] = {
+        corpo: JsonObject = {
             "model": self.model,
-            "messages": ollama_messages,
+            "messages": [*ollama_messages],
         }
         predict_limit = max_tokens
         if predict_limit is None:
@@ -410,7 +423,7 @@ class OllamaChatClient:
                 if tools
                 else settings.ollama_num_predict
             )
-        options: dict[str, Any] = {
+        options: JsonObject = {
             "num_ctx": settings.ollama_num_ctx,
             "num_predict": predict_limit,
         }
@@ -424,17 +437,11 @@ class OllamaChatClient:
             options["temperature"] = 0.2
         corpo["options"] = options
         if payload_tool_specs:
-            corpo["tools"] = [t.openai_schema() for t in payload_tool_specs]
-            if (
-                compacted
-                and corpo["messages"]
-                and corpo["messages"][0]["role"] == "system"
-            ):
-                corpo["messages"][0]["content"] += (
-                    "\n\nLocal model guidance: use `terminal` for one-shot shell commands. "
-                    "Use the browser tools directly for navigation and reading; "
-                    "do not open or manage an interactive PTY."
-                )
+            corpo["tools"] = [chat_completions_tool(t) for t in payload_tool_specs]
+            if compacted and ollama_messages:
+                first = ollama_messages[0]
+                if first["role"] == "system":
+                    first["content"] = f"{first['content']}{_LOCAL_MODEL_GUIDANCE}"
         return corpo
 
     async def _accepted_media(self, messages: list[VMessage]) -> AcceptedMedia:

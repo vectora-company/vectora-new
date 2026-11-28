@@ -17,10 +17,14 @@ from __future__ import annotations
 
 import dataclasses
 import typing
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 if typing.TYPE_CHECKING:
     from collections.abc import Iterable
+
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 
 class CollectionSettingAdapter(Protocol):
@@ -32,9 +36,9 @@ class CollectionSettingAdapter(Protocol):
     `run_until_complete` num loop ativo.
     """
 
-    async def list_items(self) -> list[dict[str, typing.Any]]: ...
+    async def list_items(self) -> list[JsonObject]: ...
 
-    async def add(self, item: dict[str, typing.Any]) -> dict[str, typing.Any]: ...
+    async def add(self, item: JsonObject) -> JsonObject: ...
 
     async def remove(self, item_id: str) -> None: ...
 
@@ -48,10 +52,10 @@ class CollectionSettingField:
     description: str
     adapter: CollectionSettingAdapter
 
-    async def list_items(self) -> list[dict[str, typing.Any]]:
+    async def list_items(self) -> list[JsonObject]:
         return await self.adapter.list_items()
 
-    async def add(self, item: dict[str, typing.Any]) -> dict[str, typing.Any]:
+    async def add(self, item: JsonObject) -> JsonObject:
         return await self.adapter.add(item)
 
     async def remove(self, item_id: str) -> None:
@@ -107,11 +111,9 @@ class UserScopedCollectionAdapter(Protocol):
     dono (perfil de conta, memórias). Difere de `CollectionSettingAdapter`
     (coleção global) apenas no escopo: nenhuma operação existe sem o dono."""
 
-    async def list_items(self, user_id: str) -> list[dict[str, typing.Any]]: ...
+    async def list_items(self, user_id: str) -> list[JsonObject]: ...
 
-    async def add(
-        self, item: dict[str, typing.Any]
-    ) -> dict[str, typing.Any] | None: ...
+    async def add(self, item: JsonObject) -> JsonObject | None: ...
 
     async def remove(self, user_id: str, item_id: str) -> None: ...
 
@@ -125,10 +127,10 @@ class UserScopedCollectionField:
     description: str
     adapter: UserScopedCollectionAdapter
 
-    async def list_items(self, user_id: str) -> list[dict[str, typing.Any]]:
+    async def list_items(self, user_id: str) -> list[JsonObject]:
         return await self.adapter.list_items(user_id)
 
-    async def add(self, item: dict[str, typing.Any]) -> dict[str, typing.Any] | None:
+    async def add(self, item: JsonObject) -> JsonObject | None:
         return await self.adapter.add(item)
 
     async def remove(self, user_id: str, item_id: str) -> None:

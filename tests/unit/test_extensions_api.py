@@ -5,10 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
+from starlette.requests import Request
 
 import backend.extensions.host as host_module
 from backend.api.handlers import extensions as api
@@ -20,25 +22,31 @@ from backend.extensions.host import (
 )
 from backend.extensions.models import Contribution, ExtensionRelease
 from backend.extensions.store import ExtensionStore
+from backend.tools.context import ToolContext
 from backend.tools.extensions import call_extension_tool
+from backend.vtypes.contracts import JsonObject
 
 
 class _Client:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.calls: list[tuple[str, JsonObject]] = []
 
     async def connect(
-        self, connections: dict[str, Any], *, strict: bool = False
+        self, connections: dict[str, JsonObject], *, strict: bool = False
     ) -> None:
         return None
 
-    def tools(self) -> dict[str, Any]:
-        return {"echo": object()}
+    def tools(self) -> list[str]:
+        return ["echo"]
 
     async def call_tool(
-        self, name: str, arguments: dict[str, Any], ctx: Any = None
+        self,
+        tool_name: str,
+        /,
+        arguments: JsonObject,
+        ctx: ToolContext | None = None,
     ) -> str:
-        self.calls.append((name, arguments))
+        self.calls.append((tool_name, arguments))
         return "resposta"
 
     async def aclose(self) -> None:
@@ -54,9 +62,11 @@ def host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ExtensionHost:
     return instance
 
 
-def _request(role: str | None) -> Any:
+def _request(role: str | None) -> MagicMock:
     user = None if role is None else SimpleNamespace(id="u1", role=role)
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    request = MagicMock(spec=Request)
+    request.state = SimpleNamespace(user=user)
+    return request
 
 
 def _install_body(host: ExtensionHost) -> InstallRequest:

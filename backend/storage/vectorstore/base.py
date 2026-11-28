@@ -7,9 +7,11 @@ Agent (escrita à mão, sem herdar de framework): um contrato pequeno que
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
+
+from backend.vtypes.contracts import JsonObject
 
 
 class VectorStoreHealth(BaseModel):
@@ -23,29 +25,6 @@ class VectorStoreHealth(BaseModel):
     collections: list[str] | None = None
     internal: bool | None = None
 
-    def __getitem__(self, item: str) -> object:
-        """Executa a operação getitem."""
-        if not hasattr(self, item):
-            raise KeyError(item)
-        val = getattr(self, item)
-        if val is None and item not in self.model_fields_set:
-            raise KeyError(item)
-        return val
-
-    def __contains__(self, item: object) -> bool:
-        """Executa a operação contains."""
-        if not isinstance(item, str):
-            return False
-        return hasattr(self, item) and (
-            getattr(self, item) is not None or item in self.model_fields_set
-        )
-
-    def get(self, item: str, default: object = None) -> object:
-        """Executa a operação get."""
-        if item in self:
-            return getattr(self, item)
-        return default
-
 
 @dataclass
 class VectorRow:
@@ -54,7 +33,7 @@ class VectorRow:
     id: str
     vector: list[float]
     text: str
-    metadata: dict[str, Any]
+    metadata: JsonObject
 
 
 @dataclass
@@ -65,7 +44,7 @@ class VectorHit:
     id: str
     score: float
     content: str
-    metadata: dict[str, Any]
+    metadata: JsonObject
     collection: str
 
 

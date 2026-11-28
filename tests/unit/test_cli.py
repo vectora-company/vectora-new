@@ -12,15 +12,17 @@ import io
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
 
 import pytest
+from pydantic import BaseModel
 from rich.console import Console as _Console
 
 from backend.cli import infra, keys, marketplace
 from backend.main import _build_parser
 
 
-def _null_console(*_a: object, **_kw: object) -> _Console:
+def _null_console[**P](*_a: P.args, **_kw: P.kwargs) -> _Console:
     return _Console(file=io.StringIO())
 
 
@@ -29,7 +31,7 @@ def _null_console(*_a: object, **_kw: object) -> _Console:
 # ---------------------------------------------------------------------------
 
 
-def test_parser_sem_subcomando_nao_define_command():
+def test_parser_sem_subcomando_nao_define_command() -> None:
     parser = _build_parser()
     args = parser.parse_args([])
     assert getattr(args, "command", None) is None
@@ -62,7 +64,7 @@ def test_sem_subcomando_e_help_imprimem_ajuda_sem_subir_servidor(
 ) -> None:
     from backend import main
 
-    def _nao_deve_subir(*_args: object, **_kwargs: object) -> None:
+    def _nao_deve_subir[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
         raise AssertionError("help não pode iniciar o Vectora")
 
     monkeypatch.setattr(main, "_run_start", _nao_deve_subir)
@@ -109,7 +111,7 @@ def test_parser_nao_expoe_o_antigo_comando_run() -> None:
     assert exc_info.value.code == 2
 
 
-def test_parser_start_headless_e_porta():
+def test_parser_start_headless_e_porta() -> None:
     parser = _build_parser()
     args = parser.parse_args(["start", "--headless", "--port", "9000"])
     assert args.command == "start"
@@ -117,7 +119,7 @@ def test_parser_start_headless_e_porta():
     assert args.port == 9000
 
 
-def test_parser_config_keys_docker_qdrant_redis():
+def test_parser_config_keys_docker_qdrant_redis() -> None:
     parser = _build_parser()
     assert parser.parse_args(["config", "keys"]).config_action == "keys"
 
@@ -137,7 +139,7 @@ def test_parser_config_keys_docker_qdrant_redis():
     assert redis.config_arg == "redis://localhost:6379/0"
 
 
-def test_parser_config_sem_acao_aceita_set():
+def test_parser_config_sem_acao_aceita_set() -> None:
     parser = _build_parser()
     args = parser.parse_args(["config", "--set", "verbosity=2"])
     assert args.config_action is None
@@ -175,14 +177,14 @@ def test_marketplace_json_envelope_nao_vaza_caminho(
 def test_mcp_install_remove_reutiliza_handlers(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    async def _empty_registry() -> list[object]:
+    async def _empty_registry() -> list[str]:
         return []
 
-    async def _install(request: object, user_id: str) -> dict[str, str]:
+    async def _install(request: BaseModel, user_id: str) -> dict[str, str]:
         calls.append(f"install:{user_id}")
         return {"status": "installed", "mcp_id": "github"}
 
-    async def _remove(request: object, user_id: str) -> dict[str, str]:
+    async def _remove(request: BaseModel, user_id: str) -> dict[str, str]:
         calls.append(f"remove:{user_id}")
         return {"status": "removed", "mcp_id": "github"}
 
@@ -205,7 +207,7 @@ def test_mcp_install_remove_reutiliza_handlers(monkeypatch: pytest.MonkeyPatch) 
 # ---------------------------------------------------------------------------
 
 
-def test_upsert_env_key_insere_e_atualiza(tmp_path: Path):
+def test_upsert_env_key_insere_e_atualiza(tmp_path: Path) -> None:
     env = tmp_path / ".env"
 
     keys.upsert_env_key(env, "FOO", "1")
@@ -229,7 +231,9 @@ def test_upsert_env_key_insere_e_atualiza(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_run_docker_status_ok(monkeypatch, capsys):
+def test_run_docker_status_ok(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     from backend.storage.dev_stack import StackResult
 
     monkeypatch.setattr(
@@ -294,7 +298,7 @@ def test_run_redis_falha_conexao_sai(
     monkeypatch.setattr("backend.cli.infra.Console", _null_console)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
 
-    async def _boom(url: str) -> None:
+    async def _boom(url: str) -> NoReturn:
         raise ConnectionError("recusado")
 
     monkeypatch.setattr(infra, "_test_redis", _boom)

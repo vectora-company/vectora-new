@@ -10,7 +10,15 @@ estourada exigem ações diferentes do usuário, e hoje viram a mesma mensagem.
 from __future__ import annotations
 
 import logging
-from typing import Any, Self
+from typing import TYPE_CHECKING, Self
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from types import TracebackType
+
+    import httpx
+
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +42,17 @@ class TavilyResponseError(TavilyError):
     """Resposta com forma inesperada, ou URL que a extração não conseguiu ler."""
 
 
-def _sem_none(payload: dict) -> dict:
+def _sem_none(payload: Mapping[str, JsonValue | list[str]]) -> JsonObject:
     """Remove campos não informados.
 
     Mandar `include_domains: null` restringe a busca em alguns casos em vez
     de deixá-la aberta — o campo tem que sumir, não ir nulo.
     """
-    return {k: v for k, v in payload.items() if v is not None}
+    return {
+        k: [*v] if isinstance(v, list) else v
+        for k, v in payload.items()
+        if v is not None
+    }
 
 
 class TavilyClient:
@@ -49,7 +61,7 @@ class TavilyClient:
         api_key: str,
         *,
         base_url: str = BASE_URL,
-        http_client: Any = None,
+        http_client: httpx.AsyncClient | None = None,
         timeout_s: float = _TIMEOUT_S,
     ) -> None:
         if not (api_key or "").strip():
@@ -66,7 +78,7 @@ class TavilyClient:
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"}
 
-    async def _ensure_client(self) -> Any:
+    async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
             import httpx
 
@@ -77,7 +89,12 @@ class TavilyClient:
         await self._ensure_client()
         return self
 
-    async def __aexit__(self, *_exc: object) -> None:
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
         await self.aclose()
 
     async def aclose(self) -> None:
@@ -87,7 +104,7 @@ class TavilyClient:
             with contextlib.suppress(Exception):
                 await self._client.aclose()
 
-    def _raise_for_status(self, status: int, corpo: Any, *, path: str) -> None:
+    def _raise_for_status(self, status: int, corpo: JsonValue, *, path: str) -> None:
         if status < 400:
             return
         detalhe = ""
@@ -106,8 +123,8 @@ class TavilyClient:
         raise TavilyResponseError(msg)
 
     async def _request(
-        self, method: str, path: str, payload: dict | None = None
-    ) -> dict:
+        self, method: str, path: str, payload: JsonObject | None = None
+    ) -> JsonObject:
         client = await self._ensure_client()
         if method == "GET":
             resp = await client.get(f"{self._base_url}{path}", headers=self._headers())
@@ -137,7 +154,7 @@ class TavilyClient:
         include_domains: list[str] | None = None,
         exclude_domains: list[str] | None = None,
         include_raw_content: bool | None = None,
-    ) -> list[dict]:
+    ) -> list[JsonObject]:
         """Busca web. Parâmetros são por chamada, não por instanciação."""
         corpo = await self._request(
             "POST",
@@ -162,7 +179,7 @@ class TavilyClient:
             # esconderia uma quebra de contrato da API.
             msg = "Tavily devolveu /search sem o campo `results`"
             raise TavilyResponseError(msg)
-        return resultados
+        return [item for item in resultados if isinstance(item, dict)]
 
     async def extract(
         self,
@@ -171,7 +188,7 @@ class TavilyClient:
         extract_depth: str | None = None,
         output_format: str | None = None,
         include_images: bool | None = None,
-    ) -> list[dict]:
+    ) -> list[JsonObject]:
         """Extrai o conteúdo das URLs."""
         if not urls:
             return []
@@ -188,8 +205,10 @@ class TavilyClient:
                 }
             ),
         )
-        falhas = corpo.get("failed_results") or []
-        resultados = corpo.get("results") or []
+        failed = corpo.get("failed_results")
+        found = corpo.get("results")
+        falhas = failed if isinstance(failed, list) else []
+        resultados = found if isinstance(found, list) else []
         if falhas and not resultados:
             # Ignorar `failed_results` faz o agente achar que a página estava
             # vazia, em vez de saber que não foi lida.
@@ -198,16 +217,16 @@ class TavilyClient:
             )
             msg = f"Tavily não conseguiu extrair: {urls_falhas}"
             raise TavilyResponseError(msg)
-        return list(resultados)
+        return [item for item in resultados if isinstance(item, dict)]
 
-    async def crawl(self, url: str, **kwargs: Any) -> dict:
+    async def crawl(self, url: str, **kwargs: JsonValue) -> JsonObject:
         """Varre um site a partir de `url`."""
         return await self._request("POST", "/crawl", _sem_none({"url": url, **kwargs}))
 
-    async def map(self, url: str, **kwargs: Any) -> dict:
+    async def map(self, url: str, **kwargs: JsonValue) -> JsonObject:
         """Mapeia a estrutura de links de um site."""
         return await self._request("POST", "/map", _sem_none({"url": url, **kwargs}))
 
-    async def usage(self) -> dict:
+    async def usage(self) -> JsonObject:
         """Consumo de créditos da key e do plano — base do medidor (15.19)."""
         return await self._request("GET", "/usage")

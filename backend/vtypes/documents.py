@@ -4,25 +4,19 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from backend.vtypes.contracts import JsonObject
+
 
 class Document(BaseModel):
     """Estrutura de documento recuperado do RAG (Pydantic)."""
 
     page_content: str = Field(description="Conteúdo do documento.")
-    metadata: dict[str, Any] = Field(
+    metadata: JsonObject = Field(
         default_factory=dict, description="Metadados associados."
     )
     relevance_score: float | None = Field(
         default=None, description="Score de relevância do RAG."
     )
-
-    def __getitem__(self, item: str) -> Any:
-        """Implementa a operação especial __getitem__."""
-        return getattr(self, item)
-
-    def get(self, item: str, default: Any = None) -> Any:
-        """Executa a operação get."""
-        return getattr(self, item, default)
 
 
 VALID_ARTIFACT_TYPES = frozenset(
@@ -74,14 +68,6 @@ class ArtifactMetadata(BaseModel):
     retention_class: str = Field(
         default="run", description="Política de retenção aplicada ao artifact."
     )
-
-    def __getitem__(self, item: str) -> Any:
-        """Implementa a operação especial __getitem__."""
-        return getattr(self, item)
-
-    def get(self, item: str, default: Any = None) -> Any:
-        """Executa a operação get."""
-        return getattr(self, item, default)
 
 
 class ArtifactIntegrity(BaseModel):

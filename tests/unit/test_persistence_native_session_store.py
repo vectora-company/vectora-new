@@ -4,6 +4,7 @@ Fixture com pool real sobre `tmp_path`, sem mock."""
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import cast
 
@@ -11,6 +12,7 @@ import pytest
 
 from backend.persistence.native.session_store import SessionStore, _message_to_row
 from backend.storage.sqlite.pool import AsyncConnectionPool
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -21,7 +23,7 @@ from backend.vtypes.message import (
 
 
 @pytest.fixture
-async def store(tmp_path):
+async def store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "sessions.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -86,7 +88,7 @@ class TestContextReplayIdempotency:
         self, store: SessionStore
     ) -> None:
         await store.create_session("thread-projection", user_id="alice")
-        base = {
+        base: JsonObject = {
             "projection_id": "projection-1",
             "source_transcript_hash": "a" * 64,
             "start_seq": 1,
@@ -112,7 +114,7 @@ class TestContextReplayIdempotency:
         self, store: SessionStore
     ) -> None:
         await store.create_session("thread-checkpoint", user_id="alice")
-        base = {
+        base: JsonObject = {
             "checkpoint_id": "checkpoint-1",
             "last_sequence": 4,
             "source_hash": "b" * 64,
@@ -192,7 +194,7 @@ class TestContextReplayIdempotency:
         """A retenção deve excluir pela chave composta thread + id."""
         await store.create_session("thread-old", user_id="alice")
         await store.create_session("thread-new", user_id="alice")
-        projection = {"projection_id": "same-id", "content": {"text": "x"}}
+        projection: JsonObject = {"projection_id": "same-id", "content": {"text": "x"}}
         await store.save_context_projection("thread-old", "run-old", projection)
         await store.save_context_projection("thread-new", "run-new", projection)
         async with store._pool.acquire() as conn:
@@ -538,7 +540,7 @@ class TestAppendMessageEGetHistory:
                 "is_error, created_at"
             )
 
-            async def _legacy_rows() -> list[tuple[object, ...]]:
+            async def _legacy_rows() -> list[tuple[str | int | None, ...]]:
                 async with pool.acquire() as conn:
                     return [
                         tuple(row)
@@ -648,7 +650,9 @@ class TestAppendMessageEGetHistory:
         assert "DATA:image/png" not in content_json
         assert '"image_url": null' in content_json
 
-    async def test_lista_compara_e_seleciona_branches(self, store: SessionStore):
+    async def test_lista_compara_e_seleciona_branches(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-branches", user_id="alice")
         root = await store.append_message(
             "thread-branches", text_message(MessageRole.USER, "pergunta")
@@ -672,7 +676,9 @@ class TestAppendMessageEGetHistory:
         await store.set_branch_head("thread-branches", old_head)
         assert await store.get_branch_head_id("thread-branches") == old_head
 
-    async def test_rejeita_selecao_de_mensagem_intermediaria(self, store: SessionStore):
+    async def test_rejeita_selecao_de_mensagem_intermediaria(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-branches", user_id="alice")
         root = await store.append_message(
             "thread-branches", text_message(MessageRole.USER, "pergunta")
@@ -686,7 +692,9 @@ class TestAppendMessageEGetHistory:
         with pytest.raises(ValueError, match="não pertence"):
             await store.set_branch_head("thread-branches", root)
 
-    async def test_round_trip_preserva_ordem_e_conteudo(self, store: SessionStore):
+    async def test_round_trip_preserva_ordem_e_conteudo(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
         id1 = await store.append_message(
             "thread-1", text_message(MessageRole.USER, "oi")
@@ -702,12 +710,16 @@ class TestAppendMessageEGetHistory:
         assert [m.text() for m in historico] == ["oi", "olá!"]
         assert [m.role for m in historico] == [MessageRole.USER, MessageRole.ASSISTANT]
 
-    async def test_thread_sem_mensagem_devolve_lista_vazia(self, store: SessionStore):
+    async def test_thread_sem_mensagem_devolve_lista_vazia(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-vazia", user_id="alice")
 
         assert await store.get_history("thread-vazia") == []
 
-    async def test_preserva_tool_calls_e_tool_call_id(self, store: SessionStore):
+    async def test_preserva_tool_calls_e_tool_call_id(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
         assistente = VMessage(
             role=MessageRole.ASSISTANT,
@@ -734,7 +746,7 @@ class TestAppendMessageEGetHistory:
 
     async def test_fork_via_up_to_message_id_rele_branch_antiga_sem_apagar(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
         id1 = await store.append_message(
             "thread-1", text_message(MessageRole.USER, "primeira pergunta")
@@ -762,7 +774,7 @@ class TestAppendMessageEGetHistory:
 
     async def test_get_history_with_ids_devolve_o_id_de_cada_mensagem(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
         id1 = await store.append_message(
             "thread-1", text_message(MessageRole.USER, "oi")
@@ -780,12 +792,14 @@ class TestAppendMessageEGetHistory:
 
     async def test_get_history_with_ids_thread_sem_mensagem_devolve_lista_vazia(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-vazia", user_id="alice")
 
         assert await store.get_history_with_ids("thread-vazia") == []
 
-    async def test_reconstroi_cadeia_longa_preservando_ordem(self, store: SessionStore):
+    async def test_reconstroi_cadeia_longa_preservando_ordem(
+        self, store: SessionStore
+    ) -> None:
         """`get_history_with_ids` reconstrói via uma única query recursiva
         (`WITH RECURSIVE`) em vez de uma leitura por mensagem — este teste
         cobre uma cadeia longa o bastante pra não passar por acidente com
@@ -806,7 +820,7 @@ class TestAppendMessageEGetHistory:
 
     async def test_ciclo_em_parent_message_id_levanta_erro_em_vez_de_recursar_sem_fim(
         self, store: SessionStore
-    ):
+    ) -> None:
         """A checagem antiga de ciclo era um `set` de ids visitados no loop
         Python; a reconstrução via CTE recursiva não tem como fazer o
         equivalente nativamente, então depende de um teto de profundidade
@@ -840,12 +854,14 @@ class TestAppendMessageEGetHistory:
 
 
 class TestGetBranchHeadId:
-    async def test_thread_sem_mensagem_devolve_none(self, store: SessionStore):
+    async def test_thread_sem_mensagem_devolve_none(self, store: SessionStore) -> None:
         await store.create_session("thread-1", user_id="alice")
 
         assert await store.get_branch_head_id("thread-1") is None
 
-    async def test_devolve_o_id_da_ultima_mensagem_apendada(self, store: SessionStore):
+    async def test_devolve_o_id_da_ultima_mensagem_apendada(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
         id1 = await store.append_message(
             "thread-1", text_message(MessageRole.USER, "oi")
@@ -862,7 +878,7 @@ class TestGetBranchHeadId:
 class TestSetBranchHead:
     async def test_reaponta_a_branch_ativa_sem_apagar_mensagens(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
         id1 = await store.append_message(
             "thread-1", text_message(MessageRole.USER, "pergunta")
@@ -885,7 +901,7 @@ class TestSetBranchHead:
 
     async def test_apontar_para_mensagem_de_outra_thread_rejeita_sem_corromper_historico(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
         await store.create_session("thread-2", user_id="alice")
         id_thread1 = await store.append_message(
@@ -905,7 +921,9 @@ class TestSetBranchHead:
             "outra thread"
         ]
 
-    async def test_apontar_para_id_inexistente_levanta_erro(self, store: SessionStore):
+    async def test_apontar_para_id_inexistente_levanta_erro(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
         await store.append_message("thread-1", text_message(MessageRole.USER, "oi"))
 
@@ -916,7 +934,7 @@ class TestSetBranchHead:
 class TestPendingApprovals:
     async def test_round_trip_preserva_opcoes_prioridade_e_expiracao(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-structured", user_id="alice")
         await store.put_pending_approval(
             "thread-structured",
@@ -935,7 +953,9 @@ class TestPendingApprovals:
         assert pending["priority"] == 80
         assert pending["expires_at"] == "2999-01-01T00:00:00+00:00"
 
-    async def test_aprovacao_expirada_e_removida_ao_ser_lida(self, store: SessionStore):
+    async def test_aprovacao_expirada_e_removida_ao_ser_lida(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-expired", user_id="alice")
         await store.put_pending_approval(
             "thread-expired",
@@ -968,7 +988,7 @@ class TestPendingApprovals:
 
         assert sum(item is not None for item in claimed) == 1
 
-    async def test_round_trip_put_get_clear(self, store: SessionStore):
+    async def test_round_trip_put_get_clear(self, store: SessionStore) -> None:
         await store.create_session("thread-1", user_id="alice")
         await store.put_pending_approval(
             "thread-1",
@@ -988,14 +1008,14 @@ class TestPendingApprovals:
         await store.clear_pending_approval("thread-1")
         assert await store.get_pending_approval("thread-1") is None
 
-    async def test_thread_sem_pendencia_devolve_none(self, store: SessionStore):
+    async def test_thread_sem_pendencia_devolve_none(self, store: SessionStore) -> None:
         await store.create_session("thread-1", user_id="alice")
 
         assert await store.get_pending_approval("thread-1") is None
 
     async def test_segunda_chamada_de_put_sobrescreve_a_pendencia_anterior(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
         await store.put_pending_approval(
             "thread-1",
@@ -1023,7 +1043,9 @@ class TestGetSession:
     thread — usada pelos endpoints REST de threads pra nunca vazar uma
     thread de outro usuário."""
 
-    async def test_devolve_metadados_da_sessao_existente(self, store: SessionStore):
+    async def test_devolve_metadados_da_sessao_existente(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session(
             "thread-1", user_id="alice", workspace_id="ws-1", mode="code"
         )
@@ -1036,15 +1058,19 @@ class TestGetSession:
         assert session["workspace_id"] == "ws-1"
         assert session["mode"] == "code"
 
-    async def test_thread_inexistente_devolve_none(self, store: SessionStore):
+    async def test_thread_inexistente_devolve_none(self, store: SessionStore) -> None:
         assert await store.get_session("nao-existe") is None
 
-    async def test_com_user_id_correto_devolve_sessao(self, store: SessionStore):
+    async def test_com_user_id_correto_devolve_sessao(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
 
         assert await store.get_session("thread-1", user_id="alice") is not None
 
-    async def test_com_user_id_de_outro_dono_devolve_none(self, store: SessionStore):
+    async def test_com_user_id_de_outro_dono_devolve_none(
+        self, store: SessionStore
+    ) -> None:
         """Erro/borda: passar `user_id` de outra pessoa não deve revelar a
         sessão — mesmo resultado (`None`) de uma thread inexistente, pra não
         vazar a quem ela pertence de verdade."""
@@ -1058,10 +1084,14 @@ class TestForeignThreadIds:
     de outro usuário do resultado, mesmo quando outra fonte de metadados
     (`vectora_sessions`) ainda as lista."""
 
-    async def test_lista_vazia_devolve_conjunto_vazio(self, store: SessionStore):
+    async def test_lista_vazia_devolve_conjunto_vazio(
+        self, store: SessionStore
+    ) -> None:
         assert await store.foreign_thread_ids([], "alice") == set()
 
-    async def test_exclui_apenas_threads_de_outro_dono(self, store: SessionStore):
+    async def test_exclui_apenas_threads_de_outro_dono(
+        self, store: SessionStore
+    ) -> None:
         await store.create_session("thread-mine", user_id="alice")
         await store.create_session("thread-theirs", user_id="bob")
 
@@ -1073,7 +1103,7 @@ class TestForeignThreadIds:
 
     async def test_thread_sem_registro_nao_e_considerada_alheia(
         self, store: SessionStore
-    ):
+    ) -> None:
         """Erro/borda: uma thread nunca registrada em `sessions` (legado) não
         pode ser tratada como pertencente a outro usuário — ausência de
         registro não é prova de posse alheia."""
@@ -1092,7 +1122,7 @@ class TestListActiveUserIds:
 
     async def test_lista_apenas_usuarios_atualizados_desde_o_corte(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-recente", user_id="alice")
         await store.create_session("thread-antiga", user_id="bob")
         async with store._pool.acquire() as conn:
@@ -1106,13 +1136,15 @@ class TestListActiveUserIds:
 
         assert users == ["alice"]
 
-    async def test_sem_sessao_nenhuma_devolve_lista_vazia(self, store: SessionStore):
+    async def test_sem_sessao_nenhuma_devolve_lista_vazia(
+        self, store: SessionStore
+    ) -> None:
         """Erro/borda: banco vazio nunca lança, devolve lista vazia."""
         assert await store.list_active_user_ids("2020-01-01T00:00:00") == []
 
     async def test_dois_usuarios_ativos_aparecem_sem_duplicata(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-a", user_id="alice")
         await store.create_session("thread-a2", user_id="alice")
         await store.create_session("thread-b", user_id="bob")
@@ -1125,7 +1157,7 @@ class TestListActiveUserIds:
 class TestLatestAssistantMessageId:
     async def test_distingue_runs_e_ignora_tool_calls_intermediarias(
         self, store: SessionStore
-    ):
+    ) -> None:
         await store.create_session("thread-1", user_id="alice")
 
         # Mensagem 1: run-1 intermediária com tool_calls

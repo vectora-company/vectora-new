@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import json
 import uuid
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 
 from backend.settings import settings
+from backend.vtypes.contracts import JsonObject
+from tests.json_values import as_str
 
 pytestmark = pytest.mark.live
 
@@ -44,7 +47,7 @@ async def _stream_chat(
     chat_mode: bool = True,
     workspace_id: str = "",
     timeout_s: float = 120.0,
-) -> list[dict[str, Any]]:
+) -> list[JsonObject]:
     """POST real em ``/vectora.chat.v1.ChatService/StreamChat``, devolve a
     lista de eventos SSE decodificados (``{"type": ..., ...}`` cada um)."""
     payload = {
@@ -52,7 +55,7 @@ async def _stream_chat(
         "content": content,
         "config": {"chat_mode": chat_mode, "workspace_id": workspace_id},
     }
-    events: list[dict[str, Any]] = []
+    events: list[JsonObject] = []
     async with (
         httpx.AsyncClient(base_url=base_url, timeout=timeout_s) as client,
         client.stream(
@@ -67,11 +70,13 @@ async def _stream_chat(
     return events
 
 
-def _assembled_text(events: list[dict[str, Any]]) -> str:
-    return "".join(e.get("content", "") for e in events if e.get("type") == "token")
+def _assembled_text(events: list[JsonObject]) -> str:
+    return "".join(
+        as_str(e.get("content", "")) for e in events if e.get("type") == "token"
+    )
 
 
-def _thread_id_of(events: list[dict[str, Any]]) -> str:
+def _thread_id_of(events: list[JsonObject]) -> str:
     for e in events:
         if e.get("type") == "thread":
             return str(e["thread_id"])
@@ -84,7 +89,7 @@ def _thread_id_of(events: list[dict[str, Any]]) -> str:
 
 
 @requires_google
-async def test_qa_simples_real(live_backend: str):
+async def test_qa_simples_real(live_backend: str) -> None:
     events = await _stream_chat(
         live_backend, content="Quanto é 15 + 27? Responda só com o número."
     )
@@ -95,7 +100,7 @@ async def test_qa_simples_real(live_backend: str):
     assert "42" in text
 
 
-async def test_qa_content_ausente_erro_422(live_backend: str):
+async def test_qa_content_ausente_erro_422(live_backend: str) -> None:
     # Par de erro/borda: payload sem `content` (campo obrigatório do
     # StreamChatRequest) — 422 do FastAPI, sem sequer chamar o LLM.
     async with httpx.AsyncClient(base_url=live_backend, timeout=30.0) as client:
@@ -113,7 +118,7 @@ async def test_qa_content_ausente_erro_422(live_backend: str):
 
 @requires_google
 @requires_tavily
-async def test_tool_call_busca_web_real(live_backend: str):
+async def test_tool_call_busca_web_real(live_backend: str) -> None:
     events = await _stream_chat(
         live_backend,
         content=(
@@ -138,7 +143,7 @@ async def test_tool_call_busca_web_real(live_backend: str):
 
 
 @requires_google
-async def test_leitura_escrita_arquivo_real(live_backend: str, tmp_path):
+async def test_leitura_escrita_arquivo_real(live_backend: str, tmp_path: Path) -> None:
     workspace_dir = tmp_path / "agent-workspace"
     workspace_dir.mkdir()
 
@@ -186,7 +191,7 @@ async def test_leitura_escrita_arquivo_real(live_backend: str, tmp_path):
 
 
 @requires_google
-async def test_multiturno_com_contexto_real(live_backend: str):
+async def test_multiturno_com_contexto_real(live_backend: str) -> None:
     codeword = f"zorblatt-{uuid.uuid4().hex[:6]}"
     first = await _stream_chat(
         live_backend,
@@ -213,7 +218,9 @@ async def test_multiturno_com_contexto_real(live_backend: str):
 
 
 @requires_google
-async def test_erro_recuperavel_tool_args_invalidos_real(live_backend: str, tmp_path):
+async def test_erro_recuperavel_tool_args_invalidos_real(
+    live_backend: str, tmp_path: Path
+) -> None:
     workspace_dir = tmp_path / "agent-workspace-erro"
     workspace_dir.mkdir()
 

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Iterator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,7 +21,9 @@ from backend.scheduling import nats_sidecar
 
 
 @pytest.fixture(autouse=True)
-def _reset_sidecar_state(tmp_path, monkeypatch):
+def _reset_sidecar_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
     # `Path.home()` isolado por padrão em TODO teste deste arquivo — sem
     # isso, qualquer teste que não pense em PID file acaba lendo/escrevendo
     # o ~/.vectora/nats real do dev (um pid file real deixado por uma
@@ -58,7 +62,7 @@ def _reset_sidecar_state(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ensure_nats_sidecar_returns_none_when_binary_not_found():
+async def test_ensure_nats_sidecar_returns_none_when_binary_not_found() -> None:
     with patch.object(nats_sidecar, "_resolve_binary", return_value=None):
         url = await nats_sidecar.ensure_nats_sidecar()
 
@@ -66,7 +70,9 @@ async def test_ensure_nats_sidecar_returns_none_when_binary_not_found():
     assert nats_sidecar._proc is None
 
 
-def test_resolve_binary_honra_override_env(tmp_path, monkeypatch):
+def test_resolve_binary_honra_override_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """VECTORA_NATS_BINARY (apontado pelo Electron pro binário empacotado) tem
     prioridade sobre PATH/resource, e só vale se o arquivo existir."""
     fake = tmp_path / "nats-server"
@@ -83,7 +89,9 @@ def test_resolve_binary_honra_override_env(tmp_path, monkeypatch):
     assert nats_sidecar._resolve_binary() == "/usr/bin/nats-server"
 
 
-def test_resolve_binary_usa_bundle_pyinstaller_antes_do_path(tmp_path, monkeypatch):
+def test_resolve_binary_usa_bundle_pyinstaller_antes_do_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """No binário congelado (build-hybrid.py empacota resources/
     nats-server via PyInstaller --add-binary em ``nats/``), sys._MEIPASS deve
     vencer o PATH — senão um nats-server desalinhado instalado na máquina do
@@ -100,7 +108,9 @@ def test_resolve_binary_usa_bundle_pyinstaller_antes_do_path(tmp_path, monkeypat
     assert nats_sidecar._resolve_binary() == str(bundled)
 
 
-def test_resolve_binary_meipass_sem_arquivo_cai_no_path(tmp_path, monkeypatch):
+def test_resolve_binary_meipass_sem_arquivo_cai_no_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Borda: _MEIPASS setado mas sem nats/nats-server dentro (build sem
     `scons install` antes do PyInstaller) — não trava, degrada pro PATH."""
     monkeypatch.delenv("VECTORA_NATS_BINARY", raising=False)
@@ -129,7 +139,7 @@ def _fake_ready_proc(ready_line: bytes = b"Server is ready\n") -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_ensure_nats_sidecar_spawns_and_returns_url_when_ready():
+async def test_ensure_nats_sidecar_spawns_and_returns_url_when_ready() -> None:
     fake_proc = _fake_ready_proc()
 
     with (
@@ -153,7 +163,9 @@ async def test_ensure_nats_sidecar_spawns_and_returns_url_when_ready():
 
 
 @pytest.mark.asyncio
-async def test_ensure_nats_sidecar_kills_process_and_returns_none_when_not_ready():
+async def test_ensure_nats_sidecar_kills_process_and_returns_none_when_not_ready() -> (
+    None
+):
     """Edge — processo sobe mas nunca emite "Server is ready" (porta ocupada etc.)."""
     never_ready_proc = MagicMock()
     never_ready_proc.stdout.readline = AsyncMock(return_value=b"")  # EOF imediato
@@ -175,7 +187,7 @@ async def test_ensure_nats_sidecar_kills_process_and_returns_none_when_not_ready
 
 
 @pytest.mark.asyncio
-async def test_ensure_nats_sidecar_reuses_running_process():
+async def test_ensure_nats_sidecar_reuses_running_process() -> None:
     fake_proc = _fake_ready_proc()
     nats_sidecar._proc = fake_proc
     nats_sidecar._url = "nats://127.0.0.1:4222"
@@ -188,7 +200,7 @@ async def test_ensure_nats_sidecar_reuses_running_process():
 
 
 @pytest.mark.asyncio
-async def test_stop_nats_sidecar_terminates_and_clears_state():
+async def test_stop_nats_sidecar_terminates_and_clears_state() -> None:
     fake_proc = MagicMock()
     fake_proc.wait = AsyncMock(return_value=None)
     nats_sidecar._proc = fake_proc
@@ -207,7 +219,7 @@ async def test_stop_nats_sidecar_terminates_and_clears_state():
 
 
 @pytest.mark.asyncio
-async def test_stop_nats_sidecar_without_running_process_is_noop():
+async def test_stop_nats_sidecar_without_running_process_is_noop() -> None:
     await nats_sidecar.stop_nats_sidecar()
     assert nats_sidecar._proc is None
 
@@ -222,24 +234,30 @@ class TestOrphanPidFile:
     (cada PID isolado por try/except) — assim uma falha isolada ao matar um
     PID não derruba o rastreamento dos demais."""
 
-    def test_pid_file_path_fica_dentro_do_store_dir(self, tmp_path):
+    def test_pid_file_path_fica_dentro_do_store_dir(self, tmp_path: Path) -> None:
         assert nats_sidecar._pid_file_path(tmp_path) == tmp_path / "sidecar.pid"
 
-    def test_write_e_read_pid_list_roundtrip(self, tmp_path):
+    def test_write_e_read_pid_list_roundtrip(self, tmp_path: Path) -> None:
         nats_sidecar._write_pid_list(tmp_path, [4242, 5353])
         assert nats_sidecar._read_stale_pids(tmp_path) == [4242, 5353]
 
-    def test_read_stale_pids_sem_arquivo_retorna_lista_vazia(self, tmp_path):
+    def test_read_stale_pids_sem_arquivo_retorna_lista_vazia(
+        self, tmp_path: Path
+    ) -> None:
         assert nats_sidecar._read_stale_pids(tmp_path) == []
 
-    def test_read_stale_pids_arquivo_corrompido_retorna_lista_vazia(self, tmp_path):
+    def test_read_stale_pids_arquivo_corrompido_retorna_lista_vazia(
+        self, tmp_path: Path
+    ) -> None:
         # Erro/borda: JSON inválido ou campo ausente nunca derruba o caller —
         # degrada pra "nenhum pid conhecido" (fail-safe, não fail-open pra
         # matar processo errado).
         (tmp_path / "sidecar.pid").write_text("{nao e json valido", encoding="utf-8")
         assert nats_sidecar._read_stale_pids(tmp_path) == []
 
-    def test_read_stale_pids_aceita_formato_legado_pid_unico(self, tmp_path):
+    def test_read_stale_pids_aceita_formato_legado_pid_unico(
+        self, tmp_path: Path
+    ) -> None:
         # Compatibilidade com o formato D3 ({"pid": N}) — um pid file antigo
         # já em disco no momento do upgrade não deve ser ignorado.
         (tmp_path / "sidecar.pid").write_text(
@@ -247,33 +265,33 @@ class TestOrphanPidFile:
         )
         assert nats_sidecar._read_stale_pids(tmp_path) == [7777]
 
-    def test_write_pid_list_respeita_o_cap(self, tmp_path):
+    def test_write_pid_list_respeita_o_cap(self, tmp_path: Path) -> None:
         many_pids = list(range(1, 20))
         nats_sidecar._write_pid_list(tmp_path, many_pids)
         assert (
             len(nats_sidecar._read_stale_pids(tmp_path)) == nats_sidecar._PID_LIST_CAP
         )
 
-    def test_clear_pid_file_remove_e_e_idempotente(self, tmp_path):
+    def test_clear_pid_file_remove_e_e_idempotente(self, tmp_path: Path) -> None:
         nats_sidecar._write_pid_list(tmp_path, [4242])
         nats_sidecar._clear_pid_file(tmp_path)
         assert not (tmp_path / "sidecar.pid").is_file()
         nats_sidecar._clear_pid_file(tmp_path)  # segunda chamada não lança
 
-    def test_remove_pid_preserva_os_demais(self, tmp_path):
+    def test_remove_pid_preserva_os_demais(self, tmp_path: Path) -> None:
         nats_sidecar._write_pid_list(tmp_path, [111, 222, 333])
         nats_sidecar._remove_pid(tmp_path, 222)
         assert nats_sidecar._read_stale_pids(tmp_path) == [111, 333]
 
-    def test_remove_pid_ultimo_da_lista_limpa_o_arquivo(self, tmp_path):
+    def test_remove_pid_ultimo_da_lista_limpa_o_arquivo(self, tmp_path: Path) -> None:
         nats_sidecar._write_pid_list(tmp_path, [4242])
         nats_sidecar._remove_pid(tmp_path, 4242)
         assert not (tmp_path / "sidecar.pid").is_file()
 
     @pytest.mark.asyncio
     async def test_ensure_nats_sidecar_mata_orfao_registrado_antes_de_spawnar(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
         store_dir = tmp_path / "nats"
         store_dir.mkdir(parents=True)
@@ -302,8 +320,8 @@ class TestOrphanPidFile:
 
     @pytest.mark.asyncio
     async def test_flatpak_reuses_nats_from_url_without_trusting_namespaced_pid(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
         monkeypatch.setenv("FLATPAK_ID", "company.vectora.vectora")
         store_dir = tmp_path / "nats"
@@ -331,8 +349,8 @@ class TestOrphanPidFile:
 
     @pytest.mark.asyncio
     async def test_flatpak_never_kills_a_stale_pid_from_another_namespace(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
         monkeypatch.setenv("FLATPAK_ID", "company.vectora.vectora")
         store_dir = tmp_path / "nats"
@@ -366,8 +384,8 @@ class TestOrphanPidFile:
 
     @pytest.mark.asyncio
     async def test_stop_without_owned_sidecar_keeps_registered_pid_file(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
         store_dir = tmp_path / "nats"
         store_dir.mkdir(parents=True)
@@ -379,8 +397,8 @@ class TestOrphanPidFile:
 
     @pytest.mark.asyncio
     async def test_ensure_nats_sidecar_ignora_pid_morto_sem_tentar_matar(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Par de erro/borda: pid file existe mas o processo já morreu sozinho
         # (ex.: crash) — não deve chamar kill à toa, só limpar e seguir.
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
@@ -408,8 +426,8 @@ class TestOrphanPidFile:
 
     @pytest.mark.asyncio
     async def test_ensure_nats_sidecar_varre_multiplos_orfaos_isolando_falhas(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Lista com 3 órfãos, um deles falha ao matar — os outros dois ainda
         # são processados, e a subida do sidecar novo não é afetada.
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
@@ -439,8 +457,8 @@ class TestOrphanPidFile:
 
     @pytest.mark.asyncio
     async def test_ensure_nats_sidecar_pid_is_alive_lancando_nao_aborta_a_subida(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Erro/borda: uma exceção em `_pid_is_alive` (ex. stdout=None em
         # `_pid_is_alive_win32`) nunca deve impedir o sidecar novo de subir.
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
@@ -470,7 +488,9 @@ class TestOrphanPidFile:
         assert nats_sidecar._read_stale_pids(store_dir) == [12345]
 
     @pytest.mark.asyncio
-    async def test_stop_nats_sidecar_limpa_o_pid_file(self, tmp_path, monkeypatch):
+    async def test_stop_nats_sidecar_limpa_o_pid_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
         store_dir = tmp_path / "nats"
         store_dir.mkdir(parents=True)
@@ -488,8 +508,8 @@ class TestOrphanPidFile:
 
     @pytest.mark.asyncio
     async def test_stop_nats_sidecar_preserva_orfaos_nao_relacionados(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Erro/borda: se por algum motivo a lista tem outros PIDs além do
         # processo atual, stop_nats_sidecar não deve apagá-los — só remove
         # o PID do processo que ele mesmo está encerrando.
@@ -516,7 +536,9 @@ class TestJobObjectIntegration:
     de subir mesmo se a associação falhar."""
 
     @pytest.mark.asyncio
-    async def test_nao_chama_job_object_fora_do_windows(self, tmp_path, monkeypatch):
+    async def test_nao_chama_job_object_fora_do_windows(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
         monkeypatch.setattr(nats_sidecar.sys, "platform", "linux")
 
@@ -539,8 +561,8 @@ class TestJobObjectIntegration:
 
     @pytest.mark.asyncio
     async def test_associa_processo_a_job_object_no_windows(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
         monkeypatch.setattr(nats_sidecar.sys, "platform", "win32")
 
@@ -571,8 +593,8 @@ class TestJobObjectIntegration:
 
     @pytest.mark.asyncio
     async def test_job_object_falhando_nao_impede_sidecar_de_subir(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Erro/borda central: exceção na criação da Job Object nunca deve
         # aparecer pro chamador de ensure_nats_sidecar.
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
@@ -598,7 +620,9 @@ class TestJobObjectIntegration:
         assert url is not None
 
     @pytest.mark.asyncio
-    async def test_job_handle_reaproveitado_entre_subidas(self, tmp_path, monkeypatch):
+    async def test_job_handle_reaproveitado_entre_subidas(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Não recria a Job Object a cada subida — só na primeira vez.
         monkeypatch.setattr(nats_sidecar.settings, "vectora_home", tmp_path)
         monkeypatch.setattr(nats_sidecar.sys, "platform", "win32")

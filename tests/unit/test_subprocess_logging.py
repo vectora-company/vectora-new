@@ -23,7 +23,9 @@ class _FakeStreamReader:
 
 
 @pytest.mark.asyncio
-async def test_pipe_to_logger_forwards_each_line_with_prefix(caplog):
+async def test_pipe_to_logger_forwards_each_line_with_prefix(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     stream = _FakeStreamReader([b"line one\n", b"line two\n"])
     logger = logging.getLogger("test.pipe_to_logger")
 
@@ -36,7 +38,7 @@ async def test_pipe_to_logger_forwards_each_line_with_prefix(caplog):
 
 
 @pytest.mark.asyncio
-async def test_pipe_to_logger_stops_on_eof():
+async def test_pipe_to_logger_stops_on_eof() -> None:
     stream = _FakeStreamReader([b"only line\n"])
     logger = logging.getLogger("test.pipe_to_logger")
 
@@ -45,7 +47,7 @@ async def test_pipe_to_logger_stops_on_eof():
 
 
 @pytest.mark.asyncio
-async def test_pipe_to_logger_none_stream_is_noop():
+async def test_pipe_to_logger_none_stream_is_noop() -> None:
     # erro/borda: subprocess sem stdout capturado (ex. herança de FD falhou)
     # não pode quebrar o helper.
     logger = logging.getLogger("test.pipe_to_logger")
@@ -53,7 +55,9 @@ async def test_pipe_to_logger_none_stream_is_noop():
 
 
 @pytest.mark.asyncio
-async def test_pipe_to_logger_skips_blank_lines(caplog):
+async def test_pipe_to_logger_skips_blank_lines(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     stream = _FakeStreamReader([b"\n", b"real content\n"])
     logger = logging.getLogger("test.pipe_to_logger")
 
@@ -66,7 +70,7 @@ async def test_pipe_to_logger_skips_blank_lines(caplog):
 
 
 @pytest.mark.asyncio
-async def test_pipe_to_logger_calls_on_line_for_each_line():
+async def test_pipe_to_logger_calls_on_line_for_each_line() -> None:
     stream = _FakeStreamReader([b"first\n", b"second\n"])
     logger = logging.getLogger("test.pipe_to_logger")
     seen: list[str] = []
@@ -77,7 +81,7 @@ async def test_pipe_to_logger_calls_on_line_for_each_line():
 
 
 @pytest.mark.asyncio
-async def test_pipe_to_logger_on_line_not_called_for_blank_lines():
+async def test_pipe_to_logger_on_line_not_called_for_blank_lines() -> None:
     # erro/borda: linha em branco não deve virar entrada vazia no buffer.
     stream = _FakeStreamReader([b"\n", b"content\n"])
     logger = logging.getLogger("test.pipe_to_logger")

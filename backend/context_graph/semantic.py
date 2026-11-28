@@ -19,7 +19,15 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Literal
+
+from backend.vtypes.context_graph import SemanticFragment
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+if TYPE_CHECKING:
+    from backend.vtypes.message import VMessage
+
+    from .file_slice import FileUnit
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +123,7 @@ def _file_to_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
-def _read_files(units: list[Any], root: Path) -> str:
+def _read_files(units: list[FileUnit], root: Path) -> str:
     """Lê arquivos/slices e formata para o prompt de extração."""
     from .file_slice import FileSlice, read_slice_text, unit_path
 
@@ -140,7 +148,7 @@ def _read_files(units: list[Any], root: Path) -> str:
 # ── Parsing do JSON do LLM ────────────────────────────────────────────────────
 
 
-def _parse_llm_json(raw: str) -> dict[str, Any]:
+def _parse_llm_json(raw: str) -> JsonObject:
     if len(raw) > _LLM_JSON_MAX_BYTES:
         logger.warning(
             "semantic: resposta LLM excede %d bytes — chunk descartado",
@@ -214,7 +222,7 @@ def _parse_llm_json(raw: str) -> dict[str, Any]:
     return {"nodes": [], "edges": [], "hyperedges": []}
 
 
-def _repair_truncated_json(raw: str) -> dict[str, Any] | None:
+def _repair_truncated_json(raw: str) -> JsonObject | None:
     """Repara JSON cortado por max tokens, salvando os elementos completos.
 
     Caminha o texto rastreando profundidade de ``{}``/``[]`` e strings; marca o
@@ -262,7 +270,7 @@ def _repair_truncated_json(raw: str) -> dict[str, Any] | None:
         return None
 
 
-def _response_is_hollow(raw_content: str | None, parsed: dict[str, Any]) -> bool:
+def _response_is_hollow(raw_content: str | None, parsed: JsonObject) -> bool:
     if raw_content is None or not raw_content.strip():
         return True
     return (
@@ -278,7 +286,7 @@ _VISION_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 _IMAGE_TOKEN_ESTIMATE = 1_600
 
 
-def _estimate_file_tokens(unit: Any) -> int:
+def _estimate_file_tokens(unit: FileUnit) -> int:
     from .file_slice import FileSlice, read_slice_text, unit_path
 
     if isinstance(unit, FileSlice):
@@ -295,19 +303,19 @@ def _estimate_file_tokens(unit: Any) -> int:
     return chars // _CHARS_PER_TOKEN
 
 
-def _pack_chunks(files: list[Any], token_budget: int) -> list[list[Any]]:
+def _pack_chunks(files: list[FileUnit], token_budget: int) -> list[list[FileUnit]]:
     """Empacota arquivos em chunks que cabem no budget de tokens."""
     from .file_slice import unit_path
 
     if token_budget <= 0:
         raise ValueError(f"token_budget deve ser positivo, recebeu {token_budget}")
 
-    by_dir: dict[Path, list[Any]] = {}
+    by_dir: dict[Path, list[FileUnit]] = {}
     for f in files:
         by_dir.setdefault(unit_path(f).parent, []).append(f)
 
-    chunks: list[list[Any]] = []
-    current: list[Any] = []
+    chunks: list[list[FileUnit]] = []
+    current: list[FileUnit] = []
     current_tokens = 0
 
     for directory in sorted(by_dir):
@@ -333,7 +341,7 @@ async def _call_llm_async(
     *,
     model_id: str,
     deep: bool = False,
-) -> dict[str, Any]:
+) -> SemanticFragment:
     """Chama o LLM do Vectora de forma assíncrona e parseia o resultado."""
     from backend.llm.provider_fallback import (
         QuotaExhaustedError,
@@ -348,7 +356,7 @@ async def _call_llm_async(
         text_message(MessageRole.USER, user_msg),
     ]
 
-    async def _invoke(mid: str) -> Any:
+    async def _invoke(mid: str) -> VMessage:
         return await load_native_llm(mid).agenerate(messages)
 
     try:
@@ -363,14 +371,7 @@ async def _call_llm_async(
             "semantic: falha na chamada LLM",
             extra={"model_id": model_id, "error": str(exc)},
         )
-        return {
-            "nodes": [],
-            "edges": [],
-            "hyperedges": [],
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "finish_reason": "error",
-        }
+        return _empty_fragment("error")
 
     raw_content: str = response.text()
 
@@ -388,14 +389,37 @@ async def _call_llm_async(
     from .semantic_cleanup import sanitize_semantic_fragment
 
     sanitize_semantic_fragment(parsed)
-    parsed["input_tokens"] = input_tokens
-    parsed["output_tokens"] = output_tokens
-    parsed["finish_reason"] = "stop"
 
-    if _response_is_hollow(raw_content, parsed):
-        parsed["finish_reason"] = "length"
+    return {
+        "nodes": _items(parsed, "nodes"),
+        "edges": _items(parsed, "edges"),
+        "hyperedges": _items(parsed, "hyperedges"),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "finish_reason": "length"
+        if _response_is_hollow(raw_content, parsed)
+        else "stop",
+    }
 
-    return parsed
+
+def _items(parsed: JsonObject, key: str) -> list[JsonValue]:
+    value = parsed.get(key)
+    return value if isinstance(value, list) else []
+
+
+def _empty_fragment(
+    finish_reason: Literal["stop", "error"] | None = None,
+) -> SemanticFragment:
+    fragment: SemanticFragment = {
+        "nodes": [],
+        "edges": [],
+        "hyperedges": [],
+        "input_tokens": 0,
+        "output_tokens": 0,
+    }
+    if finish_reason is not None:
+        fragment["finish_reason"] = finish_reason
+    return fragment
 
 
 # ── Retry/bisect adaptativo ───────────────────────────────────────────────────
@@ -418,26 +442,26 @@ def _looks_like_context_exceeded(exc: BaseException) -> bool:
     return any(m in msg for m in _CONTEXT_EXCEEDED_MARKERS)
 
 
-def _merge_results(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+def _merge_results(left: SemanticFragment, right: SemanticFragment) -> SemanticFragment:
     return {
-        "nodes": left.get("nodes", []) + right.get("nodes", []),
-        "edges": left.get("edges", []) + right.get("edges", []),
-        "hyperedges": left.get("hyperedges", []) + right.get("hyperedges", []),
-        "input_tokens": left.get("input_tokens", 0) + right.get("input_tokens", 0),
-        "output_tokens": left.get("output_tokens", 0) + right.get("output_tokens", 0),
+        "nodes": left["nodes"] + right["nodes"],
+        "edges": left["edges"] + right["edges"],
+        "hyperedges": left["hyperedges"] + right["hyperedges"],
+        "input_tokens": left["input_tokens"] + right["input_tokens"],
+        "output_tokens": left["output_tokens"] + right["output_tokens"],
         "finish_reason": "stop",
     }
 
 
 async def _extract_chunk_with_retry(
-    chunk: list[Any],
+    chunk: list[FileUnit],
     root: Path,
     *,
     model_id: str,
     deep: bool,
     max_depth: int,
     _depth: int = 0,
-) -> dict[str, Any]:
+) -> SemanticFragment:
     """Extrai um chunk com retry/bisect em caso de truncamento ou contexto excedido."""
     from backend.llm.provider_fallback import QuotaExhaustedError
 
@@ -455,28 +479,14 @@ async def _extract_chunk_with_retry(
             logger.exception(
                 "semantic: erro irrecuperável no chunk", extra={"depth": _depth}
             )
-            return {
-                "nodes": [],
-                "edges": [],
-                "hyperedges": [],
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "finish_reason": "error",
-            }
+            return _empty_fragment("error")
         if _depth >= max_depth:
             logger.warning(
                 "semantic: chunk excede contexto em profundidade %d/%d — descartado",
                 _depth,
                 max_depth,
             )
-            return {
-                "nodes": [],
-                "edges": [],
-                "hyperedges": [],
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "finish_reason": "stop",
-            }
+            return _empty_fragment("stop")
         mid = len(chunk) // 2
         if mid == 0:
             if len(chunk) == 1 and isinstance(chunk[0], FileSlice):
@@ -501,14 +511,7 @@ async def _extract_chunk_with_retry(
                         ),
                     )
                     return _merge_results(left, right)
-            return {
-                "nodes": [],
-                "edges": [],
-                "hyperedges": [],
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "finish_reason": "stop",
-            }
+            return _empty_fragment("stop")
         left, right = await asyncio.gather(
             _extract_chunk_with_retry(
                 chunk[:mid],
@@ -599,7 +602,7 @@ async def extract_semantic(
     token_budget: int = _DEFAULT_TOKEN_BUDGET,
     max_bisect_depth: int = 3,
     concurrency: int = 4,
-) -> dict[str, Any]:
+) -> SemanticFragment:
     """Extrai nós/arestas semânticos de uma lista de arquivos usando o LLM do Vectora.
 
     Chunks em paralelo via asyncio.gather (limitado por ``concurrency``).
@@ -617,17 +620,11 @@ async def extract_semantic(
         chunks = _pack_chunks(expanded, token_budget)
 
         if not chunks:
-            return {
-                "nodes": [],
-                "edges": [],
-                "hyperedges": [],
-                "input_tokens": 0,
-                "output_tokens": 0,
-            }
+            return _empty_fragment()
 
         semaphore = asyncio.Semaphore(concurrency)
 
-        async def _bounded(chunk: list[Any]) -> dict[str, Any]:
+        async def _bounded(chunk: list[FileUnit]) -> SemanticFragment:
             async with semaphore:
                 return await _extract_chunk_with_retry(
                     chunk,
@@ -641,13 +638,7 @@ async def extract_semantic(
             *(_bounded(c) for c in chunks), return_exceptions=True
         )
 
-        merged: dict[str, Any] = {
-            "nodes": [],
-            "edges": [],
-            "hyperedges": [],
-            "input_tokens": 0,
-            "output_tokens": 0,
-        }
+        merged = _empty_fragment()
         for r in results:
             if isinstance(r, QuotaExhaustedError):
                 # Quota total — propaga para o pipeline pausar (não degrada).
@@ -657,11 +648,11 @@ async def extract_semantic(
                     "semantic: chunk com erro irrecuperável", extra={"error": str(r)}
                 )
                 continue
-            merged["nodes"].extend(r.get("nodes", []))
-            merged["edges"].extend(r.get("edges", []))
-            merged["hyperedges"].extend(r.get("hyperedges", []))
-            merged["input_tokens"] += r.get("input_tokens", 0)
-            merged["output_tokens"] += r.get("output_tokens", 0)
+            merged["nodes"].extend(r["nodes"])
+            merged["edges"].extend(r["edges"])
+            merged["hyperedges"].extend(r["hyperedges"])
+            merged["input_tokens"] += r["input_tokens"]
+            merged["output_tokens"] += r["output_tokens"]
 
         logger.info(
             "semantic: extração concluída — %d nós, %d arestas, %d tokens entrada, %d saída",
@@ -680,10 +671,4 @@ async def extract_semantic(
             "semantic: falha catastrófica na extração semântica",
             extra={"model_id": model_id},
         )
-        return {
-            "nodes": [],
-            "edges": [],
-            "hyperedges": [],
-            "input_tokens": 0,
-            "output_tokens": 0,
-        }
+        return _empty_fragment()

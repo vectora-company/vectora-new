@@ -42,7 +42,7 @@ _COHERE_MODEL_ID = "cohere:command-a-03-2025"
 
 
 @requires_google
-async def test_completion_google_agenerate_real():
+async def test_completion_google_agenerate_real() -> None:
     model = load_native_llm(_GOOGLE_MODEL_ID)
     result = await model.agenerate(
         [text_message(MessageRole.USER, "Responda só com a palavra OK, nada mais.")]
@@ -51,7 +51,7 @@ async def test_completion_google_agenerate_real():
 
 
 @requires_cohere
-async def test_completion_cohere_agenerate_real():
+async def test_completion_cohere_agenerate_real() -> None:
     model = load_native_llm(_COHERE_MODEL_ID)
     result = await model.agenerate(
         [text_message(MessageRole.USER, "Responda só com a palavra OK, nada mais.")]
@@ -60,7 +60,7 @@ async def test_completion_cohere_agenerate_real():
 
 
 @requires_google
-async def test_completion_google_prompt_longo_real():
+async def test_completion_google_prompt_longo_real() -> None:
     model = load_native_llm(_GOOGLE_MODEL_ID)
     prompt = "Resuma em uma frase: " + "Vectora é um agente de codificação. " * 40
     result = await model.agenerate([text_message(MessageRole.USER, prompt)])
@@ -73,7 +73,7 @@ async def test_completion_google_prompt_longo_real():
 
 
 @requires_google
-async def test_streaming_google_astream_real():
+async def test_streaming_google_astream_real() -> None:
     model = load_native_llm(_GOOGLE_MODEL_ID)
     chunks = [
         chunk.delta_text
@@ -87,7 +87,7 @@ async def test_streaming_google_astream_real():
 
 
 @requires_cohere
-async def test_streaming_cohere_astream_real():
+async def test_streaming_cohere_astream_real() -> None:
     model = load_native_llm(_COHERE_MODEL_ID)
     chunks = [
         chunk.delta_text
@@ -105,13 +105,13 @@ async def test_streaming_cohere_astream_real():
 # ---------------------------------------------------------------------------
 
 
-def test_load_native_llm_provider_desconhecido_levanta_erro_claro():
+def test_load_native_llm_provider_desconhecido_levanta_erro_claro() -> None:
     with pytest.raises(ValueError, match="Provider de LLM nativo desconhecido"):
         load_native_llm("provider-que-nao-existe:algum-modelo")
 
 
 @requires_google
-async def test_completion_google_model_id_inexistente_real_levanta_erro():
+async def test_completion_google_model_id_inexistente_real_levanta_erro() -> None:
     model = load_native_llm("google_genai:modelo-que-nao-existe-9999")
     with pytest.raises(Exception):  # noqa: B017 — exceção real do SDK
         await model.agenerate([text_message(MessageRole.USER, "oi")])
@@ -125,7 +125,7 @@ async def test_completion_google_model_id_inexistente_real_levanta_erro():
 @requires_google
 async def test_quota_exhausted_is_wrapped_without_switching_provider(
     monkeypatch: pytest.MonkeyPatch,
-):
+) -> None:
     from backend.llm import provider_fallback
 
     monkeypatch.setenv("GOOGLE_API_KEY", "invalid-key-forced-for-live-test")

@@ -27,12 +27,14 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from backend.vtypes.contracts import JsonValue
+
 
 class SettingAdapter(Protocol):
     """Lê/escreve um valor escalar num mecanismo de persistência real."""
 
-    def get(self, key: str) -> object: ...
-    def set(self, key: str, value: object) -> None: ...
+    def get(self, key: str) -> JsonValue: ...
+    def set(self, key: str, value: JsonValue) -> None: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -47,10 +49,10 @@ class SettingField:
     adapter: SettingAdapter
     secret: bool = False
 
-    def get(self) -> object:
+    def get(self) -> JsonValue:
         return self.adapter.get(self.key)
 
-    def set(self, value: object) -> None:
+    def set(self, value: JsonValue) -> None:
         self.adapter.set(self.key, value)
 
 
@@ -94,7 +96,7 @@ def get_field(key: str) -> SettingField | None:
     return _REGISTRY.get(key)
 
 
-def get_value(key: str) -> object:
+def get_value(key: str) -> JsonValue:
     """Read a registered value through its declared adapter."""
     field = get_field(key)
     if field is None:
@@ -102,7 +104,7 @@ def get_value(key: str) -> object:
     return field.get()
 
 
-def set_value(key: str, value: object) -> None:
+def set_value(key: str, value: JsonValue) -> None:
     """Write a registered value through its declared adapter."""
     field = get_field(key)
     if field is None:

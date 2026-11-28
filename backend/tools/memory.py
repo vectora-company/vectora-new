@@ -14,12 +14,17 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from backend.persistence.native.store import is_store_value_expired
 from backend.storage.protocols import StoreBackend
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject
+
+if TYPE_CHECKING:
+    from backend.persistence.native.store import SearchItem
+    from backend.vtypes.store import AgentStore
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +111,7 @@ async def list_fact_contents(user_id: str) -> list[str]:
 
     store = await get_agent_store()
     ctx = ToolContext(user_id=user_id)
-    items: list[Any] = []
+    items: list[SearchItem] = []
     seen: set[str] = set()
     for ns in _memory_namespace_candidates(ctx):
         for item in await store.asearch(ns):
@@ -114,17 +119,17 @@ async def list_fact_contents(user_id: str) -> list[str]:
                 continue
             seen.add(item.key)
             items.append(item)
-    return [item.value.get("content", "") for item in items]
+    return [str(item.value.get("content", "")) for item in items]
 
 
 async def _search_unexpired(
-    store: StoreBackend,
+    store: AgentStore,
     namespace: tuple[str, ...],
     *,
     query: str,
     limit: int,
     initial_scan_limit: int | None = None,
-) -> list[Any]:
+) -> list[SearchItem]:
     """Busca candidatos até reunir ``limit`` itens válidos.
 
     Backends nativos filtram expiração antes da paginação. Implementações
@@ -141,7 +146,7 @@ async def _search_unexpired(
     # bounded page because it has a strict per-turn budget.
     first_page = 1_000 if initial_scan_limit is None else max(1, initial_scan_limit)
     scan_limit = min(_MAX_MEMORY_SEARCH, max(wanted, first_page))
-    valid: list[Any] = []
+    valid: list[SearchItem] = []
     while scan_limit <= _MAX_MEMORY_SEARCH:
         if query:
             candidates = await store.asearch(namespace, query=query, limit=scan_limit)
@@ -159,7 +164,7 @@ async def _search_unexpired(
     return valid[:wanted]
 
 
-def _get_store(ctx: ToolContext) -> Any:
+def _get_store(ctx: ToolContext) -> AgentStore:
     """Obtém o store persistente da execução atual — via ``ctx.store``.
 
     O motor de execução nativo sempre popula ``ctx.store`` antes do turno
@@ -194,7 +199,7 @@ async def save_memory(
     ctx: ToolContext,
     key: str,
     content: str,
-    metadata: dict[str, Any] | None = None,
+    metadata: JsonObject | None = None,
     ttl_days: int | None = None,
     category: FactCategory | None = None,
 ) -> str:
@@ -232,7 +237,7 @@ async def save_memory(
         persisted_metadata["trust_level"] = (
             "untrusted" if extra.get("untrusted_content") else "trusted"
         )
-        value: dict[str, Any] = {
+        value: JsonObject = {
             "key": key,
             "content": content,
             "metadata": persisted_metadata,
@@ -383,7 +388,7 @@ async def search_memory(ctx: ToolContext, query: str, limit: int = 5) -> str:
     """
     try:
         store = _get_store(ctx)
-        items: list[Any] = []
+        items: list[SearchItem] = []
         seen: set[str] = set()
         for ns in _memory_namespace_candidates(ctx):
             for item in await _search_unexpired(store, ns, query=query, limit=limit):

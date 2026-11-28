@@ -11,7 +11,11 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from watchdog.events import FileSystemEvent
+    from watchdog.observers.api import BaseObserver
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +34,7 @@ _registry: dict[str, FileWatcher] = {}
 
 async def debounce_collect(
     queue: asyncio.Queue,
-    callback: Callable[[set], Coroutine[Any, Any, None]],
+    callback: Callable[[set], Coroutine[None, None, None]],
     debounce_ms: int = 300,
 ) -> None:
     """Lê eventos da queue com debounce.
@@ -76,7 +80,7 @@ class FileWatcher:
         self._workspace_id = workspace_id
         self._queue: asyncio.Queue = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
-        self._observer: Any = None
+        self._observer: BaseObserver | None = None
         self.running = False
 
     async def start(self) -> None:
@@ -96,7 +100,7 @@ class FileWatcher:
                 exc,
             )
 
-    def _start_observer(self) -> Any:
+    def _start_observer(self) -> BaseObserver | None:
         """Inicia o Observer do watchdog em thread separada."""
         try:
             from watchdog.events import FileSystemEventHandler
@@ -108,7 +112,7 @@ class FileWatcher:
             ignore = _IGNORE_PATTERNS
 
             class _Handler(FileSystemEventHandler):
-                def on_any_event(self, event: Any) -> None:
+                def on_any_event(self, event: FileSystemEvent) -> None:
                     if event.is_directory:
                         return
                     src = getattr(event, "src_path", "") or ""

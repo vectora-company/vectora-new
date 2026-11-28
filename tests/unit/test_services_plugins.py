@@ -6,6 +6,8 @@ CRUD por usuário, persistido em disco, isolado entre usuários. O diretório ba
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.workspace.plugins import (
@@ -19,7 +21,7 @@ from backend.workspace.plugins import (
 
 
 @pytest.fixture(autouse=True)
-def iso_dir(tmp_path, monkeypatch):
+def iso_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "backend.workspace.plugins._plugins_dir", lambda: tmp_path / "mcp"
     )
@@ -30,11 +32,11 @@ def iso_dir(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_list_empty_initially():
+def test_list_empty_initially() -> None:
     assert list_servers("u1") == []
 
 
-def test_add_then_list():
+def test_add_then_list() -> None:
     srv = McpServer(name="files", transport="stdio", command="mcp-files")
     add_server("u1", srv)
     servers = list_servers("u1")
@@ -43,7 +45,7 @@ def test_add_then_list():
     assert servers[0].command == "mcp-files"
 
 
-def test_add_is_upsert_by_name():
+def test_add_is_upsert_by_name() -> None:
     add_server("u1", McpServer(name="x", transport="stdio", command="a"))
     add_server("u1", McpServer(name="x", transport="stdio", command="b"))
     servers = list_servers("u1")
@@ -51,13 +53,13 @@ def test_add_is_upsert_by_name():
     assert servers[0].command == "b"
 
 
-def test_remove_server():
+def test_remove_server() -> None:
     add_server("u1", McpServer(name="x", transport="stdio", command="a"))
     assert remove_server("u1", "x") is True
     assert list_servers("u1") == []
 
 
-def test_remove_unknown_returns_false():
+def test_remove_unknown_returns_false() -> None:
     assert remove_server("u1", "nao-existe") is False
 
 
@@ -66,14 +68,14 @@ def test_remove_unknown_returns_false():
 # ---------------------------------------------------------------------------
 
 
-def test_users_are_isolated():
+def test_users_are_isolated() -> None:
     add_server("a", McpServer(name="sa", transport="stdio", command="x"))
     add_server("b", McpServer(name="sb", transport="sse", url="http://h/sse"))
     assert [s.name for s in list_servers("a")] == ["sa"]
     assert [s.name for s in list_servers("b")] == ["sb"]
 
 
-def test_persists_across_calls():
+def test_persists_across_calls() -> None:
     add_server("u1", McpServer(name="p", transport="http", url="http://h/mcp"))
     # Nova leitura lê do disco (sem cache em memória entre chamadas)
     assert list_servers("u1")[0].url == "http://h/mcp"
@@ -100,7 +102,7 @@ async def test_mcp_tools_podem_ser_filtradas_por_nome() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_build_connection_stdio():
+def test_build_connection_stdio() -> None:
     conn = build_connection(
         McpServer(name="x", transport="stdio", command="cmd", args=["--a"])
     )
@@ -114,7 +116,7 @@ def test_build_connection_stdio():
     }
 
 
-def test_build_connection_stdio_repassa_env_vars_declaradas():
+def test_build_connection_stdio_repassa_env_vars_declaradas() -> None:
     conn = build_connection(
         McpServer(
             name="x",

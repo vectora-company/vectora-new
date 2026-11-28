@@ -7,6 +7,7 @@ conecta ao Chromium já ativo do Electron via CDP.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 
 import httpx
 import pytest
@@ -41,7 +42,7 @@ def _electron_cdp_available() -> bool:
 
 
 @pytest.fixture(autouse=True)
-def _clean_fallback_browser():
+def _clean_fallback_browser() -> Iterator[None]:
     """Garante nenhum Chromium do fallback sobrando de um teste anterior."""
     search_fallback.close_search_fallback_browser()
     yield
@@ -49,7 +50,7 @@ def _clean_fallback_browser():
 
 
 @pytest.mark.live
-def test_search_fallback_retorna_resultados_reais_do_duckduckgo():
+def test_search_fallback_retorna_resultados_reais_do_duckduckgo() -> None:
     results = search_fallback.search_fallback("python programming language")
 
     assert len(results) > 0
@@ -60,7 +61,9 @@ def test_search_fallback_retorna_resultados_reais_do_duckduckgo():
 
 
 @pytest.mark.live
-def test_search_fallback_query_sem_instant_answer_retorna_lista_vazia_sem_lancar():
+def test_search_fallback_query_sem_instant_answer_retorna_lista_vazia_sem_lancar() -> (
+    None
+):
     # Par de erro/borda: query sem AbstractText/RelatedTopics (ex.: string
     # aleatória sem entrada na base de instant-answers) não deve lançar —
     # só retorna lista vazia, e o caller trata isso normalmente.
@@ -73,13 +76,13 @@ def test_search_fallback_query_sem_instant_answer_retorna_lista_vazia_sem_lancar
     not _electron_cdp_available(),
     reason="Electron não está ativo ou não publicou o endpoint CDP",
 )
-def test_fetch_fallback_extrai_texto_visivel_de_uma_pagina_real():
+def test_fetch_fallback_extrai_texto_visivel_de_uma_pagina_real() -> None:
     text = search_fallback.fetch_fallback("https://example.com")
 
     assert "Example Domain" in text
 
 
-def test_fetch_fallback_url_invalida_levanta_em_vez_de_retornar_string_vazia():
+def test_fetch_fallback_url_invalida_levanta_em_vez_de_retornar_string_vazia() -> None:
     # Par de erro: URL inexistente/malformada deve levantar (o caller —
     # backend/tools/web.py — é quem decide degradar pro erro textual),
     # nunca retornar silenciosamente uma string vazia.

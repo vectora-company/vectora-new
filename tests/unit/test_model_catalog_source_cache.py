@@ -20,7 +20,7 @@ def _limpa_cache() -> Generator[None]:
     model_catalog.invalidate_model_catalog()
 
 
-def _client(*responses: object) -> MagicMock:
+def _client(*responses: MagicMock | httpx.Response | Exception) -> MagicMock:
     client = MagicMock()
     client.get = AsyncMock(side_effect=list(responses))
     return client

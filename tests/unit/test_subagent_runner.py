@@ -14,7 +14,7 @@ import pytest
 from backend.scheduling.subagent_runner import SUBAGENT_TYPES, _spec_for
 
 
-def test_subagent_types_bate_com_o_catalogo_real():
+def test_subagent_types_bate_com_o_catalogo_real() -> None:
     """SUBAGENT_TYPES é um literal estático (evita ciclo de import
     nodes.tools -> background -> subagent_runner -> souls -> nodes.tools) —
     esse teste é o que garante que ele nunca fica desatualizado."""
@@ -26,7 +26,7 @@ def test_subagent_types_bate_com_o_catalogo_real():
 
 
 @pytest.mark.parametrize("nome", list(SUBAGENT_TYPES))
-def test_spec_for_retorna_a_soul_certa_do_catalogo_pra_todas_as_10(nome: str):
+def test_spec_for_retorna_a_soul_certa_do_catalogo_pra_todas_as_10(nome: str) -> None:
     """Gap real (revisão de 2026-08-30): só `coder`/`search` provavam a
     implementação de `_spec_for` — um bug de digitação em qualquer uma das
     outras 8 SOULs (ex.: `SOUL_CATALOG.get(nome.replace("-", "_"))`) passaria
@@ -37,6 +37,6 @@ def test_spec_for_retorna_a_soul_certa_do_catalogo_pra_todas_as_10(nome: str):
     assert _spec_for(nome) is SOUL_CATALOG[nome]
 
 
-def test_spec_for_tipo_invalido_levanta_value_error():
+def test_spec_for_tipo_invalido_levanta_value_error() -> None:
     with pytest.raises(ValueError, match="subagent_type inválido"):
         _spec_for("orchestrator")

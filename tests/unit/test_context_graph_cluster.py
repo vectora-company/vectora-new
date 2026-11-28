@@ -19,7 +19,7 @@ def _make_connected_graph(n_nodes: int = 6) -> nx.Graph:
 
 
 class TestCohesionScore:
-    def test_fully_connected_triangle(self):
+    def test_fully_connected_triangle(self) -> None:
         from backend.context_graph.cluster import cohesion_score
 
         G = nx.Graph()
@@ -28,21 +28,21 @@ class TestCohesionScore:
         score = cohesion_score(G, ["a", "b", "c"])
         assert abs(score - 1.0) < 1e-6
 
-    def test_no_edges_zero_cohesion(self):
+    def test_no_edges_zero_cohesion(self) -> None:
         from backend.context_graph.cluster import cohesion_score
 
         G = nx.Graph()
         G.add_nodes_from(["a", "b", "c"])
         assert cohesion_score(G, ["a", "b", "c"]) == 0.0
 
-    def test_single_node_is_one(self):
+    def test_single_node_is_one(self) -> None:
         from backend.context_graph.cluster import cohesion_score
 
         G = nx.Graph()
         G.add_node("a")
         assert cohesion_score(G, ["a"]) == 1.0
 
-    def test_partial_connectivity(self):
+    def test_partial_connectivity(self) -> None:
         from backend.context_graph.cluster import cohesion_score
 
         G = nx.Graph()
@@ -53,7 +53,7 @@ class TestCohesionScore:
 
 
 class TestScoreAll:
-    def test_returns_dict_with_all_community_ids(self):
+    def test_returns_dict_with_all_community_ids(self) -> None:
         from backend.context_graph.cluster import score_all
 
         G = nx.Graph()
@@ -65,12 +65,12 @@ class TestScoreAll:
 
 
 class TestCluster:
-    def test_empty_graph_returns_empty(self):
+    def test_empty_graph_returns_empty(self) -> None:
         from backend.context_graph.cluster import cluster
 
         assert cluster(nx.Graph()) == {}
 
-    def test_single_node_graph(self):
+    def test_single_node_graph(self) -> None:
         from backend.context_graph.cluster import cluster
 
         G = nx.Graph()
@@ -79,7 +79,7 @@ class TestCluster:
         assert len(result) == 1
         assert "solo" in result[0]
 
-    def test_no_edges_each_node_own_community(self):
+    def test_no_edges_each_node_own_community(self) -> None:
         from backend.context_graph.cluster import cluster
 
         G = nx.Graph()
@@ -89,7 +89,7 @@ class TestCluster:
         total_nodes = sum(len(v) for v in result.values())
         assert total_nodes == 3
 
-    def test_connected_nodes_clustered(self):
+    def test_connected_nodes_clustered(self) -> None:
         from backend.context_graph.cluster import cluster
 
         G = _make_connected_graph(6)
@@ -98,7 +98,7 @@ class TestCluster:
         total = sum(len(v) for v in result.values())
         assert total == 6
 
-    def test_directed_graph_converted_to_undirected(self):
+    def test_directed_graph_converted_to_undirected(self) -> None:
         from backend.context_graph.cluster import cluster
 
         G = nx.DiGraph()
@@ -108,7 +108,7 @@ class TestCluster:
         result = cluster(G)
         assert isinstance(result, dict)
 
-    def test_exclude_hubs_percentile(self):
+    def test_exclude_hubs_percentile(self) -> None:
         from backend.context_graph.cluster import cluster
 
         G = _make_connected_graph(8)
@@ -120,7 +120,7 @@ class TestCluster:
 
 
 class TestSplitCommunity:
-    def test_no_edges_splits_into_singles(self):
+    def test_no_edges_splits_into_singles(self) -> None:
         from backend.context_graph.cluster import _split_community
 
         G = nx.Graph()
@@ -128,7 +128,7 @@ class TestSplitCommunity:
         parts = _split_community(G, ["a", "b", "c"])
         assert len(parts) == 3
 
-    def test_connected_community_may_split(self):
+    def test_connected_community_may_split(self) -> None:
         from backend.context_graph.cluster import _split_community
 
         G = _make_connected_graph(4)
@@ -139,7 +139,7 @@ class TestSplitCommunity:
 
 
 class TestRemapCommunitiesToPrevious:
-    def test_preserves_ids_with_high_overlap(self):
+    def test_preserves_ids_with_high_overlap(self) -> None:
         from backend.context_graph.cluster import remap_communities_to_previous
 
         communities = {0: ["a", "b", "c"], 1: ["d", "e"]}
@@ -150,12 +150,12 @@ class TestRemapCommunitiesToPrevious:
         assert node_cid["a"] == node_cid["b"] == node_cid["c"]
         assert node_cid["d"] == node_cid["e"]
 
-    def test_empty_communities_returns_empty(self):
+    def test_empty_communities_returns_empty(self) -> None:
         from backend.context_graph.cluster import remap_communities_to_previous
 
         assert remap_communities_to_previous({}, {}) == {}
 
-    def test_all_unmatched_gets_fresh_ids(self):
+    def test_all_unmatched_gets_fresh_ids(self) -> None:
         from backend.context_graph.cluster import remap_communities_to_previous
 
         communities = {0: ["x", "y"], 1: ["z"]}
@@ -166,7 +166,7 @@ class TestRemapCommunitiesToPrevious:
 
 
 class TestLabelCommunitiesByHub:
-    def test_labels_by_highest_degree_member(self):
+    def test_labels_by_highest_degree_member(self) -> None:
         from backend.context_graph.cluster import label_communities_by_hub
 
         G = nx.Graph()
@@ -181,7 +181,7 @@ class TestLabelCommunitiesByHub:
 
         assert labels == {0: "auth"}
 
-    def test_ties_broken_by_node_id_deterministically(self):
+    def test_ties_broken_by_node_id_deterministically(self) -> None:
         from backend.context_graph.cluster import label_communities_by_hub
 
         G = nx.Graph()
@@ -192,7 +192,7 @@ class TestLabelCommunitiesByHub:
 
         assert labels[0] == "A"
 
-    def test_community_absent_from_graph_falls_back_to_generic_name(self):
+    def test_community_absent_from_graph_falls_back_to_generic_name(self) -> None:
         # Erro/borda: todos os membros de uma comunidade sumiram do grafo
         # (rebuild removeu esses nós) — nunca lança, cai no nome genérico.
         from backend.context_graph.cluster import label_communities_by_hub
@@ -204,7 +204,7 @@ class TestLabelCommunitiesByHub:
 
         assert labels == {0: "Community 0"}
 
-    def test_strips_trailing_call_parens_from_function_labels(self):
+    def test_strips_trailing_call_parens_from_function_labels(self) -> None:
         from backend.context_graph.cluster import label_communities_by_hub
 
         G = nx.Graph()
@@ -214,14 +214,14 @@ class TestLabelCommunitiesByHub:
 
         assert labels[0] == "log_action"
 
-    def test_empty_communities_returns_empty_dict(self):
+    def test_empty_communities_returns_empty_dict(self) -> None:
         from backend.context_graph.cluster import label_communities_by_hub
 
         assert label_communities_by_hub(nx.Graph(), {}) == {}
 
 
 class TestCommunityMemberSigs:
-    def test_deterministic_across_node_order(self):
+    def test_deterministic_across_node_order(self) -> None:
         from backend.context_graph.cluster import community_member_sigs
 
         sigs_a = community_member_sigs({0: ["a", "b", "c"]})
@@ -229,7 +229,7 @@ class TestCommunityMemberSigs:
 
         assert sigs_a == sigs_b
 
-    def test_different_membership_yields_different_sig(self):
+    def test_different_membership_yields_different_sig(self) -> None:
         # Erro/borda: essa é a checagem que evita reusar um label antigo
         # numa comunidade que já não é mais a mesma (stale label bug).
         from backend.context_graph.cluster import community_member_sigs
@@ -239,7 +239,7 @@ class TestCommunityMemberSigs:
 
         assert sigs_before[0] != sigs_after[0]
 
-    def test_independent_of_cid_index(self):
+    def test_independent_of_cid_index(self) -> None:
         from backend.context_graph.cluster import community_member_sigs
 
         sigs_a = community_member_sigs({0: ["a", "b"]})
@@ -247,7 +247,7 @@ class TestCommunityMemberSigs:
 
         assert sigs_a[0] == sigs_b[7]
 
-    def test_empty_communities_returns_empty_dict(self):
+    def test_empty_communities_returns_empty_dict(self) -> None:
         from backend.context_graph.cluster import community_member_sigs
 
         assert community_member_sigs({}) == {}

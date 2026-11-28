@@ -23,21 +23,21 @@ if TYPE_CHECKING:
 
 
 class _AsyncContext:
-    def __init__(self, value):
+    def __init__(self, value: _Connection | None) -> None:
         """Inicializa o estado da instância."""
         self.value = value
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> _Connection | None:
         """Executa a operação aenter."""
         return self.value
 
-    async def __aexit__(self, *_args):
+    async def __aexit__(self, *_args) -> bool:
         """Executa a operação aexit."""
         return False
 
 
 class _Connection:
-    def __init__(self, fetchval_results: list[object] | None = None):
+    def __init__(self, fetchval_results: list[int | str | None] | None = None) -> None:
         """Inicializa o estado da instância."""
         self.fetchval_results = list(fetchval_results or [])
         self.fetchval = AsyncMock(side_effect=self.fetchval_results)
@@ -45,17 +45,17 @@ class _Connection:
         self.fetchrow = AsyncMock()
         self.execute = AsyncMock()
 
-    def transaction(self):
+    def transaction(self) -> _AsyncContext:
         """Executa a operação transaction."""
         return _AsyncContext(None)
 
 
 class _Pool:
-    def __init__(self, connection: _Connection):
+    def __init__(self, connection: _Connection) -> None:
         """Inicializa o estado da instância."""
         self.connection = connection
 
-    def acquire(self):
+    def acquire(self) -> _AsyncContext:
         """Executa a operação acquire."""
         return _AsyncContext(self.connection)
 

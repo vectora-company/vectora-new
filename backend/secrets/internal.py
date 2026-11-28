@@ -14,16 +14,21 @@ from __future__ import annotations
 import hashlib
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import aiosqlite
+
+    from backend.vtypes.auth import DatabaseHealth
 
 logger = logging.getLogger(__name__)
 
 _DB_PATH = Path.home() / ".vectora" / "secrets" / "internal.db"
-_db_conn: Any = None
+_db_conn: aiosqlite.Connection | None = None
 _open_keys: dict[str, bytes] = {}  # user_id → chave NaCl em memória
 
 
-async def _get_db() -> Any:
+async def _get_db() -> aiosqlite.Connection:
     global _db_conn
     if _db_conn is not None:
         return _db_conn
@@ -31,9 +36,9 @@ async def _get_db() -> Any:
     import aiosqlite
 
     _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _db_conn = await aiosqlite.connect(str(_DB_PATH))
-    await _db_conn.execute("PRAGMA journal_mode=WAL")
-    await _db_conn.execute("""
+    connection = await aiosqlite.connect(str(_DB_PATH))
+    await connection.execute("PRAGMA journal_mode=WAL")
+    await connection.execute("""
         CREATE TABLE IF NOT EXISTS secrets (
             user_id TEXT NOT NULL,
             key     TEXT NOT NULL,
@@ -42,8 +47,9 @@ async def _get_db() -> Any:
             PRIMARY KEY (user_id, key)
         )
     """)
-    await _db_conn.commit()
-    return _db_conn
+    await connection.commit()
+    _db_conn = connection
+    return connection
 
 
 def _derive_key(user_id: str, password: str) -> bytes:
@@ -130,7 +136,7 @@ class PostgresSecretsDB:
     Usa o pool asyncpg de ``storage.factory.get_pg_pool()``.
     """
 
-    async def health(self) -> dict[str, object]:
+    async def health(self) -> DatabaseHealth:
         """Verifica se a conexão Postgres está acessível."""
         try:
             from backend.storage.factory import get_pg_pool

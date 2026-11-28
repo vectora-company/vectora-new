@@ -12,7 +12,7 @@ from backend.sandbox.ssh import run_ssh_sandboxed
 
 
 @pytest.mark.asyncio
-async def test_missing_remote_host_fails_closed_without_connecting():
+async def test_missing_remote_host_fails_closed_without_connecting() -> None:
     result = await run_ssh_sandboxed(
         ["ls"], "/ws", SandboxPolicy(enabled=True, backend="ssh")
     )
@@ -22,7 +22,7 @@ async def test_missing_remote_host_fails_closed_without_connecting():
 
 
 @pytest.mark.asyncio
-async def test_successful_run_returns_remote_output():
+async def test_successful_run_returns_remote_output() -> None:
     fake_result = MagicMock(exit_code=0, stdout="hi\n", stderr="")
     fake_transport = MagicMock()
     fake_transport.run = AsyncMock(return_value=fake_result)
@@ -41,7 +41,7 @@ async def test_successful_run_returns_remote_output():
 
 
 @pytest.mark.asyncio
-async def test_connection_failure_returns_clear_error_and_still_closes():
+async def test_connection_failure_returns_clear_error_and_still_closes() -> None:
     fake_transport = MagicMock()
     fake_transport.run = AsyncMock(side_effect=RuntimeError("connection refused"))
     fake_transport.close = AsyncMock()
@@ -59,7 +59,7 @@ async def test_connection_failure_returns_clear_error_and_still_closes():
 
 
 @pytest.mark.asyncio
-async def test_empty_remote_host_string_fails_closed_like_none():
+async def test_empty_remote_host_string_fails_closed_like_none() -> None:
     # Erro/borda: string vazia é falsy — mesmo caminho de "ausente".
     result = await run_ssh_sandboxed(
         ["ls"], "/ws", SandboxPolicy(enabled=True, backend="ssh", remote_host="")
@@ -70,7 +70,7 @@ async def test_empty_remote_host_string_fails_closed_like_none():
 
 
 @pytest.mark.asyncio
-async def test_timeout_during_remote_run_returns_error_and_still_closes():
+async def test_timeout_during_remote_run_returns_error_and_still_closes() -> None:
     fake_transport = MagicMock()
     fake_transport.run = AsyncMock(side_effect=TimeoutError("comando travou"))
     fake_transport.close = AsyncMock()
@@ -89,7 +89,7 @@ async def test_timeout_during_remote_run_returns_error_and_still_closes():
 
 
 @pytest.mark.asyncio
-async def test_host_unreachable_returns_clear_error_and_still_closes():
+async def test_host_unreachable_returns_clear_error_and_still_closes() -> None:
     fake_transport = MagicMock()
     fake_transport.run = AsyncMock(side_effect=OSError("No route to host"))
     fake_transport.close = AsyncMock()
@@ -107,7 +107,7 @@ async def test_host_unreachable_returns_clear_error_and_still_closes():
 
 
 @pytest.mark.asyncio
-async def test_transport_constructed_with_policy_ssh_key_id():
+async def test_transport_constructed_with_policy_ssh_key_id() -> None:
     fake_result = MagicMock(exit_code=0, stdout="", stderr="")
     fake_transport = MagicMock()
     fake_transport.run = AsyncMock(return_value=fake_result)
@@ -133,7 +133,7 @@ async def test_transport_constructed_with_policy_ssh_key_id():
 
 
 @pytest.mark.asyncio
-async def test_close_is_awaited_even_when_run_returns_normally():
+async def test_close_is_awaited_even_when_run_returns_normally() -> None:
     fake_result = MagicMock(exit_code=0, stdout="ok\n", stderr="")
     fake_transport = MagicMock()
     fake_transport.run = AsyncMock(return_value=fake_result)

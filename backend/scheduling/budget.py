@@ -17,7 +17,12 @@ Duas decisões deliberadas:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
+
+from backend.vtypes.contracts import JsonObject
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +41,7 @@ _PRECO_POR_MILHAO_CENTS: dict[str, tuple[float, float]] = {
 }
 
 
-async def _get_db() -> Any:
+async def _get_db() -> aiosqlite.Connection:
     """Mesmo banco de `vectora_background_tasks`/`vectora_background_runs` —
     não `checkpoints.db` (ver docstring equivalente em `kanban.py::_get_db`)."""
     from backend.scheduling.background_tasks import _get_db as _tasks_db
@@ -123,7 +128,7 @@ async def accumulated_cents(task_id: str) -> tuple[float, int]:
     return total, desconhecidas
 
 
-async def budget_status(task_id: str) -> dict[str, Any]:
+async def budget_status(task_id: str) -> JsonObject:
     """Estado atual do budget da task — leitura pura, sem efeito colateral.
 
     `warn` sinaliza que o gasto já cruzou `budget_warn_percent` do teto

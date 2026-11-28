@@ -9,10 +9,10 @@ Cobre:
 from __future__ import annotations
 
 import base64
-from contextlib import ExitStack
+from contextlib import AbstractContextManager, ExitStack
 from pathlib import Path
-from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any, NoReturn, cast
+from unittest.mock import AsyncMock, MagicMock, _patch, patch
 
 import pytest
 from pydantic import ValidationError
@@ -319,7 +319,7 @@ class TestBuildUserVMessage:
 
         called = False
 
-        def fail_create(**_kwargs: object) -> None:
+        def fail_create[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
             nonlocal called
             called = True
             raise ValueError("asset inválido")
@@ -389,7 +389,9 @@ class TestBuildUserVMessage:
         assert [block.kind for block in msg.content] == ["text"]
 
     @pytest.mark.asyncio
-    async def test_falha_ao_persistir_nao_aborta_o_turno(self, monkeypatch) -> None:
+    async def test_falha_ao_persistir_nao_aborta_o_turno(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: disco cheio/sem permissão não pode derrubar o chat —
         a imagem já foi enviada ao provider via base64 inline, só a
         reexibição pós-restart fica indisponível. Testa
@@ -400,7 +402,7 @@ class TestBuildUserVMessage:
 
         from backend.api.handlers.chat import _persist_image_attachment
 
-        def _boom(self, *_a: object, **_kw: object) -> None:
+        def _boom[**P](self, *_a: P.args, **_kw: P.kwargs) -> NoReturn:
             raise OSError("disco cheio")
 
         monkeypatch.setattr(PathCls, "mkdir", _boom)
@@ -637,7 +639,7 @@ async def _collect_sse_body(response) -> str:
     )
 
 
-def _native_dispatch_patches() -> list[Any]:
+def _native_dispatch_patches() -> list[_patch[MagicMock | AsyncMock]]:
     """Patches pro motor nativo (`agent_factory.get_native_agent`/
     `get_session_store`/`get_approval_gate`/`get_store` + `run_conversation`
     dentro de `backend.api.handlers.chat`) — usados pelos testes que
@@ -686,7 +688,9 @@ class TestStreamChatBlocksImageForNonVisionProvider:
     de chamar o provider, com um ErrorEvent(code='MODEL_NO_VISION')."""
 
     @pytest.fixture(autouse=True)
-    def _isolated_vectora_home(self, tmp_path, monkeypatch):
+    def _isolated_vectora_home(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """`stream_chat` com anexo de imagem grava em `settings.vectora_home`
         (`_persist_image_attachment`) — nunca aponta pro `~/.vectora` real
         do ambiente rodando o teste."""
@@ -848,7 +852,7 @@ class TestStreamChatBlocksImageForNonVisionProvider:
 
     @pytest.mark.asyncio
     async def test_ignora_fallback_persistido_apos_remover_credencial(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers import chat as chat_mod
         from backend.settings import CapabilityState

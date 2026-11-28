@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import NoReturn
+
 import pytest
 
 import backend.embedding.background as _bg_mod
@@ -17,7 +20,7 @@ from backend.storage.factory import EmbeddingDimensionMismatchError
 
 
 @pytest.fixture(autouse=True)
-def _reset_worker_singleton():
+def _reset_worker_singleton() -> Iterator[None]:
     original = _bg_mod._worker
     _bg_mod._worker = None
     yield
@@ -37,6 +40,18 @@ class _FakeQueue:
     async def archive_pending(self, reason: str) -> int:
         self.archived_reason = reason
         return 7
+
+    async def mark_retry(self, queue_id: str) -> NoReturn:
+        raise AssertionError("os cenários não repetem a tentativa")
+
+    async def mark_success(self, queue_id: str) -> NoReturn:
+        raise AssertionError("os cenários não concluem o item")
+
+    async def mark_failed(self, queue_id: str, reason: str, /) -> NoReturn:
+        raise AssertionError("os cenários não marcam falha")
+
+    async def mark_dlq(self, queue_id: str, reason: str, /) -> NoReturn:
+        raise AssertionError("os cenários não movem para a DLQ")
 
 
 def _record() -> EmbeddingQueueRecord:
@@ -125,7 +140,7 @@ async def test_get_queue_uses_shared_configured_resolver(
     worker = BackgroundEmbeddingWorker()
     expected = _FakeQueue()
 
-    async def resolve(_dsn: str | None) -> object:
+    async def resolve(_dsn: str | None) -> _FakeQueue:
         return expected
 
     monkeypatch.setattr(_bg_mod, "get_embedding_queue", resolve)

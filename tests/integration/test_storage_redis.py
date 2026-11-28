@@ -15,13 +15,13 @@ class TestRedisConnectivity:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_ping(self, redis_client):
+    async def test_ping(self, redis_client) -> None:
         result = await redis_client.ping()
         assert result is True
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_set_get(self, redis_client):
+    async def test_set_get(self, redis_client) -> None:
         await redis_client.set("_vtest_key", "hello", ex=30)
         val = await redis_client.get("_vtest_key")
         assert val == b"hello"
@@ -29,7 +29,7 @@ class TestRedisConnectivity:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_set_get_error_incr_on_list(self, redis_client):
+    async def test_set_get_error_incr_on_list(self, redis_client) -> None:
         """Erro: INCR em chave que é uma lista levanta ResponseError."""
         import redis.asyncio
 
@@ -41,7 +41,7 @@ class TestRedisConnectivity:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_key_expiry(self, redis_client):
+    async def test_key_expiry(self, redis_client) -> None:
         """Chaves com TTL expiram após o tempo configurado."""
         import asyncio
 
@@ -54,7 +54,7 @@ class TestRedisConnectivity:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_delete(self, redis_client):
+    async def test_delete(self, redis_client) -> None:
         await redis_client.set("_vtest_del", "x")
         await redis_client.delete("_vtest_del")
         val = await redis_client.get("_vtest_del")
@@ -62,7 +62,7 @@ class TestRedisConnectivity:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_error_get_nonexistent_returns_none(self, redis_client):
+    async def test_error_get_nonexistent_returns_none(self, redis_client) -> None:
         """GET em chave inexistente retorna None, não levanta exceção."""
         await redis_client.delete("_vtest_nonexistent_xyz")
         val = await redis_client.get("_vtest_nonexistent_xyz")

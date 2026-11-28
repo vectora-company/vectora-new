@@ -26,7 +26,7 @@ def _hitl_run(tool_name: str, args: dict):
     (``stopped_reason="interrupted"``), como o motor nativo faria ao
     encontrar uma tool que exige aprovação."""
 
-    async def run(on_event):
+    async def run(on_event) -> str:
         await on_event(
             HitlRequested(
                 tool_name=tool_name,
@@ -40,13 +40,15 @@ def _hitl_run(tool_name: str, args: dict):
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence):
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 
 @pytest.mark.asyncio
-async def test_pre_approved_reflete_o_avaliador(monkeypatch):
-    async def _sempre_true(*_a, **_k):
+async def test_pre_approved_reflete_o_avaliador(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _sempre_true(*_a: dict[str, str] | str, **_k) -> bool:
         return True
 
     monkeypatch.setattr("backend.api.native_stream._pre_approved", _sempre_true)
@@ -59,7 +61,9 @@ async def test_pre_approved_reflete_o_avaliador(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_falha_no_avaliador_nao_derruba_o_stream(monkeypatch):
+async def test_falha_no_avaliador_nao_derruba_o_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: `_pre_approved` já degrada sozinho, mas se algo escapar
     (bug futuro) o stream ainda não pode quebrar por causa de uma anotação
     cosmética — HITL é a parte que importa."""
@@ -74,7 +78,7 @@ async def test_falha_no_avaliador_nao_derruba_o_stream(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_pre_approved_nao_afeta_a_emissao_do_evento_hitl():
+async def test_pre_approved_nao_afeta_a_emissao_do_evento_hitl() -> None:
     """Com ou sem pré-aprovação, o evento `hitl` sempre é emitido — a pausa
     já aconteceu no motor nativo antes disso."""
     run = _hitl_run("file_write", {"path": "x.py"})

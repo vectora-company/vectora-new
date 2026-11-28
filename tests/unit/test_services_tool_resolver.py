@@ -6,9 +6,12 @@ Mocka tool_policy e plugins.get_user_mcp_tools para isolar a lógica.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 
 from backend.services import tool_resolver
+from backend.vtypes.contracts import JsonObject
 
 
 class _FakeTool:
@@ -21,27 +24,31 @@ class _FakeWorkspace:
 
 
 @pytest.fixture
-def fake_all_tools(monkeypatch):
+def fake_all_tools(monkeypatch: pytest.MonkeyPatch) -> list[_FakeTool]:
     tools = [_FakeTool("file_read"), _FakeTool("terminal"), _FakeTool("grep")]
     monkeypatch.setattr(tool_resolver, "ALL_TOOL_SPECS", tools)
     return tools
 
 
 @pytest.mark.asyncio
-async def test_local_user_gets_all_tools(fake_all_tools, monkeypatch):
+async def test_local_user_gets_all_tools(
+    fake_all_tools: list[_FakeTool], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Sem user_id (CLI/local) → ALL_TOOLS, sem consulta de policy/MCP."""
     result = await tool_resolver.resolve_tools(None)
     assert [t.name for t in result] == ["file_read", "terminal", "grep"]
 
 
 @pytest.mark.asyncio
-async def test_filters_disabled_tools(fake_all_tools, monkeypatch):
+async def test_filters_disabled_tools(
+    fake_all_tools: list[_FakeTool], monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(
         "backend.rbac.tool_policy.is_allowed",
         lambda uid, name: name != "terminal",
     )
 
-    async def _no_mcp(_uid):
+    async def _no_mcp(_uid: str):
         return []
 
     monkeypatch.setattr(tool_resolver, "get_user_mcp_tools", _no_mcp)
@@ -54,10 +61,12 @@ async def test_filters_disabled_tools(fake_all_tools, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_appends_mcp_tools(fake_all_tools, monkeypatch):
+async def test_appends_mcp_tools(
+    fake_all_tools: list[_FakeTool], monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 
-    async def _mcp(_uid):
+    async def _mcp(_uid: str) -> list[_FakeTool]:
         return [_FakeTool("mcp_search")]
 
     monkeypatch.setattr(tool_resolver, "get_user_mcp_tools", _mcp)
@@ -71,10 +80,12 @@ async def test_appends_mcp_tools(fake_all_tools, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_mcp_failure_degrades_to_builtins(fake_all_tools, monkeypatch):
+async def test_mcp_failure_degrades_to_builtins(
+    fake_all_tools: list[_FakeTool], monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 
-    async def _boom(_uid):
+    async def _boom(_uid: str) -> NoReturn:
         raise RuntimeError("mcp down")
 
     monkeypatch.setattr(tool_resolver, "get_user_mcp_tools", _boom)
@@ -86,16 +97,18 @@ async def test_mcp_failure_degrades_to_builtins(fake_all_tools, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_workspace_skill_resolution_usa_diretorio_autorizado(
-    fake_all_tools, monkeypatch
-):
+    fake_all_tools: list[_FakeTool], monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 
-    async def _no_mcp(_uid: str, **_kwargs: object) -> list[_FakeTool]:
+    async def _no_mcp[**P](
+        _uid: str, *_args: P.args, **_kwargs: P.kwargs
+    ) -> list[_FakeTool]:
         return []
 
-    captured: dict[str, object] = {}
+    captured: dict[str, str | None] = {}
 
-    def _list_paths(_uid: str, **kwargs: object) -> list[object]:
+    def _list_paths(_uid: str, **kwargs: str | None) -> list[str]:
         captured.update(kwargs)
         return []
 

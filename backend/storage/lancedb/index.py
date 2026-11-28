@@ -16,9 +16,12 @@ Uso:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from lancedb.index import IvfPq
+
+if TYPE_CHECKING:
+    from lancedb.table import AsyncTable
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ _DEFAULT_NUM_SUB_VECTORS = 16
 
 
 async def create_ivf_index(
-    table: Any,
+    table: AsyncTable,
     vector_column: str = "vector",
     *,
     num_partitions: int = _DEFAULT_NUM_PARTITIONS,
@@ -111,7 +114,7 @@ async def create_ivf_index(
 
 
 async def create_fts_index(
-    table: Any,
+    table: AsyncTable,
     text_column: str = "text",
     *,
     replace: bool = False,

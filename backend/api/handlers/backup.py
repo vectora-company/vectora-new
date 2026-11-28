@@ -25,6 +25,8 @@ from backend.storage.backup_manifest import (
     restore_snapshots,
     snapshot_targets,
 )
+from backend.vtypes.api import BackupPreviewPayload
+from backend.vtypes.contracts import JsonObject
 
 router = APIRouter(prefix="/storage/backup", tags=["backup"])
 _restore_lock = asyncio.Lock()
@@ -46,7 +48,7 @@ def _require_desktop_bridge(token: str | None) -> None:
         raise HTTPException(status_code=403, detail="ponte local não autorizada")
 
 
-def _preview_payload(preview: BackupPreview) -> dict[str, object]:
+def _preview_payload(preview: BackupPreview) -> BackupPreviewPayload:
     return {
         "version": preview.version,
         "app_version": preview.app_version,
@@ -62,7 +64,7 @@ def _preview_payload(preview: BackupPreview) -> dict[str, object]:
 async def inspect_local_backup(
     payload: InspectBackupRequest,
     x_vectora_desktop_bridge: Annotated[str | None, Header()] = None,
-) -> dict[str, object]:
+) -> BackupPreviewPayload:
     """Inspeciona arquivo escolhido pelo diálogo nativo sem escrever estado."""
     _require_desktop_bridge(x_vectora_desktop_bridge)
     return _preview_payload(inspect_backup(payload.archive_path))
@@ -72,7 +74,7 @@ async def inspect_local_backup(
 async def restore_local_backup(
     payload: RestoreBackupRequest,
     x_vectora_desktop_bridge: Annotated[str | None, Header()] = None,
-) -> dict[str, object]:
+) -> BackupPreviewPayload:
     """Importa categorias confirmadas usando o banco configurado no backend."""
     _require_desktop_bridge(x_vectora_desktop_bridge)
     if not payload.confirmed:

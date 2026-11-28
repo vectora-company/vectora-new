@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
 from backend.extensions.host import ExtensionError, get_extension_host
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ async def call_extension_tool(
         Resposta da tool, ou mensagem de erro descritiva
     """
     try:
-        parsed: Any = json.loads(arguments) if arguments else {}
+        parsed: JsonValue = json.loads(arguments) if arguments else {}
     except json.JSONDecodeError as exc:
         return f"Erro: 'arguments' deve ser JSON válido — {exc}"
     if not isinstance(parsed, dict):

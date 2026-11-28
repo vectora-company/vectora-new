@@ -3,6 +3,8 @@ testável sem o binário docker instalado; execução real mockada."""
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,7 +13,7 @@ from backend.sandbox.docker import build_docker_command, run_docker_sandboxed
 from backend.sandbox.policy import SandboxPolicy
 
 
-def test_build_docker_command_uses_default_image_and_mounts_workspace():
+def test_build_docker_command_uses_default_image_and_mounts_workspace() -> None:
     argv = build_docker_command(SandboxPolicy(enabled=True), "/ws", ["ls"])
 
     assert argv[:3] == ["docker", "run", "--rm"]
@@ -21,7 +23,7 @@ def test_build_docker_command_uses_default_image_and_mounts_workspace():
     assert argv[-2:] == ["python:3.13-slim", "ls"]
 
 
-def test_build_docker_command_uses_configured_image():
+def test_build_docker_command_uses_configured_image() -> None:
     argv = build_docker_command(
         SandboxPolicy(enabled=True, docker_image="node:20-slim"), "/ws", ["true"]
     )
@@ -29,7 +31,7 @@ def test_build_docker_command_uses_configured_image():
     assert "node:20-slim" in argv
 
 
-def test_build_docker_command_lockdown_disables_network():
+def test_build_docker_command_lockdown_disables_network() -> None:
     argv = build_docker_command(
         SandboxPolicy(enabled=True, lockdown=True), "/ws", ["true"]
     )
@@ -39,8 +41,10 @@ def test_build_docker_command_lockdown_disables_network():
 
 
 @pytest.mark.asyncio
-async def test_missing_docker_binary_returns_clear_error(tmp_path, monkeypatch):
-    async def _raise_not_found(*_args, **_kwargs):
+async def test_missing_docker_binary_returns_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _raise_not_found(*_args: str, **_kwargs: int) -> NoReturn:
         raise FileNotFoundError("docker")
 
     monkeypatch.setattr(
@@ -56,7 +60,9 @@ async def test_missing_docker_binary_returns_clear_error(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_successful_run_returns_output(tmp_path, monkeypatch):
+async def test_successful_run_returns_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(b"hi\n", b""))
     proc.returncode = 0
@@ -75,9 +81,9 @@ async def test_successful_run_returns_output(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_permission_denied_returns_clear_error_not_exception(
-    tmp_path, monkeypatch
-):
-    async def _raise_permission_denied(*_args, **_kwargs):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _raise_permission_denied(*_args: str, **_kwargs: int) -> NoReturn:
         raise PermissionError("Permission denied: docker")
 
     monkeypatch.setattr(
@@ -95,11 +101,11 @@ async def test_permission_denied_returns_clear_error_not_exception(
 
 @pytest.mark.asyncio
 async def test_timeout_kills_container_process_and_reports_timed_out(
-    tmp_path, monkeypatch
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = MagicMock()
 
-    async def _hang(*_args, **_kwargs):
+    async def _hang(*_args, **_kwargs) -> None:
         import asyncio
 
         await asyncio.sleep(10)
@@ -122,7 +128,9 @@ async def test_timeout_kills_container_process_and_reports_timed_out(
 
 
 @pytest.mark.asyncio
-async def test_nonzero_exit_code_from_container_is_propagated(tmp_path, monkeypatch):
+async def test_nonzero_exit_code_from_container_is_propagated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(b"", b"comando falhou\n"))
     proc.returncode = 1
@@ -139,13 +147,13 @@ async def test_nonzero_exit_code_from_container_is_propagated(tmp_path, monkeypa
     assert result.stderr == "comando falhou\n"
 
 
-def test_build_docker_command_with_empty_command_list_still_ends_with_image():
+def test_build_docker_command_with_empty_command_list_still_ends_with_image() -> None:
     argv = build_docker_command(SandboxPolicy(enabled=True), "/ws", [])
 
     assert argv[-1] == "python:3.13-slim"
 
 
-def test_build_docker_command_lockdown_false_omits_network_flag():
+def test_build_docker_command_lockdown_false_omits_network_flag() -> None:
     argv = build_docker_command(
         SandboxPolicy(enabled=True, lockdown=False), "/ws", ["true"]
     )
@@ -153,7 +161,7 @@ def test_build_docker_command_lockdown_false_omits_network_flag():
     assert "--network" not in argv
 
 
-def test_build_docker_command_workspace_with_spaces_and_unicode():
+def test_build_docker_command_workspace_with_spaces_and_unicode() -> None:
     argv = build_docker_command(
         SandboxPolicy(enabled=True), "/home/usuário/meu projeto", ["ls"]
     )
@@ -162,7 +170,9 @@ def test_build_docker_command_workspace_with_spaces_and_unicode():
     assert argv[v_idx + 1] == "/home/usuário/meu projeto:/home/usuário/meu projeto"
 
 
-def test_build_docker_command_sempre_aplica_flags_de_seguranca(monkeypatch):
+def test_build_docker_command_sempre_aplica_flags_de_seguranca(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Cap-drop/no-new-privileges não dependem de cgroup — valem mesmo num
     host onde os limites de recurso não podem ser aplicados."""
     monkeypatch.setattr(
@@ -189,7 +199,7 @@ def test_build_docker_command_sempre_aplica_flags_de_seguranca(monkeypatch):
         SandboxPolicy(enabled=True, docker_image="node:20-slim"),
     ],
 )
-def test_build_docker_command_nunca_monta_o_socket_do_docker_do_host(policy):
+def test_build_docker_command_nunca_monta_o_socket_do_docker_do_host(policy) -> None:
     """Invariante permanente: diferente do ai-jail (CVE de socket montado
     automaticamente = root do host), o Vectora roda o comando do agente
     DENTRO do container — nunca dá ao processo sandboxed acesso ao Docker
@@ -200,7 +210,9 @@ def test_build_docker_command_nunca_monta_o_socket_do_docker_do_host(policy):
     assert not any(":/var/run/docker.sock" in arg for arg in argv)
 
 
-def test_build_docker_command_limites_de_recurso_por_perfil(monkeypatch):
+def test_build_docker_command_limites_de_recurso_por_perfil(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr("backend.sandbox.docker._cgroup_limits_available", lambda: True)
 
     normal = build_docker_command(SandboxPolicy(enabled=True), "/ws", ["true"])

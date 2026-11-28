@@ -90,7 +90,7 @@ class _BackgroundUvicorn:
 
 
 async def test_webhook_via_gateway_producao_dispara_background_task(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     if not _gateway_reachable(_GATEWAY_HTTP_URL):
         pytest.skip("gateway.vectora.chat inacessível — sem rede ou serviço fora do ar")

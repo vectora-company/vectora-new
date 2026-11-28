@@ -32,7 +32,12 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import aiosqlite
+
+    from backend.vtypes.storage import SchemaPlan
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +103,7 @@ class MigrationRunner:
 
     def __init__(
         self,
-        conn: Any,  # aiosqlite.Connection
+        conn: aiosqlite.Connection,
         schema_file: str | Path | None = None,
     ) -> None:
         self._conn = conn
@@ -228,7 +233,7 @@ class MigrationRunner:
         rows = await cursor.fetchall()
         return [{"checksum": row[0], "applied_at": row[1]} for row in rows]
 
-    async def plan(self) -> dict[str, Any]:
+    async def plan(self) -> SchemaPlan:
         """Describe the pending schema change without mutating the database.
 
         The plan is intentionally data-free: it exposes the checksum and
@@ -309,7 +314,7 @@ class MigrationRunner:
 
 
 async def run_migrations(
-    conn: Any,
+    conn: aiosqlite.Connection,
     schema_file: str | Path | None = None,
 ) -> bool:
     """Reaplica o schema.sql em ``conn`` se ele mudou desde a última vez.

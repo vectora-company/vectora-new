@@ -21,7 +21,7 @@ import logging
 import time
 import uuid
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from backend.api.adapters import (
     _mark_thread_has_content,
@@ -46,14 +46,20 @@ from backend.engine.stream_events import (
     MessageChunk,
     SubagentOutput,
 )
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage
 
 if TYPE_CHECKING:
+    from backend.api.turn_files import TurnFileChange, TurnWorkspaceSnapshot
+    from backend.engine.stream_events import EngineEvent
+
+    type TurnFinalizer = Callable[[TurnWorkspaceSnapshot | None], list[TurnFileChange]]
+    type QueueItem = EngineEvent | _Sentinel
     from collections.abc import AsyncGenerator, Awaitable, Callable
 
     from fastapi import Request
 
-    from backend.engine.stream_events import EngineEvent, EventSink
+    from backend.engine.stream_events import EventSink
 
 logger = logging.getLogger(__name__)
 _workspace_run_locks: dict[str, asyncio.Lock] = {}
@@ -90,17 +96,22 @@ def _workspace_run_lock(workspace_id: str) -> asyncio.Lock:
 #: BaseHTTPMiddleware de auth não deve encerrar um stream real).
 _DISCONNECT_CONFIRM_DELAY_S = 0.3
 
-_SENTINEL = object()
+
+class _Sentinel:
+    """Marca o fim da fila de eventos."""
+
+
+_SENTINEL = _Sentinel()
 
 
 _TURN_FILES_TIMEOUT_SECONDS = 5.0
 _attach_tasks: set[asyncio.Task[None]] = set()
-_finalize_tasks: set[asyncio.Task[list[dict[str, object]]]] = set()
+_finalize_tasks: set[asyncio.Task[list[JsonObject]]] = set()
 
 
 async def _finalize_turn_files(
-    finalize_fn: Callable[[Any], list[Any]], snapshot: Any
-) -> list[Any]:
+    finalize_fn: TurnFinalizer, snapshot: TurnWorkspaceSnapshot | None
+) -> list[TurnFileChange]:
     """Lista os arquivos alterados no turno sem deixar um workspace lento
     segurar o evento final: passou do prazo, o turno termina sem a lista."""
     try:
@@ -118,12 +129,12 @@ async def _finalize_turn_files(
 
 
 async def _finalize_and_attach(
-    finalize_fn: Callable[[Any], list[Any]],
-    encode_fn: Callable[[Any], list[dict[str, object]]],
-    snapshot: Any,
+    finalize_fn: TurnFinalizer,
+    encode_fn: Callable[[list[TurnFileChange]], list[JsonObject]],
+    snapshot: TurnWorkspaceSnapshot | None,
     thread_id: str,
     run_id: str,
-) -> list[dict[str, object]]:
+) -> list[JsonObject]:
     """Varre os arquivos do turno, persiste a lista e a devolve para o stream."""
     changes = await _finalize_turn_files(finalize_fn, snapshot)
     payload = encode_fn(changes)
@@ -133,7 +144,7 @@ async def _finalize_and_attach(
 
 
 def _schedule_attach_edited_files(
-    thread_id: str, run_id: str, files: list[dict[str, object]]
+    thread_id: str, run_id: str, files: list[JsonObject]
 ) -> None:
     """Persiste os arquivos editados depois do fim do stream."""
 
@@ -561,12 +572,12 @@ def stream_engine_events(
             raise
         lock_guard_active = False
 
-        queue: asyncio.Queue[Any] = asyncio.Queue()
+        queue: asyncio.Queue[QueueItem] = asyncio.Queue()
         background_tasks: set[asyncio.Task[None]] = set()
         run_error: BaseException | None = None
         stopped_reason = "stop"
         empty_model_response = False
-        finalize_task: asyncio.Task[list[dict[str, object]]] | None = None
+        finalize_task: asyncio.Task[list[JsonObject]] | None = None
         event_count = 0
         message_chunk_count = 0
         streamed_content_chars = 0
@@ -699,7 +710,7 @@ def stream_engine_events(
                 _active_run_tasks.pop(active_run_key, None)
 
         run_task.add_done_callback(_remove_active_run)
-        next_task: asyncio.Task[Any] = asyncio.ensure_future(queue.get())
+        next_task: asyncio.Task[QueueItem] = asyncio.ensure_future(queue.get())
         term_task: asyncio.Task[str] = asyncio.ensure_future(term_queue.get())
 
         content_started = False
@@ -710,7 +721,9 @@ def stream_engine_events(
 
         try:
             while True:
-                wait_set: set[asyncio.Task[Any]] = {next_task, term_task}
+                wait_set: set[
+                    asyncio.Task[QueueItem] | asyncio.Task[str] | asyncio.Task[bool]
+                ] = {next_task, term_task}
                 disconnect_task: asyncio.Task[bool] | None = None
                 request: Request | None = None
                 if http_request is not None:
@@ -729,15 +742,15 @@ def stream_engine_events(
                             continue
 
                         async def _consume_remainder(
-                            pending: asyncio.Task[Any],
-                            q: asyncio.Queue[Any],
+                            pending: asyncio.Task[QueueItem],
+                            q: asyncio.Queue[QueueItem],
                             *,
                             empty_model_response: bool = empty_model_response,
                         ) -> None:
                             """Executa a operação consume remainder."""
                             nonlocal accumulated_partial_content
                             try:
-                                first_item: object | None = None
+                                first_item: QueueItem | None = None
                                 with contextlib.suppress(Exception):
                                     first_item = await pending
                                 item = first_item
@@ -745,7 +758,7 @@ def stream_engine_events(
                                     # Sem cliente, o run segue alimentando o log para
                                     # que uma retomada receba o que perdeu.
                                     if item is not None and not isinstance(
-                                        item, Exception
+                                        item, _Sentinel
                                     ):
                                         with contextlib.suppress(Exception):
                                             run_log.add(to_sse_line(item))
@@ -835,7 +848,7 @@ def stream_engine_events(
                 event = next_task.result()
                 next_task = asyncio.ensure_future(queue.get())
 
-                if event is _SENTINEL:
+                if isinstance(event, _Sentinel):
                     break
 
                 event_count += 1

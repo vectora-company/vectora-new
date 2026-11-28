@@ -8,7 +8,7 @@ exigem admin. Nenhuma resposta traz caminhos do disco, comandos nem segredos.
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any, NoReturn
+from typing import Annotated, NoReturn
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
@@ -22,6 +22,8 @@ from backend.extensions.host import (
     get_extension_host,
 )
 from backend.extensions.models import ExtensionRecord
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.extensions import ExtensionHealth
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +106,7 @@ async def list_extensions(request: Request) -> list[ExtensionSummary]:
 
 
 @router.get("/contributions")
-async def list_contributions(request: Request) -> list[dict[str, Any]]:
+async def list_contributions(request: Request) -> list[JsonObject]:
     """Contribuições de interface das extensões ativas."""
     _actor(request)
     return get_extension_host().contributions()
@@ -120,7 +122,7 @@ async def get_extension(request: Request, extension_id: str) -> ExtensionSummary
 
 
 @router.get("/{extension_id}/health")
-async def extension_health(request: Request, extension_id: str) -> dict[str, Any]:
+async def extension_health(request: Request, extension_id: str) -> ExtensionHealth:
     _actor(request)
     try:
         return await get_extension_host().health(extension_id)
@@ -184,7 +186,7 @@ async def extension_audit(
     request: Request,
     extension_id: str,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
-) -> list[dict[str, Any]]:
+) -> list[JsonObject]:
     _admin(request)
     return get_extension_host().audit(extension_id)[-limit:]
 

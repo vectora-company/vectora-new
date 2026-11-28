@@ -4,8 +4,7 @@ real (CDP mockado via AsyncMock, mesmo padrão de test_browser_session_jail.py).
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,8 +13,8 @@ from backend.browser import session as browser_session
 
 class TestResolveUidCenter:
     @pytest.mark.asyncio
-    async def test_calcula_centro_do_quad_de_conteudo(self):
-        cdp = SimpleNamespace(
+    async def test_calcula_centro_do_quad_de_conteudo(self) -> None:
+        cdp = MagicMock(
             send=AsyncMock(
                 return_value={"model": {"content": [0, 0, 10, 0, 10, 20, 0, 20]}}
             )
@@ -27,16 +26,16 @@ class TestResolveUidCenter:
         cdp.send.assert_awaited_once_with("DOM.getBoxModel", {"backendNodeId": 42})
 
     @pytest.mark.asyncio
-    async def test_no_inexistente_retorna_none_sem_lancar(self):
-        cdp = SimpleNamespace(send=AsyncMock(side_effect=RuntimeError("No node found")))
+    async def test_no_inexistente_retorna_none_sem_lancar(self) -> None:
+        cdp = MagicMock(send=AsyncMock(side_effect=RuntimeError("No node found")))
 
         center = await browser_session.resolve_uid_center(cdp, 999)
 
         assert center is None
 
     @pytest.mark.asyncio
-    async def test_resposta_sem_quad_de_conteudo_retorna_none(self):
-        cdp = SimpleNamespace(send=AsyncMock(return_value={"model": {}}))
+    async def test_resposta_sem_quad_de_conteudo_retorna_none(self) -> None:
+        cdp = MagicMock(send=AsyncMock(return_value={"model": {}}))
 
         center = await browser_session.resolve_uid_center(cdp, 1)
 
@@ -45,8 +44,8 @@ class TestResolveUidCenter:
 
 class TestSetValueByUid:
     @pytest.mark.asyncio
-    async def test_resolve_node_e_chama_setter_via_cdp(self):
-        cdp = SimpleNamespace(
+    async def test_resolve_node_e_chama_setter_via_cdp(self) -> None:
+        cdp = MagicMock(
             send=AsyncMock(
                 side_effect=[
                     {"object": {"objectId": "obj-1"}},
@@ -67,8 +66,8 @@ class TestSetValueByUid:
         assert second_call.args[1]["arguments"] == [{"value": "a@b.com"}]
 
     @pytest.mark.asyncio
-    async def test_no_inexistente_retorna_false_sem_lancar(self):
-        cdp = SimpleNamespace(send=AsyncMock(side_effect=RuntimeError("No node found")))
+    async def test_no_inexistente_retorna_false_sem_lancar(self) -> None:
+        cdp = MagicMock(send=AsyncMock(side_effect=RuntimeError("No node found")))
 
         ok = await browser_session.set_value_by_uid(cdp, 999, "x")
 

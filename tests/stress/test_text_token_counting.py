@@ -20,7 +20,7 @@ from backend.services.text import text_service
 
 
 @pytest.mark.stress
-def test_token_counting_throughput():
+def test_token_counting_throughput() -> None:
     """10 000 chamadas de count_tokens() — determinismo e throughput."""
     sample = (
         "O Vectora é um assistente de IA com suporte a RAG, busca vetorial e MCP. "
@@ -49,7 +49,7 @@ def test_token_counting_throughput():
 
 
 @pytest.mark.stress
-def test_large_text_token_counting():
+def test_large_text_token_counting() -> None:
     """Texto grande (~500 mensagens de conversa) — contagem em menos de 1 s."""
     parts = []
     for i in range(250):
@@ -70,7 +70,7 @@ def test_large_text_token_counting():
 
 
 @pytest.mark.stress
-def test_split_consistency_under_load():
+def test_split_consistency_under_load() -> None:
     """split() em 1 000 textos — consistência dos chunks e throughput."""
     # Texto de ~3 000 tokens (vai ser dividido em vários chunks)
     paragraph = (
@@ -125,7 +125,7 @@ def test_split_consistency_under_load():
         "vazio",
     ],
 )
-def test_count_tokens_various_samples(sample):
+def test_count_tokens_various_samples(sample) -> None:
     """count_tokens em amostras variadas de conteúdo — nunca lança, sempre determinístico."""
     count1 = text_service.count_tokens(sample)
     count2 = text_service.count_tokens(sample)
@@ -138,7 +138,7 @@ def test_count_tokens_various_samples(sample):
 @pytest.mark.parametrize(
     "n_calls", [1_000, 5_000, 10_000, 20_000], ids=lambda n: f"calls={n}"
 )
-def test_count_tokens_throughput_various_volumes(n_calls):
+def test_count_tokens_throughput_various_volumes(n_calls: int) -> None:
     """Throughput de count_tokens em volumes crescentes de chamadas."""
     sample = "O Vectora processa texto em chunks tokenizados via tiktoken."
     baseline = text_service.count_tokens(sample)
@@ -156,7 +156,7 @@ def test_count_tokens_throughput_various_volumes(n_calls):
 @pytest.mark.parametrize(
     "size", [1_000, 5_000, 20_000, 50_000], ids=lambda n: f"chars={n}"
 )
-def test_split_various_text_sizes(size):
+def test_split_various_text_sizes(size: int) -> None:
     """split() em textos de tamanhos crescentes — chunking sempre determinístico."""
     unit = "frase de teste com conteúdo variado. "
     text = (unit * ((size // len(unit)) + 1))[:size]
@@ -172,7 +172,7 @@ def test_split_various_text_sizes(size):
 @pytest.mark.parametrize(
     "batch_size", [100, 500, 1_000, 5_000], ids=lambda n: f"batch={n}"
 )
-def test_count_tokens_rapid_batch_various_sizes(batch_size):
+def test_count_tokens_rapid_batch_various_sizes(batch_size: int) -> None:
     """Lote de chamadas rápidas de count_tokens em textos distintos — sem degradação de precisão."""
     texts = [
         f"documento número {i} com algum conteúdo variável {i * 2}"
@@ -200,7 +200,7 @@ def test_count_tokens_rapid_batch_various_sizes(batch_size):
     ],
     ids=["p1", "p2_numeros", "p3_maiusculas", "p4_mixed", "p5_virgulas"],
 )
-def test_split_determinism_across_text_variations(text):
+def test_split_determinism_across_text_variations(text) -> None:
     """split() é determinístico em textos com formatações e cases distintos."""
     chunks_a = text_service.split(text)
     chunks_b = text_service.split(text)

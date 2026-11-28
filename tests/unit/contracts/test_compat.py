@@ -1,12 +1,19 @@
 """Testes unitários para verificação de compatibilidade semântica de schemas."""
 
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
 from backend.contracts.compat import check_schema_compatibility
+from backend.vtypes.contracts import JsonObject
 
 
 def test_schema_compat_identical() -> None:
     """Verifica o comportamento de schema compat identical."""
-    s1 = {"type": "object", "properties": {"a": {"type": "string"}}}
-    s2 = {"type": "object", "properties": {"a": {"type": "string"}}}
+    s1: JsonObject = {"type": "object", "properties": {"a": {"type": "string"}}}
+    s2: JsonObject = {"type": "object", "properties": {"a": {"type": "string"}}}
     report = check_schema_compatibility(s1, s2)
     assert report.is_compatible
     assert len(report.breaking) == 0
@@ -15,8 +22,8 @@ def test_schema_compat_identical() -> None:
 
 def test_schema_compat_added_field() -> None:
     """Verifica o comportamento de schema compat added field."""
-    old = {"type": "object", "properties": {"a": {"type": "string"}}}
-    new = {
+    old: JsonObject = {"type": "object", "properties": {"a": {"type": "string"}}}
+    new: JsonObject = {
         "type": "object",
         "properties": {"a": {"type": "string"}, "b": {"type": "integer"}},
     }
@@ -29,11 +36,11 @@ def test_schema_compat_added_field() -> None:
 
 def test_schema_compat_removed_field() -> None:
     """Verifica o comportamento de schema compat removed field."""
-    old = {
+    old: JsonObject = {
         "type": "object",
         "properties": {"a": {"type": "string"}, "b": {"type": "integer"}},
     }
-    new = {"type": "object", "properties": {"a": {"type": "string"}}}
+    new: JsonObject = {"type": "object", "properties": {"a": {"type": "string"}}}
     report = check_schema_compatibility(old, new)
     assert not report.is_compatible
     assert len(report.breaking) == 1
@@ -42,8 +49,8 @@ def test_schema_compat_removed_field() -> None:
 
 def test_schema_compat_type_changed() -> None:
     """Verifica o comportamento de schema compat type changed."""
-    old = {"type": "object", "properties": {"a": {"type": "string"}}}
-    new = {"type": "object", "properties": {"a": {"type": "integer"}}}
+    old: JsonObject = {"type": "object", "properties": {"a": {"type": "string"}}}
+    new: JsonObject = {"type": "object", "properties": {"a": {"type": "integer"}}}
     report = check_schema_compatibility(old, new)
     assert not report.is_compatible
     assert len(report.breaking) == 1
@@ -52,8 +59,8 @@ def test_schema_compat_type_changed() -> None:
 
 def test_schema_compat_required_fields_by_direction() -> None:
     """Verifica o comportamento de schema compat required fields by direction."""
-    old = {"type": "object", "properties": {"a": {"type": "string"}}}
-    new = {
+    old: JsonObject = {"type": "object", "properties": {"a": {"type": "string"}}}
+    new: JsonObject = {
         "type": "object",
         "properties": {"a": {"type": "string"}, "b": {"type": "string"}},
         "required": ["b"],
@@ -71,12 +78,12 @@ def test_schema_compat_required_fields_by_direction() -> None:
 
 def test_schema_compat_removed_required_fields_by_direction() -> None:
     """Verifica o comportamento de schema compat removed required fields by direction."""
-    old = {
+    old: JsonObject = {
         "type": "object",
         "properties": {"a": {"type": "string"}},
         "required": ["a"],
     }
-    new = {
+    new: JsonObject = {
         "type": "object",
         "properties": {"a": {"type": "string"}},
         "required": [],
@@ -96,13 +103,13 @@ def test_schema_compat_removed_required_fields_by_direction() -> None:
 
 def test_schema_compat_nested_schemas_and_refs() -> None:
     """Verifica o comportamento de schema compat nested schemas and refs."""
-    old = {
+    old: JsonObject = {
         "type": "object",
         "properties": {
             "items": {"type": "array", "items": {"$ref": "#/defs/OldItem"}},
         },
     }
-    new = {
+    new: JsonObject = {
         "type": "object",
         "properties": {
             "items": {"type": "array", "items": {"$ref": "#/defs/NewItem"}},
@@ -121,7 +128,7 @@ def test_openapi_endpoint_and_request_schema_removal_detection() -> None:
         _removed_request_schemas,
     )
 
-    baseline_openapi = {
+    baseline_openapi: JsonObject = {
         "paths": {
             "/api/v1/users": {
                 "get": {
@@ -164,7 +171,7 @@ def test_openapi_endpoint_and_request_schema_removal_detection() -> None:
         },
     }
 
-    new_openapi = {
+    new_openapi: JsonObject = {
         "paths": {
             "/api/v1/users": {
                 "get": {
@@ -214,14 +221,14 @@ def test_python_union_type_to_ts_preserves_nullability() -> None:
 
 def test_schema_compat_combinators_compare_content_and_direction() -> None:
     """Verifica o comportamento de schema compat combinators compare content and direction."""
-    old = {"anyOf": [{"type": "string"}, {"type": "integer"}]}
-    removed = {"anyOf": [{"type": "string"}]}
+    old: JsonObject = {"anyOf": [{"type": "string"}, {"type": "integer"}]}
+    removed: JsonObject = {"anyOf": [{"type": "string"}]}
     request_report = check_schema_compatibility(old, removed, direction="request")
     assert not request_report.is_compatible
     response_report = check_schema_compatibility(old, removed, direction="response")
     assert response_report.is_compatible
 
-    changed = {"anyOf": [{"type": "number"}, {"type": "integer"}]}
+    changed: JsonObject = {"anyOf": [{"type": "number"}, {"type": "integer"}]}
     changed_report = check_schema_compatibility(old, changed, direction="request")
     assert not changed_report.is_compatible
 
@@ -238,8 +245,10 @@ def test_schema_compat_response_enum_expansion_is_breaking() -> None:
 
 def test_schema_compat_combinator_removal_from_middle() -> None:
     """Verifica o comportamento de schema compat combinator removal from middle."""
-    old = {"anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "boolean"}]}
-    new = {"anyOf": [{"type": "string"}, {"type": "boolean"}]}
+    old: JsonObject = {
+        "anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "boolean"}]
+    }
+    new: JsonObject = {"anyOf": [{"type": "string"}, {"type": "boolean"}]}
 
     request_report = check_schema_compatibility(old, new, direction="request")
     assert not request_report.is_compatible
@@ -251,8 +260,8 @@ def test_schema_compat_combinator_removal_from_middle() -> None:
 
 def test_schema_compat_removed_shared_definition_is_breaking() -> None:
     """Uma definição removida pode quebrar referências existentes."""
-    old = {"$defs": {"Payload": {"type": "object"}}}
-    new = {"$defs": {}}
+    old: JsonObject = {"$defs": {"Payload": {"type": "object"}}}
+    new: JsonObject = {"$defs": {}}
 
     report = check_schema_compatibility(old, new)
 
@@ -260,7 +269,9 @@ def test_schema_compat_removed_shared_definition_is_breaking() -> None:
     assert any("Payload" in item for item in report.breaking)
 
 
-def test_contract_baseline_prefers_ci_base_and_explicit_override(monkeypatch) -> None:
+def test_contract_baseline_prefers_ci_base_and_explicit_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verifica o comportamento de contract baseline prefers ci base and explicit override."""
     from backend.contracts.__main__ import _contract_baseline_ref
 
@@ -272,7 +283,9 @@ def test_contract_baseline_prefers_ci_base_and_explicit_override(monkeypatch) ->
     assert _contract_baseline_ref() == "refs/remotes/origin/custom"
 
 
-def test_baseline_contract_tree_is_detected(monkeypatch, tmp_path) -> None:
+def test_baseline_contract_tree_is_detected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A release without the contract tree is a valid initialization baseline."""
     import backend.contracts.__main__ as contracts_cli
 
@@ -287,7 +300,7 @@ def test_baseline_contract_tree_is_detected(monkeypatch, tmp_path) -> None:
 
 
 def test_baseline_contract_tree_missing_is_not_treated_as_drift(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The first contracts export must not fail only because its base is empty."""
     import backend.contracts.__main__ as contracts_cli

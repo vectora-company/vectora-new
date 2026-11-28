@@ -11,7 +11,10 @@ nada.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import git
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,7 @@ class DelegateError(RuntimeError):
     mensagem clara em vez de deixar a task presa num estado inconsistente."""
 
 
-def _resolve_repo(workspace_id: str) -> Any:
+def _resolve_repo(workspace_id: str) -> git.Repo:
     import git as gitpython
 
     from backend.workspace.workspace import workspace_registry
@@ -52,7 +55,7 @@ async def create_task_worktree(workspace_id: str, task_id: str) -> str:
         raise DelegateError(
             f"Falha ao criar worktree pra task '{task_id}': {result.get('message')}"
         )
-    return result["path"]
+    return str(result["path"])
 
 
 async def remove_task_worktree(workspace_id: str, task_id: str) -> None:

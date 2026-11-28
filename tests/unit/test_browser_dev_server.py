@@ -10,7 +10,9 @@ from backend.browser.dev_server import resolve_dev_server_url
 
 
 @pytest.mark.asyncio
-async def test_resolve_dev_server_url_returns_port_of_running_server(monkeypatch):
+async def test_resolve_dev_server_url_returns_port_of_running_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cfg = MagicMock()
     cfg.configurations = [MagicMock(name="web", port=5173)]
     cfg.configurations[0].name = "web"
@@ -30,8 +32,8 @@ async def test_resolve_dev_server_url_returns_port_of_running_server(monkeypatch
 
 @pytest.mark.asyncio
 async def test_resolve_dev_server_url_returns_none_when_process_alive_but_port_closed(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Bug reproduzido ao vivo: processo do dev server já existe (recém
     spawnado) mas ainda não terminou de compilar/bindar a porta — navegar
     pra lá cedo demais dá ERR_CONNECTION_REFUSED. `resolve_dev_server_url` só
@@ -54,7 +56,9 @@ async def test_resolve_dev_server_url_returns_none_when_process_alive_but_port_c
 
 
 @pytest.mark.asyncio
-async def test_resolve_dev_server_url_returns_none_when_nothing_running(monkeypatch):
+async def test_resolve_dev_server_url_returns_none_when_nothing_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cfg = MagicMock()
     cfg.configurations = []
 
@@ -68,7 +72,9 @@ async def test_resolve_dev_server_url_returns_none_when_nothing_running(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_snapshot_libera_porta_do_dev_server_em_execucao(monkeypatch):
+async def test_snapshot_libera_porta_do_dev_server_em_execucao(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Navegar para o dev server do workspace passa pela política de egress
     mesmo quando a porta não está na lista configurada."""
     from unittest.mock import AsyncMock
@@ -98,7 +104,9 @@ async def test_snapshot_libera_porta_do_dev_server_em_execucao(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_snapshot_sem_dev_server_nao_libera_porta_local(monkeypatch):
+async def test_snapshot_sem_dev_server_nao_libera_porta_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: sem dev server no ar, localhost continua bloqueado."""
     from unittest.mock import AsyncMock
 
@@ -124,7 +132,7 @@ async def test_snapshot_sem_dev_server_nao_libera_porta_local(monkeypatch):
     assert allowed is False
 
 
-def _ctx_com_workspace(workspace_id: str):
+def _ctx_com_workspace(workspace_id: str) -> MagicMock:
     from unittest.mock import MagicMock
 
     ctx = MagicMock()

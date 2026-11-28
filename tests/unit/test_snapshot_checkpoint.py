@@ -47,6 +47,7 @@ def test_create_snapshot_contains_files(tmp_path: Path) -> None:
 
     snap_dir = tmp_path / "snaps"
     result = create_snapshot_checkpoint(str(workspace), snap_dir, "t1", "msg")
+    assert result["status"] == "ok"
 
     with tarfile.open(result["snapshot_path"], "r:gz") as tar:
         names = tar.getnames()
@@ -63,6 +64,7 @@ def test_create_snapshot_contains_manifest(tmp_path: Path) -> None:
     result = create_snapshot_checkpoint(
         str(workspace), snap_dir, "thread-42", "turn msg"
     )
+    assert result["status"] == "ok"
 
     with tarfile.open(result["snapshot_path"], "r:gz") as tar:
         names = tar.getnames()
@@ -78,6 +80,7 @@ def test_create_snapshot_excludes_git_dir(tmp_path: Path) -> None:
 
     snap_dir = tmp_path / "snaps"
     result = create_snapshot_checkpoint(str(workspace), snap_dir, "t1", "msg")
+    assert result["status"] == "ok"
 
     with tarfile.open(result["snapshot_path"], "r:gz") as tar:
         names = tar.getnames()
@@ -95,6 +98,7 @@ def test_create_snapshot_excludes_node_modules(tmp_path: Path) -> None:
 
     snap_dir = tmp_path / "snaps"
     result = create_snapshot_checkpoint(str(workspace), snap_dir, "t1", "msg")
+    assert result["status"] == "ok"
 
     with tarfile.open(result["snapshot_path"], "r:gz") as tar:
         names = tar.getnames()
@@ -110,6 +114,7 @@ def test_create_snapshot_returns_files_touched(tmp_path: Path) -> None:
 
     snap_dir = tmp_path / "snaps"
     result = create_snapshot_checkpoint(str(workspace), snap_dir, "t1", "msg")
+    assert result["status"] == "ok"
 
     assert set(result["files_touched"]) >= {"x.py", "y.py"}
 

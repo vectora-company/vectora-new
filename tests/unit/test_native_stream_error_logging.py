@@ -21,6 +21,7 @@ import pytest
 from backend.api.native_stream import stream_engine_events
 from backend.engine.stream_events import ErrorSignal, EventSink, MessageBreak
 from backend.persistence.native.ledger import LedgerEventTypeLiteral, ThreadLedgerEvent
+from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.vtypes.message import MessageRole, VMessage, text_message
 
 
@@ -38,7 +39,7 @@ class TestErroDeExecucaoFicaLogado:
 
         class _LegacyStore:
             def __init__(self) -> None:
-                self.messages: list[dict[str, object]] = []
+                self.messages: list[dict[str, VMessage | JsonValue]] = []
                 self.ledger_events: dict[str, ThreadLedgerEvent] = {}
                 self.fail_event_once = True
 
@@ -56,13 +57,13 @@ class TestErroDeExecucaoFicaLogado:
                 return list(self.ledger_events.values())[:limit]
 
             async def append_message(
-                self, thread_id: str, message: VMessage, **kwargs: object
+                self, thread_id: str, message: VMessage, **kwargs: JsonValue
             ) -> int:
                 self.messages.append({"message": message, **kwargs})
                 return len(self.messages)
 
             async def append_ledger_event(
-                self, thread_id: str, **kwargs: object
+                self, thread_id: str, **kwargs: JsonValue
             ) -> None:
                 if self.fail_event_once:
                     self.fail_event_once = False
@@ -72,7 +73,7 @@ class TestErroDeExecucaoFicaLogado:
                     event_key=str(kwargs["event_key"]),
                     type=cast("LedgerEventTypeLiteral", str(kwargs["event_type"])),
                     run_id=str(kwargs["run_id"]),
-                    payload=cast("dict[str, object]", kwargs["payload"]),
+                    payload=cast("JsonObject", kwargs["payload"]),
                 )
                 self.ledger_events[event.event_key] = event
 
@@ -208,8 +209,8 @@ class TestErroDeExecucaoFicaLogado:
         class _Store:
             def __init__(self) -> None:
                 """Inicializa o estado da instância."""
-                self.messages: list[dict[str, object]] = []
-                self.ledger_events: dict[str, dict[str, object]] = {}
+                self.messages: list[dict[str, VMessage | JsonValue]] = []
+                self.ledger_events: dict[str, JsonObject] = {}
                 self.fail_message_once = True
 
             async def get_message_id_by_turn_id(
@@ -226,7 +227,7 @@ class TestErroDeExecucaoFicaLogado:
                 return 7
 
             async def append_message(
-                self, thread_id: str, message: VMessage, **kwargs: object
+                self, thread_id: str, message: VMessage, **kwargs: JsonValue
             ) -> int:
                 """Executa a operação append message."""
                 if self.fail_message_once:
@@ -241,7 +242,7 @@ class TestErroDeExecucaoFicaLogado:
                 message: VMessage,
                 *,
                 extra_events: list[ThreadLedgerEvent] | None = None,
-                **kwargs: object,
+                **kwargs: JsonValue,
             ) -> tuple[int, int]:
                 """Imita a transação nativa de mensagem + eventos extras."""
                 message_id = await self.append_message(thread_id, message, **kwargs)
@@ -259,7 +260,7 @@ class TestErroDeExecucaoFicaLogado:
                 return message_id, 1
 
             async def append_ledger_event(
-                self, thread_id: str, **kwargs: object
+                self, thread_id: str, **kwargs: JsonValue
             ) -> None:
                 """Record ledger events emitted by the stream under test."""
                 key = str(kwargs["event_key"])

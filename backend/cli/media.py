@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from backend.services.media_adapter import invoke_media, media_specs
 from backend.tools.context import ToolContext
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 class MediaArgs(Protocol):
@@ -25,15 +26,15 @@ class MediaArgs(Protocol):
 
 
 def _result(
-    status: str, data: object = None, error: str | None = None
-) -> dict[str, object]:
-    value: dict[str, object] = {"schema_version": "1", "status": status, "data": data}
+    status: str, data: JsonValue = None, error: str | None = None
+) -> JsonObject:
+    value: JsonObject = {"schema_version": "1", "status": status, "data": data}
     if error is not None:
         value["error"] = error
     return value
 
 
-def _print(value: dict[str, object], output: str) -> int:
+def _print(value: JsonObject, output: str) -> int:
     if output == "json":
         print(json.dumps(value, ensure_ascii=False, sort_keys=True))
     elif value["status"] == "error":
@@ -43,7 +44,7 @@ def _print(value: dict[str, object], output: str) -> int:
     return 0 if value["status"] == "ok" else 1
 
 
-def _invocation_result(value: object) -> tuple[str, object, str | None]:
+def _invocation_result(value: JsonValue) -> tuple[str, JsonValue, str | None]:
     """Normalize native tool output so JSON error envelopes fail the CLI."""
     if isinstance(value, dict):
         error = value.get("error")
@@ -63,12 +64,12 @@ def _invocation_result(value: object) -> tuple[str, object, str | None]:
 def run_media(args: MediaArgs) -> None:
     """List or invoke a media tool with a trusted execution context."""
     if args.action == "list":
-        data = [
+        data: list[JsonValue] = [
             {"name": spec.name, "description": spec.description}
             for spec in media_specs("local")
         ]
         raise SystemExit(_print(_result("ok", data), args.output))
-    names = {
+    names: dict[str, tuple[str, JsonObject]] = {
         "image": ("generate_image", {"prompt": args.prompt}),
         "speech": ("text_to_speech", {"text": args.text, "voice": args.voice}),
         "video": ("generate_video", {"prompt": args.prompt}),

@@ -51,8 +51,19 @@ from backend.services.context_manifest import (
     ContextCheckpointContract,
     ContextProjectionContract,
 )
-from backend.vtypes.contracts import ToolOption
-from backend.vtypes.message import VMessage
+from backend.vtypes.contracts import JsonObject, JsonValue, ToolOption
+from backend.vtypes.message import SerializedMessage, VMessage
+from backend.vtypes.persistence import (
+    BranchComparison,
+    BranchHead,
+    ContextCheckpointRecord,
+    ContextProjectionRecord,
+    MessageSearchHit,
+    PendingApprovalRecord,
+    PurgedContextCount,
+    SessionRecord,
+    ThreadTokenUsage,
+)
 
 if TYPE_CHECKING:
     import aiosqlite
@@ -162,12 +173,12 @@ def _message_to_row(
     )
 
 
-def _row_to_message(row: Any) -> VMessage:
+def _row_to_message(row: aiosqlite.Row) -> VMessage:
     """Executa a operação  row to message."""
     _id, _parent, role, content_json, tool_calls_json, tool_call_id, name, is_error = (
         row
     )
-    data = {
+    data: SerializedMessage = {
         "role": role,
         "content": json.loads(content_json),
         "tool_calls": json.loads(tool_calls_json) if tool_calls_json else [],
@@ -626,13 +637,13 @@ class SessionStore:
         self,
         run_id: str,
         *,
-        evidence: dict[str, Any] | None = None,
-        artifact: dict[str, Any] | None = None,
-        command: dict[str, Any] | None = None,
-        test_result: dict[str, Any] | None = None,
+        evidence: JsonObject | None = None,
+        artifact: JsonObject | None = None,
+        command: JsonObject | None = None,
+        test_result: JsonObject | None = None,
         tool_used: str | None = None,
-        approval: dict[str, Any] | None = None,
-        file_touched: dict[str, Any] | None = None,
+        approval: JsonObject | None = None,
+        file_touched: JsonObject | None = None,
     ) -> None:
         """Registra evidências incrementais em um AgentRun com sanitização de segredos de forma atômica."""
         await self.setup()
@@ -692,7 +703,7 @@ class SessionStore:
         self,
         thread_id: str,
         run_id: str,
-        projection: ContextProjectionContract | Mapping[str, object],
+        projection: ContextProjectionContract | Mapping[str, JsonValue],
     ) -> None:
         """Persiste a projeção versionada fora do transcript canônico."""
         await self.setup()
@@ -705,7 +716,7 @@ class SessionStore:
             if isinstance(projection, ContextProjectionContract)
             else projection
         )
-        clean: dict[str, object] = {
+        clean: JsonObject = {
             key: value
             if key
             in {
@@ -780,7 +791,7 @@ class SessionStore:
         *,
         policy_version: str | None = None,
         source_transcript_hash: str | None = None,
-    ) -> dict[str, object] | None:
+    ) -> ContextProjectionRecord | None:
         """Carrega projeção compatível com política e hash, se informados."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -828,7 +839,7 @@ class SessionStore:
         self,
         thread_id: str,
         run_id: str,
-        checkpoint: ContextCheckpointContract | Mapping[str, object],
+        checkpoint: ContextCheckpointContract | Mapping[str, JsonValue],
     ) -> None:
         """Persiste o estado mínimo para retomada por snapshot + deltas."""
         await self.setup()
@@ -837,7 +848,7 @@ class SessionStore:
             if isinstance(checkpoint, ContextCheckpointContract)
             else checkpoint
         )
-        clean: dict[str, object] = {
+        clean: JsonObject = {
             key: redact_sensitive_data(value)
             for key, value in checkpoint_values.items()
         }
@@ -896,7 +907,7 @@ class SessionStore:
         *,
         source_hash: str | None = None,
         run_id: str | None = None,
-    ) -> dict[str, object] | None:
+    ) -> ContextCheckpointRecord | None:
         """Carrega o checkpoint mais recente compatível com o transcript."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -932,7 +943,7 @@ class SessionStore:
 
     async def purge_context_records(
         self, older_than: str, *, limit: int = 500
-    ) -> dict[str, int]:
+    ) -> PurgedContextCount:
         """Remove projections/checkpoints older than a retention cutoff.
 
         The bounded batch is intentional: maintenance must not hold the
@@ -1560,7 +1571,7 @@ class SessionStore:
         )
 
     async def attach_edited_files(
-        self, thread_id: str, run_id: str, files: list[dict[str, object]]
+        self, thread_id: str, run_id: str, files: list[JsonObject]
     ) -> None:
         """Persiste os arquivos finais associados a um run de resposta."""
         await self.setup()
@@ -1576,7 +1587,7 @@ class SessionStore:
 
     async def get_edited_files_for_thread(
         self, thread_id: str
-    ) -> dict[int, list[dict[str, object]]]:
+    ) -> dict[int, list[JsonObject]]:
         """Retorna os payloads de arquivos persistidos por mensagem."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -1586,7 +1597,7 @@ class SessionStore:
                 (thread_id,),
             )
             rows = await cur.fetchall()
-        result: dict[int, list[dict[str, object]]] = {}
+        result: dict[int, list[JsonObject]] = {}
         for message_id, raw in rows:
             try:
                 value = json.loads(raw)
@@ -1647,7 +1658,7 @@ class SessionStore:
         *,
         limit: int = 5,
         exclude_thread_id: str | None = None,
-    ) -> list[dict[str, str]]:
+    ) -> list[MessageSearchHit]:
         """Busca full-text (FTS5) nas mensagens de usuário e assistente do usuário.
 
         Devolve as melhores correspondências com um trecho em torno do termo.
@@ -1657,7 +1668,7 @@ class SessionStore:
         if not match:
             return []
         await self.setup()
-        params: list[Any] = [match, user_id]
+        params: list[str | int] = [match, user_id]
         exclude_sql = ""
         if exclude_thread_id:
             exclude_sql = "AND f.thread_id != ? "
@@ -1784,7 +1795,7 @@ class SessionStore:
                 await conn.rollback()
                 raise
 
-    async def thread_token_usage(self, thread_id: str) -> dict[str, Any]:
+    async def thread_token_usage(self, thread_id: str) -> ThreadTokenUsage:
         """Soma os tokens das execuções da conversa e devolve o último modelo."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -1812,7 +1823,7 @@ class SessionStore:
 
     async def list_branch_heads(
         self, thread_id: str, *, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    ) -> list[BranchHead]:
         """Lista as pontas (folhas) persistidas de uma conversa.
 
         A ponta ativa continua sendo marcada por ``is_branch_head``. Para
@@ -1849,7 +1860,7 @@ class SessionStore:
 
     async def compare_branches(
         self, thread_id: str, selected_head_id: int
-    ) -> dict[str, Any]:
+    ) -> BranchComparison:
         """Compara a ponta ativa com outra ponta da mesma thread."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -1881,7 +1892,7 @@ class SessionStore:
             if left != right:
                 break
             common += 1
-        result = {
+        result: BranchComparison = {
             "active_head_message_id": active_head,
             "selected_head_message_id": selected_head_id,
             "common_message_ids": active_ids[:common],
@@ -1895,7 +1906,7 @@ class SessionStore:
 
     async def get_session(
         self, thread_id: str, *, user_id: str | None = None
-    ) -> dict[str, Any] | None:
+    ) -> SessionRecord | None:
         """Metadados de posse de uma sessão — fonte de verdade sobre a
         EXISTÊNCIA e o DONO (`user_id`) de uma thread no motor nativo.
 
@@ -1914,7 +1925,7 @@ class SessionStore:
             row = await cur.fetchone()
         if row is None:
             return None
-        session = {
+        session: SessionRecord = {
             "thread_id": row[0],
             "user_id": row[1],
             "workspace_id": row[2],
@@ -2067,7 +2078,9 @@ class SessionStore:
             rows = await cur.fetchall()
         return [r[0] for r in rows if r[0]]
 
-    async def get_pending_approval(self, thread_id: str) -> dict[str, Any] | None:
+    async def get_pending_approval(
+        self, thread_id: str
+    ) -> PendingApprovalRecord | None:
         """Executa a operação get pending approval."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -2161,7 +2174,7 @@ class SessionStore:
 
     async def claim_pending_approval(
         self, thread_id: str, *, interrupt_id: str
-    ) -> dict[str, Any] | None:
+    ) -> PendingApprovalRecord | None:
         """Atomically consume a matching pending approval for one resumer,
         recording an approval_resolved event in the ledger on the same transaction."""
         await self.setup()
@@ -2257,7 +2270,7 @@ class SessionStore:
         tool_name: str,
         tool_call_id: str,
         run_id: str | None = None,
-        args: dict[str, Any],
+        args: JsonObject,
         reasoning: str | None = None,
         options: list[ToolOption] | None = None,
         priority: int = 0,
@@ -2512,7 +2525,7 @@ class SessionStore:
         message_id: int | None = None,
         tool_call_id: str | None = None,
         interrupt_id: str | None = None,
-        payload: dict[str, Any] | None = None,
+        payload: JsonObject | None = None,
         created_at: str | None = None,
     ) -> ThreadLedgerEvent:
         """Helper para registrar eventos no ledger usando argumentos nomeados."""

@@ -39,7 +39,7 @@ import socket
 import subprocess  # nosec B404 — só mata/consulta um PID já conhecido nosso, sem shell
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.evaluation_stages import emit_backend_stage
 from backend.services.subprocess_logging import pipe_to_logger
@@ -49,6 +49,9 @@ from backend.services.subprocess_sidecar_utils import (
     terminate_gracefully,
 )
 from backend.settings import settings
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -324,7 +327,7 @@ def _write_pid_list(store_dir: Path, pids: list[int], url: str = "") -> None:
     de subir outro sobre o mesmo store — dois `nats-server` no mesmo diretório
     de JetStream derrubam um ao outro.
     """
-    payload: dict[str, Any] = {"pids": pids[-_PID_LIST_CAP:]}
+    payload: JsonObject = {"pids": [*pids[-_PID_LIST_CAP:]]}
     if url:
         payload["url"] = url
     with contextlib.suppress(Exception):

@@ -15,11 +15,12 @@ import base64
 import binascii
 import logging
 import time
-from typing import Any
+from typing import TypedDict
 
 import httpx
 
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
+from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ async def generate_image_bytes(
     seed: int | None = None,
 ) -> bytes:
     """Gera uma imagem e devolve os bytes já decodificados."""
-    payload: dict[str, Any] = {"model": model, "prompt": prompt}
+    payload: JsonObject = {"model": model, "prompt": prompt}
     # Campo não pedido fica ausente, nunca `null` — parte dos providers
     # roteados rejeita o campo nulo com 400.
     opcionais = {
@@ -73,13 +74,21 @@ async def generate_image_bytes(
         raise OpenRouterResponseError(msg) from exc
 
 
+class SpeechModel(TypedDict):
+    """Modelo de fala com as vozes que oferece."""
+
+    id: str
+    name: str
+    voices: list[str]
+
+
 _SPEECH_MODELS_URL = "https://openrouter.ai/api/v1/models?output_modalities=speech"
 _FALLBACK_VOICE = "alloy"
 _LIST_TTL_S = 3600.0
-_speech_models_cache: tuple[float, list[dict[str, Any]]] | None = None
+_speech_models_cache: tuple[float, list[SpeechModel]] | None = None
 
 
-async def list_speech_models() -> list[dict[str, Any]]:
+async def list_speech_models() -> list[SpeechModel]:
     """Modelos de fala do OpenRouter com as vozes de cada um (cache de 1 h).
 
     Devolve ``[]`` quando a listagem não está acessível.
@@ -92,7 +101,7 @@ async def list_speech_models() -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=5.0) as http:
             res = await http.get(_SPEECH_MODELS_URL)
         res.raise_for_status()
-        models = [
+        models: list[SpeechModel] = [
             {
                 "id": str(item["id"]),
                 "name": str(item.get("name") or item["id"]),
@@ -133,7 +142,7 @@ async def synthesize_speech_bytes(
 
     Nada de `b64decode` aqui: o endpoint devolve o áudio binário direto.
     """
-    payload: dict[str, Any] = {"model": model, "input": text, "voice": voice}
+    payload: JsonObject = {"model": model, "input": text, "voice": voice}
     if response_format is not None:
         payload["response_format"] = response_format
     if speed is not None:

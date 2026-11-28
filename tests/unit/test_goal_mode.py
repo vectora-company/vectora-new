@@ -13,6 +13,8 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -23,12 +25,12 @@ from backend.llm.systemone.harness import SystemOneHarness
 from backend.persistence.native.session_store import SessionStore
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
-from backend.tools.registry import ToolRegistry
+from backend.tools.registry import ToolRegistry, ToolSpec
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage, VMessageChunk
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(
         str(tmp_path / "goal-sessions.db"), min_size=1, max_size=2
     )
@@ -68,15 +70,27 @@ class _GoalChatClient:
         self.turn_calls = 0
         self.judge_calls = 0
 
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         turno = self._turnos[self.turn_calls]
         self.turn_calls += 1
         for chunk in turno:
             yield chunk
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         item = self._judgments[self.judge_calls]
         self.judge_calls += 1
         if isinstance(item, Exception):
@@ -101,8 +115,8 @@ async def _new_thread(session_store: SessionStore, thread_id: str) -> None:
 
 
 async def test_objetivo_cumprido_em_n_turnos_par_com_turn_budget_esgotado(
-    session_store,
-):
+    session_store: SessionStore,
+) -> None:
     """Happy: judge aprova no 2º turno, `status="done"`. Par de erro no MESMO
     teste: judge nunca aprova + turn budget pequeno -> `status="error"`, e o
     loop realmente para (prova de ausência de loop infinito via
@@ -163,7 +177,9 @@ async def test_objetivo_cumprido_em_n_turnos_par_com_turn_budget_esgotado(
     assert chat_client_erro.turn_calls == 3
 
 
-async def test_falhas_consecutivas_do_judge_disparam_auto_pause(session_store):
+async def test_falhas_consecutivas_do_judge_disparam_auto_pause(
+    session_store: SessionStore,
+) -> None:
     """Falha de transporte/parse do judge repetida 3x seguidas dispara
     auto-pause com motivo distinto de turn budget — mesmo com turn budget
     grande o suficiente pra nunca ser a causa real."""
@@ -201,14 +217,16 @@ async def test_falhas_consecutivas_do_judge_disparam_auto_pause(session_store):
 
 
 @pytest.mark.asyncio
-async def test_plan_mode_respeita_flag_de_decision_model(session_store, monkeypatch):
+async def test_plan_mode_respeita_flag_de_decision_model(
+    session_store: SessionStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
     thread_id = "goal-decision-model-flag"
     await _new_thread(session_store, thread_id)
     chat_client = _GoalChatClient(
         turnos=[_text_turn("feito")],
         judgments=[(True, "objetivo cumprido")],
     )
-    model_calls: list[object] = []
+    model_calls: list[SystemOneHarness] = []
 
     async def evaluate(harness, **kwargs):
         model_calls.append(harness)
@@ -242,8 +260,8 @@ async def test_plan_mode_respeita_flag_de_decision_model(session_store, monkeypa
 
 
 async def test_mesmo_gate_falhando_repetidamente_dispara_auto_pause_antes_do_turn_budget(
-    session_store,
-):
+    session_store: SessionStore,
+) -> None:
     """Gate de qualidade sozinho bloqueia mesmo com o judge sempre aprovando
     — prova que o AND é real (judge aprovar não basta) e que o mesmo gate
     falhando repetidas vezes dispara pausa distinta de turn budget."""
@@ -279,8 +297,8 @@ async def test_mesmo_gate_falhando_repetidamente_dispara_auto_pause_antes_do_tur
 
 
 async def test_gate_e_judge_sao_criterios_independentes_nunca_marca_done_sozinho(
-    session_store, tmp_path
-):
+    session_store: SessionStore, tmp_path: Path
+) -> None:
     """AND real, dois subcasos no mesmo teste: (1) gate passa mas judge
     rejeita -> não fecha; (2) judge aprova mas gate falha -> não fecha. Só
     fecha quando os dois aprovam no mesmo turno."""
@@ -356,8 +374,8 @@ async def test_gate_e_judge_sao_criterios_independentes_nunca_marca_done_sozinho
 
 
 async def test_run_quality_gates_executa_comandos_reais_sequencial_e_trunca_saida(
-    session_store,
-):
+    session_store: SessionStore,
+) -> None:
     """`_run_quality_gates` roda comando real via subprocess assíncrono
     (nunca `subprocess.run`), sequencial. Erro/borda: comando com exit != 0
     vira `GateResult(passed=False)` com a saída capturada, sem levantar."""
@@ -375,7 +393,9 @@ async def test_run_quality_gates_executa_comandos_reais_sequencial_e_trunca_said
     assert "deu ruim" in resultados[1].output
 
 
-async def test_resume_goal_sem_pendencia_real_devolve_erro_idempotente(session_store):
+async def test_resume_goal_sem_pendencia_real_devolve_erro_idempotente(
+    session_store: SessionStore,
+) -> None:
     """Erro/borda de `resume_goal`: sem aprovação pendente (duplo-clique/
     retry), devolve `status="error"` de forma defensiva, sem propagar."""
     thread_id = "goal-resume-sem-pendencia"
@@ -405,8 +425,8 @@ class TestShouldRequireApprovalObrigatorio:
     que roda um goal-mode inteiro sem nenhuma pausa de aprovação."""
 
     async def test_run_goal_sem_should_require_approval_estoura_typeerror(
-        self, session_store
-    ):
+        self, session_store: SessionStore
+    ) -> None:
         with pytest.raises(TypeError, match="should_require_approval"):
             await goal_mode.run_goal(  # type: ignore[call-arg]  # ty: ignore[missing-argument]
                 session_store=session_store,
@@ -419,8 +439,8 @@ class TestShouldRequireApprovalObrigatorio:
             )
 
     async def test_resume_goal_sem_should_require_approval_estoura_typeerror(
-        self, session_store
-    ):
+        self, session_store: SessionStore
+    ) -> None:
         with pytest.raises(TypeError, match="should_require_approval"):
             await goal_mode.resume_goal(  # type: ignore[call-arg]  # ty: ignore[missing-argument]
                 session_store=session_store,

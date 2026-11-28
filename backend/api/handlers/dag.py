@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import hmac
-from typing import Any
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -15,8 +15,14 @@ from backend.api.handlers.threads import (
     _user_id,
 )
 from backend.scheduling.dag import DAGStore, DAGValidationError
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.dag import DagPlanRecord
 
 router = APIRouter()
+
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 
 class ApproveDAGRequest(BaseModel):
@@ -30,7 +36,7 @@ class DAGStageView(BaseModel):
     status: str = "pending"
     attempt: int = 0
     error: str | None = None
-    output: dict[str, Any] | None = None
+    output: JsonObject | None = None
 
 
 class DAGExecutionView(BaseModel):
@@ -56,7 +62,7 @@ class DAGPlanResponse(BaseModel):
     plan: DAGPlanView | None
 
 
-async def _db_store() -> tuple[Any, DAGStore]:
+async def _db_store() -> tuple[aiosqlite.Connection, DAGStore]:
     from backend.scheduling.background_tasks import _get_db
 
     db = await _get_db()
@@ -67,7 +73,7 @@ async def _db_store() -> tuple[Any, DAGStore]:
 
 async def _plan_for_thread(
     thread_id: str, plan_id: str, request: Request
-) -> dict[str, Any]:
+) -> DagPlanRecord:
     await _assert_owns_thread(thread_id, request, require_existing=True)
     sessions = await _get_session_store()
     runs = await sessions.list_agent_runs(thread_id, limit=100)

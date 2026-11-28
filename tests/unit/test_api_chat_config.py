@@ -6,6 +6,8 @@ deve se traduzir corretamente para o dict ``configurable`` consumido pelo grafo.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 
 from backend.api.handlers.chat import (
@@ -20,13 +22,13 @@ from backend.api.schemas import ChatConfig
 # ---------------------------------------------------------------------------
 
 
-def test_thread_and_user_always_present():
+def test_thread_and_user_always_present() -> None:
     cfg = _build_configurable(ChatConfig(), "thread-1", "user-1")
     assert cfg["thread_id"] == "thread-1"
     assert cfg["user_id"] == "user-1"
 
 
-def test_optional_fields_absent_by_default():
+def test_optional_fields_absent_by_default() -> None:
     """Sem valores, os campos opcionais não entram no configurable."""
     cfg = _build_configurable(ChatConfig(), "t", "u")
     assert "workspace_id" not in cfg
@@ -39,19 +41,19 @@ def test_optional_fields_absent_by_default():
 # ---------------------------------------------------------------------------
 
 
-def test_permission_mode_default_is_empty_sentinel():
+def test_permission_mode_default_is_empty_sentinel() -> None:
     """O modo ausente fica vazio para permitir reidratar a sessão persistida."""
     cfg = _build_configurable(ChatConfig(), "t", "u")
     assert "permission_mode" not in cfg
 
 
-def test_permission_mode_passthrough():
+def test_permission_mode_passthrough() -> None:
     for mode in ("ask", "accept_edits", "plan", "auto", "bypass"):
         cfg = _build_configurable(ChatConfig(permission_mode=mode), "t", "u")
         assert cfg["permission_mode"] == mode
 
 
-def test_permission_mode_empty_string_omitted():
+def test_permission_mode_empty_string_omitted() -> None:
     cfg = _build_configurable(ChatConfig(permission_mode=""), "t", "u")
     assert "permission_mode" not in cfg
 
@@ -67,12 +69,12 @@ def test_permission_mode_rejeita_valor_fora_do_contrato() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_reasoning_effort_passthrough():
+def test_reasoning_effort_passthrough() -> None:
     cfg = _build_configurable(ChatConfig(reasoning_effort="high"), "t", "u")
     assert cfg["reasoning_effort"] == "high"
 
 
-def test_reasoning_effort_default_omitted():
+def test_reasoning_effort_default_omitted() -> None:
     """Default vazio → modelo usa seu próprio default (campo ausente)."""
     cfg = _build_configurable(ChatConfig(), "t", "u")
     assert "reasoning_effort" not in cfg
@@ -83,7 +85,7 @@ def test_reasoning_effort_default_omitted():
 # ---------------------------------------------------------------------------
 
 
-def test_workspace_and_prompt_passthrough():
+def test_workspace_and_prompt_passthrough() -> None:
     cfg = _build_configurable(
         ChatConfig(workspace_id="ws1", custom_system_prompt="seja conciso"),
         "t",
@@ -99,31 +101,31 @@ def test_workspace_and_prompt_passthrough():
 # ---------------------------------------------------------------------------
 
 
-def test_model_absent_by_default():
+def test_model_absent_by_default() -> None:
     cfg = _build_configurable(ChatConfig(), "t", "u")
     assert "model" not in cfg
 
 
-def test_model_provider_hyphen_normalized_to_underscore():
+def test_model_provider_hyphen_normalized_to_underscore() -> None:
     cfg = _build_configurable(
         ChatConfig(model="google-genai:gemini-2.5-flash"), "t", "u"
     )
     assert cfg["model"] == "google_genai:gemini-2.5-flash"
 
 
-def test_model_provider_without_hyphen_passthrough():
+def test_model_provider_without_hyphen_passthrough() -> None:
     cfg = _build_configurable(ChatConfig(model="cohere:command-a-03-2025"), "t", "u")
     assert cfg["model"] == "cohere:command-a-03-2025"
 
 
-def test_openrouter_model_preserves_slash_and_provider():
+def test_openrouter_model_preserves_slash_and_provider() -> None:
     cfg = _build_configurable(
         ChatConfig(model="openrouter:deepseek/deepseek-v4-flash-0731"), "t", "u"
     )
     assert cfg["model"] == "openrouter:deepseek/deepseek-v4-flash-0731"
 
 
-def test_model_without_colon_passthrough():
+def test_model_without_colon_passthrough() -> None:
     # Sem prefixo de provider: repassado como veio (não vira provider espúrio).
     cfg = _build_configurable(ChatConfig(model="gemini-2.5-flash"), "t", "u")
     assert cfg["model"] == "gemini-2.5-flash"
@@ -134,7 +136,7 @@ def test_model_without_colon_passthrough():
 # ---------------------------------------------------------------------------
 
 
-def test_fork_from_checkpoint_id_present_included_absent_omitted():
+def test_fork_from_checkpoint_id_present_included_absent_omitted() -> None:
     """checkpoint_id presente no configurable faz o histórico ramificar dali
     (edit/regenerate); ausente mantém o comportamento atual — resume do
     checkpoint mais recente da thread."""
@@ -150,12 +152,12 @@ def test_fork_from_checkpoint_id_present_included_absent_omitted():
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_keeps_explicit_workspace():
+def test_resolve_keeps_explicit_workspace() -> None:
     """Workspace escolhido pelo cliente é mantido — sem criar pasta de sessão."""
     assert _resolve_workspace_id("ws-escolhido", "thread1", "u") == "ws-escolhido"
 
 
-def test_resolve_reuses_active_workspace(monkeypatch):
+def test_resolve_reuses_active_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sem workspace pedido mas com um ativo, reusa o ativo (não cria por thread)."""
     calls = {}
 
@@ -163,15 +165,15 @@ def test_resolve_reuses_active_workspace(monkeypatch):
         id = "ws-ativo"
 
     class _FakeRegistry:
-        def get_active(self, user_id=None):
+        def get_active(self, user_id: str | None = None):
             calls["get_active"] = user_id
             return _ActiveWs()
 
-        def get_or_create_session_workspace(self, *_args, **_kwargs):
+        def get_or_create_session_workspace(self, *_args, **_kwargs) -> NoReturn:
             calls["created"] = True  # não deve ser chamado
             raise AssertionError("não deveria criar workspace de sessão")
 
-        def set_active(self, ws_id, user_id=None):
+        def set_active(self, ws_id, user_id=None) -> bool:
             calls["set_active"] = (ws_id, user_id)
             return True
 
@@ -184,7 +186,9 @@ def test_resolve_reuses_active_workspace(monkeypatch):
     assert "created" not in calls
 
 
-def test_resolve_force_new_skips_active_workspace_reuse(monkeypatch):
+def test_resolve_force_new_skips_active_workspace_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """force_new=True pula o reuso do workspace ativo e cria um dedicado —
     par de erro: force_new=False (default) continua reusando o ativo, mesmo
     registry fake, confirmando que o comportamento antigo não regrediu."""
@@ -197,16 +201,18 @@ def test_resolve_force_new_skips_active_workspace_reuse(monkeypatch):
         id = "ws-novo-dedicado"
 
     class _FakeRegistry:
-        def get_active(self, user_id=None):
+        def get_active(self, user_id: str | None = None):
             calls.setdefault("get_active_calls", 0)
             calls["get_active_calls"] += 1
             return _ActiveWs()
 
-        def get_or_create_session_workspace(self, thread_id, user_id=None):
+        def get_or_create_session_workspace(
+            self, thread_id: str, user_id: str | None = None
+        ):
             calls["created_thread_id"] = thread_id
             return _NewWs()
 
-        def set_active(self, ws_id, user_id=None):
+        def set_active(self, ws_id: str, user_id: str | None = None) -> bool:
             calls["set_active"] = (ws_id, user_id)
             return True
 
@@ -226,7 +232,9 @@ def test_resolve_force_new_skips_active_workspace_reuse(monkeypatch):
     assert "created_thread_id" not in calls
 
 
-def test_resolve_creates_session_workspace_when_no_active(monkeypatch):
+def test_resolve_creates_session_workspace_when_no_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Sem workspace pedido e sem ativo, deriva o padrão da sessão via registry."""
     calls = {}
 
@@ -234,15 +242,17 @@ def test_resolve_creates_session_workspace_when_no_active(monkeypatch):
         id = "sess-ws"
 
     class _FakeRegistry:
-        def get_active(self, *_args, **_kwargs):
+        def get_active(self, *_args: str, **_kwargs) -> None:
             return None
 
-        def get_or_create_session_workspace(self, thread_id, user_id=None):
+        def get_or_create_session_workspace(
+            self, thread_id: str, user_id: str | None = None
+        ):
             calls["thread_id"] = thread_id
             calls["user_id"] = user_id
             return _FakeWs()
 
-        def set_active(self, ws_id, user_id=None):
+        def set_active(self, ws_id: str, user_id: str | None = None) -> bool:
             calls["active"] = (ws_id, user_id)
             return True
 
@@ -262,7 +272,9 @@ def test_resolve_creates_session_workspace_when_no_active(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_sem_fallback_configurado_devolve_none(monkeypatch):
+async def test_sem_fallback_configurado_devolve_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace.runtime_settings import runtime_settings
 
     monkeypatch.setattr(runtime_settings, "get", lambda key, default=None: "")
@@ -271,7 +283,9 @@ async def test_sem_fallback_configurado_devolve_none(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fallback_configurado_e_com_visao_e_devolvido(monkeypatch):
+async def test_fallback_configurado_e_com_visao_e_devolvido(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace.runtime_settings import runtime_settings
 
     async def _sempre_com_visao(spec: str) -> bool:
@@ -290,7 +304,9 @@ async def test_fallback_configurado_e_com_visao_e_devolvido(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fallback_configurado_mas_tambem_sem_visao_devolve_none(monkeypatch):
+async def test_fallback_configurado_mas_tambem_sem_visao_devolve_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Bad path: config inconsistente (fallback apontando pra outro modelo
     sem visão) não vira loop de bloqueio disfarçado de fallback — trata
     como se não houvesse fallback."""

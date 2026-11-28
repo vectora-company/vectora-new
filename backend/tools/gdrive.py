@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
 
 from backend.tools.registry import ToolExtras, vtool
 
@@ -41,7 +40,7 @@ async def google_drive_list(folder_id: str = "root") -> str:
         import httpx
 
         token = _token()
-        params: dict[str, Any] = {
+        params: dict[str, str | int] = {
             "q": f"'{folder_id}' in parents and trashed=false",
             "fields": "files(id,name,mimeType,size,modifiedTime)",
             "pageSize": 50,
@@ -124,7 +123,7 @@ async def google_drive_search(query: str, max_results: int = 10) -> str:
         import httpx
 
         token = _token()
-        params: dict[str, Any] = {
+        params: dict[str, str | int] = {
             "q": f"fullText contains '{query}' and trashed=false",
             "fields": "files(id,name,mimeType,modifiedTime)",
             "pageSize": min(max_results, 50),

@@ -23,8 +23,8 @@ _WEBM = b"\x1a\x45\xdf\xa3fake-audio-bytes"
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cancelled", [False, True])
 async def test_local_timeout_keeps_audio_until_worker_releases_it(
-    monkeypatch, cancelled
-):
+    monkeypatch: pytest.MonkeyPatch, cancelled: bool
+) -> None:
     from backend.llm import transcription
 
     started = threading.Event()
@@ -351,8 +351,8 @@ class TestTranscribeAudioGeminiFallback:
 
 @pytest.mark.asyncio
 async def test_local_probe_rejects_result_after_configuration_change(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from backend.llm import transcription
     from backend.settings import settings
 
@@ -366,7 +366,7 @@ async def test_local_probe_rejects_result_after_configuration_change(
         },
     )
 
-    def probe():
+    def probe() -> str:
         settings.vectora_home = tmp_path / "after"
         return "ready"
 

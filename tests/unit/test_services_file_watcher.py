@@ -20,7 +20,7 @@ from backend.scheduling.file_watcher import FileWatcher, debounce_collect
 
 
 @pytest.mark.asyncio
-async def test_debounce_collect_batches_rapid_events():
+async def test_debounce_collect_batches_rapid_events() -> None:
     """Eventos em <300ms devem ser agrupados em um único callback."""
     received: list[set] = []
 
@@ -44,7 +44,7 @@ async def test_debounce_collect_batches_rapid_events():
 
 
 @pytest.mark.asyncio
-async def test_debounce_collect_emits_separate_batches_for_spaced_events():
+async def test_debounce_collect_emits_separate_batches_for_spaced_events() -> None:
     """Eventos espaçados >debounce_ms devem gerar callbacks separados."""
     received: list[set] = []
 
@@ -72,7 +72,7 @@ async def test_debounce_collect_emits_separate_batches_for_spaced_events():
 
 
 @pytest.mark.asyncio
-async def test_file_watcher_start_stop(tmp_path: Path):
+async def test_file_watcher_start_stop(tmp_path: Path) -> None:
     """FileWatcher deve iniciar e parar sem erros."""
     watcher = FileWatcher(str(tmp_path), workspace_id="ws-1")
     await watcher.start()
@@ -84,7 +84,7 @@ async def test_file_watcher_start_stop(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_file_watcher_publishes_on_change(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+) -> None:
     """Ao detectar mudanca, deve publicar via KV."""
     published: list[dict] = []
 
@@ -102,7 +102,7 @@ async def test_file_watcher_publishes_on_change(
 
 
 @pytest.mark.asyncio
-async def test_file_watcher_singleton_per_workspace(tmp_path: Path):
+async def test_file_watcher_singleton_per_workspace(tmp_path: Path) -> None:
     """get_watcher retorna a mesma instancia para o mesmo workspace_id."""
     from backend.scheduling.file_watcher import get_watcher
 

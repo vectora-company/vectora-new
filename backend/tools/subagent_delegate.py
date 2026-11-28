@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from backend.llm.base import ChatClient
     from backend.persistence.native.session_store import SessionStore
     from backend.services.policy_compiler import PolicySnapshot
+    from backend.vtypes.engine import ApprovalPredicate
     from backend.vtypes.message import VMessage
 
 logger = logging.getLogger(__name__)
@@ -101,10 +102,7 @@ class SubagentDeps:
         chat_client: ChatClient,
         config: LoopConfig | None = None,
         on_event: EventSink | None = None,
-        should_require_approval: Callable[
-            [str, ToolContext, dict[str, Any], list[VMessage]], bool
-        ]
-        | None,
+        should_require_approval: ApprovalPredicate | None,
         turn_budget: TurnBudget | None = None,
         liveness: LivenessConfig | None = None,
         policy_snapshot: PolicySnapshot | None = None,

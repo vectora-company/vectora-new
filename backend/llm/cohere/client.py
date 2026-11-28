@@ -11,7 +11,12 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import httpx
+
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +49,7 @@ class CohereResponseError(CohereError):
     ausente. Separada dos erros de status: aqui o problema é o que voltou."""
 
 
-def _extrair_mensagem(corpo: Any, fallback: str) -> str:
+def _extrair_mensagem(corpo: JsonValue, fallback: str) -> str:
     if isinstance(corpo, dict):
         msg = corpo.get("message")
         if isinstance(msg, str) and msg:
@@ -60,7 +65,7 @@ class CohereClient:
         api_key: str,
         *,
         base_url: str = BASE_URL,
-        http_client: Any = None,
+        http_client: httpx.AsyncClient | None = None,
         timeout_s: float = _DEFAULT_TIMEOUT_S,
     ) -> None:
         if not (api_key or "").strip():
@@ -74,7 +79,7 @@ class CohereClient:
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"}
 
-    async def _ensure_client(self) -> Any:
+    async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
             import httpx
 
@@ -88,7 +93,7 @@ class CohereClient:
             with contextlib.suppress(Exception):
                 await self._client.aclose()
 
-    def _raise_for_status(self, status: int, corpo: Any) -> None:
+    def _raise_for_status(self, status: int, corpo: JsonValue) -> None:
         if status < 400:
             return
         msg = _extrair_mensagem(corpo, f"Cohere respondeu {status}")
@@ -164,15 +169,15 @@ class CohereClient:
         model: str,
         top_n: int | None = None,
         max_tokens_per_doc: int = 4096,
-    ) -> list[dict[str, Any]]:
+    ) -> list[JsonObject]:
         """``POST /v2/rerank`` — devolve ``results[]`` cru (index/relevance_score)."""
         if not documents:
             return []
 
-        payload: dict[str, Any] = {
+        payload: JsonObject = {
             "model": model,
             "query": query,
-            "documents": documents,
+            "documents": [*documents],
             "max_tokens_per_doc": max_tokens_per_doc,
         }
         if top_n is not None:
@@ -183,7 +188,7 @@ class CohereClient:
         if not isinstance(resultados, list):
             msg = "Cohere devolveu `results` ausente/inválido em /v2/rerank"
             raise CohereResponseError(msg)
-        return resultados
+        return [item for item in resultados if isinstance(item, dict)]
 
     async def chat(self, payload: dict) -> dict:
         """``POST /v2/chat`` sem streaming."""

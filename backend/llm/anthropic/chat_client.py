@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 from backend.llm.anthropic.client import AnthropicClient, AnthropicResponseError
 from backend.llm.media_parts import prepare_content, split_data_url
 from backend.llm.reasoning import reasoning_effort, thinking_budget
-from backend.vtypes.contracts import UsageSnapshot
+from backend.vtypes.contracts import JsonObject, JsonValue, UsageSnapshot
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -45,7 +45,7 @@ _ROLE_POR_TIPO = {
 }
 
 
-def _to_anthropic_tool(spec: ToolSpec) -> dict:
+def _to_anthropic_tool(spec: ToolSpec) -> JsonObject:
     """`{"name","description","input_schema"}` — Anthropic não usa o
     envelope `{"type":"function","function":{...}}` da OpenAI."""
     convertida = spec.openai_schema()["function"]
@@ -57,7 +57,7 @@ def _to_anthropic_tool(spec: ToolSpec) -> dict:
     }
 
 
-def _anthropic_image_block(data_uri: str) -> dict:
+def _anthropic_image_block(data_uri: str) -> JsonObject:
     """`data:` URI (formato que `ContentBlock.image_url` sempre carrega,
     montado em ``api/handlers/chat.py``) vira bloco `base64`; qualquer outra
     string (URL http já assinada) vira bloco `url` — a Messages API aceita
@@ -75,7 +75,7 @@ def _anthropic_image_block(data_uri: str) -> dict:
     return {"type": "image", "source": {"type": "url", "url": data_uri}}
 
 
-def _to_anthropic_content(content: list[ContentBlock]) -> str | list[dict]:
+def _to_anthropic_content(content: list[ContentBlock]) -> str | list[JsonValue]:
     """Bloco `text` vira string simples (caso comum, evita envelope de lista
     desnecessário); qualquer bloco `image_url` presente força o formato de
     lista de blocos tipados da Messages API — nunca descarta a imagem só
@@ -83,7 +83,7 @@ def _to_anthropic_content(content: list[ContentBlock]) -> str | list[dict]:
     content = prepare_content(content, "anthropic")
     if not any(b.kind in {"image_url", "media"} for b in content):
         return "".join(b.text or "" for b in content if b.kind == "text")
-    partes: list[dict] = []
+    partes: list[JsonValue] = []
     for bloco in content:
         if bloco.kind == "text" and bloco.text:
             partes.append({"type": "text", "text": bloco.text})
@@ -91,7 +91,7 @@ def _to_anthropic_content(content: list[ContentBlock]) -> str | list[dict]:
             partes.append(_anthropic_image_block(bloco.image_url))
         elif bloco.kind == "media" and bloco.media_data_url:
             media_type, dado = split_data_url(bloco.media_data_url)
-            documento: dict = {
+            documento: JsonObject = {
                 "type": "document",
                 "source": {"type": "base64", "media_type": media_type, "data": dado},
             }
@@ -101,9 +101,9 @@ def _to_anthropic_content(content: list[ContentBlock]) -> str | list[dict]:
     return partes
 
 
-def _tool_result_content(msg: VMessage) -> str | list[dict]:
+def _tool_result_content(msg: VMessage) -> str | list[JsonValue]:
     """``tool_result`` aceita blocos de imagem junto do texto (screenshots)."""
-    imagens = [
+    imagens: list[JsonValue] = [
         _anthropic_image_block(b.image_url)
         for b in msg.content
         if b.kind == "image_url" and b.image_url
@@ -111,11 +111,12 @@ def _tool_result_content(msg: VMessage) -> str | list[dict]:
     if not imagens:
         return msg.text()
     texto = msg.text()
-    return [*([{"type": "text", "text": texto}] if texto else []), *imagens]
+    lead: list[JsonValue] = [{"type": "text", "text": texto}] if texto else []
+    return [*lead, *imagens]
 
 
-def _assistant_content_blocks(msg: VMessage) -> list[dict]:
-    blocos: list[dict] = []
+def _assistant_content_blocks(msg: VMessage) -> list[JsonValue]:
+    blocos: list[JsonValue] = []
     texto = msg.text()
     if texto:
         blocos.append({"type": "text", "text": texto})
@@ -126,13 +127,15 @@ def _assistant_content_blocks(msg: VMessage) -> list[dict]:
     return blocos
 
 
-def _to_anthropic_messages(messages: list[VMessage]) -> tuple[str | None, list[dict]]:
+def _to_anthropic_messages(
+    messages: list[VMessage],
+) -> tuple[str | None, list[JsonObject]]:
     """Extrai o `system` (concatenado, se houver mais de uma mensagem system
     — raro, mas não deve perder conteúdo) e traduz o resto pro formato
     `messages` da Anthropic. Tool result (role TOOL) vira mensagem `user`
     com bloco `tool_result` — a API não tem role `tool`."""
     partes_system: list[str] = []
-    traduzidas: list[dict] = []
+    traduzidas: list[JsonObject] = []
 
     for msg in messages:
         if msg.role == MessageRole.SYSTEM:
@@ -174,10 +177,10 @@ def _to_anthropic_messages(messages: list[VMessage]) -> tuple[str | None, list[d
     return system, traduzidas
 
 
-_CACHE_CONTROL = {"type": "ephemeral"}
+_CACHE_CONTROL: JsonObject = {"type": "ephemeral"}
 
 
-def _with_prompt_cache(body: dict[str, Any]) -> dict[str, Any]:
+def _with_prompt_cache(body: JsonObject) -> JsonObject:
     """Marca o prefixo estável para o cache de prompt da Anthropic.
 
     Até 4 pontos: última tool, system e as duas últimas mensagens. O que está
@@ -188,23 +191,29 @@ def _with_prompt_cache(body: dict[str, Any]) -> dict[str, Any]:
     if not settings.prompt_cache_enabled:
         return body
     tools = body.get("tools")
-    if tools:
-        tools[-1] = {**tools[-1], "cache_control": _CACHE_CONTROL}
+    if isinstance(tools, list) and tools and isinstance(last_tool := tools[-1], dict):
+        tools[-1] = {**last_tool, "cache_control": _CACHE_CONTROL}
     system = body.get("system")
     if isinstance(system, str) and system:
         body["system"] = [
             {"type": "text", "text": system, "cache_control": _CACHE_CONTROL}
         ]
-    for message in body["messages"][-2:]:
-        content = message["content"]
-        if isinstance(content, str):
-            if not content:
-                continue
-            content = [{"type": "text", "text": content}]
-        if not content:
+    messages = body.get("messages")
+    for message in messages[-2:] if isinstance(messages, list) else []:
+        if not isinstance(message, dict):
             continue
-        content = [*content[:-1], {**content[-1], "cache_control": _CACHE_CONTROL}]
-        message["content"] = content
+        content: JsonValue = message.get("content")
+        if isinstance(content, str) and content:
+            content = [{"type": "text", "text": content}]
+        if not isinstance(content, list) or not content:
+            continue
+        last = content[-1]
+        if isinstance(last, dict):
+            marked: list[JsonValue] = [
+                *content[:-1],
+                {**last, "cache_control": _CACHE_CONTROL},
+            ]
+            message["content"] = marked
     return body
 
 
@@ -246,9 +255,9 @@ class AnthropicChatClient:
         max_tokens: int | None,
     ) -> dict:
         system, traduzidas = _to_anthropic_messages(messages)
-        body: dict[str, Any] = {
+        body: JsonObject = {
             "model": self.model,
-            "messages": traduzidas,
+            "messages": [*traduzidas],
             # Anthropic exige max_tokens sempre — sem um teto explícito do
             # caller, usa um default generoso em vez de deixar a API rejeitar
             # a requisição por campo obrigatório ausente.
@@ -264,7 +273,7 @@ class AnthropicChatClient:
         if budget is not None:
             body["thinking"] = {"type": "enabled", "budget_tokens": budget}
             # O thinking exige max_tokens acima do orçamento e temperatura 1.
-            body["max_tokens"] = max(body["max_tokens"], budget + 4096)
+            body["max_tokens"] = max(max_tokens or 4096, budget + 4096)
             body.pop("temperature", None)
         return _with_prompt_cache(body)
 

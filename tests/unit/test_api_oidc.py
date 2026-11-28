@@ -13,14 +13,20 @@ mockando só a fronteira de rede (`httpx`/JWKS), nunca o handler em si.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aiosqlite import Connection
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture
-def app_and_db(tmp_path, monkeypatch):
+def app_and_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[FastAPI]:
     db_file = str(tmp_path / "test_api_oidc.db")
     os.environ["VECTORA_AUTH_REQUIRED"] = "true"
 
@@ -31,7 +37,7 @@ def app_and_db(tmp_path, monkeypatch):
     auth_mod._db_conn = None
     monkeypatch.setattr(auth_mod, "_get_secret", lambda: "oidc-api-test-secret-xxxxx")
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)
@@ -50,7 +56,7 @@ def app_and_db(tmp_path, monkeypatch):
 
     import asyncio
 
-    async def _close():
+    async def _close() -> None:
         if auth_mod._db_conn is not None:
             await auth_mod._db_conn.close()
             auth_mod._db_conn = None
@@ -60,17 +66,17 @@ def app_and_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def client(app_and_db):
+def client(app_and_db: FastAPI) -> TestClient:
     return TestClient(app_and_db, raise_server_exceptions=False)
 
 
 class TestOidcStatus:
-    def test_desabilitado_sem_config(self, client):
+    def test_desabilitado_sem_config(self, client: TestClient) -> None:
         r = client.get("/auth/oidc/status")
         assert r.status_code == 200
         assert r.json() == {"enabled": False}
 
-    def test_habilitado_com_config_completa(self, client):
+    def test_habilitado_com_config_completa(self, client: TestClient) -> None:
         from backend.api.handlers import oidc as oidc_handler
         from backend.rbac.oidc import OIDCConfig
 
@@ -83,11 +89,11 @@ class TestOidcStatus:
 
 
 class TestOidcLogin:
-    def test_sem_config_devolve_404(self, client):
+    def test_sem_config_devolve_404(self, client: TestClient) -> None:
         r = client.get("/auth/oidc/login", follow_redirects=False)
         assert r.status_code == 404
 
-    def test_idp_fora_do_ar_na_descoberta_vira_502(self, client):
+    def test_idp_fora_do_ar_na_descoberta_vira_502(self, client: TestClient) -> None:
         from backend.api.handlers import oidc as oidc_handler
         from backend.rbac.oidc import OIDCConfig, OIDCError
 
@@ -104,7 +110,7 @@ class TestOidcLogin:
             r = client.get("/auth/oidc/login", follow_redirects=False)
         assert r.status_code == 502
 
-    def test_feliz_redireciona_pro_idp_com_pkce(self, client):
+    def test_feliz_redireciona_pro_idp_com_pkce(self, client: TestClient) -> None:
         from backend.api.handlers import oidc as oidc_handler
         from backend.rbac.oidc import OIDCConfig, OIDCDiscovery
 
@@ -132,7 +138,7 @@ class TestOidcLogin:
 
 
 class TestOidcCallback:
-    def test_erro_do_idp_no_query_vira_401(self, client):
+    def test_erro_do_idp_no_query_vira_401(self, client: TestClient) -> None:
         r = client.get(
             "/auth/oidc/callback",
             params={"error": "access_denied"},
@@ -140,11 +146,11 @@ class TestOidcCallback:
         )
         assert r.status_code == 401
 
-    def test_sem_code_ou_state_vira_400(self, client):
+    def test_sem_code_ou_state_vira_400(self, client: TestClient) -> None:
         r = client.get("/auth/oidc/callback", follow_redirects=False)
         assert r.status_code == 400
 
-    def test_sem_config_devolve_404(self, client):
+    def test_sem_config_devolve_404(self, client: TestClient) -> None:
         r = client.get(
             "/auth/oidc/callback",
             params={"code": "abc", "state": "xyz"},
@@ -152,7 +158,7 @@ class TestOidcCallback:
         )
         assert r.status_code == 404
 
-    def test_id_token_sem_claim_email_vira_401(self, client):
+    def test_id_token_sem_claim_email_vira_401(self, client: TestClient) -> None:
         from backend.api.handlers import oidc as oidc_handler
         from backend.rbac.oidc import OIDCConfig, OIDCDiscovery
 
@@ -181,7 +187,7 @@ class TestOidcCallback:
             )
         assert r.status_code == 401
 
-    def test_feliz_provisiona_usuario_e_grava_cookies(self, client):
+    def test_feliz_provisiona_usuario_e_grava_cookies(self, client: TestClient) -> None:
         from backend.api.handlers import oidc as oidc_handler
         from backend.rbac.oidc import OIDCConfig, OIDCDiscovery
 
@@ -241,7 +247,7 @@ class TestOidcCallback:
             token_endpoint="https://idp.test/token",
             jwks_uri="https://idp.test/jwks",
         )
-        claims: dict[str, object] = {
+        claims: JsonObject = {
             "sub": "u1",
             "email": "sso@example.com",
             "name": "SSO User",

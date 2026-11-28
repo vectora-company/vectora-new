@@ -22,6 +22,8 @@ from pydantic import BaseModel
 from backend.context_graph.security import validate_url
 from backend.services import extension_trust, mcp_policy, registry_client
 from backend.services.importers import preview_mcp_config
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.services import McpImportPreview
 
 if TYPE_CHECKING:
     from backend.workspace.plugins import McpServer
@@ -124,7 +126,7 @@ class UninstallRequest(BaseModel):
 
 
 class ImportPreviewRequest(BaseModel):
-    payload: dict
+    payload: JsonObject
 
 
 class PolicyRequest(BaseModel):
@@ -423,6 +425,6 @@ async def post_uninstall(req: UninstallRequest, request: Request) -> dict:
 
 
 @router.post("/import/preview")
-async def preview_import(req: ImportPreviewRequest) -> dict:
+async def preview_import(req: ImportPreviewRequest) -> McpImportPreview:
     """Return a non-executing import preview; secrets and commands are data only."""
     return preview_mcp_config(req.payload)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -13,11 +13,13 @@ from backend.transport.base import DirEntry, RunResult
 
 
 @pytest.fixture
-def remote(monkeypatch):
+def remote(monkeypatch: pytest.MonkeyPatch) -> tuple[SimpleNamespace, AsyncMock]:
     ws = SimpleNamespace(transport="codespace", remote_path="/workspaces/project")
     transport = AsyncMock()
 
-    async def resolve(_workspace_id: str, path: str):
+    async def resolve(
+        _workspace_id: str, path: str
+    ) -> tuple[SimpleNamespace, AsyncMock, str]:
         target = f"/workspaces/project/{path}" if path else "/workspaces/project"
         return ws, transport, target
 
@@ -29,7 +31,9 @@ def remote(monkeypatch):
     return ws, transport
 
 
-async def test_remote_tree_lists_workspace_entries(remote, monkeypatch):
+async def test_remote_tree_lists_workspace_entries(
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
     _ws, transport = remote
     monkeypatch.setattr(
         workspaces,
@@ -49,7 +53,9 @@ async def test_remote_tree_lists_workspace_entries(remote, monkeypatch):
     transport.list_dir.assert_awaited_once_with("/workspaces/project/src")
 
 
-async def test_remote_file_preview_and_hash(remote, monkeypatch):
+async def test_remote_file_preview_and_hash(
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
     _ws, transport = remote
     content = b"remote"
     monkeypatch.setattr(
@@ -65,7 +71,9 @@ async def test_remote_file_preview_and_hash(remote, monkeypatch):
     assert result.sha256 == hashlib.sha256(content).hexdigest()
 
 
-async def test_remote_update_uses_optimistic_hash(remote, monkeypatch):
+async def test_remote_update_uses_optimistic_hash(
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
     _ws, transport = remote
     current = b"old"
     monkeypatch.setattr(
@@ -86,7 +94,9 @@ async def test_remote_update_uses_optimistic_hash(remote, monkeypatch):
     transport.write_file.assert_not_awaited()
 
 
-async def test_remote_create_file_uses_transport(remote, monkeypatch):
+async def test_remote_create_file_uses_transport(
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
     _ws, transport = remote
     monkeypatch.setattr(
         workspaces,
@@ -104,7 +114,9 @@ async def test_remote_create_file_uses_transport(remote, monkeypatch):
     )
 
 
-async def test_remote_create_directory_uses_confined_path(remote, monkeypatch):
+async def test_remote_create_directory_uses_confined_path(
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
     ws, transport = remote
     run = AsyncMock()
     monkeypatch.setattr(workspaces, "_remote_fs_run", run)
@@ -122,7 +134,9 @@ async def test_remote_create_directory_uses_confined_path(remote, monkeypatch):
     )
 
 
-async def test_remote_delete_requires_explicit_permanent_confirmation(remote):
+async def test_remote_delete_requires_explicit_permanent_confirmation(
+    remote: tuple[SimpleNamespace, AsyncMock],
+) -> None:
     _ws, transport = remote
 
     result = await workspaces.delete_fs_node("ws", path="src/a.txt", permanent=False)
@@ -132,7 +146,9 @@ async def test_remote_delete_requires_explicit_permanent_confirmation(remote):
     transport.run.assert_not_awaited()
 
 
-async def test_remote_move_checks_conflicts_and_runs_rename(remote, monkeypatch):
+async def test_remote_move_checks_conflicts_and_runs_rename(
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
     ws, transport = remote
     monkeypatch.setattr(
         workspaces,
@@ -156,7 +172,9 @@ async def test_remote_move_checks_conflicts_and_runs_rename(remote, monkeypatch)
     )
 
 
-async def test_remote_update_writes_new_content_after_hash_check(remote, monkeypatch):
+async def test_remote_update_writes_new_content_after_hash_check(
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
     _ws, transport = remote
     current = b"old"
     monkeypatch.setattr(
@@ -182,7 +200,9 @@ async def test_remote_update_writes_new_content_after_hash_check(remote, monkeyp
     )
 
 
-async def test_remote_search_returns_relative_matches(remote):
+async def test_remote_search_returns_relative_matches(
+    remote: tuple[SimpleNamespace, AsyncMock],
+) -> None:
     _ws, transport = remote
     transport.run.return_value = RunResult(
         0,
@@ -205,11 +225,11 @@ async def test_remote_search_returns_relative_matches(remote):
     assert result.hits[0].line_number == 3
 
 
-async def test_remote_path_resolver_rejects_traversal_without_transport_call():
+async def test_remote_path_resolver_rejects_traversal_without_transport_call() -> None:
     from backend.workspace.remote_fs import resolve_remote_workspace_path
 
     transport = AsyncMock()
-    ws = SimpleNamespace(remote_path="/workspaces/project")
+    ws = MagicMock(remote_path="/workspaces/project")
 
     resolved, error = await resolve_remote_workspace_path(transport, ws, "../escape")
 
@@ -218,12 +238,12 @@ async def test_remote_path_resolver_rejects_traversal_without_transport_call():
     transport.run.assert_not_awaited()
 
 
-async def test_remote_path_resolver_checks_canonical_symlink_target():
+async def test_remote_path_resolver_checks_canonical_symlink_target() -> None:
     from backend.workspace.remote_fs import resolve_remote_workspace_path
 
     transport = AsyncMock()
     transport.run.return_value = RunResult(2, "", "")
-    ws = SimpleNamespace(remote_path="/workspaces/project")
+    ws = MagicMock(remote_path="/workspaces/project")
 
     resolved, error = await resolve_remote_workspace_path(transport, ws, "linked/key")
 

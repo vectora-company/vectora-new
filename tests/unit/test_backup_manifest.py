@@ -26,7 +26,7 @@ def test_manifest_rejeita_lista_vazia_fora_de_artifacts() -> None:
 
 
 def test_restore_rejeita_limite_agregado_antes_de_publicar(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Verifica o comportamento de restore rejeita limite agregado antes de publicar."""
     payload_a = b"1234"

@@ -13,9 +13,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.tools.tavily.client import TavilyClient, TavilyResponseError
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +44,10 @@ async def run_research(
     model: str | None = None,
     poll_interval_s: float = _DEFAULT_POLL_INTERVAL_S,
     timeout_s: float = _DEFAULT_TIMEOUT_S,
-    **kwargs: Any,
-) -> dict:
+    **kwargs: JsonValue,
+) -> JsonObject:
     """Dispara a pesquisa e acompanha até um estado terminal."""
-    payload: dict[str, Any] = {"input": input_text, **kwargs}
+    payload: JsonObject = {"input": input_text, **kwargs}
     if model:
         payload["model"] = model
 

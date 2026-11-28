@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from backend.persistence.native.store import VectoraStore
+    from backend.vtypes.store import EmbeddingIndex
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ async def build_store(embedding_model: str | None = None) -> VectoraStore:
     return store
 
 
-def _build_index(embedding_model: str | None) -> Any:
+def _build_index(embedding_model: str | None) -> EmbeddingIndex | None:
     """Constrói IndexConfig do Store via ``_build_lc_embeddings()`` — honra o
     seleção configurável do provider entre Cohere, Voyage, Ollama e OpenRouter em vez de ficar
     hardcoded em Cohere. Retorna None se nenhum provider estiver configurado.

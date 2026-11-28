@@ -10,7 +10,7 @@ import pytest
 
 
 class TestSupabaseRecipe:
-    def test_build_dsn_direct(self):
+    def test_build_dsn_direct(self) -> None:
         from backend.storage.recipes.supabase import build_dsn
 
         dsn = build_dsn(
@@ -22,7 +22,7 @@ class TestSupabaseRecipe:
         assert "secret" in dsn
         assert dsn.startswith("postgresql")
 
-    def test_build_dsn_pooler(self):
+    def test_build_dsn_pooler(self) -> None:
         from backend.storage.recipes.supabase import build_dsn
 
         dsn = build_dsn(
@@ -33,7 +33,7 @@ class TestSupabaseRecipe:
         assert dsn.startswith("postgresql")
         assert "secret" in dsn
 
-    def test_configure_settings(self, monkeypatch):
+    def test_configure_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from unittest.mock import MagicMock
 
         from backend.storage.recipes.supabase import configure_settings
@@ -49,7 +49,7 @@ class TestSupabaseRecipe:
 
 
 class TestNeonRecipe:
-    def test_build_dsn_without_pooler(self):
+    def test_build_dsn_without_pooler(self) -> None:
         from backend.storage.recipes.neon import build_dsn
 
         dsn = build_dsn(
@@ -62,7 +62,7 @@ class TestNeonRecipe:
         assert "alice" in dsn
         assert dsn.startswith("postgresql")
 
-    def test_build_dsn_with_pooler(self):
+    def test_build_dsn_with_pooler(self) -> None:
         from backend.storage.recipes.neon import build_dsn
 
         dsn = build_dsn(
@@ -76,7 +76,7 @@ class TestNeonRecipe:
         assert "-pooler" in dsn or "pooler" in dsn
         assert dsn.startswith("postgresql")
 
-    def test_configure_settings(self, monkeypatch):
+    def test_configure_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from unittest.mock import MagicMock
 
         from backend.storage.recipes.neon import configure_settings
@@ -93,7 +93,7 @@ class TestNeonRecipe:
 
 
 class TestQdrantCloudRecipe:
-    def test_build_config_with_url(self):
+    def test_build_config_with_url(self) -> None:
         from backend.storage.recipes.qdrant_cloud import build_config
 
         cfg = build_config(
@@ -104,7 +104,7 @@ class TestQdrantCloudRecipe:
         assert cfg["api_key"] == "test-key"
         assert "articles" in cfg["collections"]
 
-    def test_build_config_from_cluster_id(self):
+    def test_build_config_from_cluster_id(self) -> None:
         from backend.storage.recipes.qdrant_cloud import build_config
 
         cfg = build_config(
@@ -115,7 +115,7 @@ class TestQdrantCloudRecipe:
         assert "abc123" in cfg["url"]
         assert "eu-west-1" in cfg["url"]
 
-    def test_configure_settings(self):
+    def test_configure_settings(self) -> None:
         from unittest.mock import MagicMock
 
         from backend.storage.recipes.qdrant_cloud import configure_settings
@@ -130,13 +130,13 @@ class TestQdrantCloudRecipe:
         assert settings.qdrant_url == "https://cluster.qdrant.io"
         assert settings.qdrant_api_key == "key"
 
-    def test_default_collections(self):
+    def test_default_collections(self) -> None:
         from backend.storage.recipes.qdrant_cloud import build_config
 
         cfg = build_config(api_key="x", url="https://x.qdrant.io")
         assert set(cfg["collections"]) >= {"articles", "web_cache", "search"}
 
-    def test_custom_collections(self):
+    def test_custom_collections(self) -> None:
         from backend.storage.recipes.qdrant_cloud import build_config
 
         cfg = build_config(

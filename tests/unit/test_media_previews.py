@@ -20,6 +20,7 @@ from backend.services.media_hydration import hydrate_media_blocks
 from backend.services.media_previews import extract_video_frames, render_pdf_pages
 from backend.settings import settings
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage
+from tests.json_values import dig
 
 
 def _pdf(pages: int = 2) -> bytes:
@@ -156,7 +157,7 @@ def test_openrouter_envia_paginas_como_image_url() -> None:
         media_for_modalities({"text", "image"}),
     )
     assert isinstance(parts, list)
-    assert [part["type"] for part in parts] == [
+    assert [dig(part, "type") for part in parts] == [
         "text",
         "text",
         "text",

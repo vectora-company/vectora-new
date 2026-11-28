@@ -1,7 +1,6 @@
 """Asserções de teste sobre `VMessage` (`backend/vtypes/message.py`)."""
 
-from typing import Any
-
+from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.vtypes.message import MessageRole, VMessage
 
 
@@ -31,7 +30,7 @@ def assert_tool_called(
 def assert_tool_called_with_args(
     messages: list[VMessage],
     tool_name: str,
-    expected_args: dict[str, Any],
+    expected_args: JsonObject,
 ) -> None:
     """Assert that a specific tool was called with expected arguments.
 
@@ -62,7 +61,7 @@ def assert_tool_called_with_args(
 def assert_tool_result_in_messages(
     messages: list[VMessage],
     tool_name: str,
-    expected_result: Any,
+    expected_result: JsonValue,
 ) -> None:
     """Assert that a tool's result appears in the message sequence.
 

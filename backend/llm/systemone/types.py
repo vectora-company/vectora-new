@@ -11,11 +11,12 @@ Especificação técnica de Decision Models:
 from __future__ import annotations
 
 import math
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError, model_validator
 
 from backend.llm.systemone.errors import SystemOneValidationError
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 QuestionType = Literal["noul", "choice", "score"]
 DecisionProviderType = Literal[
@@ -272,7 +273,7 @@ class SystemOneResponse(BaseModel):
         ...,
         description="Metadados de execução, latência e consumo sem expor segredos.",
     )
-    raw_payload: dict[str, Any] | None = Field(
+    raw_payload: JsonObject | None = Field(
         default=None,
         description="Payload original compatível retornado pelo engine para auditoria.",
     )
@@ -298,7 +299,7 @@ _USAGE_ADAPTER = TypeAdapter(SystemOneUsage)
 
 
 def parse_systemone_response(
-    data: object,
+    data: JsonValue,
     request: SystemOneRequest,
     *,
     provider: str,

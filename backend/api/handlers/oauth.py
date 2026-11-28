@@ -40,7 +40,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -50,6 +50,10 @@ from backend.services.availability import require_services, services_enabled
 from backend.services.integration_validation import is_oauth_validated
 from backend.services.license import get_license_token
 from backend.settings import settings
+from backend.vtypes.api import Integration
+
+if TYPE_CHECKING:
+    from backend.rbac.auth import User
 
 logger = logging.getLogger(__name__)
 
@@ -407,7 +411,7 @@ def _gateway_callback_url(
 #: Todas as integrações suportadas — consumido pela UI e pelo endpoint /integrations.
 #: kind="apikey" → apenas chave inserida manualmente pelo usuário.
 #: kind="oauth"  → fluxo OAuth delegado; o token é salvo como env_override.
-INTEGRATIONS_REGISTRY: list[dict[str, Any]] = [
+INTEGRATIONS_REGISTRY: list[Integration] = [
     {
         "id": "gemini",
         "name": "Google Gemini",
@@ -670,7 +674,7 @@ INTEGRATIONS_REGISTRY: list[dict[str, Any]] = [
 ]
 
 # Índice rápido por id
-_REGISTRY_BY_ID: dict[str, dict[str, Any]] = {i["id"]: i for i in INTEGRATIONS_REGISTRY}
+_REGISTRY_BY_ID: dict[str, Integration] = {i["id"]: i for i in INTEGRATIONS_REGISTRY}
 
 
 # ---------------------------------------------------------------------------
@@ -678,7 +682,7 @@ _REGISTRY_BY_ID: dict[str, dict[str, Any]] = {i["id"]: i for i in INTEGRATIONS_R
 # ---------------------------------------------------------------------------
 
 
-def _get_user(request: Request) -> Any:
+def _get_user(request: Request) -> User:
     """Executa a operação get user."""
     user = getattr(request.state, "user", None)
     if user is None:

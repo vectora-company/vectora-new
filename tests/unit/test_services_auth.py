@@ -16,8 +16,13 @@ Cobre:
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
+from aiosqlite import Connection
+
+from backend.workspace.runtime_settings import RuntimeSettings
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -25,7 +30,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def isolate_db(tmp_path, monkeypatch):
+def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Cada teste usa um banco SQLite temporário isolado."""
     db_file = str(tmp_path / "test_auth.db")
 
@@ -44,7 +49,7 @@ def isolate_db(tmp_path, monkeypatch):
 
     original_get_db = auth_mod._get_db
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)
@@ -59,7 +64,7 @@ def isolate_db(tmp_path, monkeypatch):
     # Fecha a conexão após o teste
     import asyncio
 
-    async def _close():
+    async def _close() -> None:
         if auth_mod._db_conn is not None:
             await auth_mod._db_conn.close()
             auth_mod._db_conn = None
@@ -73,26 +78,26 @@ def isolate_db(tmp_path, monkeypatch):
 
 
 class TestPasswordHashing:
-    def test_hash_is_not_plaintext(self):
+    def test_hash_is_not_plaintext(self) -> None:
         from backend.rbac.auth import hash_password
 
         h = hash_password("senhasegura123")
         assert h != "senhasegura123"
         assert len(h) > 20
 
-    def test_verify_correct_password(self):
+    def test_verify_correct_password(self) -> None:
         from backend.rbac.auth import hash_password, verify_password
 
         h = hash_password("minhasenha456!")
         assert verify_password("minhasenha456!", h) is True
 
-    def test_verify_wrong_password(self):
+    def test_verify_wrong_password(self) -> None:
         from backend.rbac.auth import hash_password, verify_password
 
         h = hash_password("correta123456")
         assert verify_password("errada123456", h) is False
 
-    def test_two_hashes_of_same_password_differ(self):
+    def test_two_hashes_of_same_password_differ(self) -> None:
         from backend.rbac.auth import hash_password
 
         h1 = hash_password("mesmasenha123")
@@ -106,7 +111,7 @@ class TestPasswordHashing:
 
 
 class TestJWT:
-    def test_create_and_decode_access_token(self):
+    def test_create_and_decode_access_token(self) -> None:
         from backend.rbac.auth import User, create_access_token, decode_access_token
 
         user = User(
@@ -122,7 +127,7 @@ class TestJWT:
         assert payload["email"] == "test@example.com"
         assert payload["role"] == "member"
 
-    def test_tampered_token_raises(self):
+    def test_tampered_token_raises(self) -> None:
         from jwt import PyJWTError as JWTError
 
         from backend.rbac.auth import User, create_access_token, decode_access_token
@@ -139,7 +144,7 @@ class TestJWT:
         with pytest.raises(JWTError):
             decode_access_token(tampered)
 
-    def test_expired_token_raises(self):
+    def test_expired_token_raises(self) -> None:
         import time
         from datetime import UTC, datetime, timedelta
 
@@ -171,13 +176,13 @@ class TestJWT:
 
 class TestHasUsers:
     @pytest.mark.asyncio
-    async def test_empty_db_has_no_users(self):
+    async def test_empty_db_has_no_users(self) -> None:
         from backend.rbac.auth import has_users
 
         assert await has_users() is False
 
     @pytest.mark.asyncio
-    async def test_after_signup_has_users(self):
+    async def test_after_signup_has_users(self) -> None:
         from backend.rbac.auth import has_users, signup
 
         await signup("first@example.com", "senhasegura1234")
@@ -191,7 +196,7 @@ class TestHasUsers:
 
 class TestSignup:
     @pytest.mark.asyncio
-    async def test_first_user_is_root(self):
+    async def test_first_user_is_root(self) -> None:
         from backend.rbac.auth import signup
 
         user, access_token, refresh_token = await signup(
@@ -203,7 +208,7 @@ class TestSignup:
         assert refresh_token
 
     @pytest.mark.asyncio
-    async def test_second_user_is_member(self):
+    async def test_second_user_is_member(self) -> None:
         from backend.rbac.auth import signup
 
         await signup("root@example.com", "senharootok1234")
@@ -211,7 +216,7 @@ class TestSignup:
         assert user.role == "member"
 
     @pytest.mark.asyncio
-    async def test_duplicate_email_raises(self):
+    async def test_duplicate_email_raises(self) -> None:
         from backend.rbac.auth import signup
 
         await signup("dup@example.com", "senha123456789")
@@ -219,14 +224,14 @@ class TestSignup:
             await signup("dup@example.com", "outrasenha123")
 
     @pytest.mark.asyncio
-    async def test_short_password_raises(self):
+    async def test_short_password_raises(self) -> None:
         from backend.rbac.auth import signup
 
         with pytest.raises(ValueError, match="mínimo 8"):
             await signup("short@example.com", "curta")
 
     @pytest.mark.asyncio
-    async def test_email_stored_lowercase(self):
+    async def test_email_stored_lowercase(self) -> None:
         from backend.rbac.auth import signup
 
         user, _, _ = await signup("Upper@Example.COM", "senhasegura1234")
@@ -240,7 +245,7 @@ class TestSignup:
 
 class TestProvisionOrLoginSSO:
     @pytest.mark.asyncio
-    async def test_usuario_novo_e_provisionado_como_root_primeiro_acesso(self):
+    async def test_usuario_novo_e_provisionado_como_root_primeiro_acesso(self) -> None:
         from backend.rbac.auth import get_user_by_id, provision_or_login_sso
 
         user, access_token, refresh_token = await provision_or_login_sso(
@@ -254,7 +259,7 @@ class TestProvisionOrLoginSSO:
         assert await get_user_by_id(user.id) is not None
 
     @pytest.mark.asyncio
-    async def test_usuario_existente_faz_login_sem_criar_conta_duplicada(self):
+    async def test_usuario_existente_faz_login_sem_criar_conta_duplicada(self) -> None:
         """Erro/borda inverso: a segunda chamada pro mesmo email nunca cria
         um segundo usuário — sempre resolve pro mesmo `id`."""
         from backend.rbac.auth import list_users, provision_or_login_sso
@@ -270,7 +275,7 @@ class TestProvisionOrLoginSSO:
         assert len(await list_users()) == 1
 
     @pytest.mark.asyncio
-    async def test_email_e_normalizado_como_no_signup_local(self):
+    async def test_email_e_normalizado_como_no_signup_local(self) -> None:
         from backend.rbac.auth import provision_or_login_sso
 
         user, _, _ = await provision_or_login_sso("Dev@Example.COM")
@@ -284,7 +289,7 @@ class TestProvisionOrLoginSSO:
 
 class TestSignin:
     @pytest.mark.asyncio
-    async def test_valid_credentials(self):
+    async def test_valid_credentials(self) -> None:
         from backend.rbac.auth import signin, signup
 
         await signup("user@example.com", "senhasegura1234")
@@ -296,7 +301,7 @@ class TestSignin:
         assert refresh_token
 
     @pytest.mark.asyncio
-    async def test_wrong_password_raises(self):
+    async def test_wrong_password_raises(self) -> None:
         from backend.rbac.auth import signin, signup
 
         await signup("user2@example.com", "senhasegura1234")
@@ -304,14 +309,14 @@ class TestSignin:
             await signin("user2@example.com", "senhaerrada1234")
 
     @pytest.mark.asyncio
-    async def test_unknown_email_raises(self):
+    async def test_unknown_email_raises(self) -> None:
         from backend.rbac.auth import signin
 
         with pytest.raises(ValueError, match="Credenciais inválidas"):
             await signin("ghost@example.com", "senhasegura1234")
 
     @pytest.mark.asyncio
-    async def test_case_insensitive_email(self):
+    async def test_case_insensitive_email(self) -> None:
         from backend.rbac.auth import signin, signup
 
         await signup("case@example.com", "senhasegura1234")
@@ -319,7 +324,7 @@ class TestSignin:
         assert user.email == "case@example.com"
 
     @pytest.mark.asyncio
-    async def test_signin_updates_last_login_at(self):
+    async def test_signin_updates_last_login_at(self) -> None:
         from backend.rbac.auth import signin, signup
 
         user_created, _, _ = await signup("login@example.com", "senhasegura1234")
@@ -335,7 +340,7 @@ class TestSignin:
 
 class TestRefreshTokens:
     @pytest.mark.asyncio
-    async def test_refresh_issues_new_pair(self):
+    async def test_refresh_issues_new_pair(self) -> None:
         from backend.rbac.auth import decode_access_token, refresh_tokens, signup
 
         _, _old_access, old_refresh = await signup(
@@ -351,7 +356,7 @@ class TestRefreshTokens:
         assert payload["email"] == "refresh@example.com"
 
     @pytest.mark.asyncio
-    async def test_old_refresh_token_revoked_after_rotation(self):
+    async def test_old_refresh_token_revoked_after_rotation(self) -> None:
         from backend.rbac.auth import refresh_tokens, signup
 
         _, _, refresh = await signup("rot@example.com", "senhasegura1234")
@@ -361,14 +366,14 @@ class TestRefreshTokens:
             await refresh_tokens(refresh)
 
     @pytest.mark.asyncio
-    async def test_invalid_refresh_token_raises(self):
+    async def test_invalid_refresh_token_raises(self) -> None:
         from backend.rbac.auth import refresh_tokens
 
         with pytest.raises(ValueError, match="inválido"):
             await refresh_tokens("token-invalido-qualquer")
 
     @pytest.mark.asyncio
-    async def test_expired_refresh_token_raises(self):
+    async def test_expired_refresh_token_raises(self) -> None:
         import hashlib
         from datetime import UTC, datetime, timedelta
 
@@ -397,7 +402,7 @@ class TestRefreshTokens:
 
 class TestSignout:
     @pytest.mark.asyncio
-    async def test_signout_revokes_refresh_token(self):
+    async def test_signout_revokes_refresh_token(self) -> None:
         from backend.rbac.auth import refresh_tokens, signout, signup
 
         _, _, refresh = await signup("out@example.com", "senhasegura1234")
@@ -407,7 +412,7 @@ class TestSignout:
             await refresh_tokens(refresh)
 
     @pytest.mark.asyncio
-    async def test_signout_with_invalid_token_does_not_raise(self):
+    async def test_signout_with_invalid_token_does_not_raise(self) -> None:
         from backend.rbac.auth import signout
 
         # Signout com token inexistente não deve levantar exceção
@@ -421,7 +426,7 @@ class TestSignout:
 
 class TestGetUserById:
     @pytest.mark.asyncio
-    async def test_returns_user(self):
+    async def test_returns_user(self) -> None:
         from backend.rbac.auth import get_user_by_id, signup
 
         created, _, _ = await signup("find@example.com", "senhasegura1234")
@@ -430,7 +435,7 @@ class TestGetUserById:
         assert found.email == "find@example.com"
 
     @pytest.mark.asyncio
-    async def test_returns_none_for_unknown_id(self):
+    async def test_returns_none_for_unknown_id(self) -> None:
         from backend.rbac.auth import get_user_by_id
 
         result = await get_user_by_id("id-que-nao-existe")
@@ -444,7 +449,7 @@ class TestGetUserById:
 
 class TestChangePassword:
     @pytest.mark.asyncio
-    async def test_changes_password_successfully(self):
+    async def test_changes_password_successfully(self) -> None:
         from backend.rbac.auth import change_password, signin, signup
 
         user, _, _ = await signup("chpwd@example.com", "senhaantiga1234")
@@ -455,7 +460,7 @@ class TestChangePassword:
         assert u2.email == "chpwd@example.com"
 
     @pytest.mark.asyncio
-    async def test_wrong_old_password_raises(self):
+    async def test_wrong_old_password_raises(self) -> None:
         from backend.rbac.auth import change_password, signup
 
         user, _, _ = await signup("chpwd2@example.com", "senhaantiga1234")
@@ -463,7 +468,7 @@ class TestChangePassword:
             await change_password(user.id, "senhaerrada1234", "senhanova5678!")
 
     @pytest.mark.asyncio
-    async def test_short_new_password_raises(self):
+    async def test_short_new_password_raises(self) -> None:
         from backend.rbac.auth import change_password, signup
 
         user, _, _ = await signup("chpwd3@example.com", "senhaantiga1234")
@@ -471,7 +476,7 @@ class TestChangePassword:
             await change_password(user.id, "senhaantiga1234", "curta")
 
     @pytest.mark.asyncio
-    async def test_change_password_revokes_existing_refresh_tokens(self):
+    async def test_change_password_revokes_existing_refresh_tokens(self) -> None:
         from backend.rbac.auth import change_password, refresh_tokens, signup
 
         user, _, refresh = await signup("chpwd4@example.com", "senhaantiga1234")
@@ -488,7 +493,7 @@ class TestChangePassword:
 
 class TestEnvOverrides:
     @pytest.mark.asyncio
-    async def test_set_and_get_override(self):
+    async def test_set_and_get_override(self) -> None:
         from backend.rbac.auth import get_env_overrides, set_env_override, signup
 
         user, _, _ = await signup("env@example.com", "senhasegura1234")
@@ -498,7 +503,7 @@ class TestEnvOverrides:
         assert overrides["GITHUB_TOKEN"] == "ghp_test123"
 
     @pytest.mark.asyncio
-    async def test_delete_override(self):
+    async def test_delete_override(self) -> None:
         from backend.rbac.auth import (
             delete_env_override,
             get_env_overrides,
@@ -514,7 +519,7 @@ class TestEnvOverrides:
         assert "MY_KEY" not in overrides
 
     @pytest.mark.asyncio
-    async def test_override_does_not_affect_other_users(self):
+    async def test_override_does_not_affect_other_users(self) -> None:
         from backend.rbac.auth import get_env_overrides, set_env_override, signup
 
         user1, _, _ = await signup("u1@example.com", "senhasegura1234")
@@ -525,7 +530,7 @@ class TestEnvOverrides:
         assert "PRIVATE_KEY" not in overrides2
 
     @pytest.mark.asyncio
-    async def test_empty_overrides_for_new_user(self):
+    async def test_empty_overrides_for_new_user(self) -> None:
         from backend.rbac.auth import get_env_overrides, signup
 
         user, _, _ = await signup("empty@example.com", "senhasegura1234")
@@ -623,7 +628,9 @@ class TestEnvOverridesLocalUser:
     em vez de fazer UPDATE/SELECT sem efeito."""
 
     @pytest.fixture(autouse=True)
-    def _isolated_runtime_settings(self, tmp_path, monkeypatch):
+    def _isolated_runtime_settings(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> RuntimeSettings:
         from backend.workspace import runtime_settings as rs_mod
 
         fresh = rs_mod.RuntimeSettings(path=tmp_path / "runtime.db")
@@ -631,7 +638,7 @@ class TestEnvOverridesLocalUser:
         return fresh
 
     @pytest.mark.asyncio
-    async def test_set_and_get_override_local_user(self):
+    async def test_set_and_get_override_local_user(self) -> None:
         from backend.rbac.auth import get_env_overrides, set_env_override
 
         await set_env_override("local", "GOOGLE_API_KEY", "AIza-local")
@@ -640,7 +647,7 @@ class TestEnvOverridesLocalUser:
         assert overrides["GOOGLE_API_KEY"] == "AIza-local"
 
     @pytest.mark.asyncio
-    async def test_delete_override_local_user(self):
+    async def test_delete_override_local_user(self) -> None:
         from backend.rbac.auth import (
             delete_env_override,
             get_env_overrides,
@@ -654,14 +661,14 @@ class TestEnvOverridesLocalUser:
         assert "MY_KEY" not in overrides
 
     @pytest.mark.asyncio
-    async def test_empty_overrides_for_local_user_by_default(self):
+    async def test_empty_overrides_for_local_user_by_default(self) -> None:
         from backend.rbac.auth import get_env_overrides
 
         overrides = await get_env_overrides("local")
         assert overrides == {}
 
     @pytest.mark.asyncio
-    async def test_real_account_user_still_uses_users_table_regression(self):
+    async def test_real_account_user_still_uses_users_table_regression(self) -> None:
         """Regressão: um usuário real (id de conta company) continua
         usando a tabela `users`, não `runtime_settings`."""
         from backend.rbac.auth import get_env_overrides, set_env_override, signup
@@ -683,7 +690,7 @@ class TestEnvOverridesLocalUser:
 
 class TestInvites:
     @pytest.mark.asyncio
-    async def test_create_and_validate_invite(self):
+    async def test_create_and_validate_invite(self) -> None:
         from backend.rbac.auth import create_invite, signup, validate_invite
 
         root, _, _ = await signup("root@example.com", "senharootok1234")
@@ -696,7 +703,7 @@ class TestInvites:
         assert info["role"] == "member"
 
     @pytest.mark.asyncio
-    async def test_signup_with_invite_uses_invite_role(self):
+    async def test_signup_with_invite_uses_invite_role(self) -> None:
         from backend.rbac.auth import create_invite, signup, validate_invite
 
         root, _, _ = await signup("root@example.com", "senharootok1234")
@@ -710,7 +717,7 @@ class TestInvites:
         assert user.role == "admin"
 
     @pytest.mark.asyncio
-    async def test_consume_invalidates_invite(self):
+    async def test_consume_invalidates_invite(self) -> None:
         from backend.rbac.auth import (
             consume_invite,
             create_invite,
@@ -726,13 +733,13 @@ class TestInvites:
         assert await validate_invite(token) is None
 
     @pytest.mark.asyncio
-    async def test_unknown_token_is_invalid(self):
+    async def test_unknown_token_is_invalid(self) -> None:
         from backend.rbac.auth import validate_invite
 
         assert await validate_invite("token-inexistente") is None
 
     @pytest.mark.asyncio
-    async def test_expired_invite_is_invalid(self):
+    async def test_expired_invite_is_invalid(self) -> None:
         from datetime import UTC, datetime, timedelta
 
         from backend.rbac.auth import (
@@ -757,7 +764,7 @@ class TestInvites:
         assert await validate_invite(token) is None
 
     @pytest.mark.asyncio
-    async def test_list_and_revoke_invite(self):
+    async def test_list_and_revoke_invite(self) -> None:
         from backend.rbac.auth import (
             create_invite,
             list_invites,
@@ -776,7 +783,7 @@ class TestInvites:
         assert await list_invites() == []
 
     @pytest.mark.asyncio
-    async def test_first_user_ignores_invite_role(self):
+    async def test_first_user_ignores_invite_role(self) -> None:
         from backend.rbac.auth import signup
 
         # Sem usuários ainda: a role do convite é ignorada, o 1º vira root
@@ -791,7 +798,7 @@ class TestInvites:
 
 class TestAuditRedaction:
     @pytest.mark.asyncio
-    async def test_campo_comum_passa_intacto(self):
+    async def test_campo_comum_passa_intacto(self) -> None:
         import json
 
         from backend.rbac.auth import _get_db, _write_audit
@@ -803,10 +810,11 @@ class TestAuditRedaction:
             "SELECT metadata_json FROM audit WHERE action = ?", ("test_action",)
         ) as cur:
             row = await cur.fetchone()
+        assert row is not None
         assert json.loads(row["metadata_json"]) == {"ip": "1.2.3.4"}
 
     @pytest.mark.asyncio
-    async def test_campo_sensivel_sempre_redigido_mesmo_tentando_gravar(self):
+    async def test_campo_sensivel_sempre_redigido_mesmo_tentando_gravar(self) -> None:
         """Erro/borda: qualquer chave da denylist (case-insensitive) nunca
         chega ao banco com o valor real, mesmo que um call-site futuro
         passe por engano."""
@@ -831,6 +839,7 @@ class TestAuditRedaction:
             ("test_action_sensivel",),
         ) as cur:
             row = await cur.fetchone()
+        assert row is not None
         salvo = json.loads(row["metadata_json"])
         assert salvo["password"] == "[REDACTED]"
         assert salvo["Token"] == "[REDACTED]"
@@ -844,7 +853,7 @@ class TestAuditRedaction:
 
 class TestPasswordReset:
     @pytest.mark.asyncio
-    async def test_fluxo_completo_feliz(self):
+    async def test_fluxo_completo_feliz(self) -> None:
         from backend.rbac.auth import (
             confirm_password_reset,
             request_password_reset,
@@ -866,7 +875,7 @@ class TestPasswordReset:
         assert user.email == "reset@example.com"
 
     @pytest.mark.asyncio
-    async def test_email_inexistente_nao_lanca_e_devolve_none(self):
+    async def test_email_inexistente_nao_lanca_e_devolve_none(self) -> None:
         """Erro/borda: email que não existe nunca revela isso via exceção
         — devolve None silenciosamente (evita enumeração de conta)."""
         from backend.rbac.auth import request_password_reset
@@ -874,7 +883,7 @@ class TestPasswordReset:
         assert await request_password_reset("nao-existe@example.com") is None
 
     @pytest.mark.asyncio
-    async def test_token_invalido_expirado_ou_reusado_e_rejeitado(self):
+    async def test_token_invalido_expirado_ou_reusado_e_rejeitado(self) -> None:
         """Erro/borda: token desconhecido, e um token real usado duas
         vezes — os dois levantam ValueError, nunca aplicam a senha."""
         from backend.rbac.auth import (
@@ -895,7 +904,7 @@ class TestPasswordReset:
             await confirm_password_reset(token, "segundatrocasegura2")
 
     @pytest.mark.asyncio
-    async def test_senha_curta_e_rejeitada(self):
+    async def test_senha_curta_e_rejeitada(self) -> None:
         from backend.rbac.auth import (
             confirm_password_reset,
             request_password_reset,
@@ -910,7 +919,7 @@ class TestPasswordReset:
             await confirm_password_reset(token, "curta")
 
     @pytest.mark.asyncio
-    async def test_reset_revoga_refresh_tokens_existentes(self):
+    async def test_reset_revoga_refresh_tokens_existentes(self) -> None:
         from backend.rbac.auth import (
             confirm_password_reset,
             refresh_tokens,

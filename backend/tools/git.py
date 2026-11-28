@@ -20,7 +20,7 @@ import json
 import logging
 import os
 from collections.abc import Callable
-from typing import Any, cast
+from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel
 
@@ -34,6 +34,15 @@ from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
 from backend.vtypes.git import GitDiffSnapshot, GitLogSnapshot, GitStatusSnapshot
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from backend.vtypes.contracts import JsonObject, JsonValue
+    from backend.vtypes.tools import GitInfo
+    from backend.workspace.workspace import Workspace
+
+    type GitOutcome = JsonObject | BaseModel
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +51,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _resolve_workspace(workspace_id: str | None, ctx: ToolContext) -> Any:
+def _resolve_workspace(workspace_id: str | None, ctx: ToolContext) -> Workspace | None:
     """Resolve a workspace while binding explicit legacy IDs to the caller."""
     from backend.workspace.workspace import workspace_registry
 
@@ -58,22 +67,20 @@ def _resolve_workspace(workspace_id: str | None, ctx: ToolContext) -> Any:
     return workspace_registry.get_or_create()
 
 
-def _open_repo(workspace_id: str | None, ctx: ToolContext) -> Any:
+def _open_repo(workspace_id: str | None, ctx: ToolContext) -> git.Repo | str:
     """Abre git.Repo para o workspace ativo.
 
-    Retorna (repo, None) em sucesso ou (None, error_json_str) em falha.
+    Retorna o repositório ou, em falha, o JSON de erro.
     """
     ws = _resolve_workspace(workspace_id, ctx)
     if ws is None:
-        return None, json.dumps(
-            {"status": "error", "message": "Workspace não encontrado."}
-        )
+        return json.dumps({"status": "error", "message": "Workspace não encontrado."})
     # git tools ainda só rodam contra repos locais. Workspaces
     # SSH/Codespace precisam usar `terminal` (ou tools `remote_git_*`
     # dedicadas).
     transport = str(getattr(ws, "transport", "local"))
     if transport != "local":
-        return None, json.dumps(
+        return json.dumps(
             {
                 "status": "remote_unsupported",
                 "message": (
@@ -84,20 +91,19 @@ def _open_repo(workspace_id: str | None, ctx: ToolContext) -> Any:
             }
         )
     try:
-        repo = git.Repo(ws.cwd, search_parent_directories=True)
-        return repo, None
+        return git.Repo(ws.cwd, search_parent_directories=True)
     except git.InvalidGitRepositoryError:
-        return None, json.dumps(
+        return json.dumps(
             {
                 "status": "not_git",
                 "message": f"Não é um repositório git: {ws.cwd}",
             }
         )
     except Exception as exc:
-        return None, json.dumps({"status": "error", "message": str(exc)})
+        return json.dumps({"status": "error", "message": str(exc)})
 
 
-def _safe_call(fn: Callable[[], object]) -> dict:
+def _safe_call(fn: Callable[[], GitOutcome]) -> JsonObject:
     """Executa uma operação git e nunca deixa exceção escapar pra tool.
 
     ``_open_repo`` já blinda a abertura do repositório, mas as operações git
@@ -110,7 +116,7 @@ def _safe_call(fn: Callable[[], object]) -> dict:
         value = fn()
         if isinstance(value, BaseModel):
             return value.model_dump(mode="json")
-        return cast("dict[str, object]", value)
+        return value
     except git.GitCommandNotFound:
         return {
             "status": "git_not_found",
@@ -126,8 +132,8 @@ async def _execute_git_write(
     workspace_id: str | None,
     repo: git.Repo,
     operation: str,
-    callback: Callable[[], object],
-) -> dict[str, object]:
+    callback: Callable[[], GitOutcome],
+) -> JsonObject:
     """Serialize an agent Git mutation with every other write to the repo."""
     from backend.services.git import GitOperationError, git_service
 
@@ -141,7 +147,7 @@ async def _execute_git_write(
             operation,
             lambda: _safe_call(callback),
         )
-        return cast("dict[str, object]", result or {})
+        return result or {}
     except GitOperationError as exc:
         return {"status": "error", "code": exc.code, "message": str(exc)}
 
@@ -178,10 +184,10 @@ def _git_branch_impl(
     repo: git.Repo,
     action: str,
     name: str | None = None,
-) -> dict:
+) -> JsonObject:
     """Operações em branches: list / create / delete."""
     if action == "list":
-        branches = [b.name for b in repo.branches]
+        branches: list[JsonValue] = [b.name for b in repo.branches]
         try:
             current = repo.active_branch.name
         except TypeError:
@@ -209,7 +215,7 @@ def _git_branch_impl(
     return {"status": "error", "message": f"Ação desconhecida: {action}"}
 
 
-def _git_checkout_impl(repo: git.Repo, ref: str, create: bool = False) -> dict:
+def _git_checkout_impl(repo: git.Repo, ref: str, create: bool = False) -> JsonObject:
     """Faz checkout para branch ou commit; `create=True` cria a branch antes
     (equivalente a `git checkout -b`) — a UI já combina os dois numa chamada
     só, as tools tinham só o checkout simples."""
@@ -239,7 +245,7 @@ def _git_commit_impl(
     amend: bool = False,
     signoff: bool = False,
     bypass: bool = False,
-) -> dict:
+) -> JsonObject:
     """Cria um commit (ou emenda o último, se `amend=True`).
 
     Args:
@@ -316,7 +322,7 @@ def _git_squash_impl(
     base_ref: str,
     message: str,
     body: str | None = None,
-) -> dict:
+) -> JsonObject:
     """Squasha todos os commits de `base_ref` até HEAD numa mensagem só —
     `reset --soft` pra `base_ref` (mantém as mudanças staged) seguido de um
     commit novo. `base_ref` inválido ou repo com working tree sujo (fora do
@@ -350,7 +356,7 @@ def _git_squash_impl(
         return {"status": "error", "message": str(exc)}
 
 
-def _git_reorder_impl(repo: git.Repo, commits: list[str]) -> dict:
+def _git_reorder_impl(repo: git.Repo, commits: list[str]) -> JsonObject:
     """Reordena commits locais (ainda não pushados) pra sequência exata de
     `commits` — reset --hard pro parent do mais antigo do conjunto (não
     necessariamente `commits[0]`, que reflete a ordem FINAL desejada, não a
@@ -408,7 +414,7 @@ def _git_reorder_impl(repo: git.Repo, commits: list[str]) -> dict:
 
     return {
         "status": "ok",
-        "commits": commits,
+        "commits": [*commits],
         "new_head": repo.head.commit.hexsha[:7],
     }
 
@@ -417,7 +423,7 @@ def _git_cherry_pick_impl(
     repo: git.Repo,
     sha: str,
     no_commit: bool = False,
-) -> dict:
+) -> JsonObject:
     """Cherry-pick de um commit de outra branch/ref. Commit já aplicado
     (idempotente) devolve erro claro em vez de duplicar; conflito não
     resolvível aborta o cherry-pick, nunca deixa o repo em estado pendente."""
@@ -444,7 +450,7 @@ def _git_cherry_pick_impl(
         return {"status": "error", "message": msg}
 
 
-def _git_fetch_impl(repo: git.Repo, remote: str = "origin") -> dict:
+def _git_fetch_impl(repo: git.Repo, remote: str = "origin") -> JsonObject:
     """Baixa refs do remote sem integrar (sem tocar no working tree)."""
     try:
         repo.git.fetch(remote)
@@ -453,7 +459,7 @@ def _git_fetch_impl(repo: git.Repo, remote: str = "origin") -> dict:
         return {"status": "error", "message": str(exc)}
 
 
-def _git_merge_impl(repo: git.Repo, branch: str, no_ff: bool = False) -> dict:
+def _git_merge_impl(repo: git.Repo, branch: str, no_ff: bool = False) -> JsonObject:
     """Faz merge de `branch` na branch ativa. Conflito devolve erro
     estruturado com o status atual (arquivos em conflito), não deixa a
     exceção crua escapar."""
@@ -462,7 +468,7 @@ def _git_merge_impl(repo: git.Repo, branch: str, no_ff: bool = False) -> dict:
         repo.git.merge(*args)
         return {"status": "ok", "branch": branch, "no_ff": no_ff}
     except git.GitCommandError as exc:
-        conflicted = [str(p) for p in repo.index.unmerged_blobs()]
+        conflicted: list[JsonValue] = [str(p) for p in repo.index.unmerged_blobs()]
         return {
             "status": "conflict" if conflicted else "error",
             "message": str(exc),
@@ -470,7 +476,7 @@ def _git_merge_impl(repo: git.Repo, branch: str, no_ff: bool = False) -> dict:
         }
 
 
-def _git_revert_impl(repo: git.Repo, sha: str, no_commit: bool = False) -> dict:
+def _git_revert_impl(repo: git.Repo, sha: str, no_commit: bool = False) -> JsonObject:
     """Reverte um commit (cria um commit inverso, ou só stageia com
     `no_commit=True` — equivalente a `git revert --no-commit`)."""
     try:
@@ -490,7 +496,7 @@ def _git_revert_impl(repo: git.Repo, sha: str, no_commit: bool = False) -> dict:
 
 def _git_compare_impl(
     repo: git.Repo, base: str, head: str, file_path: str | None = None
-) -> dict:
+) -> JsonObject:
     """Compara dois refs. Sem `file_path`: diff resumido (arquivos +
     status), mesmo formato de `git diff base...head --name-status`. Com
     `file_path`: hunks do diff daquele arquivo específico entre os dois
@@ -523,7 +529,7 @@ def _git_compare_impl(
     return {"status": "ok", "base": base, "head": head, "files": files}
 
 
-def _git_resolve_conflict_impl(repo: git.Repo, path: str, strategy: str) -> dict:
+def _git_resolve_conflict_impl(repo: git.Repo, path: str, strategy: str) -> JsonObject:
     """Resolve um conflito de merge escolhendo um dos dois lados —
     `strategy` é `"ours"` ou `"theirs"`. Estagia o arquivo resolvido depois
     do checkout, pronto pra `git_commit` fechar o merge."""
@@ -547,7 +553,7 @@ def _git_push_impl(
     remote: str = "origin",
     branch: str | None = None,
     force: bool = False,
-) -> dict:
+) -> JsonObject:
     """Faz push para remote."""
     try:
         active = branch or repo.active_branch.name
@@ -564,7 +570,7 @@ def _git_pull_impl(
     repo: git.Repo,
     remote: str = "origin",
     branch: str | None = None,
-) -> dict:
+) -> JsonObject:
     """Faz pull do remote."""
     try:
         active = branch or repo.active_branch.name
@@ -578,7 +584,7 @@ def _git_stash_impl(
     repo: git.Repo,
     action: str,
     name: str | None = None,
-) -> dict:
+) -> JsonObject:
     """Operações de stash: push / pop / list / drop."""
     if action == "push":
         try:
@@ -624,7 +630,7 @@ def _git_stash_impl(
     return {"status": "error", "message": f"Ação desconhecida: {action}"}
 
 
-def git_init_repo(cwd: str) -> dict:
+def git_init_repo(cwd: str) -> JsonObject:
     """Inicializa um repositório git no diretório informado.
 
     Idempotente: se já houver um repositório, retorna status ``already``.
@@ -664,7 +670,7 @@ def _safe_branch(repo: git.Repo) -> str | None:
         return None
 
 
-def _worktrees_root(workspace_id: str) -> Any:
+def _worktrees_root(workspace_id: str) -> Path:
     """Diretório base das worktrees de um workspace."""
     from pathlib import Path
 
@@ -677,15 +683,15 @@ def _git_worktree_impl(
     action: str,
     name: str | None = None,
     branch: str | None = None,
-) -> dict:
+) -> JsonObject:
     """Operações de worktree: add / list / remove."""
     from pathlib import Path
 
     if action == "list":
         try:
             out = repo.git.worktree("list", "--porcelain")
-            entries: list[dict] = []
-            current: dict = {}
+            entries: list[JsonValue] = []
+            current: JsonObject = {}
             for line in out.splitlines():
                 if line.startswith("worktree "):
                     if current:
@@ -741,7 +747,7 @@ def _git_worktree_impl(
 # ---------------------------------------------------------------------------
 
 
-def _git_stage_impl(repo: git.Repo, path: str) -> dict:
+def _git_stage_impl(repo: git.Repo, path: str) -> JsonObject:
     """Stageia um arquivo específico (`git add <path>`)."""
     try:
         repo.git.add("--", path)
@@ -750,7 +756,7 @@ def _git_stage_impl(repo: git.Repo, path: str) -> dict:
         return {"status": "error", "message": str(exc)}
 
 
-def _git_unstage_impl(repo: git.Repo, path: str) -> dict:
+def _git_unstage_impl(repo: git.Repo, path: str) -> JsonObject:
     """Remove um arquivo do stage (`git reset HEAD <path>`)."""
     try:
         repo.git.reset("HEAD", "--", path)
@@ -759,7 +765,7 @@ def _git_unstage_impl(repo: git.Repo, path: str) -> dict:
         return {"status": "error", "message": str(exc)}
 
 
-def _git_restore_impl(repo: git.Repo, path: str) -> dict:
+def _git_restore_impl(repo: git.Repo, path: str) -> JsonObject:
     """Descarta mudanças não staged (`git restore -- <path>`).
 
     Atenção: operação destrutiva — as mudanças no worktree são perdidas.
@@ -781,7 +787,7 @@ def _git_restore_impl(repo: git.Repo, path: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _run_pre_commit_hooks(repo: git.Repo) -> dict:
+def _run_pre_commit_hooks(repo: git.Repo) -> JsonObject:
     """Executa os hooks pre-commit sem criar um commit.
 
     Retorna ``{"passed": True}`` se todos os hooks passaram, ou
@@ -837,9 +843,9 @@ async def git_status(ctx: ToolContext, workspace_id: str | None = None) -> str:
     Args:
         workspace_id: ID do workspace (usa o workspace ativo se omitido).
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     return json.dumps(_safe_call(lambda: _git_status_impl(repo)))
 
 
@@ -923,9 +929,9 @@ async def git_log(
         branch: Branch específica (usa branch ativa se omitida).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     return json.dumps(_safe_call(lambda: _git_log_impl(repo, n=n, branch=branch)))
 
 
@@ -948,9 +954,9 @@ async def git_diff(
         ref: Commit hash, tag ou branch para comparar (compara working tree se omitido).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     return json.dumps(_safe_call(lambda: _git_diff_impl(repo, ref=ref)))
 
 
@@ -975,9 +981,9 @@ async def git_branch(
         name: Nome da branch (obrigatório para create/delete).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if action == "list":
         return json.dumps(
             _safe_call(lambda: _git_branch_impl(repo, action=action, name=name))
@@ -1019,9 +1025,9 @@ async def git_checkout(
                 (equivalente a `git checkout -b`).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not ref:
         return json.dumps({"status": "error", "message": "ref é obrigatório."})
     return json.dumps(
@@ -1064,9 +1070,9 @@ async def git_commit(
         amend: Se True, substitui o último commit em vez de criar um novo.
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not message:
         return json.dumps(
             {"status": "error", "message": "Mensagem de commit é obrigatória."}
@@ -1108,9 +1114,9 @@ async def git_squash(
         body: Descrição opcional do commit resultante.
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not base_ref or not message:
         return json.dumps(
             {"status": "error", "message": "base_ref e message são obrigatórios."}
@@ -1148,9 +1154,9 @@ async def git_reorder(
         commits: SHAs na ordem final desejada (do mais antigo pro mais novo).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     return json.dumps(
         await _execute_git_write(
             ctx,
@@ -1184,9 +1190,9 @@ async def git_cherry_pick(
         no_commit: Se True, só stageia as mudanças (sem criar o commit).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not sha:
         return json.dumps({"status": "error", "message": "sha é obrigatório."})
     return json.dumps(
@@ -1219,9 +1225,9 @@ async def git_fetch(
         remote: Nome do remote (default: "origin").
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     return json.dumps(
         await _execute_git_write(
             ctx,
@@ -1256,9 +1262,9 @@ async def git_merge(
                possível.
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not branch:
         return json.dumps({"status": "error", "message": "branch é obrigatório."})
     return json.dumps(
@@ -1295,9 +1301,9 @@ async def git_revert(
         no_commit: Se True, só stageia as mudanças (sem criar o commit).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not sha:
         return json.dumps({"status": "error", "message": "sha é obrigatório."})
     return json.dumps(
@@ -1336,9 +1342,9 @@ async def git_compare(
             vez da lista de arquivos alterados.
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not base or not head:
         return json.dumps(
             {"status": "error", "message": "base e head são obrigatórios."}
@@ -1373,9 +1379,9 @@ async def git_resolve_conflict(
                   incoming).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     return json.dumps(
         await _execute_git_write(
             ctx,
@@ -1403,9 +1409,9 @@ async def git_check_hooks(ctx: ToolContext, workspace_id: str | None = None) -> 
     Args:
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     try:
         result = await asyncio.to_thread(_run_pre_commit_hooks, repo)
         logger.info(
@@ -1452,9 +1458,9 @@ async def git_push(
         force: Se True, usa --force (cuidado em branches compartilhadas).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     return json.dumps(
         await _execute_git_write(
             ctx,
@@ -1488,9 +1494,9 @@ async def git_pull(
         branch: Branch a baixar (usa branch ativa se omitida).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     return json.dumps(
         await _execute_git_write(
             ctx,
@@ -1525,9 +1531,9 @@ async def git_stash(
         name: Nome descritivo do stash (opcional, apenas para push).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if action == "list":
         return json.dumps(
             _safe_call(lambda: _git_stash_impl(repo, action=action, name=name))
@@ -1593,9 +1599,11 @@ async def git_worktree(
         workspace_id: ID do workspace.
     """
     ws = _resolve_workspace(workspace_id, ctx)
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
+    if ws is None:
+        return json.dumps({"status": "error", "message": "Workspace não encontrado."})
     if action == "list":
         return json.dumps(
             _safe_call(
@@ -1639,9 +1647,9 @@ async def git_stage(
         path: Caminho do arquivo a stagear (relativo à raiz do repositório).
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not path:
         return json.dumps({"status": "error", "message": "path é obrigatório."})
     return json.dumps(
@@ -1675,9 +1683,9 @@ async def git_unstage(
         path: Caminho do arquivo a remover do stage.
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not path:
         return json.dumps({"status": "error", "message": "path é obrigatório."})
     return json.dumps(
@@ -1716,9 +1724,9 @@ async def git_discard(
         path: Caminho do arquivo cujas mudanças serão descartadas.
         workspace_id: ID do workspace.
     """
-    repo, err = _open_repo(workspace_id, ctx)
-    if err:
-        return err
+    repo = _open_repo(workspace_id, ctx)
+    if isinstance(repo, str):
+        return repo
     if not path:
         return json.dumps({"status": "error", "message": "path é obrigatório."})
     return json.dumps(
@@ -1737,7 +1745,7 @@ async def git_discard(
 # ---------------------------------------------------------------------------
 
 
-def detect_git_info(cwd: str) -> dict:
+def detect_git_info(cwd: str) -> GitInfo:
     """Detecta se o diretório é um repo git e retorna informações básicas.
 
     Retorna dict com is_git_repo, branch, remote e default_branch.

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -39,13 +42,15 @@ class _FakeVectorStoreBackend:
             raise RuntimeError(f"coleção {collection!r} não encontrada")
         del self.rows_by_collection[collection]
 
-    async def search(self, collection, query_vector, limit):  # pragma: no cover
+    async def search(
+        self, collection, query_vector, limit
+    ) -> NoReturn:  # pragma: no cover
         raise NotImplementedError
 
-    async def upsert(self, collection, rows):  # pragma: no cover
+    async def upsert(self, collection, rows) -> NoReturn:  # pragma: no cover
         raise NotImplementedError
 
-    async def delete(self, collection, ids):  # pragma: no cover
+    async def delete(self, collection, ids) -> NoReturn:  # pragma: no cover
         raise NotImplementedError
 
 
@@ -64,7 +69,7 @@ def _fake_request() -> Request:
 
 
 @pytest.fixture(autouse=True)
-def _bypass_workspace_ownership():
+def _bypass_workspace_ownership() -> Iterator[None]:
     """As classes deste arquivo testam a lógica de agregação de coleções,
     não o gate de dono do workspace (coberto em test_workspaces_view.py) —
     mantém o mock local só pra não travar em request/workspace reais."""
@@ -77,7 +82,7 @@ def _bypass_workspace_ownership():
 
 class TestRagSettingsEndpoints:
     @pytest.mark.asyncio
-    async def test_get_returns_runtime_settings(self, tmp_path):
+    async def test_get_returns_runtime_settings(self, tmp_path: Path) -> None:
         from backend.api.handlers import rag as handler
         from backend.workspace.runtime_settings import RuntimeSettings
 
@@ -95,7 +100,7 @@ class TestRagSettingsEndpoints:
 
     @pytest.mark.asyncio
     @pytest.mark.asyncio
-    async def test_patch_updates_and_returns(self, tmp_path):
+    async def test_patch_updates_and_returns(self, tmp_path: Path) -> None:
         from backend.api.handlers import rag as handler
         from backend.api.handlers.rag import RagSettingsBody
         from backend.workspace.runtime_settings import RuntimeSettings
@@ -111,7 +116,7 @@ class TestRagSettingsEndpoints:
 
 class TestRagCollections:
     @pytest.mark.asyncio
-    async def test_list_empty_when_backend_has_no_collections(self):
+    async def test_list_empty_when_backend_has_no_collections(self) -> None:
         from backend.api.handlers import rag as handler
 
         fake = _FakeVectorStoreBackend()
@@ -123,7 +128,7 @@ class TestRagCollections:
         assert out == {"collections": []}
 
     @pytest.mark.asyncio
-    async def test_delete_raises_404_when_collection_missing(self):
+    async def test_delete_raises_404_when_collection_missing(self) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers import rag as handler
@@ -147,7 +152,7 @@ class TestWorkspaceRagSummary:
     """
 
     @pytest.mark.asyncio
-    async def test_empty_when_no_collections(self):
+    async def test_empty_when_no_collections(self) -> None:
         from backend.api.handlers import rag as handler
 
         fake = _FakeVectorStoreBackend()
@@ -159,7 +164,7 @@ class TestWorkspaceRagSummary:
         assert out == {"collections": []}
 
     @pytest.mark.asyncio
-    async def test_counts_only_rows_matching_workspace_id(self):
+    async def test_counts_only_rows_matching_workspace_id(self) -> None:
         from backend.api.handlers import rag as handler
 
         fake = _FakeVectorStoreBackend(
@@ -180,7 +185,7 @@ class TestWorkspaceRagSummary:
         assert out == {"collections": [{"name": "articles", "count": 2}]}
 
     @pytest.mark.asyncio
-    async def test_omits_collections_with_zero_matches(self):
+    async def test_omits_collections_with_zero_matches(self) -> None:
         from backend.api.handlers import rag as handler
 
         fake = _FakeVectorStoreBackend(
@@ -195,7 +200,9 @@ class TestWorkspaceRagSummary:
         assert out == {"collections": []}
 
     @pytest.mark.asyncio
-    async def test_tolerates_one_broken_collection_and_still_reports_others(self):
+    async def test_tolerates_one_broken_collection_and_still_reports_others(
+        self,
+    ) -> None:
         """Edge — uma coleção corrompida/sem schema não deve derrubar as demais."""
         from backend.api.handlers import rag as handler
 
@@ -219,7 +226,7 @@ class TestRagSearch:
     """POST /rag/search — busca direta do usuário, mesma vector_search do agente."""
 
     @pytest.mark.asyncio
-    async def test_search_with_explicit_collection_returns_sorted_results(self):
+    async def test_search_with_explicit_collection_returns_sorted_results(self) -> None:
         import json
 
         from backend.api.handlers import rag as handler
@@ -245,7 +252,9 @@ class TestRagSearch:
         assert all(r["collection"] == "articles" for r in out["results"])
 
     @pytest.mark.asyncio
-    async def test_search_without_collection_or_workspace_falls_back_to_articles(self):
+    async def test_search_without_collection_or_workspace_falls_back_to_articles(
+        self,
+    ) -> None:
         from backend.api.handlers import rag as handler
         from backend.api.handlers.rag import RagSearchBody
 
@@ -261,7 +270,9 @@ class TestRagSearch:
         assert out["results"] == []
 
     @pytest.mark.asyncio
-    async def test_search_with_workspace_but_nothing_indexed_returns_empty(self):
+    async def test_search_with_workspace_but_nothing_indexed_returns_empty(
+        self,
+    ) -> None:
         """Edge — workspace sem nenhuma coleção indexada não deve chamar vector_search."""
         from backend.api.handlers import rag as handler
         from backend.api.handlers.rag import RagSearchBody
@@ -301,7 +312,9 @@ class TestRagCollectionsRealLanceDB:
     pytestmark = pytest.mark.real_lancedb
 
     @pytest.fixture(autouse=True)
-    def _reset_vector_store_singleton(self, monkeypatch):
+    def _reset_vector_store_singleton(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> Iterator[None]:
         """`get_vector_store_backend()` cacheia um singleton por processo —
         sem resetar, o 2º teste desta classe reusaria o `LanceDBBackend` do
         1º, apontando pro `tmp_path` errado.
@@ -323,7 +336,7 @@ class TestRagCollectionsRealLanceDB:
         factory._reset_singletons()
 
     @pytest.mark.asyncio
-    async def test_list_collections_shape_with_real_table(self, tmp_path):
+    async def test_list_collections_shape_with_real_table(self, tmp_path: Path) -> None:
         import lancedb
         import pyarrow as pa
 
@@ -354,7 +367,9 @@ class TestRagCollectionsRealLanceDB:
         assert isinstance(collection["count"], int)
 
     @pytest.mark.asyncio
-    async def test_workspace_summary_shape_with_real_table(self, tmp_path):
+    async def test_workspace_summary_shape_with_real_table(
+        self, tmp_path: Path
+    ) -> None:
         import lancedb
         import pyarrow as pa
 

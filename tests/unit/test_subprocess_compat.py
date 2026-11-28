@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -10,7 +11,7 @@ from utils.subprocess_compat import command_for_execution
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Fallback applies to POSIX launchers")
-def test_executes_shebangless_shell_launcher_through_sh(tmp_path) -> None:
+def test_executes_shebangless_shell_launcher_through_sh(tmp_path: Path) -> None:
     launcher = tmp_path / "pnpm"
     launcher.write_text('# launcher without shebang\nprintf "%s\\n" "$1"\n')
     launcher.chmod(0o755)
@@ -25,7 +26,7 @@ def test_executes_shebangless_shell_launcher_through_sh(tmp_path) -> None:
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Fallback applies to POSIX launchers")
-def test_leaves_shebang_launchers_unchanged(tmp_path) -> None:
+def test_leaves_shebang_launchers_unchanged(tmp_path: Path) -> None:
     launcher = tmp_path / "pnpm"
     launcher.write_text("#!/bin/sh\nexit 0\n")
     launcher.chmod(0o755)

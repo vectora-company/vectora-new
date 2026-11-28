@@ -15,6 +15,8 @@ testa especificamente o caminho COM Tavily configurado.
 from __future__ import annotations
 
 import json
+from typing import NoReturn
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -45,7 +47,7 @@ def _results(raw: str) -> list[dict]:
 
 
 @_requires_tavily
-async def test_web_search_query_generica_real():
+async def test_web_search_query_generica_real() -> None:
     raw = await web_search(query="FastAPI framework")
     results = _results(raw)
     assert len(results) > 0
@@ -56,7 +58,7 @@ async def test_web_search_query_generica_real():
 
 
 @_requires_tavily
-async def test_web_search_query_local_com_time_range_real():
+async def test_web_search_query_local_com_time_range_real() -> None:
     raw = await web_search(
         query="clima em São Paulo hoje", topic="general", time_range="day"
     )
@@ -65,7 +67,7 @@ async def test_web_search_query_local_com_time_range_real():
 
 
 @_requires_tavily
-async def test_web_search_query_tecnica_especifica_real():
+async def test_web_search_query_tecnica_especifica_real() -> None:
     raw = await web_search(query="Python asyncio event loop internals")
     results = _results(raw)
     assert len(results) > 0
@@ -73,24 +75,25 @@ async def test_web_search_query_tecnica_especifica_real():
 
 
 @_requires_tavily
-async def test_web_search_topic_finance_real():
+async def test_web_search_topic_finance_real() -> None:
     raw = await web_search(query="Nvidia stock price", topic="finance")
     results = _results(raw)
     assert len(results) > 0
 
 
 @_requires_tavily
-async def test_web_search_com_include_domains_real():
+async def test_web_search_com_include_domains_real() -> None:
     raw = await web_search(query="python asyncio", include_domains=["github.com"])
     results = _results(raw)
     # Tavily pode devolver menos resultados quando restrito a um domínio —
     # o importante é que nenhum resultado escape do domínio pedido.
     for r in results:
-        assert "github.com" in r.get("url", "")
+        host = urlsplit(r.get("url", "")).hostname or ""
+        assert host == "github.com" or host.endswith(".github.com")
 
 
 @_requires_tavily
-async def test_web_search_com_exclude_domains_real():
+async def test_web_search_com_exclude_domains_real() -> None:
     raw = await web_search(
         query="python asyncio tutorial", exclude_domains=["github.com"]
     )
@@ -99,7 +102,7 @@ async def test_web_search_com_exclude_domains_real():
         assert "github.com" not in r.get("url", "")
 
 
-async def test_web_search_query_vazia_borda():
+async def test_web_search_query_vazia_borda() -> None:
     # Par de erro/borda: query vazia não deve derrubar a tool nem propagar
     # exceção — o contrato da tool (nunca lançar) tem que se manter.
     raw = await web_search(query="")
@@ -127,7 +130,7 @@ async def test_fetch_url_github_publico_real(
 ) -> None:
     """A URL pública do GitHub deve usar o fallback HTTP."""
 
-    async def raise_attribute_error(*args: object, **kwargs: object) -> object:
+    async def raise_attribute_error[**P](*args: P.args, **kwargs: P.kwargs) -> NoReturn:
         raise AttributeError("extração indisponível")
 
     monkeypatch.setattr(web_tools, "_invoke_backend", raise_attribute_error)
@@ -140,14 +143,14 @@ async def test_fetch_url_github_publico_real(
     assert "provider" in body.lower() or "llama" in body.lower()
 
 
-async def test_fetch_url_url_invalida_sem_lancar():
+async def test_fetch_url_url_invalida_sem_lancar() -> None:
     # Borda: URL sem esquema não bate rede nenhuma — validação local, mas
     # ainda cobre o contrato "nunca lança, sempre devolve string de erro".
     result = await fetch_url(url="not-a-real-url")
     assert result.startswith("Error:")
 
 
-async def test_fetch_url_pagina_inexistente_real_nao_lanca():
+async def test_fetch_url_pagina_inexistente_real_nao_lanca() -> None:
     # Domínio real, path que garantidamente não existe — extração real
     # falha, mas a tool deve degradar para texto de erro, nunca propagar.
     content = await fetch_url(

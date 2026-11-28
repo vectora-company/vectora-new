@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.sandbox import dry_run, workspace_jail
+from backend.sandbox import JailedWorker, dry_run, workspace_jail
 from backend.sandbox.dry_run import (
     CLONE_NAMESPACE_FLAGS,
     DENIED_SYSCALLS,
@@ -33,7 +33,7 @@ def _setenv_pairs(argv: list[str]) -> dict[str, str]:
 # ── ambiente limpo ──────────────────────────────────────────────────────────
 
 
-def test_jail_usa_clearenv_e_sessao_nova():
+def test_jail_usa_clearenv_e_sessao_nova() -> None:
     argv = build_bwrap_command(SandboxPolicy(enabled=True), "/ws", ["true"])
 
     assert "--clearenv" in argv
@@ -42,7 +42,9 @@ def test_jail_usa_clearenv_e_sessao_nova():
     assert argv.index("--clearenv") < argv.index("--setenv")
 
 
-def test_segredos_do_backend_nao_entram_no_ambiente_do_jail(monkeypatch):
+def test_segredos_do_backend_nao_entram_no_ambiente_do_jail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-segredo")
     monkeypatch.setenv("VECTORA_TOKEN", "tok-segredo")
     monkeypatch.setenv("LANG", "pt_BR.UTF-8")
@@ -58,7 +60,9 @@ def test_segredos_do_backend_nao_entram_no_ambiente_do_jail(monkeypatch):
     assert env["HOME"] == dry_run.WORKER_HOME
 
 
-def test_env_pass_libera_so_o_que_o_usuario_declarou(monkeypatch):
+def test_env_pass_libera_so_o_que_o_usuario_declarou(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("NPM_TOKEN", "npm-ok")
     monkeypatch.setenv("OUTRO_SEGREDO", "nao")
 
@@ -68,7 +72,9 @@ def test_env_pass_libera_so_o_que_o_usuario_declarou(monkeypatch):
     assert "OUTRO_SEGREDO" not in env
 
 
-def test_env_pass_de_variavel_ausente_nao_cria_entrada(monkeypatch):
+def test_env_pass_de_variavel_ausente_nao_cria_entrada(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("NAO_EXISTE", raising=False)
 
     env = jail_environment(SandboxPolicy(enabled=True, env_pass=("NAO_EXISTE",)))
@@ -79,7 +85,9 @@ def test_env_pass_de_variavel_ausente_nao_cria_entrada(monkeypatch):
 # ── sistema e runtime ───────────────────────────────────────────────────────
 
 
-def test_links_do_sistema_sao_recriados_como_links(monkeypatch, tmp_path):
+def test_links_do_sistema_sao_recriados_como_links(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """`/lib64 -> usr/lib64`: montar o link como pasta esconde o carregador."""
     real = tmp_path / "usr"
     real.mkdir()
@@ -94,14 +102,16 @@ def test_links_do_sistema_sao_recriados_como_links(monkeypatch, tmp_path):
     assert ["--symlink", "usr/lib64", str(link)] == argv[3:6]
 
 
-def test_pasta_de_sistema_inexistente_e_ignorada(monkeypatch):
+def test_pasta_de_sistema_inexistente_e_ignorada(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(dry_run, "SYSTEM_PATHS", ("/nao/existe/de/jeito/nenhum",))
     monkeypatch.setattr(dry_run, "_resolver_run_dir", lambda: None)
 
     assert system_mounts() == []
 
 
-def test_runtime_do_python_nao_expoe_o_repositorio_inteiro():
+def test_runtime_do_python_nao_expoe_o_repositorio_inteiro() -> None:
     paths = [p if isinstance(p, str) else p[0] for p in python_runtime_paths()]
     repo_root = str(Path(dry_run.__file__).resolve().parents[2])
 
@@ -109,7 +119,7 @@ def test_runtime_do_python_nao_expoe_o_repositorio_inteiro():
     assert any(Path(p).name == "backend" for p in paths)
 
 
-def test_runtime_so_entra_quando_pedido_e_vai_para_pythonpath():
+def test_runtime_so_entra_quando_pedido_e_vai_para_pythonpath() -> None:
     sem = build_bwrap_command(SandboxPolicy(enabled=True), "/ws", ["true"])
     com = build_bwrap_command(
         SandboxPolicy(enabled=True),
@@ -122,7 +132,7 @@ def test_runtime_so_entra_quando_pedido_e_vai_para_pythonpath():
     assert _setenv_pairs(com)["PYTHONPATH"]
 
 
-def test_tmp_proprio_do_jail():
+def test_tmp_proprio_do_jail() -> None:
     argv = build_bwrap_command(SandboxPolicy(enabled=True), "/ws", ["true"])
 
     idx = argv.index("/tmp")
@@ -132,7 +142,7 @@ def test_tmp_proprio_do_jail():
 # ── .git ────────────────────────────────────────────────────────────────────
 
 
-def test_git_hooks_e_config_ficam_somente_leitura(tmp_path):
+def test_git_hooks_e_config_ficam_somente_leitura(tmp_path: Path) -> None:
     (tmp_path / ".git" / "hooks").mkdir(parents=True)
     (tmp_path / ".git" / "config").write_text("[core]\n")
 
@@ -146,11 +156,11 @@ def test_git_hooks_e_config_ficam_somente_leitura(tmp_path):
     assert str(tmp_path / ".git/config") in argv
 
 
-def test_sem_repositorio_nao_ha_protecao(tmp_path):
+def test_sem_repositorio_nao_ha_protecao(tmp_path: Path) -> None:
     assert git_protection_mounts(str(tmp_path)) == []
 
 
-def test_git_writable_libera_a_escrita(tmp_path):
+def test_git_writable_libera_a_escrita(tmp_path: Path) -> None:
     (tmp_path / ".git" / "hooks").mkdir(parents=True)
 
     protegido = build_bwrap_command(
@@ -165,7 +175,7 @@ def test_git_writable_libera_a_escrita(tmp_path):
     assert hooks not in liberado
 
 
-def test_protecao_do_git_vem_depois_do_bind_do_workspace(tmp_path):
+def test_protecao_do_git_vem_depois_do_bind_do_workspace(tmp_path: Path) -> None:
     (tmp_path / ".git" / "hooks").mkdir(parents=True)
 
     argv = build_bwrap_command(SandboxPolicy(enabled=True), str(tmp_path), ["true"])
@@ -176,7 +186,7 @@ def test_protecao_do_git_vem_depois_do_bind_do_workspace(tmp_path):
 # ── política ────────────────────────────────────────────────────────────────
 
 
-def test_parse_policy_le_os_campos_novos(tmp_path):
+def test_parse_policy_le_os_campos_novos(tmp_path: Path) -> None:
     toml = tmp_path / "vectora.toml"
     toml.write_text(
         '[sandbox]\nenv_pass = ["NPM_TOKEN"]\ngit_writable = true\n'
@@ -190,7 +200,7 @@ def test_parse_policy_le_os_campos_novos(tmp_path):
     assert policy.require_full_isolation is True
 
 
-def test_parse_policy_padroes_dos_campos_novos(tmp_path):
+def test_parse_policy_padroes_dos_campos_novos(tmp_path: Path) -> None:
     toml = tmp_path / "vectora.toml"
     toml.write_text("[sandbox]\nenabled = true\n")
 
@@ -215,11 +225,11 @@ def test_parse_policy_padroes_dos_campos_novos(tmp_path):
         "perf_event_open",
     ],
 )
-def test_denylist_cobre_superficies_de_ataque(name):
+def test_denylist_cobre_superficies_de_ataque(name: str) -> None:
     assert name in DENIED_SYSCALLS
 
 
-def test_tiocsti_e_flags_de_namespace_estao_definidos():
+def test_tiocsti_e_flags_de_namespace_estao_definidos() -> None:
     assert TIOCSTI == 0x5412
     assert 0x10000000 in CLONE_NAMESPACE_FLAGS  # CLONE_NEWUSER
     assert 0x40000000 in CLONE_NAMESPACE_FLAGS  # CLONE_NEWNET
@@ -229,7 +239,9 @@ def test_tiocsti_e_flags_de_namespace_estao_definidos():
 
 
 @pytest.mark.asyncio
-async def test_require_full_isolation_recusa_sem_seccomp(tmp_path, monkeypatch):
+async def test_require_full_isolation_recusa_sem_seccomp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(workspace_jail, "_is_windows", lambda: False)
     monkeypatch.setattr(workspace_jail, "build_seccomp_filter", lambda: None)
     policy = SandboxPolicy(enabled=True, require_full_isolation=True)
@@ -241,8 +253,8 @@ async def test_require_full_isolation_recusa_sem_seccomp(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sem_exigencia_o_jail_inicia_com_isolamento_parcial(
-    tmp_path, monkeypatch
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Sem libseccomp o jail segue (namespaces e Landlock valem) e o estado
     mostra `seccomp: False`, nunca "completo"."""
     if not _bwrap_works():
@@ -291,13 +303,15 @@ real_bwrap = pytest.mark.skipif(
 )
 
 
-async def _exec(worker, command: str) -> dict:
+async def _exec(worker: JailedWorker, command: str) -> dict:
     return await worker.request("exec", timeout_s=30, command=["sh", "-c", command])
 
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_jail_real_executa_comandos_e_nao_herda_segredos(tmp_path, monkeypatch):
+async def test_jail_real_executa_comandos_e_nao_herda_segredos(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Antes: `/lib64`, o interpretador e o pacote `backend` não existiam no
     jail, e o worker morria ao iniciar; agora executa, sem as chaves do backend."""
     monkeypatch.setenv("VECTORA_TESTE_SEGREDO", "abc123")
@@ -320,7 +334,7 @@ async def test_jail_real_executa_comandos_e_nao_herda_segredos(tmp_path, monkeyp
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_jail_real_protege_hooks_e_config_do_git(tmp_path):
+async def test_jail_real_protege_hooks_e_config_do_git(tmp_path: Path) -> None:
     (tmp_path / ".git" / "hooks").mkdir(parents=True)
     (tmp_path / ".git" / "config").write_text("[core]\n")
     manager = workspace_jail.WorkspaceJailManager()
@@ -343,7 +357,7 @@ async def test_jail_real_protege_hooks_e_config_do_git(tmp_path):
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_jail_real_com_git_writable_permite_gravar_hook(tmp_path):
+async def test_jail_real_com_git_writable_permite_gravar_hook(tmp_path: Path) -> None:
     (tmp_path / ".git" / "hooks").mkdir(parents=True)
     manager = workspace_jail.WorkspaceJailManager()
     try:
@@ -359,7 +373,7 @@ async def test_jail_real_com_git_writable_permite_gravar_hook(tmp_path):
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_jail_real_nao_enxerga_o_home_do_usuario(tmp_path):
+async def test_jail_real_nao_enxerga_o_home_do_usuario(tmp_path: Path) -> None:
     manager = workspace_jail.WorkspaceJailManager()
     try:
         worker = await manager.get_or_spawn(
@@ -380,7 +394,9 @@ async def test_jail_real_nao_enxerga_o_home_do_usuario(tmp_path):
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_jail_real_com_isolamento_exigido_reporta_tudo_aplicado(tmp_path):
+async def test_jail_real_com_isolamento_exigido_reporta_tudo_aplicado(
+    tmp_path: Path,
+) -> None:
     pytest.importorskip("pyseccomp")
     manager = workspace_jail.WorkspaceJailManager()
     try:
@@ -402,7 +418,7 @@ async def test_jail_real_com_isolamento_exigido_reporta_tudo_aplicado(tmp_path):
 
 
 @real_bwrap
-def test_bwrap_nao_executa_ioctl_tiocsti_nem_syscalls_negadas(tmp_path):
+def test_bwrap_nao_executa_ioctl_tiocsti_nem_syscalls_negadas(tmp_path: Path) -> None:
     pytest.importorskip("pyseccomp")
     # Um filtro real carregado pelo bwrap mata `unshare`: o processo morre por sinal.
     from backend.sandbox.linux import build_seccomp_filter
@@ -425,7 +441,9 @@ def test_bwrap_nao_executa_ioctl_tiocsti_nem_syscalls_negadas(tmp_path):
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_worker_e_recriado_quando_a_pasta_ou_a_politica_mudam(tmp_path):
+async def test_worker_e_recriado_quando_a_pasta_ou_a_politica_mudam(
+    tmp_path: Path,
+) -> None:
     primeira = tmp_path / "a"
     segunda = tmp_path / "b"
     primeira.mkdir()

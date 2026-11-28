@@ -11,9 +11,12 @@ Cobre:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
+from pathlib import Path
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 
 # ---------------------------------------------------------------------------
 # Fixture — banco isolado por teste (mesmo padrão de test_services_auth.py)
@@ -21,7 +24,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def isolate_db(tmp_path, monkeypatch):
+def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     db_file = str(tmp_path / "test_auth_name.db")
 
     import backend.rbac.auth as auth_mod
@@ -31,7 +34,7 @@ def isolate_db(tmp_path, monkeypatch):
         auth_mod, "_get_secret", lambda: "test-secret-key-name-tests-abcdef"
     )
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)
@@ -44,7 +47,7 @@ def isolate_db(tmp_path, monkeypatch):
     monkeypatch.setattr(auth_mod, "_get_db", _patched_get_db)
     yield
 
-    async def _close():
+    async def _close() -> None:
         if auth_mod._db_conn is not None:
             await auth_mod._db_conn.close()
             auth_mod._db_conn = None
@@ -59,7 +62,7 @@ def isolate_db(tmp_path, monkeypatch):
 
 class TestSignupWithName:
     @pytest.mark.asyncio
-    async def test_name_defaults_to_empty(self):
+    async def test_name_defaults_to_empty(self) -> None:
         """Backward-compat: chamadas antigas sem name continuam funcionando."""
         from backend.rbac.auth import signup
 
@@ -67,7 +70,7 @@ class TestSignupWithName:
         assert user.name == ""
 
     @pytest.mark.asyncio
-    async def test_accepts_simple_name(self):
+    async def test_accepts_simple_name(self) -> None:
         from backend.rbac.auth import signup
 
         user, _, _ = await signup(
@@ -76,7 +79,7 @@ class TestSignupWithName:
         assert user.name == "Bruno Soares"
 
     @pytest.mark.asyncio
-    async def test_strips_whitespace(self):
+    async def test_strips_whitespace(self) -> None:
         from backend.rbac.auth import signup
 
         user, _, _ = await signup(
@@ -85,7 +88,7 @@ class TestSignupWithName:
         assert user.name == "Bruno"
 
     @pytest.mark.asyncio
-    async def test_collapses_internal_whitespace(self):
+    async def test_collapses_internal_whitespace(self) -> None:
         """Espaços/tabs internos múltiplos viram um espaço só."""
         from backend.rbac.auth import signup
 
@@ -97,7 +100,7 @@ class TestSignupWithName:
         assert user.name == "Bruno de Souza Soares"
 
     @pytest.mark.asyncio
-    async def test_caps_at_100_chars(self):
+    async def test_caps_at_100_chars(self) -> None:
         """Nome muito longo é truncado em 100 caracteres."""
         from backend.rbac.auth import signup
 
@@ -107,7 +110,7 @@ class TestSignupWithName:
         assert user.name == "A" * 100
 
     @pytest.mark.asyncio
-    async def test_accepts_utf8_accents_and_special_chars(self):
+    async def test_accepts_utf8_accents_and_special_chars(self) -> None:
         """Acentos, ç, apóstrofo, espaços, kanji — tudo entra cru."""
         from backend.rbac.auth import signup
 
@@ -123,7 +126,7 @@ class TestSignupWithName:
             assert user.name == name, f"falhou para {name!r}"
 
     @pytest.mark.asyncio
-    async def test_name_persists_across_signin(self):
+    async def test_name_persists_across_signin(self) -> None:
         """Após signup, signin devolve o mesmo name persistido."""
         from backend.rbac.auth import signin, signup
 
@@ -139,7 +142,7 @@ class TestSignupWithName:
 
 class TestUpdateProfile:
     @pytest.mark.asyncio
-    async def test_updates_name(self):
+    async def test_updates_name(self) -> None:
         from backend.rbac.auth import signup, update_profile
 
         user, _, _ = await signup("upd@example.com", "senhasegura1234", name="Velho")
@@ -149,7 +152,7 @@ class TestUpdateProfile:
         assert updated.email == user.email
 
     @pytest.mark.asyncio
-    async def test_sanitizes_on_update(self):
+    async def test_sanitizes_on_update(self) -> None:
         from backend.rbac.auth import signup, update_profile
 
         user, _, _ = await signup("upd2@example.com", "senhasegura1234")
@@ -157,7 +160,7 @@ class TestUpdateProfile:
         assert updated.name == "Bruno Soares"
 
     @pytest.mark.asyncio
-    async def test_can_clear_name(self):
+    async def test_can_clear_name(self) -> None:
         """Atualizar com string vazia → name fica vazio (não rejeita)."""
         from backend.rbac.auth import signup, update_profile
 
@@ -168,7 +171,7 @@ class TestUpdateProfile:
         assert updated.name == ""
 
     @pytest.mark.asyncio
-    async def test_caps_at_100_chars_on_update(self):
+    async def test_caps_at_100_chars_on_update(self) -> None:
         from backend.rbac.auth import signup, update_profile
 
         user, _, _ = await signup("cap@example.com", "senhasegura1234")
@@ -176,14 +179,14 @@ class TestUpdateProfile:
         assert len(updated.name) == 100
 
     @pytest.mark.asyncio
-    async def test_raises_for_unknown_user(self):
+    async def test_raises_for_unknown_user(self) -> None:
         from backend.rbac.auth import update_profile
 
         with pytest.raises(ValueError):
             await update_profile("nope-uuid", name="Ninguém")
 
     @pytest.mark.asyncio
-    async def test_persists_across_get_user_by_id(self):
+    async def test_persists_across_get_user_by_id(self) -> None:
         """Após update, get_user_by_id devolve o name novo (não cache stale)."""
         from backend.rbac.auth import get_user_by_id, signup, update_profile
 
@@ -201,7 +204,7 @@ class TestUpdateProfile:
 
 class TestSchemaMigration:
     @pytest.mark.asyncio
-    async def test_alter_table_is_idempotent(self):
+    async def test_alter_table_is_idempotent(self) -> None:
         """Rodar _ensure_schema duas vezes não quebra (ALTER ADD COLUMN x2)."""
         import backend.rbac.auth as auth_mod
 

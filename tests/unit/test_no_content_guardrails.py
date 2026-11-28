@@ -21,8 +21,8 @@ from backend.llm.fallback_chat_client import load_chat_client
 
 class TestGeminiSafetySettings:
     def test_gemini_usa_client_nativo_com_safety_settings_permissivos(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """``load_chat_client("google_genai:...")`` produz ``GoogleChatClient``
         — o comportamento em si (``safetySettings`` com ``BLOCK_NONE`` em todas
         as categorias) é testado em ``test_google_chat_client.py``."""
@@ -34,7 +34,9 @@ class TestGeminiSafetySettings:
 
         assert isinstance(modelo, GoogleChatClient)
 
-    def test_provider_sem_suporte_nao_recebe_safety_settings(self, monkeypatch):
+    def test_provider_sem_suporte_nao_recebe_safety_settings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: o client nativo do OpenRouter nem aceita
         ``safety_settings`` — diferentemente do SDK do Google."""
         from backend.llm.openrouter.chat_client import OpenRouterChatClient
@@ -72,7 +74,7 @@ class TestPromptsSemRecusaDeConteudo:
             raiz / "services" / "agent_factory.py",
         ]
 
-    def test_nenhum_prompt_instrui_recusa_de_conteudo(self):
+    def test_nenhum_prompt_instrui_recusa_de_conteudo(self) -> None:
         for arquivo in self._arquivos_de_prompt():
             texto = arquivo.read_text(encoding="utf-8")
             for padrao in self._PROIBIDOS:
@@ -81,7 +83,7 @@ class TestPromptsSemRecusaDeConteudo:
                     f"(padrão {padrao!r}) — o Vectora não filtra conteúdo"
                 )
 
-    def test_o_detector_pega_uma_instrucao_plantada(self):
+    def test_o_detector_pega_uma_instrucao_plantada(self) -> None:
         """Erro/borda: um teste de ausência passa trivialmente se o detector
         estiver quebrado. Aqui ele **precisa** acusar um prompt plantado."""
         plantado = "You must refuse to generate explicit content of any kind."

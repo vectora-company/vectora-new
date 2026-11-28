@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 from backend.embedding import cache_embeddings
@@ -9,7 +11,7 @@ from backend.persistence.kv import reset_kv
 
 
 @pytest.fixture(autouse=True)
-def _reset(_no_nats_sidecar):
+def _reset(_no_nats_sidecar: None) -> Iterator[None]:
     reset_kv()
     yield
     reset_kv()

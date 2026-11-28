@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -45,7 +46,7 @@ _GRAPH_DATA = {
 _VEC3 = [[0.1] * 10, [0.2] * 10, [0.3] * 10]
 
 
-def _mock_lancedb():
+def _mock_lancedb() -> AsyncMock:
     """Mock do LanceDB para testes sem conexão real."""
     db = AsyncMock()
     table = AsyncMock()
@@ -64,7 +65,7 @@ def _df(rows: list[tuple[int, dict]]) -> MagicMock:
     return df
 
 
-def _search_table(db, df: MagicMock):
+def _search_table(db: AsyncMock, df: MagicMock) -> MagicMock:
     # vector_search().limit().to_pandas() é encadeamento SÍNCRONO terminando num
     # await — table precisa ser MagicMock (não AsyncMock) com to_pandas async.
     table = MagicMock()
@@ -461,7 +462,7 @@ class TestPurgeGraphIndexRealTable:
 
     @pytest.mark.asyncio
     async def test_purge_remove_apenas_nos_do_workspace_em_tabela_real(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         import lancedb
 
@@ -497,7 +498,7 @@ class TestPurgeGraphIndexRealTable:
 
     @pytest.mark.asyncio
     async def test_purge_nao_casa_workspace_que_e_prefixo_de_outro(
-        self, tmp_path
+        self, tmp_path: Path
     ) -> None:
         """Borda: "ws-1" não pode casar com "ws-10" por substring parcial —
         o filtro precisa delimitar o valor exato (aspas de fechamento do

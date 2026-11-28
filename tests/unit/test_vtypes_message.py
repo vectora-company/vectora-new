@@ -14,7 +14,7 @@ from backend.vtypes.message import (
 
 
 class TestVMessageText:
-    def test_concatena_multiplos_blocos_de_texto_na_ordem(self):
+    def test_concatena_multiplos_blocos_de_texto_na_ordem(self) -> None:
         msg = VMessage(
             role=MessageRole.ASSISTANT,
             content=[
@@ -25,7 +25,7 @@ class TestVMessageText:
         )
         assert msg.text() == "Olá, mundo"
 
-    def test_texto_vazio_quando_so_ha_blocos_nao_texto(self):
+    def test_texto_vazio_quando_so_ha_blocos_nao_texto(self) -> None:
         """Erro/borda: mensagem só com imagem não deve quebrar `.text()`,
         deve devolver string vazia."""
         msg = VMessage(
@@ -36,7 +36,7 @@ class TestVMessageText:
 
 
 class TestTextMessage:
-    def test_atalho_cria_bloco_unico_de_texto(self):
+    def test_atalho_cria_bloco_unico_de_texto(self) -> None:
         msg = text_message(MessageRole.USER, "oi", name="agent")
         assert msg.role == MessageRole.USER
         assert msg.text() == "oi"
@@ -44,7 +44,7 @@ class TestTextMessage:
 
 
 class TestVMessageRoundTrip:
-    def test_serializacao_preserva_tool_calls_e_blocos_multimodais(self):
+    def test_serializacao_preserva_tool_calls_e_blocos_multimodais(self) -> None:
         original = VMessage(
             role=MessageRole.ASSISTANT,
             content=[
@@ -65,7 +65,7 @@ class TestVMessageRoundTrip:
         assert restored.name == "coder"
         assert restored.finish_reason == "tool_calls"
 
-    def test_round_trip_de_tool_result_preserva_is_error(self):
+    def test_round_trip_de_tool_result_preserva_is_error(self) -> None:
         """Erro/borda: resultado de tool marcado como erro precisa
         sobreviver ao round-trip — é o campo que popula `is_error` no
         evento SSE `tool_result`."""
@@ -81,7 +81,7 @@ class TestVMessageRoundTrip:
         assert restored.tool_call_id == "call_1"
         assert restored.is_error is True
 
-    def test_from_dict_com_campos_ausentes_usa_defaults(self):
+    def test_from_dict_com_campos_ausentes_usa_defaults(self) -> None:
         """Erro/borda: dict mínimo (só `role`) não deve levantar KeyError —
         histórico persistido antes de um campo novo existir precisa
         continuar carregável."""
@@ -94,13 +94,13 @@ class TestVMessageRoundTrip:
 
 
 class TestVMessageChunk:
-    def test_chunk_default_sem_tool_calls_nem_usage(self):
+    def test_chunk_default_sem_tool_calls_nem_usage(self) -> None:
         chunk = VMessageChunk(delta_text="oi")
         assert chunk.delta_text == "oi"
         assert chunk.tool_call_chunks == []
         assert chunk.usage is None
 
-    def test_tool_call_chunk_carrega_indice_e_fragmento(self):
+    def test_tool_call_chunk_carrega_indice_e_fragmento(self) -> None:
         chunk = VMessageChunk(
             tool_call_chunks=[
                 ToolCallChunk(

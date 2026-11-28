@@ -10,9 +10,13 @@ backend compartilhado (Redis), fora do escopo atual.
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 __all__ = ["UsageTracker", "usage_tracker"]
 
+
+if TYPE_CHECKING:
+    from backend.vtypes.services import UsageWindow, UsageWindows
 
 _FIVE_HOURS = 5 * 60 * 60
 _WEEK = 7 * 24 * 60 * 60
@@ -63,7 +67,7 @@ class UsageTracker:
 
     def _window_stats(
         self, bucket: list[float], now: float, window: int, limit: int
-    ) -> dict[str, float | int]:
+    ) -> UsageWindow:
         cutoff = now - window
         used = sum(1 for ts in bucket if ts >= cutoff)
         # Tempo até o evento mais antigo dentro da janela sair dela.
@@ -77,7 +81,7 @@ class UsageTracker:
             "reset_in_seconds": round(reset_in, 1),
         }
 
-    def usage(self, user_id: str, *, now: float | None = None) -> dict[str, object]:
+    def usage(self, user_id: str, *, now: float | None = None) -> UsageWindows:
         """Retorna o consumo atual nas três janelas mais um snapshot legado.
 
         - ``five_hour`` e ``weekly``: alimentam o popover de uso.

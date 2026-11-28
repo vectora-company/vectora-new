@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from qdrant_client import AsyncQdrantClient, models
@@ -22,6 +22,9 @@ from backend.storage.vectorstore.base import (
     VectorRow,
     VectorStoreHealth,
 )
+
+if TYPE_CHECKING:
+    from qdrant_client.conversions.common_types import PointId
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +248,7 @@ class QdrantBackend:
             return []
 
         rows: list[VectorRow] = []
-        offset: Any = None
+        offset: PointId | None = None
         while True:
             async with asyncio.timeout(_TIMEOUT_S):
                 points, next_offset = await client.scroll(

@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from backend.scheduling.background_tasks import BackgroundTask
 from backend.tools.background import (
     _capability_token,
     create_background_task,
@@ -25,7 +26,8 @@ from backend.tools.background import (
     toggle_background_task,
 )
 from backend.tools.context import ToolContext
-from backend.tools.registry import TOOL_REGISTRY
+from backend.tools.registry import TOOL_REGISTRY, ToolExtras
+from backend.vtypes.contracts import JsonObject
 
 
 def _ctx(
@@ -34,26 +36,35 @@ def _ctx(
     return ToolContext(thread_id=thread_id, workspace_id=workspace_id, user_id=user_id)
 
 
-def _tool_extras(name: str) -> Any:
+def _task(
+    task_id: str,
+    *,
+    name: str = "n",
+    trigger_type: str = "manual",
+    trigger_config: JsonObject | None = None,
+    next_run_at: str | None = None,
+) -> BackgroundTask:
+    return BackgroundTask(
+        id=task_id,
+        session_id="t1",
+        user_id="u1",
+        kind="routine",
+        name=name,
+        instruction="",
+        trigger_type=trigger_type,
+        trigger_config=trigger_config or {},
+        next_run_at=next_run_at,
+    )
+
+
+def _tool_extras(name: str) -> ToolExtras:
     spec = TOOL_REGISTRY.get(name)
     assert spec is not None, f"tool {name!r} não registrada"
     return spec.extras
 
 
-def _fake_task(task_name: str = "Minha tarefa") -> Any:
-    class _FakeTask:
-        def __init__(self) -> None:
-            self.id = "task-123"
-            self.session_id: str = "t1"
-            self.user_id: str = "u1"
-            self.name = task_name
-            self.kind = "routine"
-            self.trigger_type = "interval"
-
-        def to_dict(self) -> dict:
-            return {"id": self.id, "name": self.name}
-
-    return _FakeTask()
+def _fake_task(task_name: str = "Minha tarefa") -> BackgroundTask:
+    return _task("task-123", name=task_name, trigger_type="interval")
 
 
 # ---------------------------------------------------------------------------
@@ -240,13 +251,8 @@ async def test_schedule_task_missing_session_returns_error() -> None:
 
 def _fake_subagent_task(
     task_id: str = "task-sub-1", next_run_at: str = "2026-07-23T12:00:00+00:00"
-) -> Any:
-    class _FakeTask:
-        def __init__(self) -> None:
-            self.id = task_id
-            self.next_run_at = next_run_at
-
-    return _FakeTask()
+) -> BackgroundTask:
+    return _task(task_id, next_run_at=next_run_at)
 
 
 @pytest.mark.asyncio
@@ -436,18 +442,8 @@ async def test_schedule_subagent_task_correlation_id_ausente_nao_tenta_dedupar()
 # ---------------------------------------------------------------------------
 
 
-def _fake_task_status(task_id: str, trigger_config: dict) -> Any:
-    class _FakeTask:
-        def __init__(self) -> None:
-            self.id = task_id
-            self.session_id = "t1"
-            self.name = "n"
-            self.kind = "routine"
-            self.enabled = True
-            self.last_run_at = None
-            self.trigger_config = trigger_config
-
-    return _FakeTask()
+def _fake_task_status(task_id: str, trigger_config: JsonObject) -> BackgroundTask:
+    return _task(task_id, trigger_config=trigger_config)
 
 
 @pytest.mark.asyncio

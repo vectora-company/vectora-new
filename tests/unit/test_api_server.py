@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture(scope="module")
-def headless_app():
+def headless_app() -> FastAPI:
     """App FastAPI em modo headless (sem static files).
 
     Auth é desabilitada via env var para que os testes unitários não
@@ -36,7 +36,7 @@ def headless_app():
 
 
 @pytest.fixture(scope="module")
-def client(headless_app):
+def client(headless_app: FastAPI) -> TestClient:
     """Executa a operação client."""
     return TestClient(headless_app, raise_server_exceptions=False)
 
@@ -52,7 +52,9 @@ class TestLifespan:
     ``ingest_docs``/``ingest_directory`` sejam processados pelo RAG.
     """
 
-    def test_lifespan_starts_embedding_worker(self, headless_app, monkeypatch):
+    def test_lifespan_starts_embedding_worker(
+        self, headless_app: FastAPI, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de lifespan starts embedding worker."""
         import backend.embedding.background as bg
 
@@ -82,8 +84,8 @@ class TestLifespan:
         )
 
     def test_lifespan_runs_thread_cleanup_immediately_at_boot(
-        self, headless_app, monkeypatch
-    ):
+        self, headless_app: FastAPI, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """`cleanup_empty_threads` roda imediatamente no boot, sem esperar
         o primeiro `asyncio.sleep` do loop de limpeza — threads vazias de
         sessões anteriores não ficam visíveis até essa espera. Também
@@ -130,7 +132,9 @@ class TestLifespan:
             "fantasma visíveis por até 1h a cada restart."
         )
 
-    def test_gateway_forwards_to_configured_backend_port(self, monkeypatch):
+    def test_gateway_forwards_to_configured_backend_port(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de gateway forwards to configured backend port."""
         from backend.api.server import _gateway_local_url
 
@@ -147,7 +151,7 @@ class TestLifespan:
 
 
 class TestHealth:
-    def test_health_ok(self, client):
+    def test_health_ok(self, client: TestClient) -> None:
         """Verifica o comportamento de health ok."""
         response = client.get("/health")
         assert response.status_code == 200
@@ -155,14 +159,14 @@ class TestHealth:
         assert body["status"] == "ok"
         assert "version" in body
 
-    def test_health_version_non_empty(self, client):
+    def test_health_version_non_empty(self, client: TestClient) -> None:
         """Verifica o comportamento de health version non empty."""
         response = client.get("/health")
         assert response.json()["version"] != ""
 
 
 class TestUpdateChangelog:
-    def test_returns_latest_packaged_release_notes(self, client):
+    def test_returns_latest_packaged_release_notes(self, client: TestClient) -> None:
         """Verifica o comportamento de returns latest packaged release notes."""
         response = client.get("/api/updates/changelog")
         assert response.status_code == 200
@@ -177,7 +181,7 @@ class TestUpdateChangelog:
 
 
 class TestMetrics:
-    def test_metrics_returns_list(self, client):
+    def test_metrics_returns_list(self, client: TestClient) -> None:
         """Verifica o comportamento de metrics returns list."""
         response = client.get("/metrics")
         assert response.status_code == 200
@@ -204,21 +208,21 @@ def _collect_route_paths(routes) -> list[str]:
 
 
 class TestRoutes:
-    def _route_paths(self, app) -> list[str]:
+    def _route_paths(self, app: FastAPI) -> list[str]:
         """Executa a operação route paths."""
         return _collect_route_paths(app.routes)
 
-    def test_stream_chat_route_exists(self, headless_app):
+    def test_stream_chat_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de stream chat route exists."""
         paths = self._route_paths(headless_app)
         assert "/vectora.chat.v1.ChatService/StreamChat" in paths
 
-    def test_resume_chat_route_exists(self, headless_app):
+    def test_resume_chat_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de resume chat route exists."""
         paths = self._route_paths(headless_app)
         assert "/vectora.chat.v1.ChatService/ResumeChat" in paths
 
-    def test_get_tools_route_exists(self, headless_app):
+    def test_get_tools_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de get tools route exists."""
         paths = self._route_paths(headless_app)
         assert "/vectora.chat.v1.ChatService/GetTools" in paths
@@ -233,7 +237,7 @@ class TestRoutes:
         assert "X-Vectora-Chat-Persisted" in cors.kwargs["expose_headers"]
         assert "X-Vectora-Device-Id" in cors.kwargs["allow_headers"]
 
-    def test_workspaces_active_route_exists(self, headless_app):
+    def test_workspaces_active_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de workspaces active route exists."""
         paths = self._route_paths(headless_app)
         assert "/workspaces/active" in paths, (
@@ -242,7 +246,7 @@ class TestRoutes:
             "e falha com 502."
         )
 
-    def test_thread_routes_exist(self, headless_app):
+    def test_thread_routes_exist(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de thread routes exist."""
         paths = self._route_paths(headless_app)
         for route in (
@@ -254,7 +258,7 @@ class TestRoutes:
         ):
             assert route in paths, f"Rota ausente: {route}"
 
-    def test_share_routes_exist(self, headless_app):
+    def test_share_routes_exist(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de share routes exist."""
         paths = self._route_paths(headless_app)
         assert "/threads/share" in paths
@@ -267,12 +271,12 @@ class TestRoutes:
 
 
 class TestWorkspacesActive:
-    def test_returns_200(self, client):
+    def test_returns_200(self, client: TestClient) -> None:
         """Verifica o comportamento de returns 200."""
         res = client.get("/workspaces/active")
         assert res.status_code == 200
 
-    def test_response_has_workspace_key(self, client):
+    def test_response_has_workspace_key(self, client: TestClient) -> None:
         """Verifica o comportamento de response has workspace key."""
         body = client.get("/workspaces/active").json()
         assert "workspace" in body, (
@@ -280,7 +284,7 @@ class TestWorkspacesActive:
             "'data.workspace?.git_current_branch'."
         )
 
-    def test_workspace_is_none_or_object(self, client):
+    def test_workspace_is_none_or_object(self, client: TestClient) -> None:
         """Verifica o comportamento de workspace is none or object."""
         body = client.get("/workspaces/active").json()
         ws = body["workspace"]
@@ -295,7 +299,7 @@ class TestWorkspacesActive:
 
 
 class TestApiToolsSchema:
-    def test_api_tools_schema_route_exists(self, headless_app):
+    def test_api_tools_schema_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de api tools schema route exists."""
         paths = _collect_route_paths(headless_app.routes)
         assert "/api/tools/schema" in paths
@@ -307,19 +311,19 @@ class TestApiToolsSchema:
 
 
 class TestGetTools:
-    def test_get_tools_returns_200(self, client):
+    def test_get_tools_returns_200(self, client: TestClient) -> None:
         """Verifica o comportamento de get tools returns 200."""
         response = client.get("/vectora.chat.v1.ChatService/GetTools")
         assert response.status_code == 200
 
-    def test_get_tools_has_tools_key(self, client):
+    def test_get_tools_has_tools_key(self, client: TestClient) -> None:
         """Verifica o comportamento de get tools has tools key."""
         response = client.get("/vectora.chat.v1.ChatService/GetTools")
         body = response.json()
         assert "tools" in body
         assert isinstance(body["tools"], list)
 
-    def test_get_tools_each_has_name(self, client):
+    def test_get_tools_each_has_name(self, client: TestClient) -> None:
         """Verifica o comportamento de get tools each has name."""
         response = client.get("/vectora.chat.v1.ChatService/GetTools")
         tools = response.json()["tools"]
@@ -335,7 +339,7 @@ class TestGetTools:
 
 
 class TestChatModeWithoutStaticDir:
-    def test_chat_mode_with_frontend_proxy(self):
+    def test_chat_mode_with_frontend_proxy(self) -> None:
         """create_app(serve_static=True) registra o proxy do frontend sem explodir."""
         from backend.api.server import create_app
 

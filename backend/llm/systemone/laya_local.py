@@ -9,7 +9,6 @@ contrato canônico do Vectora.
 from __future__ import annotations
 
 import time
-from typing import Any
 
 import httpx
 
@@ -31,6 +30,7 @@ from backend.llm.systemone.types import (
     SystemOneResponse,
     parse_systemone_response,
 )
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 
@@ -105,16 +105,17 @@ class LayaLocalAdapter(SystemOneProvider):
         return headers
 
     @staticmethod
-    def _questions(request: SystemOneRequest) -> dict[str, dict[str, Any]]:
+    def _questions(request: SystemOneRequest) -> JsonObject:
         """Executa a operação questions."""
-        serialized: dict[str, dict[str, Any]] = {}
+        serialized: JsonObject = {}
         for question_id, question in request.questions.items():
             if isinstance(question, NoulQuestion):
                 serialized[question_id] = {
                     "type": "noul",
                     "instructions": question.instructions or question.criterion,
-                    "criteria": question.criteria
-                    or {
+                    "criteria": {**question.criteria}
+                    if question.criteria
+                    else {
                         "true": question.criterion,
                         "false": f"A afirmação não é verdadeira: {question.criterion}",
                     },
@@ -124,8 +125,9 @@ class LayaLocalAdapter(SystemOneProvider):
                     "type": "choice",
                     "instructions": question.instructions
                     or "Escolha a opção adequada.",
-                    "criteria": question.criteria
-                    or {option: option for option in question.options},
+                    "criteria": {**question.criteria}
+                    if question.criteria
+                    else {option: option for option in question.options},
                 }
             elif isinstance(question, ScoreQuestion):
                 levels = question.levels or [
@@ -135,21 +137,26 @@ class LayaLocalAdapter(SystemOneProvider):
                 serialized[question_id] = {
                     "type": "score",
                     "instructions": question.instructions or question.criterion,
-                    "criteria": levels,
+                    "criteria": [*levels],
                 }
         return serialized
 
     @staticmethod
-    def _normalize_response(data: object, request: SystemOneRequest) -> dict[str, Any]:
+    def _normalize_response(data: JsonValue, request: SystemOneRequest) -> JsonObject:
         """Executa a operação normalize response."""
-        if not isinstance(data, dict) or not isinstance(data.get("answers"), dict):
+        if not isinstance(data, dict):
             raise ValueError("Laya retornou um envelope inválido")
-        normalized: dict[str, Any] = {"answers": {}}
+        raw_answers = data.get("answers")
+        if not isinstance(raw_answers, dict):
+            raise ValueError("Laya retornou um envelope inválido")
+        answers: JsonObject = {}
+        normalized: JsonObject = {"answers": answers}
         for question_id, question in request.questions.items():
-            raw = data["answers"].get(question_id)
+            raw = raw_answers.get(question_id)
             if not isinstance(raw, dict):
                 raise ValueError("Laya não retornou todas as respostas")
             confidence = raw.get("answer_confidence", raw.get("confidence"))
+            answer: JsonObject
             if isinstance(question, NoulQuestion):
                 if "noul" not in raw:
                     raise ValueError("Resposta Noul do Laya ausente")
@@ -165,7 +172,10 @@ class LayaLocalAdapter(SystemOneProvider):
             else:
                 if "score" not in raw:
                     raise ValueError("Resposta Score do Laya ausente")
-                score = float(raw["score"])
+                raw_score = raw["score"]
+                if not isinstance(raw_score, int | float | str):
+                    raise ValueError("Resposta Score do Laya inválida")
+                score = float(raw_score)
                 if question.levels and len(question.levels) > 1:
                     span = question.max_score - question.min_score
                     score = question.min_score + span * score / (
@@ -186,7 +196,7 @@ class LayaLocalAdapter(SystemOneProvider):
                 }
             if confidence is not None:
                 answer["confidence"] = confidence
-            normalized["answers"][question_id] = answer
+            answers[question_id] = answer
 
         usage = data.get("usage")
         if isinstance(usage, dict):
@@ -194,12 +204,14 @@ class LayaLocalAdapter(SystemOneProvider):
             completion_tokens = usage.get(
                 "output_tokens", usage.get("completion_tokens", 0)
             )
+            total_tokens = usage.get("total_tokens")
+            if total_tokens is None and isinstance(prompt_tokens, int):
+                if isinstance(completion_tokens, int):
+                    total_tokens = prompt_tokens + completion_tokens
             normalized["usage"] = {
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
-                "total_tokens": usage.get(
-                    "total_tokens", prompt_tokens + completion_tokens
-                ),
+                "total_tokens": total_tokens,
             }
         return normalized
 
@@ -210,7 +222,7 @@ class LayaLocalAdapter(SystemOneProvider):
                 "Laya local aceita texto/JSON, mas não imagens ou vídeo.",
                 provider=self.provider_id,
             )
-        payload: dict[str, Any] = {
+        payload: JsonObject = {
             "model": request.model or self._model,
             "state": request.state,
             "questions": self._questions(request),

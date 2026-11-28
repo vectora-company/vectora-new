@@ -11,13 +11,22 @@ específico é necessário.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 __all__ = [
     "get_kv",
     "tracer",
 ]
 
 
-def __getattr__(name: str) -> object:
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from backend.persistence.kv import KV
+    from backend.persistence.tracer import VectoraTracer
+
+
+def __getattr__(name: str) -> Callable[[], Awaitable[KV]] | VectoraTracer:
     if name == "get_kv":
         from backend.persistence.kv import get_kv
 

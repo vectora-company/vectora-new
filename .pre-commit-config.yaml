@@ -110,6 +110,11 @@ repos:
         language: system
         files: \.(py|ts|tsx|js|jsx|mts)$
         exclude: ^utils/(checks|test_checks)\.py$
+      - id: no-any
+        name: Anotações sem Any nem object (backend e testes)
+        entry: uv run --no-project python utils/checks.py no-any
+        language: system
+        files: ^(backend|tests)/.*\.py$
       - id: release-lines-config
         name: Validate release line configuration
         entry: uv run --no-project --with "pydantic>=2.13.4" python utils/release.py line master

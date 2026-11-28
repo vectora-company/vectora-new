@@ -16,36 +16,36 @@ import pytest
 
 
 class TestIpIsBlocked:
-    def test_loopback_is_blocked(self):
+    def test_loopback_is_blocked(self) -> None:
         from backend.context_graph.security import _ip_is_blocked
 
         assert _ip_is_blocked(ipaddress.ip_address("127.0.0.1"))
 
-    def test_private_is_blocked(self):
+    def test_private_is_blocked(self) -> None:
         from backend.context_graph.security import _ip_is_blocked
 
         assert _ip_is_blocked(ipaddress.ip_address("192.168.1.1"))
         assert _ip_is_blocked(ipaddress.ip_address("10.0.0.1"))
 
-    def test_cgn_is_blocked(self):
+    def test_cgn_is_blocked(self) -> None:
         from backend.context_graph.security import _ip_is_blocked
 
         assert _ip_is_blocked(ipaddress.ip_address("100.64.0.1"))
 
-    def test_nat64_wkp_is_blocked(self):
+    def test_nat64_wkp_is_blocked(self) -> None:
         from backend.context_graph.security import _ip_is_blocked
 
         # 64:ff9b::/96 — NAT64 well-known prefix (maps to 0.0.0.0 → block)
         assert _ip_is_blocked(ipaddress.ip_address("64:ff9b::7f00:1"))
 
-    def test_public_is_not_blocked(self):
+    def test_public_is_not_blocked(self) -> None:
         from backend.context_graph.security import _ip_is_blocked
 
         assert not _ip_is_blocked(ipaddress.ip_address("8.8.8.8"))
 
 
 class TestValidateUrl:
-    def test_http_allowed(self):
+    def test_http_allowed(self) -> None:
         from backend.context_graph.security import validate_url
 
         with patch("socket.getaddrinfo") as mock_gai:
@@ -53,7 +53,7 @@ class TestValidateUrl:
             result = validate_url("http://example.com/path")
         assert result == "http://example.com/path"
 
-    def test_https_allowed(self):
+    def test_https_allowed(self) -> None:
         from backend.context_graph.security import validate_url
 
         with patch("socket.getaddrinfo") as mock_gai:
@@ -61,19 +61,19 @@ class TestValidateUrl:
             result = validate_url("https://example.com/")
         assert result.startswith("https://")
 
-    def test_file_scheme_blocked(self):
+    def test_file_scheme_blocked(self) -> None:
         from backend.context_graph.security import validate_url
 
         with pytest.raises(ValueError, match="Blocked URL scheme"):
             validate_url("file:///etc/passwd")
 
-    def test_blocked_cloud_metadata_host(self):
+    def test_blocked_cloud_metadata_host(self) -> None:
         from backend.context_graph.security import validate_url
 
         with pytest.raises(ValueError, match="Blocked cloud metadata"):
             validate_url("http://metadata.google.internal/computeMetadata")
 
-    def test_private_ip_blocked(self):
+    def test_private_ip_blocked(self) -> None:
         from backend.context_graph.security import validate_url
 
         with patch("socket.getaddrinfo") as mock_gai:
@@ -81,7 +81,7 @@ class TestValidateUrl:
             with pytest.raises(ValueError, match="Blocked private"):
                 validate_url("http://internal-host.example.com/")
 
-    def test_dns_failure_raises(self):
+    def test_dns_failure_raises(self) -> None:
         import socket as _socket
 
         from backend.context_graph.security import validate_url
@@ -92,7 +92,7 @@ class TestValidateUrl:
 
 
 class TestValidateGraphPath:
-    def test_valid_path_inside_base(self, tmp_path: Path):
+    def test_valid_path_inside_base(self, tmp_path: Path) -> None:
         from backend.context_graph.security import validate_graph_path
 
         base = tmp_path / ".vectora/context-graph"
@@ -103,7 +103,7 @@ class TestValidateGraphPath:
         result = validate_graph_path(target, base=base)
         assert result == target.resolve()
 
-    def test_path_escape_raises_value_error(self, tmp_path: Path):
+    def test_path_escape_raises_value_error(self, tmp_path: Path) -> None:
         from backend.context_graph.security import validate_graph_path
 
         base = tmp_path / ".vectora/context-graph"
@@ -114,7 +114,7 @@ class TestValidateGraphPath:
         with pytest.raises(ValueError, match="escapes"):
             validate_graph_path(escaped, base=base)
 
-    def test_missing_file_raises_file_not_found(self, tmp_path: Path):
+    def test_missing_file_raises_file_not_found(self, tmp_path: Path) -> None:
         from backend.context_graph.security import validate_graph_path
 
         base = tmp_path / ".vectora/context-graph"
@@ -124,7 +124,7 @@ class TestValidateGraphPath:
         with pytest.raises(FileNotFoundError):
             validate_graph_path(target, base=base)
 
-    def test_nonexistent_base_raises_value_error(self, tmp_path: Path):
+    def test_nonexistent_base_raises_value_error(self, tmp_path: Path) -> None:
         from backend.context_graph.security import validate_graph_path
 
         base = tmp_path / "does_not_exist"
@@ -133,7 +133,7 @@ class TestValidateGraphPath:
 
 
 class TestCheckGraphFileSizeCap:
-    def test_small_file_passes(self, tmp_path: Path):
+    def test_small_file_passes(self, tmp_path: Path) -> None:
         from backend.context_graph.security import check_graph_file_size_cap
 
         f = tmp_path / "small.json"
@@ -142,7 +142,7 @@ class TestCheckGraphFileSizeCap:
 
     def test_oversized_file_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph import security
 
         monkeypatch.setattr(security, "_MAX_GRAPH_FILE_BYTES", 10)
@@ -153,14 +153,14 @@ class TestCheckGraphFileSizeCap:
         with pytest.raises(ValueError, match="exceeds"):
             check_graph_file_size_cap(f)
 
-    def test_missing_file_is_ignored(self, tmp_path: Path):
+    def test_missing_file_is_ignored(self, tmp_path: Path) -> None:
         from backend.context_graph.security import check_graph_file_size_cap
 
         check_graph_file_size_cap(tmp_path / "ghost.json")  # no exception
 
 
 class TestMaxGraphFileBytes:
-    def test_default_returns_512mb(self):
+    def test_default_returns_512mb(self) -> None:
         from backend.context_graph.security import _max_graph_file_bytes
 
         with patch.dict(os.environ, {}, clear=False):
@@ -168,28 +168,28 @@ class TestMaxGraphFileBytes:
             result = _max_graph_file_bytes()
         assert result == 512 * 1024 * 1024
 
-    def test_mb_suffix(self):
+    def test_mb_suffix(self) -> None:
         from backend.context_graph.security import _max_graph_file_bytes
 
         with patch.dict(os.environ, {"GRAPH_MAX_GRAPH_BYTES": "100MB"}):
             result = _max_graph_file_bytes()
         assert result == 100 * 1024 * 1024
 
-    def test_gb_suffix(self):
+    def test_gb_suffix(self) -> None:
         from backend.context_graph.security import _max_graph_file_bytes
 
         with patch.dict(os.environ, {"GRAPH_MAX_GRAPH_BYTES": "2GB"}):
             result = _max_graph_file_bytes()
         assert result == 2 * 1024 * 1024 * 1024
 
-    def test_invalid_value_returns_default(self):
+    def test_invalid_value_returns_default(self) -> None:
         from backend.context_graph.security import _max_graph_file_bytes
 
         with patch.dict(os.environ, {"GRAPH_MAX_GRAPH_BYTES": "notanumber"}):
             result = _max_graph_file_bytes()
         assert result == 512 * 1024 * 1024
 
-    def test_zero_returns_default(self):
+    def test_zero_returns_default(self) -> None:
         from backend.context_graph.security import _max_graph_file_bytes
 
         with patch.dict(os.environ, {"GRAPH_MAX_GRAPH_BYTES": "0"}):
@@ -198,82 +198,78 @@ class TestMaxGraphFileBytes:
 
 
 class TestSanitizeLabel:
-    def test_none_returns_empty(self):
+    def test_none_returns_empty(self) -> None:
         from backend.context_graph.security import sanitize_label
 
         assert sanitize_label(None) == ""
 
-    def test_strips_control_chars(self):
+    def test_strips_control_chars(self) -> None:
         from backend.context_graph.security import sanitize_label
 
         assert sanitize_label("hello\x00world") == "helloworld"
         assert sanitize_label("tab\there") == "tabhere"
 
-    def test_truncates_to_max_length(self):
+    def test_truncates_to_max_length(self) -> None:
         from backend.context_graph.security import sanitize_label
 
         assert len(sanitize_label("x" * 300)) == 256
 
-    def test_normal_string_unchanged(self):
+    def test_normal_string_unchanged(self) -> None:
         from backend.context_graph.security import sanitize_label
 
         assert sanitize_label("AuthService") == "AuthService"
 
 
 class TestSanitizeMetadata:
-    def test_none_returns_empty(self):
+    def test_none_returns_empty(self) -> None:
         from backend.context_graph.security import sanitize_metadata
 
         assert sanitize_metadata(None) == {}
 
-    def test_string_values_sanitized(self):
+    def test_string_values_sanitized(self) -> None:
         from backend.context_graph.security import sanitize_metadata
 
         result = sanitize_metadata({"key": "value"})
         assert result["key"] == "value"
 
-    def test_empty_key_dropped(self):
+    def test_empty_key_dropped(self) -> None:
         from backend.context_graph.security import sanitize_metadata
 
         result = sanitize_metadata({"\x00": "value"})
         assert result == {}
 
-    def test_nested_dict_sanitized(self):
+    def test_nested_dict_sanitized(self) -> None:
         from backend.context_graph.security import sanitize_metadata
 
         result = sanitize_metadata({"meta": {"inner": "data"}})
         assert isinstance(result["meta"], dict)
 
-    def test_list_values_sanitized(self):
+    def test_list_values_sanitized(self) -> None:
         from backend.context_graph.security import sanitize_metadata
 
         result = sanitize_metadata({"items": ["a", "b", "c"]})
         assert result["items"] == ["a", "b", "c"]
 
-    def test_bool_passthrough(self):
+    def test_bool_passthrough(self) -> None:
         from backend.context_graph.security import sanitize_metadata
 
         result = sanitize_metadata({"flag": True})
         assert result["flag"] is True
 
-    def test_int_passthrough(self):
+    def test_int_passthrough(self) -> None:
         from backend.context_graph.security import sanitize_metadata
 
         result = sanitize_metadata({"count": 42})
         assert result["count"] == 42
 
-    def test_none_value_passthrough(self):
+    def test_none_value_passthrough(self) -> None:
         from backend.context_graph.security import sanitize_metadata
 
         result = sanitize_metadata({"empty": None})
         assert result["empty"] is None
 
-    def test_non_string_value_converted(self):
+    def test_non_string_value_converted(self) -> None:
         from backend.context_graph.security import sanitize_metadata
 
-        class Obj:
-            def __str__(self) -> str:
-                return "custom"
-
-        result = sanitize_metadata({"obj": Obj()})
-        assert "custom" in str(result["obj"])
+        result = sanitize_metadata({"obj": Path("custom")})
+        assert result["obj"] == "custom"

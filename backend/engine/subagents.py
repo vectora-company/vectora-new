@@ -72,7 +72,7 @@ import hmac
 import logging
 import time
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NotRequired, TypedDict, Unpack
 from uuid import uuid4
 
 from backend.engine.conversation_loop import LoopConfig, run_conversation
@@ -94,12 +94,14 @@ from backend.vtypes.message import MessageRole, text_message
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from backend.engine.conversation_loop import LoopResult
     from backend.engine.guardrails import TurnBudget
-    from backend.engine.stream_events import EventSink
+    from backend.engine.stream_events import EngineEvent, EventSink
     from backend.llm.base import ChatClient
     from backend.persistence.native.session_store import SessionStore
     from backend.tools.context import ToolContext
     from backend.tools.registry import ToolSpec
+    from backend.vtypes.engine import ApprovalPredicate
     from backend.vtypes.message import VMessage
 
 
@@ -141,7 +143,7 @@ só existe entre o início e o fim de `run_subagent`; usada pra reaproveitar
 Sem a identidade na chave, um id repetido por outro usuário receberia o
 resultado alheio."""
 
-_ACTIVE_CONVERSATION_TASKS: dict[CorrelationId, asyncio.Task[Any]] = {}
+_ACTIVE_CONVERSATION_TASKS: dict[CorrelationId, asyncio.Task[LoopResult]] = {}
 """`conversation_task` de cada subagente em execução com `correlation_id`
 definido — só existe enquanto a task roda; é o alvo real de
 `request_hard_interrupt`."""
@@ -203,7 +205,7 @@ def _tools_outside_user_scope(tools: list[ToolSpec], user_id: str | None) -> lis
 
 
 async def _watch_liveness(
-    task: asyncio.Task[Any],
+    task: asyncio.Task[LoopResult],
     liveness: LivenessConfig,
     last_activity: list[float],
 ) -> None:
@@ -230,10 +232,7 @@ async def run_subagent(
     parent_thread_id: str,
     config: LoopConfig | None = None,
     on_event: EventSink | None = None,
-    should_require_approval: Callable[
-        [str, ToolContext, dict[str, Any], list[VMessage]], bool
-    ]
-    | None,
+    should_require_approval: ApprovalPredicate | None,
     turn_budget: TurnBudget | None = None,
     liveness: LivenessConfig | None = None,
     parent_policy_snapshot: PolicySnapshot | None = None,
@@ -310,10 +309,7 @@ async def _run_subagent_once(
     parent_thread_id: str,
     config: LoopConfig | None = None,
     on_event: EventSink | None = None,
-    should_require_approval: Callable[
-        [str, ToolContext, dict[str, Any], list[VMessage]], bool
-    ]
-    | None = None,
+    should_require_approval: ApprovalPredicate | None = None,
     turn_budget: TurnBudget | None = None,
     liveness: LivenessConfig | None = None,
     parent_policy_snapshot: PolicySnapshot | None = None,
@@ -480,7 +476,7 @@ async def _run_subagent_once(
 
     last_activity = [time.monotonic()]
 
-    async def _on_event_com_liveness(event: Any) -> None:
+    async def _on_event_com_liveness(event: EngineEvent) -> None:
         """Executa a operação  on event com liveness."""
         last_activity[0] = time.monotonic()
         if on_event is not None:
@@ -500,7 +496,7 @@ async def _run_subagent_once(
                     )
                 )
 
-    conversation_task: asyncio.Task[Any] = asyncio.create_task(
+    conversation_task: asyncio.Task[LoopResult] = asyncio.create_task(
         run_conversation(
             session_store=session_store,
             chat_client=chat_client,
@@ -635,8 +631,23 @@ async def _run_subagent_once(
     return texto
 
 
+class SubagentRunOptions(TypedDict):
+    """Argumentos nomeados de ``run_subagent``."""
+
+    session_store: SessionStore
+    chat_client: ChatClient
+    ctx: ToolContext
+    parent_thread_id: str
+    should_require_approval: ApprovalPredicate | None
+    config: NotRequired[LoopConfig | None]
+    on_event: NotRequired[EventSink | None]
+    turn_budget: NotRequired[TurnBudget | None]
+    liveness: NotRequired[LivenessConfig | None]
+    parent_policy_snapshot: NotRequired[PolicySnapshot | None]
+
+
 def spawn_subagent_background(
-    spec: SubagentSpec, prompt: str, **kwargs: Any
+    spec: SubagentSpec, prompt: str, **kwargs: Unpack[SubagentRunOptions]
 ) -> asyncio.Task[str]:
     """Dispara `run_subagent` em segundo plano via `asyncio.create_task` —
     nunca thread OS. Devolve a `asyncio.Task[str]` pra

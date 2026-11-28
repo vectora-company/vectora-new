@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.services.memory_store import MemoryConflictError, MemoryStore
@@ -17,7 +19,9 @@ def _store_record(store: MemoryStore, *, content: str = "fato") -> None:
     )
 
 
-def test_persisted_same_key_is_idempotent_across_store_instances(tmp_path) -> None:
+def test_persisted_same_key_is_idempotent_across_store_instances(
+    tmp_path: Path,
+) -> None:
     """Reexecução em outro processo lógico não duplica nem falha."""
     path = tmp_path / "memory.db"
     first = MemoryStore(path)
@@ -32,7 +36,7 @@ def test_persisted_same_key_is_idempotent_across_store_instances(tmp_path) -> No
     ]
 
 
-def test_persisted_same_key_with_different_payload_is_conflict(tmp_path) -> None:
+def test_persisted_same_key_with_different_payload_is_conflict(tmp_path: Path) -> None:
     """Uma gravação concorrente divergente não sobrescreve a proveniência."""
     path = tmp_path / "memory.db"
     first = MemoryStore(path)
@@ -47,7 +51,9 @@ def test_persisted_same_key_with_different_payload_is_conflict(tmp_path) -> None
     assert result.records[0].content == "fato"
 
 
-def test_expire_then_purge_invalidated_respects_retention_and_batch(tmp_path) -> None:
+def test_expire_then_purge_invalidated_respects_retention_and_batch(
+    tmp_path: Path,
+) -> None:
     store = MemoryStore(tmp_path / "memory.db")
     store.store(
         "old",
@@ -67,7 +73,7 @@ def test_expire_then_purge_invalidated_respects_retention_and_batch(tmp_path) ->
     ]
 
 
-def test_purge_invalidated_rejeita_batch_invalido(tmp_path) -> None:
+def test_purge_invalidated_rejeita_batch_invalido(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="batch_size deve ser positivo"):
         MemoryStore(tmp_path / "memory.db").purge_invalidated(batch_size=0)
 

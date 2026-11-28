@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 from pathlib import Path
@@ -74,7 +76,7 @@ async def test_start_llamacpp_rejects_different_configuration_while_running(
 
 @pytest.mark.asyncio
 async def test_sidecar_persists_and_clears_identity(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import backend.services.llamacpp_sidecar as sidecar
 

@@ -296,7 +296,7 @@ async def graph_path(source: str, target: str, ctx: ToolContext) -> str:
                 return f"Nó '{target}' não encontrado no grafo."
             return f"Não existe caminho entre '{source}' e '{target}'."
 
-        labels = [n.get("label", n.get("id", "?")) for n in path_nodes]
+        labels = [str(n.get("label", n.get("id", "?"))) for n in path_nodes]
         return f"Caminho ({len(path_nodes)} nós): {' → '.join(labels)}"
 
     except Exception as exc:

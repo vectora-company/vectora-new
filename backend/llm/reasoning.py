@@ -30,26 +30,29 @@ _OPENAI_REASONING_PREFIXES = ("o1", "o3", "o4", "gpt-5")
 _GEMINI_THINKING_PREFIXES = ("gemini-2.5", "gemini-3")
 
 
+from backend.vtypes.contracts import JsonObject
+
+
 def thinking_budget(effort: str | None) -> int | None:
     """Orçamento de thinking para o esforço, ou ``None`` se não houver esforço."""
     return THINKING_BUDGETS.get(effort or "")
 
 
-def openai_reasoning(model: str, effort: str | None) -> dict[str, str] | None:
+def openai_reasoning(model: str, effort: str | None) -> JsonObject | None:
     """Parâmetro ``reasoning`` da Responses API, só para modelos de raciocínio."""
     if not model.startswith(_OPENAI_REASONING_PREFIXES):
         return None
-    params = {"summary": "auto"}
+    params: JsonObject = {"summary": "auto"}
     if effort in OPENAI_EFFORTS:
         params["effort"] = OPENAI_EFFORTS[effort]
     return params
 
 
-def gemini_thinking_config(model: str, effort: str | None) -> dict[str, object] | None:
+def gemini_thinking_config(model: str, effort: str | None) -> JsonObject | None:
     """``thinkingConfig`` do Gemini, só para os modelos que expõem pensamentos."""
     if not model.startswith(_GEMINI_THINKING_PREFIXES):
         return None
-    config: dict[str, object] = {"includeThoughts": True}
+    config: JsonObject = {"includeThoughts": True}
     budget = thinking_budget(effort)
     if budget is not None:
         config["thinkingBudget"] = budget

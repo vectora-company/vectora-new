@@ -233,11 +233,18 @@ async def read_terminal(
         result = session.read_since(cursor, max_bytes)
     except (TypeError, ValueError):
         return json.dumps({"status": "error", "code": "invalid_cursor"})
-    data = result.pop("data").decode("utf-8", errors="replace")
+    data = result["data"].decode("utf-8", errors="replace")
     from backend.services.git import redact_git_output
 
-    result.update({"status": "ok", "output": redact_git_output(data)})
-    return json.dumps(result, ensure_ascii=False)
+    payload = {
+        "cursor": result["cursor"],
+        "alive": result["alive"],
+        "truncated": result["truncated"],
+        "has_more": result["has_more"],
+        "status": "ok",
+        "output": redact_git_output(data),
+    }
+    return json.dumps(payload, ensure_ascii=False)
 
 
 @vtool(

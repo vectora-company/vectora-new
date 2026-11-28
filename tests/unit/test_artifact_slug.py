@@ -13,10 +13,10 @@ from backend.tools.fs import _artifact_slug
 class TestArtifactSlug:
     """Testa a conversão de títulos em slugs kebab-case."""
 
-    def test_titulo_curto_preservado(self):
+    def test_titulo_curto_preservado(self) -> None:
         assert _artifact_slug("Meu Plano") == "meu-plano"
 
-    def test_titulo_longo_nao_truncado(self):
+    def test_titulo_longo_nao_truncado(self) -> None:
         """Bug fix: títulos com mais de 50 chars não devem ser truncados."""
         longo = "Plano de correção de tratamento de imagens e estabilização de pipeline de video"
         slug = _artifact_slug(longo)
@@ -25,14 +25,14 @@ class TestArtifactSlug:
         # Comprimento deve ser maior que 50
         assert len(slug) > 50
 
-    def test_titulo_exatamente_50_chars(self):
+    def test_titulo_exatamente_50_chars(self) -> None:
         """Título de exatamente 50 chars deve ser preservado integralmente."""
         titulo = "Plano de refatoracao do modulo de autenticacao 99x"
         assert len(titulo) == 50
         slug = _artifact_slug(titulo)
         assert len(slug) == len("plano-de-refatoracao-do-modulo-de-autenticacao-99x")
 
-    def test_titulo_com_acentos(self):
+    def test_titulo_com_acentos(self) -> None:
         slug = _artifact_slug("Correção de Erros na API")
         assert (
             "correo" in slug
@@ -41,36 +41,36 @@ class TestArtifactSlug:
             or "erros" in slug
         )
 
-    def test_titulo_com_caracteres_especiais(self):
+    def test_titulo_com_caracteres_especiais(self) -> None:
         slug = _artifact_slug("Plano: Fase #1 (Backend)")
         assert "#" not in slug
         assert "(" not in slug
         assert ")" not in slug
         assert ":" not in slug
 
-    def test_titulo_vazio_retorna_artifact(self):
+    def test_titulo_vazio_retorna_artifact(self) -> None:
         assert _artifact_slug("") == "artifact"
 
-    def test_titulo_so_espacos_retorna_artifact(self):
+    def test_titulo_so_espacos_retorna_artifact(self) -> None:
         assert _artifact_slug("   ") == "artifact"
 
-    def test_slug_sem_traco_no_inicio_ou_fim(self):
+    def test_slug_sem_traco_no_inicio_ou_fim(self) -> None:
         slug = _artifact_slug("  -- Plano de Testes --  ")
         assert not slug.startswith("-")
         assert not slug.endswith("-")
 
-    def test_multiplos_espacos_viram_unico_traco(self):
+    def test_multiplos_espacos_viram_unico_traco(self) -> None:
         slug = _artifact_slug("Plano    de    Testes")
         assert "--" not in slug
 
-    def test_titulo_com_underscores(self):
+    def test_titulo_com_underscores(self) -> None:
         slug = _artifact_slug("deploy_to_production")
         assert "_" not in slug
         assert "deploy" in slug
         assert "production" in slug
 
     @pytest.mark.parametrize("length", [51, 100, 150, 200])
-    def test_titulo_muito_longo_nao_truncado(self, length: int):
+    def test_titulo_muito_longo_nao_truncado(self, length: int) -> None:
         """Quaisquer títulos longos são preservados por inteiro."""
         titulo = "palavra " * (length // 8)
         slug = _artifact_slug(titulo)

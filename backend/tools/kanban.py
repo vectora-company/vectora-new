@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, cast
+from typing import cast
 
 from backend.scheduling import background_tasks, kanban
 from backend.tools.context import ToolContext
@@ -296,7 +296,7 @@ async def kanban_update_status(
                 authorized_run_id=authorized_run_id,
             )
 
-        estado: dict[str, Any] = await kanban.get_task_status(task_id)
+        estado = await kanban.get_task_status(task_id)
         logger.info(
             "kanban_update_status: card movido com sucesso",
             extra={

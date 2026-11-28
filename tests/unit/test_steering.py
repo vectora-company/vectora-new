@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 
 from backend.engine import steering
 from backend.engine.conversation_loop import LoopConfig, run_conversation
-from backend.engine.stream_events import SteerApplied
+from backend.engine.stream_events import EngineEvent, SteerApplied
 from backend.persistence.native.session_store import SessionStore
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
-from backend.tools.registry import ToolRegistry
-from backend.vtypes.message import MessageRole, VMessageChunk, text_message
+from backend.tools.registry import ToolRegistry, ToolSpec
+from backend.vtypes.message import MessageRole, VMessage, VMessageChunk, text_message
 
 
 @pytest.fixture(autouse=True)
@@ -66,7 +68,14 @@ class _RecordingClient:
     def __init__(self) -> None:
         self.histories: list[list[str]] = []
 
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         self.histories.append(
             [m.text() for m in messages if m.role is MessageRole.USER]
         )
@@ -76,13 +85,18 @@ class _RecordingClient:
         yield VMessageChunk(delta_text="ok")
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         raise NotImplementedError
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "steer.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -95,15 +109,15 @@ async def session_store(tmp_path):
 
 
 async def test_loop_applies_a_steer_that_arrives_during_the_answer(
-    session_store,
+    session_store: SessionStore,
 ) -> None:
     await session_store.append_message(
         "thread-s", text_message(MessageRole.USER, "explique o projeto")
     )
     client = _RecordingClient()
-    events: list[object] = []
+    events: list[EngineEvent] = []
 
-    async def on_event(event: object) -> None:
+    async def on_event(event: EngineEvent) -> None:
         events.append(event)
 
     await run_conversation(
@@ -124,11 +138,13 @@ async def test_loop_applies_a_steer_that_arrives_during_the_answer(
     ]
 
 
-async def test_steer_endpoint_queues_only_when_a_run_is_active(monkeypatch) -> None:
+async def test_steer_endpoint_queues_only_when_a_run_is_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import chat as chat_handlers
     from backend.api.handlers import threads as thread_handlers
 
-    async def allow(*_args, **_kwargs) -> None:
+    async def allow(*_args: str | None, **_kwargs: bool) -> None:
         return None
 
     monkeypatch.setattr(thread_handlers, "_assert_owns_thread", allow)

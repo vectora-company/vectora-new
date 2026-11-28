@@ -53,7 +53,7 @@ def _run_without_git_on_path(code: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_git_realmente_nao_resolve_sem_git_no_path():
+def test_git_realmente_nao_resolve_sem_git_no_path() -> None:
     """Sanidade do próprio setup do teste: confirma que git.exe não é
     encontrável no PATH filtrado (senão o teste principal não provaria nada)."""
     result = _run_without_git_on_path(
@@ -64,13 +64,13 @@ def test_git_realmente_nao_resolve_sem_git_no_path():
     )
 
 
-def test_import_tools_git_sem_git_no_path_nao_crasha():
+def test_import_tools_git_sem_git_no_path_nao_crasha() -> None:
     result = _run_without_git_on_path("import backend.tools.git; print('OK')")
     assert result.returncode == 0, result.stderr
     assert "OK" in result.stdout
 
 
-def test_import_persistence_checkpoint_sem_git_no_path_nao_crasha():
+def test_import_persistence_checkpoint_sem_git_no_path_nao_crasha() -> None:
     result = _run_without_git_on_path(
         "import backend.persistence.checkpoint; print('OK')"
     )
@@ -78,7 +78,7 @@ def test_import_persistence_checkpoint_sem_git_no_path_nao_crasha():
     assert "OK" in result.stdout
 
 
-def test_import_backend_main_sem_git_no_path_nao_crasha():
+def test_import_backend_main_sem_git_no_path_nao_crasha() -> None:
     """Reproduz literalmente a cadeia do traceback relatado: launcher →
     backend.main → ... → tools/git.py → `import git`."""
     result = _run_without_git_on_path("import backend.main; print('OK')")

@@ -96,7 +96,9 @@ def _lines(log: Path) -> list[str]:
     return log.read_text().splitlines() if log.exists() else []
 
 
-def test_o_registrador_enxerga_uma_consulta_de_dns(recorder_dir, tmp_path):
+def test_o_registrador_enxerga_uma_consulta_de_dns(
+    recorder_dir: Path, tmp_path: Path
+) -> None:
     """Controle: sem ele, "nenhuma consulta" poderia ser só um registrador mudo."""
     log = tmp_path / "controle.log"
     subprocess.run(
@@ -120,8 +122,8 @@ def test_o_registrador_enxerga_uma_consulta_de_dns(recorder_dir, tmp_path):
 
 
 def test_start_sem_services_nao_consulta_nenhum_destino_do_vectora(
-    recorder_dir, tmp_path
-):
+    recorder_dir: Path, tmp_path: Path
+) -> None:
     log = tmp_path / "rede.log"
     home = tmp_path / "home"
     port = _free_port()

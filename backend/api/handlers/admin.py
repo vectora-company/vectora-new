@@ -21,7 +21,7 @@ import os
 import platform
 import sys
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -36,7 +36,14 @@ from backend.api.schemas import (
 from backend.rbac.auth import User
 from backend.rbac.permissions import can_manage_users, has_min_role
 from backend.settings import settings
+from backend.vtypes.api import SystemInfo
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.safe_root import SafeRoot
+from backend.vtypes.services import SttSettings
+
+if TYPE_CHECKING:
+    from backend.embedding.queue import EmbeddingQueue, PostgresQueueDB
+    from backend.vtypes.auth import Principal
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +54,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # ---------------------------------------------------------------------------
 
 
-def require_admin(user: Any) -> None:
+def require_admin(user: Principal | None) -> None:
     """Lança HTTPException 403 se user não é admin ou root."""
     role = getattr(user, "role", None)
     if not has_min_role(user, "admin"):
@@ -57,7 +64,7 @@ def require_admin(user: Any) -> None:
         )
 
 
-def require_root(user: Any) -> None:
+def require_root(user: Principal | None) -> None:
     """Lança HTTPException 403 se user não é root."""
     role = getattr(user, "role", None)
     if not can_manage_users(user):
@@ -79,7 +86,7 @@ def _get_user(request: Request) -> User:
 # ---------------------------------------------------------------------------
 
 
-def _build_system_info() -> dict[str, Any]:
+def _build_system_info() -> SystemInfo:
     """Constrói o dicionário de informações do sistema."""
     try:
         from backend.version import __version__, get_build_version
@@ -606,7 +613,7 @@ async def list_traces(
     request: Request,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     session_id: Annotated[int | None, Query()] = None,
-) -> dict[str, list[dict[str, Any]]]:
+) -> dict[str, list[JsonObject]]:
     """Lista metadados operacionais dos spans sem expor metadata livre."""
     require_admin(_get_user(request))
     from backend.persistence.tracer import tracer
@@ -690,7 +697,7 @@ async def patch_server_config(request: Request, body: PatchConfigBody) -> dict:
 
     # Persiste em ~/.vectora/config.toml [server] — sobrevive a restart, sem
     # depender de Postgres (ver write_config_section em src/services/license.py).
-    updated: dict[str, Any] = {}
+    updated: JsonObject = {}
     toml_values: dict[str, str | int | bool | None] = {}
     try:
         from backend.settings import settings
@@ -806,7 +813,7 @@ class TranscriptionSettingsBody(BaseModel):
 
 
 @router.get("/transcription")
-async def get_transcription_settings(request: Request) -> dict:
+async def get_transcription_settings(request: Request) -> SttSettings:
     """Configuração da transcrição local de áudio e vídeo: modelo e idioma do
     faster-whisper embutido, whisper do sistema, e quais motores existem
     nesta máquina (``backend/services/speech_to_text.py``)."""
@@ -819,7 +826,7 @@ async def get_transcription_settings(request: Request) -> dict:
 @router.patch("/transcription")
 async def patch_transcription_settings(
     request: Request, body: TranscriptionSettingsBody
-) -> dict:
+) -> SttSettings:
     """Grava a configuração da transcrição local e devolve o estado efetivo."""
     require_admin(_get_user(request))
     from backend.config.registry import get_field
@@ -1529,7 +1536,7 @@ async def update_storage_config(request: Request) -> dict:
 
     from backend.workspace.runtime_settings import runtime_settings
 
-    updated: dict[str, object] = {}
+    updated: JsonObject = {}
 
     if "storage_mode" in body:
         mode = body["storage_mode"]
@@ -1691,7 +1698,7 @@ class EmbeddingQueueCleanupBody(BaseModel):
     days: int = Field(default=30, ge=1, le=365)
 
 
-async def _embedding_queue() -> Any:
+async def _embedding_queue() -> EmbeddingQueue | PostgresQueueDB:
     from backend.embedding.queue import get_configured_embedding_queue
 
     try:

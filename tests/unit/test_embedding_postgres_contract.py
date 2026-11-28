@@ -1,4 +1,5 @@
 import json
+from types import TracebackType
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -8,18 +9,23 @@ from backend.embedding.queue import PostgresQueueDB
 
 
 class _ConnectionContext:
-    def __init__(self, connection: Any) -> None:
+    def __init__(self, connection: AsyncMock) -> None:
         self.connection = connection
 
-    async def __aenter__(self) -> Any:
+    async def __aenter__(self) -> AsyncMock:
         return self.connection
 
-    async def __aexit__(self, *_args: object) -> None:
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
         pass
 
 
 class _Pool:
-    def __init__(self, connection: Any) -> None:
+    def __init__(self, connection: AsyncMock) -> None:
         self.connection = connection
 
     def acquire(self) -> _ConnectionContext:

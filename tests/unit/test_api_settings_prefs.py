@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -10,6 +12,7 @@ import pytest
 from fastapi import Request
 
 from backend.api.handlers.flags import get_prefs, update_prefs
+from backend.vtypes.contracts import JsonValue
 from backend.workspace.runtime_settings import RuntimeSettings
 
 
@@ -19,7 +22,7 @@ class _FakeRequest:
     def __init__(
         self,
         user_id: str | None,
-        body: Any = None,
+        body: JsonValue = None,
         query_params: dict[str, str] | None = None,
     ) -> None:
         user = SimpleNamespace(id=user_id) if user_id else None
@@ -27,13 +30,13 @@ class _FakeRequest:
         self._body = body
         self.query_params = query_params or {}
 
-    async def json(self) -> Any:
+    async def json(self) -> JsonValue:
         return self._body
 
 
 def _req(
     user_id: str | None,
-    body: Any = None,
+    body: JsonValue = None,
     query_params: dict[str, str] | None = None,
 ) -> Request:
     """`_FakeRequest` visto como `Request` — os handlers só tocam `.state.user`
@@ -42,7 +45,9 @@ def _req(
 
 
 @pytest.fixture(autouse=True)
-def _isolated_runtime_settings(tmp_path, monkeypatch):
+def _isolated_runtime_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[RuntimeSettings]:
     """Isola cada teste com um RuntimeSettings próprio (nunca toca o real)."""
     from backend.api.handlers import flags as handler
     from backend.workspace import runtime_settings as rs_module
@@ -55,39 +60,39 @@ def _isolated_runtime_settings(tmp_path, monkeypatch):
     del handler  # só pra deixar claro que não precisa mais nada daqui
 
 
-def test_get_prefs_vazio_por_padrao():
+def test_get_prefs_vazio_por_padrao() -> None:
     out = asyncio.run(get_prefs(_req("u1")))
     assert out == {}
 
 
-def test_update_e_get_prefs_roundtrip():
+def test_update_e_get_prefs_roundtrip() -> None:
     asyncio.run(update_prefs(_req("u1", {"selectedModel": "cohere:command-a"})))
     out = asyncio.run(get_prefs(_req("u1")))
     assert out == {"selectedModel": "cohere:command-a"}
 
 
-def test_update_merge_parcial():
+def test_update_merge_parcial() -> None:
     asyncio.run(update_prefs(_req("u1", {"theme": "dark"})))
     asyncio.run(update_prefs(_req("u1", {"language": "pt"})))
     out = asyncio.run(get_prefs(_req("u1")))
     assert out == {"theme": "dark", "language": "pt"}
 
 
-def test_update_ignora_campo_desconhecido():
+def test_update_ignora_campo_desconhecido() -> None:
     result = asyncio.run(
         update_prefs(_req("u1", {"theme": "dark", "campo_esquisito": 1}))
     )
     assert result == {"theme": "dark"}
 
 
-def test_isola_por_usuario():
+def test_isola_por_usuario() -> None:
     asyncio.run(update_prefs(_req("u1", {"theme": "dark"})))
     asyncio.run(update_prefs(_req("u2", {"theme": "light"})))
     assert asyncio.run(get_prefs(_req("u1"))) == {"theme": "dark"}
     assert asyncio.run(get_prefs(_req("u2"))) == {"theme": "light"}
 
 
-def test_decision_model_preferences_roundtrip_isolated_by_workspace():
+def test_decision_model_preferences_roundtrip_isolated_by_workspace() -> None:
     asyncio.run(
         update_prefs(
             _req(
@@ -107,7 +112,7 @@ def test_decision_model_preferences_roundtrip_isolated_by_workspace():
     )
 
 
-def test_transcription_mode_persists_only_supported_values():
+def test_transcription_mode_persists_only_supported_values() -> None:
     asyncio.run(update_prefs(_req("u1", {"transcriptionMode": "local"})))
     assert asyncio.run(get_prefs(_req("u1"))) == {"transcriptionMode": "local"}
 
@@ -116,7 +121,9 @@ def test_transcription_mode_persists_only_supported_values():
     assert asyncio.run(get_prefs(_req("u1"))) == {"transcriptionMode": "local"}
 
 
-def test_decision_model_workspace_preferences_reject_foreign_workspace(monkeypatch):
+def test_decision_model_workspace_preferences_reject_foreign_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from fastapi import HTTPException
 
     from backend.workspace.workspace import workspace_registry
@@ -141,13 +148,13 @@ def test_decision_model_workspace_preferences_reject_foreign_workspace(monkeypat
     assert exc.value.status_code == 403
 
 
-def test_sem_user_cai_no_fallback_local():
+def test_sem_user_cai_no_fallback_local() -> None:
     # request.state.user ausente (ex.: middleware não injetou) — usa "local".
     asyncio.run(update_prefs(_req(None, {"theme": "dark"})))
     assert asyncio.run(get_prefs(_req("local"))) == {"theme": "dark"}
 
 
-def test_body_nao_objeto_retorna_422():
+def test_body_nao_objeto_retorna_422() -> None:
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc:
@@ -155,7 +162,7 @@ def test_body_nao_objeto_retorna_422():
     assert exc.value.status_code == 422
 
 
-def test_auto_update_enabled_persiste_e_convive_com_outras_prefs():
+def test_auto_update_enabled_persiste_e_convive_com_outras_prefs() -> None:
     """autoUpdateEnabled — lido pelo Electron main process (fetchBackendJson
     em main.ts) antes de agendar as checagens periódicas de update; precisa
     persistir como bool real, não só "chave presente"."""

@@ -12,6 +12,7 @@ consolidado para usar este helper corrigido).
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -32,7 +33,7 @@ def _fake_table(row_count: int = 0):
 
 
 class TestCreateIvfIndex:
-    async def test_cria_indice_quando_atinge_min_rows(self):
+    async def test_cria_indice_quando_atinge_min_rows(self) -> None:
         table = _fake_table(row_count=15_000)
 
         created = await create_ivf_index(table, min_rows=10_000)
@@ -43,7 +44,7 @@ class TestCreateIvfIndex:
         _, kwargs = table.create_index.await_args
         assert isinstance(kwargs["config"], IvfPq)
 
-    async def test_abaixo_do_minimo_pula_sem_erro(self):
+    async def test_abaixo_do_minimo_pula_sem_erro(self) -> None:
         table = _fake_table(row_count=100)
 
         created = await create_ivf_index(table, min_rows=10_000)
@@ -51,7 +52,7 @@ class TestCreateIvfIndex:
         assert created is False
         table.create_index.assert_not_awaited()
 
-    async def test_indice_ja_existente_nao_propaga(self):
+    async def test_indice_ja_existente_nao_propaga(self) -> None:
         table = _fake_table(row_count=20_000)
         table.create_index = AsyncMock(side_effect=RuntimeError("index already exists"))
 
@@ -59,7 +60,7 @@ class TestCreateIvfIndex:
 
         assert created is False
 
-    async def test_count_rows_falhando_retorna_false_sem_lancar(self):
+    async def test_count_rows_falhando_retorna_false_sem_lancar(self) -> None:
         table = _fake_table()
         table.count_rows = AsyncMock(side_effect=RuntimeError("storage indisponível"))
 
@@ -69,7 +70,7 @@ class TestCreateIvfIndex:
 
 
 class TestCreateFtsIndex:
-    async def test_cria_via_create_index_com_config_fts(self):
+    async def test_cria_via_create_index_com_config_fts(self) -> None:
         table = _fake_table()
 
         created = await create_fts_index(table, "text")
@@ -86,7 +87,7 @@ class TestCreateFtsIndex:
         # (table.create_index com config=FTS(...)) é o que é chamado.
         assert not hasattr(table, "create_fts_index")
 
-    async def test_idioma_customizado_repassado_pro_fts_config(self):
+    async def test_idioma_customizado_repassado_pro_fts_config(self) -> None:
         table = _fake_table()
 
         await create_fts_index(table, "text", language="Portuguese")
@@ -95,7 +96,7 @@ class TestCreateFtsIndex:
         _, kwargs = table.create_index.await_args
         assert kwargs["config"].language == "Portuguese"
 
-    async def test_indice_ja_existente_nao_propaga(self):
+    async def test_indice_ja_existente_nao_propaga(self) -> None:
         table = _fake_table()
         table.create_index = AsyncMock(side_effect=RuntimeError("FTS already exists"))
 
@@ -103,7 +104,7 @@ class TestCreateFtsIndex:
 
         assert created is False
 
-    async def test_falha_generica_nao_propaga(self):
+    async def test_falha_generica_nao_propaga(self) -> None:
         table = _fake_table()
         table.create_index = AsyncMock(side_effect=RuntimeError("storage indisponível"))
 
@@ -125,7 +126,9 @@ class TestCreateIvfIndexRealTable:
 
     pytestmark = pytest.mark.real_lancedb
 
-    async def test_cria_indice_ivf_pq_de_verdade_em_tabela_real(self, tmp_path) -> None:
+    async def test_cria_indice_ivf_pq_de_verdade_em_tabela_real(
+        self, tmp_path: Path
+    ) -> None:
         import lancedb
         import pyarrow as pa
 

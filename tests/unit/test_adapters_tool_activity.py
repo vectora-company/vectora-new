@@ -22,7 +22,7 @@ from backend.engine.stream_events import ToolActivity, ToolCallStarted, ToolResu
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence):
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 
@@ -32,7 +32,7 @@ def _parse(sse: str) -> dict:
 
 
 def _one_tool_run(tool_name: str, *, elapsed_ms: int = 5):
-    async def run(on_event):
+    async def run(on_event) -> str:
         await on_event(
             ToolCallStarted(tool_name=tool_name, tool_call_id="run-abc", args_json="{}")
         )
@@ -49,7 +49,7 @@ def _one_tool_run(tool_name: str, *, elapsed_ms: int = 5):
 
 
 def _start_only_run(tool_name: str):
-    async def run(on_event):
+    async def run(on_event) -> str:
         await on_event(
             ToolCallStarted(tool_name=tool_name, tool_call_id="run-abc", args_json="{}")
         )
@@ -60,7 +60,7 @@ def _start_only_run(tool_name: str):
 
 
 def _multi_tool_run():
-    async def run(on_event):
+    async def run(on_event) -> str:
         for name in ("file_edit", "web_search"):
             await on_event(
                 ToolCallStarted(tool_name=name, tool_call_id=name, args_json="{}")
@@ -76,7 +76,7 @@ def _multi_tool_run():
 
 
 @pytest.mark.asyncio
-async def test_tool_activity_emitted_on_tool_start():
+async def test_tool_activity_emitted_on_tool_start() -> None:
     """tool_activity com elapsed_ms=None sai antes de qualquer tool_result."""
     out = [
         _parse(s)
@@ -93,7 +93,7 @@ async def test_tool_activity_emitted_on_tool_start():
 
 
 @pytest.mark.asyncio
-async def test_tool_activity_emitted_on_tool_end_with_elapsed():
+async def test_tool_activity_emitted_on_tool_end_with_elapsed() -> None:
     """tool_activity de fim carrega elapsed_ms >= 0 (inteiro)."""
     out = [
         _parse(s)
@@ -113,7 +113,7 @@ async def test_tool_activity_emitted_on_tool_end_with_elapsed():
 
 
 @pytest.mark.asyncio
-async def test_tool_activity_and_tool_call_both_emitted_on_start():
+async def test_tool_activity_and_tool_call_both_emitted_on_start() -> None:
     """No início da tool, tanto tool_call quanto tool_activity saem —
     ``conversation_loop.py`` emite ``ToolCallStarted`` seguido de
     ``ToolActivity``."""
@@ -131,7 +131,7 @@ async def test_tool_activity_and_tool_call_both_emitted_on_start():
 
 
 @pytest.mark.asyncio
-async def test_tool_activity_on_end_after_tool_result():
+async def test_tool_activity_on_end_after_tool_result() -> None:
     """tool_activity (end) deve aparecer APÓS tool_result na sequência SSE."""
     out = [
         _parse(s)
@@ -148,7 +148,7 @@ async def test_tool_activity_on_end_after_tool_result():
 
 
 @pytest.mark.asyncio
-async def test_multiple_tools_activity_tracked_independently():
+async def test_multiple_tools_activity_tracked_independently() -> None:
     """Duas tools distintas geram dois pares de tool_activity com nomes corretos."""
     out = [
         _parse(s)

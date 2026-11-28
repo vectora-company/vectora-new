@@ -121,7 +121,7 @@ class ProcessTreeResourceSampler:
         found_process = False
         incomplete = False
         for index in range(self._nvml_device_count):
-            handle: object | None = None
+            handle = None
             with suppress(Exception):
                 handle = self._nvml.nvmlDeviceGetHandleByIndex(index)
             if handle is None:

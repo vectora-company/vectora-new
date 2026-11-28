@@ -16,13 +16,20 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
+from backend.vtypes.contracts import JsonObject
+
 if TYPE_CHECKING:
-    from backend.scheduling.background_tasks import BackgroundTask
+    from backend.scheduling.background_tasks import (
+        BackgroundRunRow,
+        BackgroundTask,
+        TaskUpdates,
+    )
+    from backend.vtypes.sql import SqlRow
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +60,7 @@ class TaskOut(BaseModel):
     name: str
     instruction: str
     trigger_type: str
-    trigger_config: dict[str, Any]
+    trigger_config: JsonObject
     enabled: bool
     last_run_at: str | None
     next_run_at: str | None
@@ -105,7 +112,7 @@ class CreateTaskRequest(BaseModel):
     name: str
     instruction: str
     trigger_type: str
-    trigger_config: dict[str, Any] = {}
+    trigger_config: JsonObject = {}
     workspace_id: str | None = None
     priority: str = "normal"
     #: `create_task` (background_tasks.py) já suporta o campo — só faltava
@@ -121,7 +128,7 @@ class UpdateTaskRequest(BaseModel):
     name: str | None = None
     instruction: str | None = None
     enabled: bool | None = None
-    trigger_config: dict[str, Any] | None = None
+    trigger_config: JsonObject | None = None
     #: Transição manual de status (drag-and-drop no board) — validada contra
     #: `kanban.MANUAL_TRANSITIONS`, nunca um `UPDATE` direto.
     status: str | None = None
@@ -192,7 +199,7 @@ def _user_id(request: Request) -> str:
 def _build_task_out(
     t: BackgroundTask,
     *,
-    dependencies: list[dict[str, Any]],
+    dependencies: list[SqlRow],
     progress: dict[str, int] | None,
     comment_count: int,
 ) -> TaskOut:
@@ -218,7 +225,7 @@ def _build_task_out(
         block_reason=t.block_reason,
         agent_profile_id=t.agent_profile_id,
         priority=t.priority,
-        dependencies=[TaskDependencyOut(**d) for d in dependencies],
+        dependencies=[TaskDependencyOut.model_validate(d) for d in dependencies],
         claim_expires_at=t.claim_expires_at,
         progress=ProgressOut(**progress) if progress else None,
         comment_count=comment_count,
@@ -483,7 +490,7 @@ async def patch_task(
             await kanban.manual_transition(task_id, body.status)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    update_kwargs: dict[str, Any] = {
+    update_kwargs: TaskUpdates = {
         "name": body.name,
         "instruction": body.instruction,
         "enabled": body.enabled,
@@ -664,17 +671,8 @@ async def resume_run_endpoint(
     return {"status": "queued", "run_id": run_id}
 
 
-def _row_to_run_out(r: Mapping[str, Any]) -> RunOut:
-    return RunOut(
-        id=r["id"],
-        task_id=r["task_id"],
-        run_thread_id=r.get("run_thread_id"),
-        trigger_source=r["trigger_source"],
-        status=r["status"],
-        summary=r.get("summary"),
-        started_at=r["started_at"],
-        finished_at=r.get("finished_at"),
-    )
+def _row_to_run_out(r: SqlRow | BackgroundRunRow) -> RunOut:
+    return RunOut.model_validate(r)
 
 
 @router.get("/runs", response_model=list[RunOut])
@@ -698,26 +696,12 @@ async def get_task_runs(request: Request, thread_id: str, task_id: str) -> list[
     return [_row_to_run_out(r) for r in rows]
 
 
-def _row_to_comment_out(r: dict[str, Any]) -> CommentOut:
-    return CommentOut(
-        id=r["id"],
-        task_id=r["task_id"],
-        user_id=r["user_id"],
-        body=r["body"],
-        created_at=r["created_at"],
-    )
+def _row_to_comment_out(r: SqlRow) -> CommentOut:
+    return CommentOut.model_validate(r)
 
 
-def _row_to_event_out(r: dict[str, Any]) -> TaskEventOut:
-    return TaskEventOut(
-        id=r["id"],
-        task_id=r["task_id"],
-        from_status=r.get("from_status"),
-        to_status=r["to_status"],
-        block_kind=r.get("block_kind"),
-        block_reason=r.get("block_reason"),
-        created_at=r["created_at"],
-    )
+def _row_to_event_out(r: SqlRow) -> TaskEventOut:
+    return TaskEventOut.model_validate(r)
 
 
 @router.post("/tasks/{task_id}/comments", response_model=CommentOut, status_code=201)

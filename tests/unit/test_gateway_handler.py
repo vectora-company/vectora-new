@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
+from starlette.middleware.base import _CachedRequest, _StreamingResponse
 
 # ---------------------------------------------------------------------------
 # GET /gateway/status — sem token salvo
@@ -21,7 +22,7 @@ class TestGatewayStatusSemToken:
         app = FastAPI()
 
         @app.middleware("http")
-        async def inject_user(request, call_next):
+        async def inject_user(request: _CachedRequest, call_next) -> _StreamingResponse:
             request.state.user = {"id": "u1"}
             return await call_next(request)
 
@@ -67,7 +68,7 @@ class TestGatewayStatusComToken:
         app = FastAPI()
 
         @app.middleware("http")
-        async def inject_user(request, call_next):
+        async def inject_user(request: _CachedRequest, call_next) -> _StreamingResponse:
             request.state.user = {"id": "u1"}
             return await call_next(request)
 
@@ -166,7 +167,7 @@ class TestGatewayRevoke:
         app = FastAPI()
 
         @app.middleware("http")
-        async def inject_user(request, call_next):
+        async def inject_user(request: _CachedRequest, call_next) -> _StreamingResponse:
             request.state.user = {"id": "u1"}
             return await call_next(request)
 

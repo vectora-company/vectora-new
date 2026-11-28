@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -19,7 +21,7 @@ from backend.scheduling import nats_sidecar as ns
 
 
 @pytest.fixture(autouse=True)
-def _sidecar_limpo(monkeypatch, tmp_path):
+def _sidecar_limpo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ns, "_proc", None)
     monkeypatch.setattr(ns, "_url", None)
     from backend.settings import settings
@@ -27,7 +29,7 @@ def _sidecar_limpo(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "vectora_home", tmp_path)
 
 
-def _registra(store_dir, pid: int, url: str = "") -> None:
+def _registra(store_dir: Path, pid: int, url: str = "") -> None:
     store_dir.mkdir(parents=True, exist_ok=True)
     payload: dict = {"pids": [pid]}
     if url:
@@ -36,7 +38,9 @@ def _registra(store_dir, pid: int, url: str = "") -> None:
 
 
 @pytest.mark.asyncio
-async def test_sidecar_vivo_e_respondendo_e_reusado_nunca_morto(monkeypatch, tmp_path):
+async def test_sidecar_vivo_e_respondendo_e_reusado_nunca_morto(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     store = tmp_path / "nats"
     _registra(store, 1144, "nats://127.0.0.1:4222")
 
@@ -52,7 +56,7 @@ async def test_sidecar_vivo_e_respondendo_e_reusado_nunca_morto(monkeypatch, tmp
     monkeypatch.setattr(ns, "_kill_pid", _registra_morte)
     chamou_spawn = {"sim": False}
 
-    async def _nunca_spawna(*_a, **_k):
+    async def _nunca_spawna(*_a, **_k) -> NoReturn:
         chamou_spawn["sim"] = True
         raise OSError("não deveria subir um segundo servidor no mesmo store")
 
@@ -68,7 +72,9 @@ async def test_sidecar_vivo_e_respondendo_e_reusado_nunca_morto(monkeypatch, tmp
 
 
 @pytest.mark.asyncio
-async def test_pid_vivo_mas_mudo_e_descartado(monkeypatch, tmp_path):
+async def test_pid_vivo_mas_mudo_e_descartado(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Erro/borda: processo no `tasklist` mas sem aceitar conexão (zumbi) — aí
     sim precisa ser descartado, senão o backend ficaria preso a um sidecar
     que nunca responde."""
@@ -86,7 +92,7 @@ async def test_pid_vivo_mas_mudo_e_descartado(monkeypatch, tmp_path):
 
     monkeypatch.setattr(ns, "_kill_pid", _registra_morte)
 
-    async def _spawn_falha(*_a, **_k):
+    async def _spawn_falha(*_a: str, **_k: bool | int) -> NoReturn:
         raise OSError("sem binário de verdade neste teste")
 
     monkeypatch.setattr(ns.asyncio, "create_subprocess_exec", _spawn_falha)
@@ -97,7 +103,9 @@ async def test_pid_vivo_mas_mudo_e_descartado(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_pid_file_legado_sem_url_nao_reusa_as_cegas(monkeypatch, tmp_path):
+async def test_pid_file_legado_sem_url_nao_reusa_as_cegas(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Erro/borda: pid file de versão antiga não tem `url`. Sem URL não dá pra
     confirmar que o processo é utilizável, então não pode ser reusado às
     cegas — cai no caminho de descarte."""
@@ -115,7 +123,7 @@ async def test_pid_file_legado_sem_url_nao_reusa_as_cegas(monkeypatch, tmp_path)
 
     monkeypatch.setattr(ns, "_kill_pid", _registra_morte)
 
-    async def _spawn_falha(*_a, **_k):
+    async def _spawn_falha(*_a: str, **_k: bool | int) -> NoReturn:
         raise OSError("sem binário de verdade neste teste")
 
     monkeypatch.setattr(ns.asyncio, "create_subprocess_exec", _spawn_falha)
@@ -124,7 +132,7 @@ async def test_pid_file_legado_sem_url_nao_reusa_as_cegas(monkeypatch, tmp_path)
     assert mortos == [777]
 
 
-def test_url_e_persistida_no_pid_file(tmp_path):
+def test_url_e_persistida_no_pid_file(tmp_path: Path) -> None:
     store = tmp_path / "nats"
     store.mkdir(parents=True)
     ns._write_pid_list(store, [42], url="nats://127.0.0.1:5555")
@@ -138,7 +146,7 @@ def test_url_e_persistida_no_pid_file(tmp_path):
     assert ns._read_registered_url(store) == ""
 
 
-def test_responds_nega_url_invalida_e_porta_fechada():
+def test_responds_nega_url_invalida_e_porta_fechada() -> None:
     assert ns._responds("") is False
     assert ns._responds("nats://sem-porta") is False
     # Porta certamente fechada no loopback.
@@ -146,7 +154,7 @@ def test_responds_nega_url_invalida_e_porta_fechada():
 
 
 @pytest.mark.asyncio
-async def test_consumo_para_quando_a_conexao_morre_de_vez():
+async def test_consumo_para_quando_a_conexao_morre_de_vez() -> None:
     """O bug do spam: com a conexão encerrada em definitivo, a subscription
     local nunca mais funciona. Sem o corte, o loop repetiria o mesmo warning
     a cada 2s para sempre."""
@@ -157,15 +165,15 @@ async def test_consumo_para_quando_a_conexao_morre_de_vez():
     class _SubMorta:
         tentativas = 0
 
-        async def fetch(self, *_a, **_k):
+        async def fetch(self, *_a: int, **_k: float) -> NoReturn:
             type(self).tentativas += 1
             raise RuntimeError("nats: connection closed")
 
     class _JS:
-        async def add_stream(self, **_k):
+        async def add_stream(self, **_k: list[str] | str) -> None:
             return None
 
-        async def pull_subscribe(self, *_a, **_k):
+        async def pull_subscribe(self, *_a: str, **_k: str):
             return _SubMorta()
 
     async def _connect():
@@ -174,7 +182,7 @@ async def test_consumo_para_quando_a_conexao_morre_de_vez():
     mq._connect = _connect
     mq._failed = True  # `_closed_cb` já rodou
 
-    async def _handler(_msg):
+    async def _handler(_msg) -> NoReturn:
         raise AssertionError("não deveria receber mensagem")
 
     # Sem o fix isto nunca retornaria; o timeout prova a saída do laço.

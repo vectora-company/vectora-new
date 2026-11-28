@@ -15,7 +15,6 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 AUDIT_FILE_ENV = "VECTORA_SANDBOX_AUDIT_FILE"
 #: Acima deste tamanho o arquivo é arquivado em `.1` e a cadeia continua.
@@ -37,6 +36,9 @@ EVENTS = frozenset(
 )
 
 
+from backend.vtypes.contracts import JsonObject, JsonValue, as_int
+
+
 def audit_file_path() -> Path:
     override = os.environ.get(AUDIT_FILE_ENV)
     if override:
@@ -46,7 +48,7 @@ def audit_file_path() -> Path:
     return Path(settings.vectora_home) / "sandbox-audit.jsonl"
 
 
-def redact(value: Any, key: str = "") -> Any:
+def redact(value: JsonValue | tuple[JsonValue, ...], key: str = "") -> JsonValue:
     """Cópia de `value` sem segredos: chaves sensíveis viram `***` e textos
     longos são cortados."""
     if any(part in key.lower() for part in _SENSITIVE):
@@ -60,7 +62,7 @@ def redact(value: Any, key: str = "") -> Any:
     return value
 
 
-def _digest(record: dict[str, Any]) -> str:
+def _digest(record: JsonObject) -> str:
     body = {name: record[name] for name in record if name != "hash"}
     canonical = json.dumps(
         body, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -90,15 +92,15 @@ class SandboxAuditLog:
         return self._path or audit_file_path()
 
     def append(
-        self, workspace_id: str, event: str, data: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+        self, workspace_id: str, event: str, data: JsonObject | None = None
+    ) -> JsonObject:
         if event not in EVENTS:
             raise ValueError(f"evento de auditoria desconhecido: {event!r}")
         with self._lock:
             path = self.path
             path.parent.mkdir(parents=True, exist_ok=True)
             seq, previous = self._tail_of(path)
-            record: dict[str, Any] = {
+            record: JsonObject = {
                 "seq": seq + 1,
                 "ts": datetime.now(UTC).isoformat(timespec="milliseconds"),
                 "workspace_id": workspace_id,
@@ -110,7 +112,7 @@ class SandboxAuditLog:
             line = json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n"
             with path.open("a", encoding="utf-8") as stream:
                 stream.write(line)
-            self._tail = (record["seq"], record["hash"])
+            self._tail = (seq + 1, str(record["hash"]))
             if path.stat().st_size > MAX_FILE_BYTES:
                 path.replace(path.with_suffix(path.suffix + ".1"))
             return record
@@ -120,12 +122,12 @@ class SandboxAuditLog:
             return self._tail
         self._tail = None
         last = _last_record(path) or _last_record(path.with_suffix(path.suffix + ".1"))
-        self._tail = (int(last["seq"]), str(last["hash"])) if last else (0, _GENESIS)
+        self._tail = (as_int(last["seq"]), str(last["hash"])) if last else (0, _GENESIS)
         return self._tail
 
     def read(
         self, *, workspace_id: str | None = None, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    ) -> list[JsonObject]:
         """Os registros mais recentes (do mais novo ao mais antigo)."""
         records = _read_all(self.path)
         if workspace_id is not None:
@@ -147,6 +149,8 @@ class SandboxAuditLog:
                 try:
                     record = json.loads(line)
                 except ValueError:
+                    record = None
+                if not isinstance(record, dict):
                     return VerifyResult(False, count, number, "linha ilegível")
                 if record.get("hash") != _digest(record):
                     return VerifyResult(False, count, number, "hash não confere")
@@ -154,13 +158,13 @@ class SandboxAuditLog:
                     return VerifyResult(False, count, number, "cadeia interrompida")
                 if expected_seq is not None and record.get("seq") != expected_seq:
                     return VerifyResult(False, count, number, "sequência interrompida")
-                previous = record["hash"]
-                expected_seq = int(record["seq"]) + 1
+                previous = str(record["hash"])
+                expected_seq = as_int(record["seq"]) + 1
                 count += 1
         return VerifyResult(True, count)
 
 
-def _last_record(path: Path) -> dict[str, Any] | None:
+def _last_record(path: Path) -> JsonObject | None:
     if not path.exists():
         return None
     last: str | None = None
@@ -177,25 +181,27 @@ def _last_record(path: Path) -> dict[str, Any] | None:
     return record if isinstance(record, dict) else None
 
 
-def _read_all(path: Path) -> list[dict[str, Any]]:
+def _read_all(path: Path) -> list[JsonObject]:
     if not path.exists():
         return []
-    records: list[dict[str, Any]] = []
+    records: list[JsonObject] = []
     with path.open(encoding="utf-8") as stream:
         for line in stream:
             if not line.strip():
                 continue
             try:
-                records.append(json.loads(line))
+                loaded = json.loads(line)
             except ValueError:
                 continue
+            if isinstance(loaded, dict):
+                records.append(loaded)
     return records
 
 
 audit_log = SandboxAuditLog()
 
 
-def record(workspace_id: str, event: str, data: dict[str, Any] | None = None) -> None:
+def record(workspace_id: str, event: str, data: JsonObject | None = None) -> None:
     """Registra sem nunca derrubar quem chamou: uma falha de disco na auditoria
     não pode impedir o jail de funcionar (o erro vai ao log)."""
     import logging

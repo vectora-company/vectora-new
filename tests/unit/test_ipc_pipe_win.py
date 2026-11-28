@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import gc
 import sys
+from typing import NoReturn
 
 import pytest
 
@@ -50,7 +51,7 @@ class _FakeWriteTransport(asyncio.WriteTransport):
 # ---------------------------------------------------------------------------
 
 
-def test_pipe_name_formato_e_pid():
+def test_pipe_name_formato_e_pid() -> None:
     import os
 
     name = pipe_name()
@@ -58,7 +59,7 @@ def test_pipe_name_formato_e_pid():
     assert str(os.getpid()) in name
 
 
-def test_pipe_env_var_constante():
+def test_pipe_env_var_constante() -> None:
     assert PIPE_ENV_VAR == "VECTORA_IPC_PIPE"
 
 
@@ -68,11 +69,13 @@ def test_pipe_env_var_constante():
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_buffers_antes_do_tcp(monkeypatch):
+async def test_pipe_side_buffers_antes_do_tcp(monkeypatch: pytest.MonkeyPatch) -> None:
     """Dados recebidos antes do TCP conectar ficam no _pending e são enviados depois."""
     tcp_transport = _FakeWriteTransport()
 
-    async def fake_create_conn(proto_factory, _host, _port):
+    async def fake_create_conn(
+        proto_factory, _host: str, _port: int
+    ) -> tuple[_FakeWriteTransport, _TCPSide]:
         proto = proto_factory()
         proto.connection_made(tcp_transport)
         return tcp_transport, proto
@@ -99,11 +102,15 @@ async def test_pipe_side_buffers_antes_do_tcp(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_encaminha_dados_apos_tcp(monkeypatch):
+async def test_pipe_side_encaminha_dados_apos_tcp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Dados recebidos após TCP conectar são repassados diretamente."""
     tcp_transport = _FakeWriteTransport()
 
-    async def fake_create_conn(proto_factory, _host, _port):
+    async def fake_create_conn(
+        proto_factory, _host: str, _port: int
+    ) -> tuple[_FakeWriteTransport, _TCPSide]:
         proto = proto_factory()
         proto.connection_made(tcp_transport)
         return tcp_transport, proto
@@ -125,12 +132,16 @@ async def test_pipe_side_encaminha_dados_apos_tcp(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_retries_until_uvicorn_accepts(monkeypatch):
+async def test_pipe_side_retries_until_uvicorn_accepts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A pipe aberta antes do uvicorn não perde a primeira requisição."""
     tcp_transport = _FakeWriteTransport()
     attempts = 0
 
-    async def eventually_connects(proto_factory, _host, _port):
+    async def eventually_connects(
+        proto_factory, _host: str, _port: int
+    ) -> tuple[_FakeWriteTransport, _TCPSide]:
         nonlocal attempts
         attempts += 1
         if attempts < 3:
@@ -155,10 +166,12 @@ async def test_pipe_side_retries_until_uvicorn_accepts(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_fecha_quando_tcp_falha(monkeypatch):
+async def test_pipe_side_fecha_quando_tcp_falha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Se o uvicorn TCP não estiver acessível, a pipe fecha graciosamente."""
 
-    async def fail_create_conn(proto_factory, host, port):
+    async def fail_create_conn(proto_factory, host: str, port: int) -> NoReturn:
         raise OSError("connection refused")
 
     loop = asyncio.get_event_loop()
@@ -177,11 +190,15 @@ async def test_pipe_side_fecha_quando_tcp_falha(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_fecha_tcp_ao_desconectar(monkeypatch):
+async def test_pipe_side_fecha_tcp_ao_desconectar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Quando a pipe fecha, a conexão TCP correspondente também é fechada."""
     tcp_transport = _FakeWriteTransport()
 
-    async def fake_create_conn(proto_factory, _host, _port):
+    async def fake_create_conn(
+        proto_factory, _host: str, _port: int
+    ) -> tuple[_FakeWriteTransport, _TCPSide]:
         proto = proto_factory()
         proto.connection_made(tcp_transport)
         return tcp_transport, proto
@@ -200,7 +217,7 @@ async def test_pipe_side_fecha_tcp_ao_desconectar(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_pipe_side_cancela_conexao_tcp_pendente_ao_desconectar():
+async def test_pipe_side_cancela_conexao_tcp_pendente_ao_desconectar() -> None:
     """Fechar a pipe não deixa uma tentativa TCP pendurada no loop."""
     pipe_side = _PipeSide("127.0.0.1", 9999)
     pending = asyncio.create_task(asyncio.sleep(60))
@@ -218,7 +235,7 @@ async def test_pipe_side_cancela_conexao_tcp_pendente_ao_desconectar():
 # ---------------------------------------------------------------------------
 
 
-def test_tcp_side_encaminha_para_pipe():
+def test_tcp_side_encaminha_para_pipe() -> None:
     pipe_transport = _FakeWriteTransport()
     pipe_side = _PipeSide.__new__(_PipeSide)
     pipe_side._transport = pipe_transport
@@ -231,7 +248,7 @@ def test_tcp_side_encaminha_para_pipe():
     assert b"HTTP/1.1 200 OK\r\n\r\n" in pipe_transport.written
 
 
-def test_tcp_side_nao_escreve_em_pipe_fechada():
+def test_tcp_side_nao_escreve_em_pipe_fechada() -> None:
     pipe_transport = _FakeWriteTransport()
     pipe_transport._closing = True
     pipe_side = _PipeSide.__new__(_PipeSide)
@@ -243,7 +260,7 @@ def test_tcp_side_nao_escreve_em_pipe_fechada():
     assert pipe_transport.written == []
 
 
-def test_tcp_side_fecha_pipe_ao_perder_conexao():
+def test_tcp_side_fecha_pipe_ao_perder_conexao() -> None:
     pipe_transport = _FakeWriteTransport()
     pipe_side = _PipeSide.__new__(_PipeSide)
     pipe_side._transport = pipe_transport
@@ -261,7 +278,7 @@ def test_tcp_side_fecha_pipe_ao_perder_conexao():
 
 @pytest.mark.skipif(sys.platform != "win32", reason="named pipe só no Windows")
 @pytest.mark.asyncio
-async def test_serve_pipe_inicia_e_cancela():
+async def test_serve_pipe_inicia_e_cancela() -> None:
     """serve_pipe inicia sem erros e pode ser cancelado graciosamente."""
     from backend.services.ipc_pipe_win import serve_pipe
 
@@ -286,7 +303,7 @@ async def test_serve_pipe_inicia_e_cancela():
 
 @pytest.mark.skipif(sys.platform != "win32", reason="named pipe só no Windows")
 @pytest.mark.asyncio
-async def test_serve_pipe_proxies_http():
+async def test_serve_pipe_proxies_http() -> None:
     """Conexão à named pipe recebe resposta do handler TCP real."""
     from backend.services.ipc_pipe_win import serve_pipe
 
@@ -317,12 +334,8 @@ async def test_serve_pipe_proxies_http():
         def data_received(self, data: bytes) -> None:
             received.append(data)
 
-    from typing import Any
-
-    _loop_proactor: Any = (
-        loop  # ProactorEventLoop only — não declarado em AbstractEventLoop
-    )
-    _create_pipe = _loop_proactor.create_pipe_connection
+    # Só o ProactorEventLoop tem este método; AbstractEventLoop não o declara.
+    _create_pipe = getattr(loop, "create_pipe_connection")  # noqa: B009
     _dummy_tr, _ = await _create_pipe(asyncio.Protocol, _pipe)
     transport2, _ = await _create_pipe(_ClientProto, _pipe)
 

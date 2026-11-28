@@ -10,7 +10,11 @@ par de erro).
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from pathlib import Path
+
 import pytest
+from aiosqlite import Connection
 
 from backend.config import collections as collections_mod
 from backend.config import registry as registry_mod
@@ -22,7 +26,7 @@ from backend.config.collections import (
 
 
 @pytest.fixture  # type: ignore[misc]
-def clean_registry():
+def clean_registry() -> Iterator[None]:
     """Isola os registries globais (escalar e coleção) entre testes."""
     scalar = dict(registry_mod._REGISTRY)
     collection = dict(collections_mod._COLLECTION_REGISTRY)
@@ -41,7 +45,7 @@ def clean_registry():
 
 
 class TestCollectionRegistry:
-    def test_registra_e_recupera(self, clean_registry):
+    def test_registra_e_recupera(self, clean_registry: None) -> None:
         from backend.config.collections import collection_field
 
         collection_field(
@@ -55,7 +59,7 @@ class TestCollectionRegistry:
         assert field.category == "provider_routing"
         assert isinstance(field, CollectionSettingField)
 
-    def test_chave_duplicada_levanta_erro(self, clean_registry):
+    def test_chave_duplicada_levanta_erro(self, clean_registry: None) -> None:
         from backend.config.collections import collection_field
 
         collection_field(
@@ -72,7 +76,7 @@ class TestCollectionRegistry:
                 adapter=RegisteredModelsTableAdapter("ollama_registered_models"),
             )
 
-    def test_lista_por_categoria(self, clean_registry):
+    def test_lista_por_categoria(self, clean_registry: None) -> None:
         from backend.config.collections import collection_field
 
         collection_field(
@@ -103,7 +107,9 @@ class TestCollectionRegistry:
 
 class TestRegisteredModelsTableAdapter:
     @pytest.mark.asyncio
-    async def test_add_list_remove(self, tmp_path, monkeypatch):
+    async def test_add_list_remove(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Usa DB isolado em tmp_path via monkeypatch do resolutor de DB.
         import sqlite3
 
@@ -113,7 +119,7 @@ class TestRegisteredModelsTableAdapter:
 
         db_path = tmp_path / "provider.db"
 
-        async def _fake_get_db():
+        async def _fake_get_db() -> Connection:
             return await aiosqlite.connect(db_path)
 
         monkeypatch.setattr(
@@ -129,16 +135,18 @@ class TestRegisteredModelsTableAdapter:
         assert len(items) == 1
         assert items[0]["tag"] == "llama3:8b"
 
-        await adapter.remove(model["id"])
+        await adapter.remove(str(model["id"]))
         assert await adapter.list_items() == []
 
     @pytest.mark.asyncio
-    async def test_add_tag_duplicada_levanta_erro(self, tmp_path, monkeypatch):
+    async def test_add_tag_duplicada_levanta_erro(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import aiosqlite
 
         db_path = tmp_path / "provider.db"
 
-        async def _fake_get_db():
+        async def _fake_get_db() -> Connection:
             return await aiosqlite.connect(db_path)
 
         monkeypatch.setattr(
@@ -165,7 +173,9 @@ class TestUserRowAdapter:
     """
 
     @pytest.mark.asyncio
-    async def test_get_set_delete_por_usuario(self, monkeypatch):
+    async def test_get_set_delete_por_usuario(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.rbac.auth as auth_svc
         from backend.config.adapters import UserRowAdapter
 
@@ -194,7 +204,9 @@ class TestUserRowAdapter:
         assert await adapter.get("u1") is None
 
     @pytest.mark.asyncio
-    async def test_user_local_delega_ao_rbac_auth(self, monkeypatch):
+    async def test_user_local_delega_ao_rbac_auth(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.rbac.auth as auth_svc
         from backend.config.adapters import UserRowAdapter
 

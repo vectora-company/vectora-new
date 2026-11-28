@@ -17,6 +17,8 @@ from backend.vtypes.message import ContentBlock
 
 if TYPE_CHECKING:
     from backend.tools.context import ToolContext
+    from backend.vtypes.contracts import JsonValue
+    from backend.vtypes.services import SavedToolImage
 
 #: Chave do JSON do resultado que pede o envio da imagem ao modelo.
 MODEL_IMAGE_KEY = "model_image"
@@ -24,7 +26,7 @@ MODEL_IMAGE_KEY = "model_image"
 
 def save_tool_image(
     ctx: ToolContext, payload: bytes, *, name: str
-) -> dict[str, Any] | None:
+) -> SavedToolImage | None:
     """Salva a imagem e devolve os campos do resultado, ou ``None`` se falhar."""
     from backend.services.chat_attachments import persist_media
 
@@ -45,7 +47,7 @@ def save_tool_image(
         "url": f"/threads/{ctx.thread_id}/assets/{asset_id}",
         "path": str(path),
         "bytes": len(payload),
-        MODEL_IMAGE_KEY: {
+        "model_image": {
             "asset_id": asset_id,
             "name": name,
             "mime_type": mime_type,
@@ -58,13 +60,16 @@ def save_tool_image(
 MODEL_IMAGES_KEY = "model_images"
 
 
-def _image_block(image: object) -> ContentBlock | None:
-    if not isinstance(image, dict) or not isinstance(image.get("asset_id"), str):
+def _image_block(image: JsonValue) -> ContentBlock | None:
+    if not isinstance(image, dict):
+        return None
+    asset_id = image.get("asset_id")
+    if not isinstance(asset_id, str):
         return None
     size = image.get("size_bytes")
     return ContentBlock(
         kind="image_url",
-        asset_id=image["asset_id"],
+        asset_id=asset_id,
         attachment_name=str(image.get("name") or "imagem.png"),
         attachment_mime_type=str(image.get("mime_type") or "image/png"),
         attachment_size_bytes=size if isinstance(size, int) else None,

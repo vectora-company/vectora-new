@@ -15,6 +15,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from backend.vtypes.contracts import JsonObject
+
 # ---------------------------------------------------------------------------
 # VectoraContext
 # ---------------------------------------------------------------------------
@@ -22,15 +26,15 @@ from unittest.mock import MagicMock, patch
 
 class TestVectoraContext:
     def test_decision_preferences_come_from_the_authenticated_user_store(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Runtime prefs are trusted; caller config cannot forge a decision model opt-in."""
         from backend.vtypes.context import ctx_from_config
 
         class Preferences:
             def get_frontend_prefs(
                 self, user_id: str, workspace_id: str | None = None
-            ) -> dict[str, object]:
+            ) -> JsonObject:
                 assert user_id == "alice"
                 assert workspace_id is None
                 return {
@@ -57,15 +61,15 @@ class TestVectoraContext:
         }
 
     def test_decision_preferences_fail_closed_with_shared_empty_surface_default(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Store failures must match the frontend's disabled, empty defaults."""
         from backend.vtypes.context import ctx_from_config
 
         class UnavailablePreferences:
             def get_frontend_prefs(
                 self, user_id: str, workspace_id: str | None = None
-            ) -> dict[str, object]:
+            ) -> JsonObject:
                 raise OSError("preferences database unavailable")
 
         monkeypatch.setattr(
@@ -80,7 +84,7 @@ class TestVectoraContext:
             "surfaces": {},
         }
 
-    def test_ctx_from_config_full(self):
+    def test_ctx_from_config_full(self) -> None:
         """Todos os campos são preenchidos corretamente."""
         from backend.vtypes.context import ctx_from_config
 
@@ -104,7 +108,7 @@ class TestVectoraContext:
         assert ctx.model == "claude-3-5-sonnet"
         assert ctx.thread_id == "t1"
 
-    def test_ctx_from_config_empty(self):
+    def test_ctx_from_config_empty(self) -> None:
         """Valores padrão quando config é None."""
         from backend.vtypes.context import ctx_from_config
 
@@ -113,7 +117,7 @@ class TestVectoraContext:
         assert ctx.workspace_id == ""
         assert ctx.permission_mode == "ask"
 
-    def test_ctx_from_config_partial(self):
+    def test_ctx_from_config_partial(self) -> None:
         """Campos ausentes recebem defaults."""
         from backend.vtypes.context import ctx_from_config
 
@@ -122,7 +126,7 @@ class TestVectoraContext:
         assert ctx.permission_mode == "ask"
         assert ctx.locale == ""
 
-    def test_ctx_locale_fallback(self):
+    def test_ctx_locale_fallback(self) -> None:
         """``locale`` aceita ``language`` como alias."""
         from backend.vtypes.context import ctx_from_config
 
@@ -136,7 +140,7 @@ class TestVectoraContext:
 
 
 class TestFilesystemPermission:
-    def test_deny_env_file(self):
+    def test_deny_env_file(self) -> None:
         """Arquivos .env devem ser DENY para qualquer operação."""
         from backend.rbac.permissions import FS_PERMISSION
 
@@ -144,27 +148,27 @@ class TestFilesystemPermission:
         assert FS_PERMISSION.check(".env", "write") == "deny"
         assert FS_PERMISSION.check("project/.env.local", "read") == "deny"
 
-    def test_deny_ssh_key(self):
+    def test_deny_ssh_key(self) -> None:
         """Chaves SSH privadas devem ser DENY."""
         from backend.rbac.permissions import FS_PERMISSION
 
         assert FS_PERMISSION.check("id_rsa", "read") == "deny"
         assert FS_PERMISSION.check("/home/user/.ssh/id_ed25519", "read") == "deny"
 
-    def test_allow_workspace(self):
+    def test_allow_workspace(self) -> None:
         """Paths sob /workspace/ devem ser ALLOW."""
         from backend.rbac.permissions import FS_PERMISSION
 
         assert FS_PERMISSION.check("/workspace/src/main.py", "read") == "allow"
         assert FS_PERMISSION.check("/workspace/package.json", "write") == "allow"
 
-    def test_allow_memories_read(self):
+    def test_allow_memories_read(self) -> None:
         """Leitura de memórias deve ser ALLOW."""
         from backend.rbac.permissions import FS_PERMISSION
 
         assert FS_PERMISSION.check("/memories/notes.md", "read") == "allow"
 
-    def test_deny_skills_write(self):
+    def test_deny_skills_write(self) -> None:
         """Escrita em skills deve ser DENY."""
         from backend.rbac.permissions import FS_PERMISSION
 
@@ -172,7 +176,7 @@ class TestFilesystemPermission:
             FS_PERMISSION.check("/memories/skills/my-skill/SKILL.md", "write") == "deny"
         )
 
-    def test_allow_skills_read(self):
+    def test_allow_skills_read(self) -> None:
         """Leitura de skills deve ser ALLOW."""
         from backend.rbac.permissions import FS_PERMISSION
 
@@ -180,28 +184,28 @@ class TestFilesystemPermission:
             FS_PERMISSION.check("/memories/skills/my-skill/SKILL.md", "read") == "allow"
         )
 
-    def test_interrupt_external_write(self):
+    def test_interrupt_external_write(self) -> None:
         """Escrita fora do workspace deve ser INTERRUPT."""
         from backend.rbac.permissions import FS_PERMISSION
 
         assert FS_PERMISSION.check("/tmp/something.txt", "write") == "interrupt"
         assert FS_PERMISSION.check("/home/user/notes.txt", "write") == "interrupt"
 
-    def test_allow_external_read(self):
+    def test_allow_external_read(self) -> None:
         """Leitura fora do workspace deve ser ALLOW (sem interrupt)."""
         from backend.rbac.permissions import FS_PERMISSION
 
         result = FS_PERMISSION.check("/tmp/something.txt", "read")
         assert result == "allow"
 
-    def test_is_allowed_helper(self):
+    def test_is_allowed_helper(self) -> None:
         """Atalho is_allowed() funciona corretamente."""
         from backend.rbac.permissions import FS_PERMISSION
 
         assert FS_PERMISSION.is_allowed("/workspace/file.py", "read") is True
         assert FS_PERMISSION.is_allowed(".env", "read") is False
 
-    def test_requires_interrupt_helper(self):
+    def test_requires_interrupt_helper(self) -> None:
         """requires_interrupt() detecta ops que precisam de aprovação."""
         from backend.rbac.permissions import FS_PERMISSION
 
@@ -215,7 +219,7 @@ class TestFilesystemPermission:
 
 
 class TestMemoryToolsNamespace:
-    def test_user_id_from_ctx_authenticated(self):
+    def test_user_id_from_ctx_authenticated(self) -> None:
         """user_id autenticado deve ser retornado limpo."""
         from backend.tools.context import ToolContext
         from backend.tools.memory import _user_id_from_ctx
@@ -223,7 +227,7 @@ class TestMemoryToolsNamespace:
         ctx = ToolContext(user_id="abc123")
         assert _user_id_from_ctx(ctx) == "abc123"
 
-    def test_user_id_from_ctx_workspace(self):
+    def test_user_id_from_ctx_workspace(self) -> None:
         """workspace_id usado quando não há user_id."""
         from backend.tools.context import ToolContext
         from backend.tools.memory import _user_id_from_ctx
@@ -231,7 +235,7 @@ class TestMemoryToolsNamespace:
         ctx = ToolContext(workspace_id="ws1")
         assert _user_id_from_ctx(ctx) == "workspace_ws1"
 
-    def test_user_id_from_ctx_thread_fallback(self):
+    def test_user_id_from_ctx_thread_fallback(self) -> None:
         """thread_id como fallback."""
         from backend.tools.context import ToolContext
         from backend.tools.memory import _user_id_from_ctx
@@ -239,14 +243,14 @@ class TestMemoryToolsNamespace:
         ctx = ToolContext(thread_id="t42")
         assert _user_id_from_ctx(ctx) == "session_t42"
 
-    def test_user_id_from_ctx_bare(self):
+    def test_user_id_from_ctx_bare(self) -> None:
         """ctx sem nenhum identificador retorna 'local'."""
         from backend.tools.context import ToolContext
         from backend.tools.memory import _user_id_from_ctx
 
         assert _user_id_from_ctx(ToolContext()) == "local"
 
-    def test_memory_namespace_structure(self):
+    def test_memory_namespace_structure(self) -> None:
         """Namespace deve ser tupla 3-uple."""
         from backend.tools.context import ToolContext
         from backend.tools.memory import _memory_namespace
@@ -264,7 +268,7 @@ class TestMemoryToolsNamespace:
 
 
 class TestBuildStore:
-    async def test_build_store_returns_vectora_store(self):
+    async def test_build_store_returns_vectora_store(self) -> None:
         """build_store() (async) retorna VectoraStore (nativo, aiosqlite)
         persistente."""
         import contextlib
@@ -279,7 +283,7 @@ class TestBuildStore:
         with contextlib.suppress(Exception):
             await store._pool.close()
 
-    def test_build_store_no_index_when_no_key(self):
+    def test_build_store_no_index_when_no_key(self) -> None:
         """Sem nenhum provider de embedding configurado, build_store()
         retorna store sem indexação — `_build_index` delega a
         `_build_lc_embeddings()` (fallback Cohere↔Voyage↔Ollama↔OpenRouter)."""
@@ -289,7 +293,7 @@ class TestBuildStore:
             result = _build_index(None)
         assert result is None
 
-    async def test_build_store_index_uses_lc_embeddings_fallback(self):
+    async def test_build_store_index_uses_lc_embeddings_fallback(self) -> None:
         """Com um provider resolvido por `_build_lc_embeddings()`, o
         IndexConfig usa esse client (fallback multi-provider) em vez de
         `CohereEmbeddings` hardcoded."""
@@ -317,7 +321,7 @@ class TestBuildStore:
 
 
 class TestAgentsMdPaths:
-    def test_returns_none_when_no_file(self, tmp_path):
+    def test_returns_none_when_no_file(self, tmp_path: Path) -> None:
         """Sem AGENTS.md retorna None."""
         from backend.services.agent_factory import _agents_md_paths
 
@@ -330,7 +334,7 @@ class TestAgentsMdPaths:
             result = _agents_md_paths()
         assert result is None
 
-    def test_returns_list_when_file_exists(self):
+    def test_returns_list_when_file_exists(self) -> None:
         """Com AGENTS.md existente retorna lista com o path."""
         from backend.services.agent_factory import _agents_md_paths
 

@@ -7,23 +7,34 @@ conteúdo de mensagem e convida o bot pro servidor dele.
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.services.connect.runner import process_incoming
 from backend.services.gateway.messaging import IncomingMessage
 
+if TYPE_CHECKING:
+    from discord import Client, Message
+
+    from backend.vtypes.connect import DiscordIncoming
+
 logger = logging.getLogger(__name__)
 
 PLATFORM = "discord"
+
+#: Task de conexão de cada client em execução.
+_client_tasks: dict[Client, asyncio.Task[None]] = {}
 
 #: Import dentro das funções — `discord.py` abre um pool aiohttp no import e
 #: o backend sobe sem tocar em Discord na maioria das instalações.
 DISCORD_AVAILABLE = importlib.util.find_spec("discord") is not None
 
 
-def to_incoming(message: Any, *, bot_user_id: Any = None) -> IncomingMessage | None:
+def to_incoming(
+    message: DiscordIncoming, *, bot_user_id: int | None = None
+) -> IncomingMessage | None:
     """Traduz um `discord.Message` pro formato comum.
 
     `None` quando é mensagem do próprio bot (senão ele responderia a si mesmo
@@ -49,7 +60,7 @@ def to_incoming(message: Any, *, bot_user_id: Any = None) -> IncomingMessage | N
     )
 
 
-async def handle_message(client: Any, message: Any) -> None:
+async def handle_message(client: Client, message: Message) -> None:
     """Defensivo: exceção aqui mataria o handler do `discord.py` e a conexão
     ficaria viva mas surda."""
     try:
@@ -63,7 +74,7 @@ async def handle_message(client: Any, message: Any) -> None:
         logger.exception("connect.discord: falha ao tratar mensagem")
 
 
-def build_client() -> Any:
+def build_client() -> Client:
     """Client com o intent de conteúdo de mensagem ligado — sem ele o
     `message.content` chega vazio e o bot parece mudo sem erro nenhum."""
     if not DISCORD_AVAILABLE:
@@ -76,30 +87,28 @@ def build_client() -> Any:
     client = discord.Client(intents=intents)
 
     @client.event
-    async def on_message(message: Any) -> None:  # pragma: no cover - callback
+    async def on_message(message: Message) -> None:  # pragma: no cover - callback
         await handle_message(client, message)
 
     return client
 
 
-async def start(token: str) -> Any:
+async def start(token: str) -> Client:
     """Conecta o client como task asyncio e devolve para o manager parar."""
-    import asyncio
-
     client = build_client()
     task = asyncio.create_task(client.start(token))
-    client._vectora_task = task
+    _client_tasks[client] = task
     logger.info("connect.discord: cliente iniciado")
     return client
 
 
-async def stop(client: Any) -> None:
+async def stop(client: Client | None) -> None:
     """Parada idempotente — client já fechado não levanta."""
     if client is None:
         return
     try:
         await client.close()
-        task = getattr(client, "_vectora_task", None)
+        task = _client_tasks.pop(client, None)
         if task is not None:
             task.cancel()
     except Exception:

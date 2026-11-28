@@ -17,11 +17,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from backend.vtypes.api import ProviderUsage, ProviderUsageList
+from backend.vtypes.contracts import JsonObject, JsonValue
+from backend.vtypes.services import UsageInsight
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+
+    type UsageQuery = Callable[[], Coroutine[None, None, ProviderUsage]]
 
 logger = logging.getLogger(__name__)
 
@@ -45,23 +54,23 @@ def _require_user(request: Request) -> str:
 #: O popover abre a cada mensagem; sem cache seria uma chamada por abertura.
 _CACHE_TTL_S = 180.0
 
-_cache: dict[str, tuple[float, dict]] = {}
+_cache: dict[str, tuple[float, ProviderUsage]] = {}
 
 
 def clear_usage_cache() -> None:
     _cache.clear()
 
 
-def _num(valor: Any) -> float | None:
+def _num(valor: JsonValue) -> float | None:
     """Converte pra float, ou `None` quando o provider não mandou o campo.
 
     Diferente de `0.0`: ausência de dado não é consumo zero.
     """
-    if valor is None:
+    if not isinstance(valor, int | float | str):
         return None
     try:
         return float(valor)
-    except (TypeError, ValueError):
+    except ValueError:
         return None
 
 
@@ -79,7 +88,7 @@ def _entrada(
     plan: str | None = None,
     unit: str = "credits",
     error: str | None = None,
-) -> dict[str, Any]:
+) -> ProviderUsage:
     return {
         "provider": provider,
         "label": label,
@@ -92,7 +101,7 @@ def _entrada(
     }
 
 
-async def _tavily_usage() -> dict[str, Any]:
+async def _tavily_usage() -> ProviderUsage:
     from backend.settings import settings
     from backend.tools.tavily.client import TavilyClient
 
@@ -102,8 +111,13 @@ async def _tavily_usage() -> dict[str, Any]:
     finally:
         await client.aclose()
 
-    key = bruto.get("key") or {}
-    conta = bruto.get("account") or {}
+    key = bruto.get("key")
+    conta = bruto.get("account")
+    if not isinstance(key, dict):
+        key = {}
+    if not isinstance(conta, dict):
+        conta = {}
+    plano = conta.get("current_plan")
     usado = _num(key.get("usage"))
     teto = _num(key.get("limit"))
     return _entrada(
@@ -112,11 +126,11 @@ async def _tavily_usage() -> dict[str, Any]:
         used=usado,
         limit=teto,
         remaining=_menos(teto, usado),
-        plan=conta.get("current_plan"),
+        plan=plano if isinstance(plano, str) else None,
     )
 
 
-async def _openrouter_usage() -> dict[str, Any]:
+async def _openrouter_usage() -> ProviderUsage:
     from backend.llm.openrouter.client import OpenRouterClient
     from backend.settings import settings
 
@@ -129,30 +143,35 @@ async def _openrouter_usage() -> dict[str, Any]:
     finally:
         await client.aclose()
 
-    dados = creditos.get("data") or creditos
+    dados = _data_section(creditos)
     total = _num(dados.get("total_credits"))
     usado = _num(dados.get("total_usage"))
-    limites = chave.get("data") or chave
+    limites = _data_section(chave)
 
-    return _entrada(
+    entrada = _entrada(
         "openrouter",
         "OpenRouter",
         used=usado,
         limit=total,
         remaining=_menos(total, usado),
         unit="usd",
-    ) | {
-        # Limites da própria chave, distintos do saldo da conta: uma key pode
-        # ter teto menor que o crédito disponível.
-        "key_limit": _num(limites.get("limit")),
-        "key_remaining": _num(limites.get("limit_remaining")),
-    }
+    )
+    # Limites da própria chave, distintos do saldo da conta: uma key pode ter
+    # teto menor que o crédito disponível.
+    entrada["key_limit"] = _num(limites.get("limit"))
+    entrada["key_remaining"] = _num(limites.get("limit_remaining"))
+    return entrada
 
 
-def _configurados() -> list[tuple[str, str, Any]]:
+def _data_section(payload: JsonObject) -> JsonObject:
+    data = payload.get("data")
+    return data if isinstance(data, dict) and data else payload
+
+
+def _configurados() -> list[tuple[str, str, UsageQuery]]:
     from backend.settings import settings
 
-    ativos: list[tuple[str, str, Any]] = []
+    ativos: list[tuple[str, str, UsageQuery]] = []
     if (settings.tavily_api_key or "").strip():
         ativos.append(("tavily", "Tavily", _tavily_usage))
     if (settings.openrouter_api_key or "").strip():
@@ -160,7 +179,7 @@ def _configurados() -> list[tuple[str, str, Any]]:
     return ativos
 
 
-async def collect_provider_usage() -> list[dict[str, Any]]:
+async def collect_provider_usage() -> list[ProviderUsage]:
     """Consulta em paralelo o consumo de cada provider configurado.
 
     Resultado bom vai pro cache; falha **não** vai — cachear prenderia o
@@ -171,8 +190,8 @@ async def collect_provider_usage() -> list[dict[str, Any]]:
         return []
 
     agora = time.monotonic()
-    saida: list[dict[str, Any]] = []
-    a_consultar: list[tuple[str, str, Any]] = []
+    saida: list[ProviderUsage] = []
+    a_consultar: list[tuple[str, str, UsageQuery]] = []
 
     for nome, label, fn in ativos:
         em_cache = _cache.get(nome)
@@ -204,7 +223,7 @@ async def collect_provider_usage() -> list[dict[str, Any]]:
 
 
 @router.get("/providers")
-async def get_provider_usage() -> dict[str, Any]:
+async def get_provider_usage() -> ProviderUsageList:
     """Consumo por provider — alimenta o medidor da appbar."""
     return {"providers": await collect_provider_usage()}
 
@@ -224,7 +243,7 @@ async def get_media_quota(
 @router.get("/insights/weekly")
 async def get_weekly_insight(
     request: Request, weeks: Annotated[int, Query()] = 1
-) -> dict[str, Any]:
+) -> UsageInsight:
     """Retorna somente agregados técnicos da conta autenticada."""
     from backend.api.handlers.threads import _user_id
     from backend.services.usage_insights import get_usage_database, usage_insight_store

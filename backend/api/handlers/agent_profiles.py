@@ -12,9 +12,10 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from backend.services.agent_profiles import AgentProfile
+from backend.vtypes.services import ProfileChanges
 
 router = APIRouter(prefix="/agent-profiles", tags=["agent-profiles"])
 
@@ -133,9 +134,9 @@ async def patch_agent_profile(
 
     await _require_own_profile(profile_id, _user_id(request))
 
-    changes: dict[str, Any] = {
-        k: v for k, v in body.model_dump().items() if v is not None
-    }
+    changes = TypeAdapter(ProfileChanges).validate_python(
+        body.model_dump(exclude_none=True)
+    )
     try:
         updated = await update_profile(profile_id, **changes)
     except ValueError as exc:

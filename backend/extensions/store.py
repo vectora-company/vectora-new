@@ -12,9 +12,12 @@ import os
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.extensions.models import ExtensionRecord
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 _MAX_AUDIT_READ = 500
 
@@ -80,10 +83,10 @@ class ExtensionStore:
 
     def read_audit(
         self, extension_id: str | None = None, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    ) -> list[JsonObject]:
         if not self._audit.exists():
             return []
-        entries: list[dict[str, Any]] = []
+        entries: list[JsonObject] = []
         for line in self._audit.read_text(encoding="utf-8").splitlines():
             try:
                 entry = json.loads(line)

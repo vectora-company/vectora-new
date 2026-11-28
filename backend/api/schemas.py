@@ -12,7 +12,7 @@ import base64
 import binascii
 import uuid
 from enum import StrEnum
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -22,13 +22,17 @@ from backend.services.media_types import (
     effective_media_info,
     max_bytes_for,
 )
-from backend.vtypes.contracts import ToolOption
+from backend.vtypes.contracts import JsonObject, ToolOption
 from backend.vtypes.history import HistoryPart, HistoryVerification
 from backend.vtypes.permission import PermissionMode
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
+
+
+if TYPE_CHECKING:
+    from backend.rbac.auth import User
 
 
 class ChatConfig(BaseModel):
@@ -662,7 +666,7 @@ class HistoryMessage(BaseModel):
     # quando o backend não conseguiu resolver (thread sem checkpointer, erro
     # de leitura do histórico) — ver ChatConfig.fork_from_checkpoint_id.
     checkpoint_id: str = ""
-    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    attachments: list[JsonObject] = Field(default_factory=list)
     edited_files: list[TurnFileChange] = Field(default_factory=list)
     # Raciocínio e tool calls (com resultado resumido) desta mensagem, na ordem
     # em que o stream os mostrou; o recarregamento reconstrói a mesma tela.
@@ -912,7 +916,7 @@ class UserResponse(BaseModel):
     token_expires_at: int | None = None
 
     @classmethod
-    def from_user(cls, user: Any, token_expires_at: int | None = None) -> UserResponse:
+    def from_user(cls, user: User, token_expires_at: int | None = None) -> UserResponse:
         """Executa a operação from user."""
         return cls(
             id=user.id,
@@ -970,7 +974,7 @@ class AuditEntry(BaseModel):
     timestamp: str
     ip: str = ""
     success: bool = True
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: JsonObject = Field(default_factory=dict)
 
 
 class EnvOverrideRequest(BaseModel):

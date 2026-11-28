@@ -15,6 +15,7 @@ import pytest
 from backend.llm.openrouter.chat_client import OpenRouterChatClient
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -48,7 +49,7 @@ def _ok_response(text: str = "Olá", **extra) -> dict:
 
 
 class TestAgenerate:
-    async def test_prompt_simples_devolve_conteudo(self):
+    async def test_prompt_simples_devolve_conteudo(self) -> None:
         def handler(_req):
             return httpx.Response(200, json=_ok_response("Olá do OpenRouter"))
 
@@ -59,7 +60,7 @@ class TestAgenerate:
         assert resultado.text() == "Olá do OpenRouter"
         assert resultado.role == MessageRole.ASSISTANT
 
-    async def test_resposta_sem_choices_vira_erro_tipado(self):
+    async def test_resposta_sem_choices_vira_erro_tipado(self) -> None:
         def handler(_req):
             return httpx.Response(200, json={"id": "gen_1"})
 
@@ -68,7 +69,7 @@ class TestAgenerate:
 
 
 class TestConversaoDeMensagens:
-    async def test_projecao_de_prompt_para_modelo_pequeno_preserva_nome(self):
+    async def test_projecao_de_prompt_para_modelo_pequeno_preserva_nome(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -90,7 +91,7 @@ class TestConversaoDeMensagens:
         assert "Nome: Vectora" in system
         assert len(system) < 1_000
 
-    async def test_modelo_pequeno_aplica_piso_de_temperatura(self):
+    async def test_modelo_pequeno_aplica_piso_de_temperatura(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -104,7 +105,7 @@ class TestConversaoDeMensagens:
 
         assert capturado["temperature"] == 0.2
 
-    async def test_roles_traduzidos_e_tool_message_carrega_tool_call_id(self):
+    async def test_roles_traduzidos_e_tool_message_carrega_tool_call_id(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -128,7 +129,7 @@ class TestConversaoDeMensagens:
         assert [m["role"] for m in mensagens] == ["system", "user", "assistant", "tool"]
         assert mensagens[-1]["tool_call_id"] == "call_1"
 
-    async def test_assistant_com_tool_calls_serializa_arguments_como_json(self):
+    async def test_assistant_com_tool_calls_serializa_arguments_como_json(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -149,7 +150,7 @@ class TestConversaoDeMensagens:
         assert enviado["tool_calls"][0]["function"]["name"] == "somar"
         assert json.loads(enviado["tool_calls"][0]["function"]["arguments"]) == {"a": 1}
 
-    async def test_mensagem_de_role_desconhecido_falha(self):
+    async def test_mensagem_de_role_desconhecido_falha(self) -> None:
         def handler(_req):
             return httpx.Response(200, json=_ok_response())
 
@@ -159,7 +160,7 @@ class TestConversaoDeMensagens:
         with pytest.raises(ValueError, match="extraterrestre"):
             await _client(handler).agenerate([estranha])
 
-    async def test_bloco_de_imagem_nao_e_descartado(self):
+    async def test_bloco_de_imagem_nao_e_descartado(self) -> None:
         """Regressão: `_to_openrouter_message` usava `msg.text()`, que só
         concatena blocos `text` — um anexo de imagem desaparecia do payload
         sem erro nem log."""
@@ -188,7 +189,7 @@ class TestConversaoDeMensagens:
 
 
 class TestToolCalling:
-    async def test_tool_spec_vira_schema_openai_no_payload(self):
+    async def test_tool_spec_vira_schema_openai_no_payload(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -214,7 +215,7 @@ class TestToolCalling:
 
         assert capturado["tools"][0]["function"]["name"] == "buscar"
 
-    async def test_tool_call_nao_streaming_volta_montada(self):
+    async def test_tool_call_nao_streaming_volta_montada(self) -> None:
         def handler(_req):
             return httpx.Response(
                 200,
@@ -250,7 +251,7 @@ class TestToolCalling:
         ]
         assert resultado.finish_reason == "tool_calls"
 
-    async def test_arguments_invalido_nao_derruba_a_resposta(self):
+    async def test_arguments_invalido_nao_derruba_a_resposta(self) -> None:
         def handler(_req):
             return httpx.Response(
                 200,
@@ -286,7 +287,7 @@ class TestToolCalling:
 
 
 class TestStreaming:
-    async def test_chunks_de_texto_saem_na_ordem(self):
+    async def test_chunks_de_texto_saem_na_ordem(self) -> None:
         body = (
             b'data: {"choices":[{"delta":{"content":"Oi"}}]}\n\n'
             b'data: {"choices":[{"delta":{"content":" mundo"}}]}\n\n'
@@ -308,7 +309,7 @@ class TestStreaming:
 
         assert text == "Oi mundo"
 
-    async def test_reasoning_nao_entra_no_delta_text(self):
+    async def test_reasoning_nao_entra_no_delta_text(self) -> None:
         body = (
             b'data: {"choices":[{"delta":{"reasoning":"pensando..."}}]}\n\n'
             b'data: {"choices":[{"delta":{"content":"resposta"}}]}\n\n'
@@ -332,7 +333,7 @@ class TestStreaming:
         assert text == "resposta"
         assert raciocinio == "pensando..."
 
-    async def test_stream_sem_nenhum_chunk_util_nao_trava(self):
+    async def test_stream_sem_nenhum_chunk_util_nao_trava(self) -> None:
         def handler(_req):
             return httpx.Response(
                 200,
@@ -350,7 +351,7 @@ class TestStreaming:
 
 
 class TestStreamingToolCallsEUsage:
-    async def test_tool_call_fragmentada_por_index_sai_completa(self):
+    async def test_tool_call_fragmentada_por_index_sai_completa(self) -> None:
         events = [
             {
                 "choices": [
@@ -418,7 +419,7 @@ class TestStreamingToolCallsEUsage:
         assert fragments == '{"path":"a.py"}'
         assert names == {"file_read"}
 
-    async def test_usage_do_ultimo_evento_vira_usage_metadata(self):
+    async def test_usage_do_ultimo_evento_vira_usage_metadata(self) -> None:
         body = (
             b'data: {"choices":[{"delta":{"content":"oi"}}]}\n\n'
             b'data: {"choices":[],"usage":'
@@ -446,7 +447,7 @@ class TestStreamingToolCallsEUsage:
             "total_tokens": 13,
         }
 
-    async def test_compact_system_prompt_preserva_instrucoes_e_idioma(self):
+    async def test_compact_system_prompt_preserva_instrucoes_e_idioma(self) -> None:
         payload_captured = {}
 
         def handler(req):
@@ -488,7 +489,7 @@ class TestStreamingToolCallsEUsage:
 
     async def test_compact_system_prompt_preserva_secao_apos_tools_e_regras_sem_keywords(
         self,
-    ):
+    ) -> None:
         payload_captured = {}
 
         def handler(req):
@@ -519,7 +520,7 @@ class TestStreamingToolCallsEUsage:
 
     async def test_compact_system_prompt_hierarquia_markdown_e_mencao_em_instrucao(
         self,
-    ):
+    ) -> None:
         payload_captured = {}
 
         def handler(req):
@@ -558,7 +559,7 @@ class TestStreamingToolCallsEUsage:
 
     async def test_compact_system_prompt_preserva_nivel_externo_com_cabecalhos_aninhados(
         self,
-    ):
+    ) -> None:
         payload_captured = {}
 
         def handler(req):
@@ -592,7 +593,7 @@ class TestStreamingToolCallsEUsage:
 
 
 class TestPromptCache:
-    def _client(self, model: str, origin: str):
+    def _client(self, model: str, origin: str) -> OpenRouterChatClient:
         from backend.llm.openrouter.chat_client import OpenRouterChatClient
 
         http = OpenRouterClient(
@@ -641,7 +642,7 @@ class TestPromptCache:
 
 
 class TestRouterCacheKey:
-    def _payload(self, origin: str):
+    def _payload(self, origin: str) -> JsonObject:
         from backend.llm.prompt_cache import prompt_cache_key
 
         client = TestPromptCache()._client("cc/claude-sonnet", origin)
@@ -674,7 +675,7 @@ class TestRouterSessionAndUsage:
     def _client(self, origin: str):
         return TestPromptCache()._client("modelo", origin)
 
-    def _with_key(self, origin: str):
+    def _with_key(self, origin: str) -> dict[str, str] | None:
         from backend.llm.prompt_cache import prompt_cache_key
 
         token = prompt_cache_key.set("thread-7")

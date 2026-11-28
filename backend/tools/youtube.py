@@ -24,10 +24,13 @@ import logging
 import re
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -88,12 +91,12 @@ def _is_supported_media_url(url: str) -> bool:
     )
 
 
-def _format_transcript(entries: list[dict[str, Any]]) -> str:
+def _format_transcript(entries: list[JsonObject]) -> str:
     """`[MM:SS] texto` por linha — mesmo formato que o Gemini usa pra
     transcrição de vídeo, familiar pro modelo interpretar timestamps."""
     lines: list[str] = []
     for entry in entries:
-        start = int(entry.get("start", 0) or 0)
+        start = int(float(str(entry.get("start", 0) or 0)))
         minutes, seconds = divmod(start, 60)
         text = str(entry.get("text", "")).strip()
         if text:
@@ -101,7 +104,7 @@ def _format_transcript(entries: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _fetch_captions_sync(video_id: str, languages: list[str]) -> list[dict[str, Any]]:
+def _fetch_captions_sync(video_id: str, languages: list[str]) -> list[JsonObject]:
     """Síncrono de propósito (roda em thread via `asyncio.to_thread`) — a
     lib usa `requests` por baixo, sem variante async."""
     from youtube_transcript_api import YouTubeTranscriptApi

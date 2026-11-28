@@ -5,7 +5,7 @@ Distingue mudanças compatíveis (non-breaking) de mudanças incompatíveis (bre
 
 from __future__ import annotations
 
-from typing import Any
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 class CompatibilityReport:
@@ -20,10 +20,19 @@ class CompatibilityReport:
         return len(self.breaking) == 0
 
 
-# Alias de tipo para JSON Schema arbitrário com justificativa explícita:
-# Um JSON Schema representa árvores recursivas de definições com valores primitivos,
-# listas e sub-schemas arbitrários, logo `object` / `Any` é exigido para nós genéricos.
-type JsonSchemaDict = dict[str, Any]
+type JsonSchemaDict = JsonObject
+"""Árvore de definições de um JSON Schema."""
+
+
+def _schema(value: JsonValue) -> JsonSchemaDict:
+    return value if isinstance(value, dict) else {}
+
+
+def _values(value: JsonValue) -> set[str]:
+    """Itens de uma lista (``enum`` ou ``required``) em forma comparável."""
+    if not isinstance(value, list):
+        return set()
+    return {str(item) for item in value}
 
 
 def check_schema_compatibility(
@@ -62,8 +71,8 @@ def check_schema_compatibility(
     old_enum = old_schema.get("enum")
     new_enum = new_schema.get("enum")
     if old_enum is not None and new_enum is not None:
-        old_enum_set = set(old_enum)
-        new_enum_set = set(new_enum)
+        old_enum_set = _values(old_enum)
+        new_enum_set = _values(new_enum)
         if direction == "request":
             # Em request, reduzir enum quebra clientes
             removed_enums = old_enum_set - new_enum_set
@@ -80,8 +89,8 @@ def check_schema_compatibility(
                 )
 
     # 4. Checa campos obrigatórios (required)
-    old_req = set(old_schema.get("required", []))
-    new_req = set(new_schema.get("required", []))
+    old_req = _values(old_schema.get("required"))
+    new_req = _values(new_schema.get("required"))
     added_req = new_req - old_req
     if added_req:
         if direction == "request":
@@ -104,8 +113,8 @@ def check_schema_compatibility(
             )
 
     # 5. Checa propriedades de objetos
-    old_props = old_schema.get("properties", {})
-    new_props = new_schema.get("properties", {})
+    old_props = _schema(old_schema.get("properties"))
+    new_props = _schema(new_schema.get("properties"))
     removed_props = set(old_props.keys()) - set(new_props.keys())
     if removed_props:
         report.breaking.append(f"{path}: campos removidos: {sorted(removed_props)}")
@@ -117,8 +126,8 @@ def check_schema_compatibility(
 
     for prop in set(old_props.keys()) & set(new_props.keys()):
         sub_report = check_schema_compatibility(
-            old_props[prop],
-            new_props[prop],
+            _schema(old_props[prop]),
+            _schema(new_props[prop]),
             path=f"{path}.{prop}" if path else prop,
             direction=direction,
         )
@@ -151,8 +160,8 @@ def check_schema_compatibility(
             )
         for d_key in set(old_defs.keys()) & set(new_defs.keys()):
             sub_report = check_schema_compatibility(
-                old_defs[d_key],
-                new_defs[d_key],
+                _schema(old_defs[d_key]),
+                _schema(new_defs[d_key]),
                 path=f"{path}#{defs_key}/{d_key}" if path else f"#{defs_key}/{d_key}",
                 direction=direction,
             )

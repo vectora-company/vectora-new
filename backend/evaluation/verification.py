@@ -6,7 +6,7 @@ import json
 import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
@@ -18,6 +18,10 @@ from backend.vtypes.message import VMessage
 
 ReplayCaseStatus = Literal["replayed", "failed", "unsupported"]
 ReplayReportStatus = Literal["replayed", "failed", "unsupported"]
+
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 class ReplayCaseResult(BaseModel):
@@ -88,9 +92,9 @@ class FixtureReplayReport(BaseModel):
         return "\n".join(rows)
 
 
-def _to_vmessage(raw: Mapping[str, object]) -> VMessage:
+def _to_vmessage(raw: Mapping[str, JsonValue]) -> VMessage:
     """Converte uma mensagem validada da cassete para o modelo do runtime."""
-    payload = dict(raw)
+    payload: JsonObject = dict(raw)
     payload.setdefault("role", "user")
     content = payload.get("content", "")
     if isinstance(content, str):

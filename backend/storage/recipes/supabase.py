@@ -30,7 +30,11 @@ Uso:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, NotRequired, TypedDict, Unpack
+
+if TYPE_CHECKING:
+    from backend.settings import Settings
+    from backend.vtypes.storage import RecipeHealth
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +101,21 @@ def build_dsn(
     )
 
 
-def configure_settings(settings: Any, **kwargs: Any) -> None:
+class _SupabaseDsnParams(TypedDict):
+    """Argumentos repassados a ``build_dsn``."""
+
+    project: NotRequired[str]
+    host: NotRequired[str]
+    user: NotRequired[str]
+    password: str
+    database: NotRequired[str]
+    pooler: NotRequired[bool]
+    region: NotRequired[str]
+
+
+def configure_settings(
+    settings: Settings, **kwargs: Unpack[_SupabaseDsnParams]
+) -> None:
     """Aplica flags Supabase ao objeto settings.
 
     Configura ``storage_mode = "complete"`` e define o ``postgres_dsn`` a
@@ -109,13 +127,10 @@ def configure_settings(settings: Any, **kwargs: Any) -> None:
     """
     settings.storage_mode = "complete"
     settings.postgres_dsn = build_dsn(**kwargs)
-    logger.info(
-        "Supabase configurado: storage_mode=complete dsn=%s…",
-        settings.postgres_dsn[:40],
-    )
+    logger.info("Supabase configurado: storage_mode=complete")
 
 
-async def healthcheck(dsn: str | None = None) -> dict[str, Any]:
+async def healthcheck(dsn: str | None = None) -> RecipeHealth:
     """Smoke test de conectividade ao Supabase Postgres.
 
     Testa a conexão, verifica se ``pgvector`` está instalado e se as tabelas

@@ -10,21 +10,27 @@ from __future__ import annotations
 import asyncio
 import re
 from contextlib import suppress
-from typing import Any
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/browser-workbench", tags=["browser-workbench"])
-_sessions: dict[tuple[str, str], Any] = {}
+_sessions: dict[tuple[str, str], Page] = {}
 _view_ids: dict[tuple[str, str], int] = {}
 _viewports: dict[tuple[str, str], tuple[int, int]] = {}
-_playwright: Any = None
-_browser: Any = None
+_playwright: Playwright | None = None
+_browser: Browser | None = None
 _lock = asyncio.Lock()
 _view_create_lock = asyncio.Lock()
+if TYPE_CHECKING:
+    from playwright.async_api import Browser, Page, Playwright
+
 _TAB_ID = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
+
+
+from backend.vtypes.api import BrowserTabState
 
 
 async def close_all() -> None:
@@ -64,7 +70,7 @@ def _validate_tab_id(tab_id: str) -> None:
         raise HTTPException(status_code=400, detail="Identificador de aba inválido")
 
 
-async def _get_browser() -> Any:
+async def _get_browser() -> Browser:
     global _playwright, _browser
     async with _lock:
         if _browser is not None and _browser.is_connected():
@@ -84,7 +90,7 @@ async def _get_browser() -> Any:
         return _browser
 
 
-async def _shell_page() -> Any:
+async def _shell_page() -> Page:
     browser = await _get_browser()
     if not browser.contexts:
         raise RuntimeError("O Chromium do Electron não expôs um contexto")
@@ -100,7 +106,7 @@ async def _page(
     *,
     create: bool = True,
     profile_id: str = "default",
-) -> Any:
+) -> Page:
     _validate_tab_id(tab_id)
     key = (_owner(request), tab_id)
     page = _sessions.get(key)
@@ -187,7 +193,7 @@ class BrowserViewport(BaseModel):
 @router.post("/{tab_id}/open")
 async def open_tab(
     request: Request, tab_id: str, body: BrowserOpen | None = None
-) -> dict[str, Any]:
+) -> BrowserTabState:
     page = await _page(
         request, tab_id, profile_id=body.profile_id if body else "default"
     )
@@ -195,11 +201,11 @@ async def open_tab(
 
 
 @router.get("/{tab_id}/state")
-async def get_state(request: Request, tab_id: str) -> dict[str, Any]:
+async def get_state(request: Request, tab_id: str) -> BrowserTabState:
     return await _state(await _page(request, tab_id, create=False))
 
 
-async def _state(page: Any) -> dict[str, Any]:
+async def _state(page: Page) -> BrowserTabState:
     can_go_back = False
     can_go_forward = False
     try:
@@ -238,7 +244,7 @@ async def get_frame(request: Request, tab_id: str) -> Response:
 @router.post("/{tab_id}/navigate")
 async def navigate(
     request: Request, tab_id: str, body: BrowserNavigation
-) -> dict[str, Any]:
+) -> BrowserTabState:
     url = body.url.strip()
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
@@ -266,7 +272,7 @@ async def navigate(
         try:
             await page.wait_for_function(
                 "previous => location.href !== previous",
-                previous_url,
+                arg=previous_url,
                 timeout=10_000,
             )
         except Exception as exc:
@@ -327,7 +333,7 @@ async def send_input(
 
 
 @router.post("/{tab_id}/history/{direction}")
-async def history(request: Request, tab_id: str, direction: str) -> dict[str, Any]:
+async def history(request: Request, tab_id: str, direction: str) -> BrowserTabState:
     if direction not in {"back", "forward", "reload", "stop"}:
         raise HTTPException(status_code=400, detail="Ação de histórico inválida")
     page = await _page(request, tab_id, create=False)

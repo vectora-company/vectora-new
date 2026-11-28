@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import NoReturn
 
 import pytest
 
@@ -17,8 +18,10 @@ from backend.tools import library
 
 
 @pytest.mark.asyncio
-async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(monkeypatch):
-    async def _registry():
+async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _registry() -> list[SimpleNamespace]:
         return [
             SimpleNamespace(
                 id="github", name="GitHub", description="Repos e PRs", env_vars=["T"]
@@ -44,7 +47,7 @@ async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(monkeypatch):
 
     # Erro/borda: registry fora do ar degrada com lista vazia + erro descrito,
     # nunca propaga.
-    async def _explode():
+    async def _explode() -> NoReturn:
         raise OSError("registry inacessível")
 
     monkeypatch.setattr("backend.api.handlers.mcp_marketplace.list_registry", _explode)
@@ -54,15 +57,17 @@ async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_skills_catalog_happy_e_catalogo_vazio(monkeypatch):
-    async def _catalog(_kind):
+async def test_list_skills_catalog_happy_e_catalogo_vazio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _catalog(_kind: str) -> list[dict[str, str]]:
         return [{"id": "revisar-pr", "name": "Revisar PR", "description": "Como"}]
 
     monkeypatch.setattr("backend.services.registry_client.fetch_catalog", _catalog)
     out = json.loads(await library.list_skills_catalog())
     assert [i["id"] for i in out["items"]] == ["revisar-pr"]
 
-    async def _vazio(_kind):
+    async def _vazio(_kind: str):
         return []
 
     monkeypatch.setattr("backend.services.registry_client.fetch_catalog", _vazio)
@@ -70,15 +75,17 @@ async def test_list_skills_catalog_happy_e_catalogo_vazio(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_memory_bucket_catalog_happy_e_falha(monkeypatch):
-    async def _catalog():
+async def test_list_memory_bucket_catalog_happy_e_falha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _catalog() -> list[dict[str, str]]:
         return [{"id": "leis-br", "name": "Leis BR", "description": "Legislação"}]
 
     monkeypatch.setattr("backend.services.memory_buckets.list_catalog", _catalog)
     out = json.loads(await library.list_memory_bucket_catalog())
     assert [i["id"] for i in out["items"]] == ["leis-br"]
 
-    async def _explode():
+    async def _explode() -> NoReturn:
         raise RuntimeError("library fora do ar")
 
     monkeypatch.setattr("backend.services.memory_buckets.list_catalog", _explode)
@@ -88,11 +95,13 @@ async def test_list_memory_bucket_catalog_happy_e_falha(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_catalogo_grande_e_truncado_com_total_real(monkeypatch):
+async def test_catalogo_grande_e_truncado_com_total_real(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Regressão de contexto: o registry oficial tem centenas de entradas e
     # despejar tudo gastaria a janela do LLM. `total` continua o número real
     # pra o agente saber que há mais.
-    async def _registry():
+    async def _registry() -> list[SimpleNamespace]:
         return [
             SimpleNamespace(id=f"c{i}", name=f"C{i}", description="x", env_vars=[])
             for i in range(200)
@@ -104,7 +113,7 @@ async def test_catalogo_grande_e_truncado_com_total_real(monkeypatch):
     assert out["total"] == 200
 
 
-def test_hitl_cobre_escrita_e_deixa_leitura_livre():
+def test_hitl_cobre_escrita_e_deixa_leitura_livre() -> None:
     from backend.engine.hitl import REQUIRE_APPROVAL
 
     # Toda tool que remove, publica ou grava credencial precisa pausar.

@@ -8,7 +8,8 @@ import asyncio
 import contextlib
 import json
 import logging
-from typing import Any, cast
+from collections.abc import Iterable
+from typing import TypedDict
 
 import lancedb
 import lancedb.db
@@ -20,14 +21,15 @@ from backend.storage.vectorstore.base import (
     VectorRow,
     VectorStoreHealth,
 )
+from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
 
-def _parse_metadata(raw: object) -> dict[str, Any]:
+def _parse_metadata(raw: str | JsonObject | None) -> JsonObject:
     """Executa a operação parse metadata."""
     if isinstance(raw, dict):
-        return cast("dict[str, Any]", raw)
+        return raw
     try:
         parsed = json.loads(str(raw or "{}"))
         return parsed if isinstance(parsed, dict) else {}
@@ -35,7 +37,7 @@ def _parse_metadata(raw: object) -> dict[str, Any]:
         return {}
 
 
-def _row_vector(raw: Any) -> list[float]:
+def _row_vector(raw: Iterable[float] | float | None) -> list[float]:
     """Extrai o vetor de uma linha do `DataFrame` (`row.get("vector")`).
 
     `pandas`/`pyarrow` devolvem a coluna de embedding como `numpy.ndarray`
@@ -44,9 +46,18 @@ def _row_vector(raw: Any) -> list[float]:
     e `ndarray.__bool__` só aceita 0 ou 1 elemento. Linha sem vetor (coluna
     ausente) vem como escalar `NaN` (`float`), não `None`.
     """
-    if raw is None or isinstance(raw, float):
+    if raw is None or isinstance(raw, int | float):
         return []
     return list(raw)
+
+
+class _LanceDocument(TypedDict):
+    """Linha gravada numa tabela LanceDB; os metadados vão serializados."""
+
+    id: str
+    vector: list[float]
+    text: str
+    metadata: str
 
 
 class LanceDBBackend:
@@ -146,7 +157,7 @@ class LanceDBBackend:
         self,
         table: lancedb.table.AsyncTable,
         incoming_ids: set[str],
-        docs: list[dict[str, Any]],
+        docs: list[_LanceDocument],
     ) -> None:
         """Remove duplicate legacy IDs and stage retained rows for the merge.
 
@@ -201,7 +212,7 @@ class LanceDBBackend:
                 pa.field("metadata", pa.string()),
             ]
         )
-        docs = [
+        docs: list[_LanceDocument] = [
             {
                 "id": row.id,
                 "vector": row.vector,

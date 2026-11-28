@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from backend.vtypes.message import VMessage
+    from backend.vtypes.services import ToolDefinitions
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,7 @@ def count_images(messages: Sequence[VMessage]) -> int:
 def observe_turn(
     model: str | None,
     messages: Sequence[VMessage],
-    tools: object,
+    tools: ToolDefinitions | None,
     usage: Mapping[str, int] | None,
 ) -> int | None:
     """Aprende o custo por imagem de uma chamada ao modelo.

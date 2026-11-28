@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
+from typing import NoReturn
 
 import pytest
 
@@ -18,7 +20,7 @@ from backend.persistence.kv import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_singleton(_no_nats_sidecar):
+def _reset_singleton(_no_nats_sidecar: None) -> Iterator[None]:
     reset_kv()
     yield
     reset_kv()
@@ -69,7 +71,7 @@ async def test_memory_kv_subscriber_com_erro_nao_propaga() -> None:
     kv = MemoryKV()
     received: list[str] = []
 
-    def broken(_: str) -> None:
+    def broken(_: str) -> NoReturn:
         raise RuntimeError("boom")
 
     kv.subscribe("ch", broken)

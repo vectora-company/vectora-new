@@ -5,12 +5,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field
 
 from backend.evaluation.cassette import Cassette
-from backend.vtypes import JsonObject
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 class EvalMetric(BaseModel):
@@ -68,7 +67,7 @@ def _tool_calls_equivalent(
     the observable contract of a call.
     """
 
-    def normalize(calls: list[JsonObject]) -> list[tuple[str, object]]:
+    def normalize(calls: list[JsonObject]) -> list[tuple[str, JsonValue]]:
         """Normalize tool calls into stable tuples for replay comparison."""
         return [
             (str(call.get("name", "")), call.get("args", call.get("arguments", {})))
@@ -89,7 +88,7 @@ def _decision_evidence_for_comparison(value: JsonObject) -> JsonObject:
         "tool_call_id",
     }
 
-    def normalize(item: Any) -> Any:
+    def normalize(item: JsonValue) -> JsonValue:
         if isinstance(item, dict):
             return {
                 str(key): normalize(child)
@@ -142,7 +141,7 @@ def compare_cassettes(
     total_candidate_latency = 0
     total_baseline_tokens = 0
     total_candidate_tokens = 0
-    details: list[dict[str, Any]] = []
+    details: list[JsonObject] = []
 
     for i, interaction_id in enumerate(interaction_ids):
         b_item = baseline_by_id.get(interaction_id)

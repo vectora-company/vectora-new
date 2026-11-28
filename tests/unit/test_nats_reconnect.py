@@ -8,6 +8,8 @@ Garante que:
 - reset_mq() / reset_kv() são chamados no closed_cb para forçar fallback
 """
 
+from __future__ import annotations
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -18,7 +20,7 @@ class TestNatsMQResilience:
     """Testa que NatsMQ é resiliente a quedas do sidecar NATS."""
 
     @pytest.mark.asyncio
-    async def test_connect_usa_max_reconnect_attempts(self):
+    async def test_connect_usa_max_reconnect_attempts(self) -> None:
         """nats.connect() deve ser chamado com max_reconnect_attempts=5."""
         from backend.scheduling.mq import NatsMQ
 
@@ -37,7 +39,7 @@ class TestNatsMQResilience:
             )
 
     @pytest.mark.asyncio
-    async def test_connect_configura_connect_timeout(self):
+    async def test_connect_configura_connect_timeout(self) -> None:
         """nats.connect() deve ter connect_timeout definido."""
         from backend.scheduling.mq import NatsMQ
 
@@ -55,7 +57,7 @@ class TestNatsMQResilience:
             assert kwargs["connect_timeout"] > 0
 
     @pytest.mark.asyncio
-    async def test_connect_registra_error_cb(self):
+    async def test_connect_registra_error_cb(self) -> None:
         """nats.connect() deve ter error_cb registrado."""
         from backend.scheduling.mq import NatsMQ
 
@@ -76,7 +78,7 @@ class TestNatsMQResilience:
             assert callable(kwargs.get("closed_cb")), "closed_cb deve ser um callable"
 
     @pytest.mark.asyncio
-    async def test_closed_cb_marca_failed_e_reseta_singleton(self):
+    async def test_closed_cb_marca_failed_e_reseta_singleton(self) -> None:
         """Quando closed_cb é chamado, _failed=True e reset_mq() é invocado."""
         from backend.scheduling import mq as mq_module
         from backend.scheduling.mq import NatsMQ
@@ -87,7 +89,7 @@ class TestNatsMQResilience:
 
         closed_cb_ref = None
 
-        async def capture_connect(*args, **kwargs):
+        async def capture_connect(*args: str, **kwargs) -> AsyncMock:
             nonlocal closed_cb_ref
             closed_cb_ref = kwargs.get("closed_cb")
             return mock_nc
@@ -105,7 +107,7 @@ class TestNatsMQResilience:
                 mock_reset.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_operacoes_falham_apos_failed(self):
+    async def test_operacoes_falham_apos_failed(self) -> None:
         """Após _failed=True, _connect() deve lançar RuntimeError imediatamente."""
         from backend.scheduling.mq import NatsMQ
 
@@ -120,7 +122,7 @@ class TestNatsKVResilience:
     """Testa que NatsKV é resiliente a quedas do sidecar NATS."""
 
     @pytest.mark.asyncio
-    async def test_connect_usa_max_reconnect_attempts(self):
+    async def test_connect_usa_max_reconnect_attempts(self) -> None:
         """nats.connect() deve ser chamado com max_reconnect_attempts=5."""
         from backend.persistence.kv import NatsKV
 
@@ -145,7 +147,7 @@ class TestNatsKVResilience:
             assert kwargs.get("max_reconnect_attempts") == 5
 
     @pytest.mark.asyncio
-    async def test_closed_cb_marca_failed_e_reseta_singleton(self):
+    async def test_closed_cb_marca_failed_e_reseta_singleton(self) -> None:
         """Quando closed_cb é chamado, _failed=True e reset_kv() é invocado."""
         from backend.persistence import kv as kv_module
         from backend.persistence.kv import NatsKV
@@ -161,7 +163,7 @@ class TestNatsKVResilience:
 
         closed_cb_ref = None
 
-        async def capture_connect(*args, **kwargs):
+        async def capture_connect(*args: str, **kwargs) -> MagicMock:
             nonlocal closed_cb_ref
             closed_cb_ref = kwargs.get("closed_cb")
             return mock_nc
@@ -178,7 +180,7 @@ class TestNatsKVResilience:
                 mock_reset.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_operacoes_falham_apos_failed(self):
+    async def test_operacoes_falham_apos_failed(self) -> None:
         """Após _failed=True, _connect() deve lançar RuntimeError imediatamente."""
         from backend.persistence.kv import NatsKV
 
@@ -196,7 +198,7 @@ class TestNatsReconnectDoesNotCrashBackend:
     """
 
     @pytest.mark.asyncio
-    async def test_get_mq_usa_memory_apos_nats_fechar(self):
+    async def test_get_mq_usa_memory_apos_nats_fechar(self) -> None:
         """Após reset_mq(), get_mq() deve retornar MemoryMQ como fallback."""
         from backend.scheduling import mq as mq_module
         from backend.scheduling.mq import MemoryMQ

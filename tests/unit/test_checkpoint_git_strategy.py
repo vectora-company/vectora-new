@@ -50,7 +50,9 @@ def empty_repo(tmp_path: Path) -> git.Repo:
 
 
 class TestCreateGitCheckpoint:
-    def test_creates_commit_without_moving_head(self, repo_with_commit: git.Repo):
+    def test_creates_commit_without_moving_head(
+        self, repo_with_commit: git.Repo
+    ) -> None:
         repo = repo_with_commit
         head_before = repo.head.commit.hexsha
         branch_before = repo.active_branch.name
@@ -64,7 +66,7 @@ class TestCreateGitCheckpoint:
 
     def test_does_not_touch_real_index_or_worktree(
         self, repo_with_commit: git.Repo, tmp_path: Path
-    ):
+    ) -> None:
         repo = repo_with_commit
         (tmp_path / "README.md").write_text("modificado\n")
         (tmp_path / "novo.txt").write_text("untracked\n")
@@ -78,7 +80,7 @@ class TestCreateGitCheckpoint:
 
     def test_captures_untracked_and_modified_files(
         self, repo_with_commit: git.Repo, tmp_path: Path
-    ):
+    ) -> None:
         # `write_bytes` evita a tradução de newline de `write_text` no Windows
         # (que trocaria "\n" por "\r\n"), mantendo a comparação determinística.
         repo = repo_with_commit
@@ -86,6 +88,7 @@ class TestCreateGitCheckpoint:
         (tmp_path / "novo.txt").write_bytes(b"untracked\n")
 
         result = create_git_checkpoint(repo, "thread-1", "checkpoint 1")
+        assert result["status"] == "ok"
         sha = result["sha"]
 
         snapshot = repo.commit(sha)
@@ -98,9 +101,10 @@ class TestCreateGitCheckpoint:
         assert (snapshot.tree / "README.md").data_stream.read() == b"modificado\n"
         assert (snapshot.tree / "novo.txt").data_stream.read() == b"untracked\n"
 
-    def test_uses_fixed_checkpoint_author(self, repo_with_commit: git.Repo):
+    def test_uses_fixed_checkpoint_author(self, repo_with_commit: git.Repo) -> None:
         repo = repo_with_commit
         result = create_git_checkpoint(repo, "thread-1", "checkpoint 1")
+        assert result["status"] == "ok"
 
         commit = repo.commit(result["sha"])
         assert commit.author.name == "Vectora"
@@ -108,18 +112,22 @@ class TestCreateGitCheckpoint:
 
     def test_chains_checkpoints_to_previous_one(
         self, repo_with_commit: git.Repo, tmp_path: Path
-    ):
+    ) -> None:
         repo = repo_with_commit
 
         first = create_git_checkpoint(repo, "thread-1", "checkpoint 1")
+        assert first["status"] == "ok"
         (tmp_path / "novo.txt").write_text("v2\n")
         second = create_git_checkpoint(repo, "thread-1", "checkpoint 2")
+        assert second["status"] == "ok"
 
         second_commit = repo.commit(second["sha"])
         assert [p.hexsha for p in second_commit.parents] == [first["sha"]]
         assert repo.git.rev_parse(checkpoint_ref("thread-1")).strip() == second["sha"]
 
-    def test_works_on_repo_without_commits(self, empty_repo: git.Repo, tmp_path: Path):
+    def test_works_on_repo_without_commits(
+        self, empty_repo: git.Repo, tmp_path: Path
+    ) -> None:
         (tmp_path / "a.txt").write_text("a\n")
 
         result = create_git_checkpoint(empty_repo, "thread-1", "checkpoint 1")
@@ -137,11 +145,12 @@ class TestCreateGitCheckpoint:
 class TestRestoreGitCheckpoint:
     def test_restores_modified_file_to_snapshot_content(
         self, repo_with_commit: git.Repo, tmp_path: Path
-    ):
+    ) -> None:
         repo = repo_with_commit
         readme = tmp_path / "README.md"
         readme.write_text("estado A\n")
         checkpoint = create_git_checkpoint(repo, "thread-1", "estado A")
+        assert checkpoint["status"] == "ok"
 
         readme.write_text("estado B (descartado)\n")
 
@@ -152,17 +161,18 @@ class TestRestoreGitCheckpoint:
 
     def test_restore_does_not_move_head(
         self, repo_with_commit: git.Repo, tmp_path: Path
-    ):
+    ) -> None:
         repo = repo_with_commit
         head_before = repo.head.commit.hexsha
         (tmp_path / "README.md").write_text("estado A\n")
         checkpoint = create_git_checkpoint(repo, "thread-1", "estado A")
+        assert checkpoint["status"] == "ok"
 
         restore_git_checkpoint(repo, checkpoint["sha"])
 
         assert repo.head.commit.hexsha == head_before
 
-    def test_returns_error_for_invalid_sha(self, repo_with_commit: git.Repo):
+    def test_returns_error_for_invalid_sha(self, repo_with_commit: git.Repo) -> None:
         result = restore_git_checkpoint(repo_with_commit, "0" * 40)
         assert result["status"] == "error"
 
@@ -175,11 +185,13 @@ class TestRestoreGitCheckpoint:
 class TestListGitCheckpoints:
     def test_lists_in_reverse_chronological_order(
         self, repo_with_commit: git.Repo, tmp_path: Path
-    ):
+    ) -> None:
         repo = repo_with_commit
         first = create_git_checkpoint(repo, "thread-1", "primeiro")
+        assert first["status"] == "ok"
         (tmp_path / "README.md").write_text("v2\n")
         second = create_git_checkpoint(repo, "thread-1", "segundo")
+        assert second["status"] == "ok"
 
         result = list_git_checkpoints(repo, "thread-1")
 
@@ -195,7 +207,7 @@ class TestListGitCheckpoints:
         result = list_git_checkpoints(repo_with_commit, "thread-sem-checkpoints")
         assert result == {"status": "ok", "checkpoints": []}
 
-    def test_does_not_mix_threads(self, repo_with_commit: git.Repo):
+    def test_does_not_mix_threads(self, repo_with_commit: git.Repo) -> None:
         repo = repo_with_commit
         create_git_checkpoint(repo, "thread-a", "a1")
         create_git_checkpoint(repo, "thread-b", "b1")

@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shlex
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum, StrEnum
 from pathlib import Path
@@ -22,7 +23,10 @@ def google_workspace_enabled() -> bool:
 
 
 def convert_google_workspace_file(
-    path: Path, out_dir: Path, **kwargs: object
+    path: Path,
+    out_dir: Path,
+    *,
+    xlsx_to_markdown: Callable[[Path], str] | None = None,
 ) -> str | None:
     return None
 

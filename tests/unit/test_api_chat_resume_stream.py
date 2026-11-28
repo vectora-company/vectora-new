@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -39,7 +40,7 @@ async def _body(response) -> list[dict]:
 
 
 @pytest.fixture(autouse=True)
-def _owns_thread():
+def _owns_thread() -> Iterator[None]:
     with patch("backend.api.handlers.threads._assert_owns_thread", new=AsyncMock()):
         yield
 

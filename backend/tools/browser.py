@@ -18,7 +18,7 @@ import json
 import logging
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 from urllib.parse import urlparse
 
 from backend.browser.dev_server import resolve_dev_server_url
@@ -35,6 +35,13 @@ from backend.services.policy_compiler import PolicySnapshot, compile_policy_snap
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
 
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from playwright.async_api import Page, Route
+
+    type RouteHandler = Callable[[Route], Awaitable[None]]
+
 logger = logging.getLogger(__name__)
 
 _NO_PAGE_ERROR = (
@@ -48,7 +55,15 @@ _ALLOWED_SCHEMES = ("http", "https")
 # A navigation guard must outlive the initial ``goto``: pages can issue
 # redirects, fetches and subresource requests after the tool has returned.
 # Keep the handler attached until the page is explicitly cleaned up.
-_navigation_guards: dict[int, tuple[Any, Any, dict[str, Any]]] = {}
+_navigation_guards: dict[int, tuple[Page, RouteHandler, _GuardState]] = {}
+
+
+class _GuardState(TypedDict):
+    """Política vigente e último bloqueio da guarda de uma página."""
+
+    snapshot: PolicySnapshot
+    blocked: dict[str, str]
+    release_redirect: NotRequired[Callable[[], Awaitable[None]] | None]
 
 
 def _policy_snapshot(ctx: ToolContext) -> PolicySnapshot:
@@ -94,8 +109,8 @@ def _validate_browser_url(url: str, ctx: ToolContext) -> tuple[bool, str]:
 
 
 async def _install_navigation_guard(
-    page: Any, snapshot: PolicySnapshot
-) -> tuple[Any | None, dict[str, str]]:
+    page: Page, snapshot: PolicySnapshot
+) -> tuple[RouteHandler | None, dict[str, str]]:
     """Bloqueia destinos antes da requisição, inclusive redirects.
 
     O fallback de testes não implementa ``route``; nesse caso a validação do
@@ -109,9 +124,9 @@ async def _install_navigation_guard(
         existing[2]["snapshot"] = snapshot
         return existing[1], existing[2]["blocked"]
     blocked: dict[str, str] = {}
-    state: dict[str, Any] = {"snapshot": snapshot, "blocked": blocked}
+    state: _GuardState = {"snapshot": snapshot, "blocked": blocked}
 
-    async def handler(route_obj: Any) -> None:
+    async def handler(route_obj: Route) -> None:
         """Enforce navigation policy before allowing the request to continue."""
         request = getattr(route_obj, "request", None)
         request_url = str(getattr(request, "url", ""))
@@ -140,7 +155,7 @@ async def _install_navigation_guard(
     return handler, blocked
 
 
-async def _remove_navigation_guard(page: Any, handler: Any) -> None:
+async def _remove_navigation_guard(page: Page, handler: RouteHandler | None) -> None:
     """Remove a previously registered navigation guard when supported."""
     if handler is None:
         return
@@ -156,15 +171,15 @@ async def _remove_navigation_guard(page: Any, handler: Any) -> None:
     _navigation_guards.pop(id(page), None)
 
 
-async def release_navigation_guard(page: Any) -> None:
+async def release_navigation_guard(page: Page) -> None:
     """Remove the guard when a Browser Workbench page is explicitly closed."""
     entry = _navigation_guards.get(id(page))
     if entry is not None and entry[0] is page:
         await _remove_navigation_guard(page, entry[1])
 
 
-async def _resolve_page(ctx: ToolContext) -> tuple[Any, str]:
-    """Retorna (page, "") em sucesso, ou (None, error) se não houver página
+async def _resolve_page(ctx: ToolContext) -> Page | str:
+    """A página do workspace, ou a mensagem de erro se não houver página
     resolvível — nem já navegada, nem dev server ativo do workspace.
 
     Só conecta ao browser do Electron (`get_browser_page`) quando já tem algo
@@ -177,19 +192,19 @@ async def _resolve_page(ctx: ToolContext) -> tuple[Any, str]:
     if has_browser_session(session_key):
         page = await get_browser_page(session_key)
         if page.url != "about:blank":
-            return page, ""
+            return page
         base_url = await resolve_dev_server_url(workspace_id)
         if base_url is None:
-            return None, _NO_PAGE_ERROR
+            return _NO_PAGE_ERROR
         await page.goto(base_url, wait_until="domcontentloaded")
-        return page, ""
+        return page
 
     base_url = await resolve_dev_server_url(workspace_id)
     if base_url is None:
-        return None, _NO_PAGE_ERROR
+        return _NO_PAGE_ERROR
     page = await get_browser_page(session_key)
     await page.goto(base_url, wait_until="domcontentloaded")
-    return page, ""
+    return page
 
 
 @vtool(
@@ -294,9 +309,9 @@ async def browser_screenshot(ctx: ToolContext) -> str:
         JSON com `url` da imagem salva na sessão (a imagem segue anexada ao
         resultado quando o modelo aceita imagens) ou mensagem de erro.
     """
-    page, err = await _resolve_page(ctx)
-    if page is None:
-        return err
+    page = await _resolve_page(ctx)
+    if isinstance(page, str):
+        return page
     try:
         png_bytes = await page.screenshot(type="png")
         from backend.services.tool_media import save_tool_image
@@ -336,9 +351,9 @@ async def browser_click(
         Confirmação ou mensagem de erro (elemento não encontrado, nem
         `selector` nem `uid` informados, etc.)
     """
-    page, err = await _resolve_page(ctx)
-    if page is None:
-        return err
+    page = await _resolve_page(ctx)
+    if isinstance(page, str):
+        return page
     if uid is not None:
         tab = get_tab_state(ctx.workspace_id)
         if tab is None:
@@ -387,9 +402,9 @@ async def browser_scroll(
     Returns:
         Confirmação ou mensagem de erro.
     """
-    page, err = await _resolve_page(ctx)
-    if page is None:
-        return err
+    page = await _resolve_page(ctx)
+    if isinstance(page, str):
+        return page
     if direction not in ("down", "up"):
         return "Error: `direction` deve ser 'down' ou 'up'."
     try:
@@ -426,9 +441,9 @@ async def browser_fill(
     Returns:
         Confirmação ou mensagem de erro.
     """
-    page, err = await _resolve_page(ctx)
-    if page is None:
-        return err
+    page = await _resolve_page(ctx)
+    if isinstance(page, str):
+        return page
     if uid is not None:
         tab = get_tab_state(ctx.workspace_id)
         if tab is None:
@@ -471,9 +486,9 @@ async def browser_read_dom(ctx: ToolContext, selector: str = "body") -> str:
     Returns:
         Texto visível do elemento, ou mensagem de erro se o seletor não existir.
     """
-    page, err = await _resolve_page(ctx)
-    if page is None:
-        return err
+    page = await _resolve_page(ctx)
+    if isinstance(page, str):
+        return page
     try:
         text = await page.inner_text(selector, timeout=5000)
         return text or "(vazio)"
@@ -513,9 +528,9 @@ async def browser_wait_for(
     """
     if state not in _WAIT_FOR_STATES:
         return f"Error: `state` deve ser um de {_WAIT_FOR_STATES}."
-    page, err = await _resolve_page(ctx)
-    if page is None:
-        return err
+    page = await _resolve_page(ctx)
+    if isinstance(page, str):
+        return page
     try:
         await page.wait_for_selector(selector, state=state, timeout=timeout_ms)
         return f"[OK] '{selector}' atingiu o estado '{state}'."
@@ -552,9 +567,9 @@ async def browser_drag(
     Returns:
         Confirmação ou mensagem de erro.
     """
-    page, err = await _resolve_page(ctx)
-    if page is None:
-        return err
+    page = await _resolve_page(ctx)
+    if isinstance(page, str):
+        return page
     try:
         await page.drag_and_drop(source_selector, target_selector, timeout=5000)
         return f"[OK] Arrastado: '{source_selector}' -> '{target_selector}'"
@@ -594,9 +609,9 @@ async def browser_upload_file(
         Confirmação ou erro (arquivo inexistente, elemento não é input de
         arquivo, etc.)
     """
-    page, err = await _resolve_page(ctx)
-    if page is None:
-        return err
+    page = await _resolve_page(ctx)
+    if isinstance(page, str):
+        return page
     if not Path(file_path).is_file():
         return f"Error: arquivo '{file_path}' não existe no host."
     try:
@@ -631,9 +646,9 @@ async def browser_fill_form(fields: dict[str, str], ctx: ToolContext) -> str:
         JSON `{"status": "ok"|"partial"|"error", "results": {seletor:
         "ok"|"error: ..."}}`.
     """
-    page, err = await _resolve_page(ctx)
-    if page is None:
-        return err
+    page = await _resolve_page(ctx)
+    if isinstance(page, str):
+        return page
     if not fields:
         return json.dumps({"status": "error", "error": "`fields` vazio."})
 

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Literal, cast
+from collections.abc import Awaitable, Callable
+from typing import Any, Literal, NoReturn, cast
 
 import pytest
 
@@ -58,7 +59,10 @@ from backend.tools.systemone_tools import (
     systemone_list_patterns,
     systemone_propose_kanban_transition,
 )
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.documents import Document
+
+type _Answers = dict[str, NoulAnswer | ChoiceAnswer | ScoreAnswer]
 
 
 class FakeDecisionProvider(SystemOneProvider):
@@ -83,8 +87,10 @@ class FakeDecisionProvider(SystemOneProvider):
         self._delay_s = delay_s
         self.calls: list[SystemOneRequest] = []
         self.error_to_raise: Exception | None = None
-        self.custom_answers: dict[str, Any] | None = None
-        self.custom_decide_fn: Any = None
+        self.custom_answers: _Answers | None = None
+        self.custom_decide_fn: (
+            Callable[[SystemOneRequest], Awaitable[SystemOneResponse]] | None
+        ) = None
         self.usage_tokens: int = 40
 
     @property
@@ -118,7 +124,7 @@ class FakeDecisionProvider(SystemOneProvider):
         if self.custom_decide_fn is not None:
             return await self.custom_decide_fn(request)
 
-        answers: dict[str, Any] = {}
+        answers: _Answers = {}
         if self.custom_answers is not None:
             answers = dict(self.custom_answers)
         else:
@@ -614,7 +620,7 @@ async def test_kanban_proposal_respects_card_version_and_manual_transitions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Verifica o comportamento de kanban proposal respects card version and manual transitions."""
-    card_state: dict[str, Any] = {
+    card_state: JsonObject = {
         "id": "card-1",
         "status": "blocked",
         "block_kind": "needs_input",
@@ -627,12 +633,12 @@ async def test_kanban_proposal_respects_card_version_and_manual_transitions(
         "card_version": "blocked|2026-10-19T12:00:00Z|run-1|1",
     }
 
-    async def fake_snapshot(task_id: str) -> dict[str, Any]:
+    async def fake_snapshot(task_id: str) -> JsonObject:
         """Executa a operação fake snapshot."""
         assert task_id == "card-1"
         return dict(card_state)
 
-    async def fake_deps(task_id: str) -> list[dict[str, Any]]:
+    async def fake_deps(task_id: str) -> list[JsonObject]:
         """Executa a operação fake deps."""
         return []
 
@@ -833,7 +839,7 @@ async def test_revoked_decision_model_requires_human_without_provider_call(
             "decision_model_revoked": True,
         },
     )
-    args = {"path": "secret.txt"}
+    args: JsonObject = {"path": "secret.txt"}
     assert await precompute_tool_risk_assessment(
         harness, tool_name="file_read", ctx=ctx, args=args
     )
@@ -896,7 +902,7 @@ async def test_disabled_hitl_surface_does_not_call_decision_provider() -> None:
     """A disabled surface is authoritative even when the model is enabled."""
 
     class MustNotRunHarness:
-        async def assess_tool_risk(self, **_kwargs):
+        async def assess_tool_risk(self, **_kwargs) -> NoReturn:
             raise AssertionError("disabled HITL surface called the provider")
 
     ctx = ToolContext(
@@ -1156,7 +1162,7 @@ def test_decision_model_requires_provenance_and_capability_flags(
 async def test_disabled_decision_surface_combination_never_probes_provider(
     tool_name: str,
     permission_mode: Literal["auto", "plan"],
-    extra: dict[str, object],
+    extra: JsonObject,
     background_task_id: str,
     surfaces: dict[str, bool],
 ) -> None:
@@ -1185,7 +1191,7 @@ async def test_disabled_decision_surface_combination_never_probes_provider(
             },
         },
     )
-    args = {"target": "sensitive-resource"}
+    args: JsonObject = {"target": "sensitive-resource"}
     applicable_surfaces = decision_model_surfaces_for_tool(ctx, tool_name)
     assert applicable_surfaces
     assert not decision_model_enabled_for(ctx, applicable_surfaces)
@@ -1295,7 +1301,9 @@ async def test_systemone_tools_enforce_registered_patterns_and_authenticated_con
 
 
 @pytest.mark.asyncio
-async def test_kanban_decision_tool_respects_surface_preference(monkeypatch):
+async def test_kanban_decision_tool_respects_surface_preference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.tools import systemone_tools
 
     ctx = ToolContext(
@@ -1312,7 +1320,7 @@ async def test_kanban_decision_tool_respects_surface_preference(monkeypatch):
     )
     unused = False
 
-    def fail_if_built(provider_override=None):
+    def fail_if_built(provider_override=None) -> NoReturn:
         nonlocal unused
         unused = True
         raise AssertionError("disabled Kanban surface must not construct a provider")

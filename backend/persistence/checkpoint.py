@@ -21,13 +21,21 @@ import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 # GitPython roda Git.refresh() em `import git` e levanta ImportError se não
 # achar o executável git no PATH — precisa disso antes do import abaixo.
 os.environ.setdefault("GIT_PYTHON_REFRESH", "quiet")
 
 import git
+
+from backend.vtypes.checkpoint import (
+    CheckpointFailure,
+    GitCheckpointCreated,
+    GitCheckpointList,
+    GitCheckpointRestored,
+    SnapshotCreated,
+    SnapshotRestored,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +69,7 @@ def _checkpoint_env(index_file: str) -> dict[str, str]:
 
 def create_git_checkpoint(
     repo: git.Repo, thread_id: str, message: str
-) -> dict[str, Any]:
+) -> GitCheckpointCreated | CheckpointFailure:
     """Cria um commit-snapshot do worktree atual, sem tocar HEAD/índice/branch.
 
     Usa um índice git temporário (``GIT_INDEX_FILE`` apontando para um arquivo
@@ -112,7 +120,9 @@ def create_git_checkpoint(
     return {"status": "ok", "sha": commit_sha, "tree": tree_sha}
 
 
-def restore_git_checkpoint(repo: git.Repo, sha: str) -> dict[str, Any]:
+def restore_git_checkpoint(
+    repo: git.Repo, sha: str
+) -> GitCheckpointRestored | CheckpointFailure:
     """Restaura o worktree (e o índice) para o estado gravado em ``sha``.
 
     Equivalente a ``git restore --source=<sha> --worktree --staged -- .`` —
@@ -128,7 +138,9 @@ def restore_git_checkpoint(repo: git.Repo, sha: str) -> dict[str, Any]:
     return {"status": "ok", "sha": sha}
 
 
-def list_git_checkpoints(repo: git.Repo, thread_id: str, n: int = 50) -> dict[str, Any]:
+def list_git_checkpoints(
+    repo: git.Repo, thread_id: str, n: int = 50
+) -> GitCheckpointList:
     """Lista os checkpoints da thread, do mais recente ao mais antigo."""
     ref = checkpoint_ref(thread_id)
     try:
@@ -141,7 +153,7 @@ def list_git_checkpoints(repo: git.Repo, thread_id: str, n: int = 50) -> dict[st
         "checkpoints": [
             {
                 "sha": c.hexsha,
-                "message": c.message.strip(),
+                "message": str(c.message).strip(),
                 "date": c.authored_datetime.isoformat(),
             }
             for c in commits
@@ -217,7 +229,7 @@ def create_snapshot_checkpoint(
     snapshot_dir: Path,
     thread_id: str,
     message: str,
-) -> dict[str, Any]:
+) -> SnapshotCreated | CheckpointFailure:
     """Cria um tarball comprimido do workspace como checkpoint de rewind.
 
     Usado como fallback quando o workspace não é um repositório git.  Arquiva
@@ -324,7 +336,9 @@ def create_snapshot_checkpoint(
     }
 
 
-def restore_snapshot_checkpoint(snapshot_path: str, cwd: str) -> dict[str, Any]:
+def restore_snapshot_checkpoint(
+    snapshot_path: str, cwd: str
+) -> SnapshotRestored | CheckpointFailure:
     """Restaura o workspace a partir de um tarball de snapshot.
 
     Extrai o arquivo sobre ``cwd``, sobrescrevendo os arquivos existentes.

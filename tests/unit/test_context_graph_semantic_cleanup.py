@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from backend.context_graph.semantic_cleanup import (
     MAX_SEMANTIC_FRAGMENT_BYTES,
@@ -15,13 +16,15 @@ from backend.context_graph.semantic_cleanup import (
     sanitize_semantic_fragment,
     validate_semantic_fragment,
 )
+from backend.vtypes.contracts import JsonObject, JsonValue
+from tests.json_values import as_list, as_object, as_str, dig
 
 # ─────────────────────────── validate_semantic_fragment ──────────────────────
 
 
 class TestValidateSemanticFragment:
     def test_valid_minimal_fragment(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [{"id": "node.A", "label": "A", "file_type": "code"}],
             "edges": [{"source": "node.A", "target": "node.A", "relation": "calls"}],
             "hyperedges": [],
@@ -38,7 +41,7 @@ class TestValidateSemanticFragment:
         assert any("bytes" in e for e in errors)
 
     def test_invalid_node_id(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [{"id": "bad/id", "label": "A", "file_type": "code"}],
             "edges": [],
         }
@@ -46,7 +49,7 @@ class TestValidateSemanticFragment:
         assert any("path separators" in e or "unsupported" in e for e in errors)
 
     def test_invalid_file_type(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [{"id": "node.A", "label": "A", "file_type": "illegal_type"}],
             "edges": [],
         }
@@ -54,8 +57,10 @@ class TestValidateSemanticFragment:
         assert any("file_type" in e for e in errors)
 
     def test_hyperedge_too_many_nodes(self) -> None:
-        many_nodes = [f"n{i}" for i in range(MAX_SEMANTIC_HYPEREDGE_NODES + 1)]
-        fragment = {
+        many_nodes: list[JsonValue] = [
+            f"n{i}" for i in range(MAX_SEMANTIC_HYPEREDGE_NODES + 1)
+        ]
+        fragment: JsonObject = {
             "nodes": [],
             "edges": [],
             "hyperedges": [{"id": "he.1", "nodes": many_nodes}],
@@ -85,7 +90,7 @@ class TestSanitizeSemanticFragment:
         }
 
     def test_removes_rationale_type_node(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [
                 {"id": "n.real", "label": "RealNode", "file_type": "code"},
                 {
@@ -98,7 +103,7 @@ class TestSanitizeSemanticFragment:
             "hyperedges": [],
         }
         result = sanitize_semantic_fragment(fragment)
-        ids = {n["id"] for n in result["nodes"]}
+        ids = {as_str(dig(n, "id")) for n in as_list(dig(result, "nodes"))}
         assert "n.rat" not in ids
         assert "n.real" in ids
 
@@ -107,7 +112,7 @@ class TestSanitizeSemanticFragment:
             "This node was created to handle the asynchronous dispatch of all "
             "incoming authentication tokens in the pipeline."
         )
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [
                 {"id": "n.target", "label": "AuthHandler", "file_type": "code"},
                 {"id": "n.rat", "label": rationale_text, "file_type": "rationale"},
@@ -118,14 +123,16 @@ class TestSanitizeSemanticFragment:
             "hyperedges": [],
         }
         result = sanitize_semantic_fragment(fragment)
-        ids = {n["id"] for n in result["nodes"]}
+        ids = {as_str(dig(n, "id")) for n in as_list(dig(result, "nodes"))}
         assert "n.rat" not in ids
-        target = next(n for n in result["nodes"] if n["id"] == "n.target")
-        assert "rationale" in target
-        assert rationale_text in target["rationale"]
+        target = next(
+            n for n in as_list(dig(result, "nodes")) if dig(n, "id") == "n.target"
+        )
+        assert "rationale" in as_object(target)
+        assert rationale_text in as_str(dig(target, "rationale"))
 
     def test_removes_orphan_edges(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [
                 {"id": "n.real", "label": "Real", "file_type": "code"},
                 {
@@ -141,12 +148,12 @@ class TestSanitizeSemanticFragment:
             "hyperedges": [],
         }
         result = sanitize_semantic_fragment(fragment)
-        for e in result["edges"]:
-            assert e.get("source") != "n.rat"
-            assert e.get("target") != "n.rat"
+        for e in as_list(dig(result, "edges")):
+            assert as_object(e).get("source") != "n.rat"
+            assert as_object(e).get("target") != "n.rat"
 
     def test_filters_hyperedge_with_one_member(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [
                 {"id": "n.real", "label": "Real", "file_type": "code"},
                 {
@@ -164,7 +171,7 @@ class TestSanitizeSemanticFragment:
         assert result["hyperedges"] == []
 
     def test_keeps_hyperedge_with_two_surviving_members(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [
                 {"id": "n.a", "label": "A", "file_type": "code"},
                 {"id": "n.b", "label": "B", "file_type": "code"},
@@ -178,11 +185,11 @@ class TestSanitizeSemanticFragment:
             "hyperedges": [{"id": "he.1", "nodes": ["n.a", "n.b", "n.rat"]}],
         }
         result = sanitize_semantic_fragment(fragment)
-        assert len(result["hyperedges"]) == 1
-        assert set(result["hyperedges"][0]["nodes"]) == {"n.a", "n.b"}
+        assert len(as_list(dig(result, "hyperedges"))) == 1
+        assert set(as_list(dig(result, "hyperedges", 0, "nodes"))) == {"n.a", "n.b"}
 
     def test_no_nodes_removed_when_clean(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [
                 {"id": "n.a", "label": "Foo", "file_type": "code"},
                 {"id": "n.b", "label": "Bar", "file_type": "document"},
@@ -191,8 +198,8 @@ class TestSanitizeSemanticFragment:
             "hyperedges": [],
         }
         result = sanitize_semantic_fragment(fragment)
-        assert len(result["nodes"]) == 2
-        assert len(result["edges"]) == 1
+        assert len(as_list(dig(result, "nodes"))) == 2
+        assert len(as_list(dig(result, "edges"))) == 1
 
 
 # ─────────────────────────── _is_sentence_like_rationale_label ───────────────
@@ -277,7 +284,7 @@ class TestValidateSemanticFragmentExtra:
         assert any("chars; max" in e for e in errors)
 
     def test_valid_hyperedge_passes(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [
                 {"id": "a", "file_type": "code"},
                 {"id": "b", "file_type": "code"},
@@ -327,7 +334,7 @@ class TestValidateSemanticId:
 
 
 class TestLoadValidatedFragment:
-    def test_valid_file(self, tmp_path) -> None:
+    def test_valid_file(self, tmp_path: Path) -> None:
         p = tmp_path / "frag.json"
         p.write_text(
             json.dumps({"nodes": [{"id": "a", "file_type": "code"}], "edges": []}),
@@ -337,19 +344,19 @@ class TestLoadValidatedFragment:
         assert errors == []
         assert fragment is not None
 
-    def test_invalid_json(self, tmp_path) -> None:
+    def test_invalid_json(self, tmp_path: Path) -> None:
         p = tmp_path / "frag.json"
         p.write_text("NOTJSON{", encoding="utf-8")
         fragment, errors = load_validated_semantic_fragment(p)
         assert fragment is None
         assert any("invalid JSON" in e for e in errors)
 
-    def test_nonexistent_path(self, tmp_path) -> None:
+    def test_nonexistent_path(self, tmp_path: Path) -> None:
         fragment, errors = load_validated_semantic_fragment(tmp_path / "ghost.json")
         assert fragment is None
         assert any("could not stat" in e for e in errors)
 
-    def test_invalid_fragment_returns_none_with_errors(self, tmp_path) -> None:
+    def test_invalid_fragment_returns_none_with_errors(self, tmp_path: Path) -> None:
         p = tmp_path / "frag.json"
         p.write_text(
             json.dumps({"nodes": [{"id": "bad/id"}], "edges": []}), encoding="utf-8"
@@ -369,7 +376,7 @@ class TestAppendRationaleAttr:
         assert node["rationale"] == "reason one"
 
     def test_appends_to_existing(self) -> None:
-        node = {"rationale": "first"}
+        node: JsonObject = {"rationale": "first"}
         _append_rationale_attr(node, ["second"])
         assert node["rationale"] == "first\n\nsecond"
 
@@ -402,7 +409,7 @@ class TestSanitizeExtra:
         assert result["nodes"] == []
 
     def test_concept_sentence_node_removed(self) -> None:
-        fragment = {
+        fragment: JsonObject = {
             "nodes": [
                 {"id": "n.keep", "label": "Keep", "file_type": "code"},
                 {
@@ -415,4 +422,6 @@ class TestSanitizeExtra:
             "hyperedges": [],
         }
         result = sanitize_semantic_fragment(fragment)
-        assert {n["id"] for n in result["nodes"]} == {"n.keep"}
+        assert {as_str(dig(n, "id")) for n in as_list(dig(result, "nodes"))} == {
+            "n.keep"
+        }

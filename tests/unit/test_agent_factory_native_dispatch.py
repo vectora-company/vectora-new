@@ -6,6 +6,8 @@ consome no dispatch de produção (StreamChat/ResumeChat).
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -23,14 +25,14 @@ from backend.vtypes.message import (
 
 
 @pytest.fixture(autouse=True)
-def _limpa_cache_native_agent():
+def _limpa_cache_native_agent() -> Iterator[None]:
     af._native_agents.clear()
     yield
     af._native_agents.clear()
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "native.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -194,7 +196,9 @@ class TestNativeSubagentCatalogAbac:
         assert resultado.startswith("Error:")
         assert "amend" in resultado
 
-    def test_disabled_tools_filtradas_do_catalogo(self, monkeypatch):
+    def test_disabled_tools_filtradas_do_catalogo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """ABAC/kill-switch: tools desabilitadas saem das specs nativas de
         subagente (substitui a cobertura do antigo _subagent_specs legado)."""
         from backend.rbac import tool_policy
@@ -211,8 +215,8 @@ class TestNativeSubagentCatalogAbac:
         assert "ask_parent_agent" in coder_tools
 
     def test_soul_readonly_nunca_ganha_tool_de_escrita_mesmo_sem_kill_switch(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Gap real (revisão de 2026-08-30): o teste acima só provava ABAC
         pra `coder` — não prova que uma SOUL genuinamente read-only
         (`reviewer`: só `git_readonly`/`fs_readonly`/`rag`/`aitl` nos
@@ -235,7 +239,7 @@ class TestNativeSubagentCatalogAbac:
 class TestAgetThreadMessagesNativePrimeiro:
     async def test_thread_com_historico_nativo_usa_sessionstore(
         self, session_store: SessionStore
-    ):
+    ) -> None:
         await session_store.create_session("thread-nativa", user_id="alice")
         await session_store.append_message(
             "thread-nativa", text_message(MessageRole.SYSTEM, "prompt de sistema")
@@ -259,7 +263,9 @@ class TestAgetThreadMessagesNativePrimeiro:
         # SessionStore.set_branch_head).
         assert pairs[0][2] == str(id_user)
 
-    async def test_filtra_mensagens_de_tool_e_system(self, session_store: SessionStore):
+    async def test_filtra_mensagens_de_tool_e_system(
+        self, session_store: SessionStore
+    ) -> None:
         await session_store.create_session("thread-2", user_id="alice")
         assistente = VMessage(
             role=MessageRole.ASSISTANT,
@@ -376,7 +382,7 @@ class TestAgetThreadMessagesNativePrimeiro:
 
     async def test_thread_sem_mensagem_nativa_devolve_lista_vazia(
         self, session_store: SessionStore
-    ):
+    ) -> None:
         """Uma thread sem nenhum registro no SessionStore devolve lista
         vazia direto."""
         with patch.object(
@@ -390,7 +396,7 @@ class TestAgetThreadMessagesNativePrimeiro:
 class TestAgetThreadPendingInterruptNativePrimeiro:
     async def test_pendencia_nativa_e_devolvida_do_session_store(
         self, session_store: SessionStore
-    ):
+    ) -> None:
         await session_store.create_session("thread-hitl", user_id="alice")
         await session_store.put_pending_approval(
             "thread-hitl",
@@ -414,7 +420,9 @@ class TestAgetThreadPendingInterruptNativePrimeiro:
             "expires_at": None,
         }
 
-    async def test_sem_pendencia_nativa_devolve_none(self, session_store: SessionStore):
+    async def test_sem_pendencia_nativa_devolve_none(
+        self, session_store: SessionStore
+    ) -> None:
         with patch.object(
             af, "get_session_store", AsyncMock(return_value=session_store)
         ):
@@ -426,7 +434,7 @@ class TestAgetThreadPendingInterruptNativePrimeiro:
 class TestAgetThreadTodosNativo:
     async def test_devolve_o_snapshot_da_ultima_chamada_de_write_todos(
         self, session_store: SessionStore
-    ):
+    ) -> None:
         import json
 
         await session_store.create_session("thread-todos", user_id="alice")
@@ -469,7 +477,7 @@ class TestAgetThreadTodosNativo:
 
     async def test_usa_a_chamada_mais_recente_quando_ha_varias(
         self, session_store: SessionStore
-    ):
+    ) -> None:
         import json
 
         await session_store.create_session("thread-todos-2", user_id="alice")
@@ -508,7 +516,7 @@ class TestAgetThreadTodosNativo:
 
     async def test_thread_sem_chamada_de_write_todos_devolve_lista_vazia(
         self, session_store: SessionStore
-    ):
+    ) -> None:
         """Borda: thread com histórico normal (sem write_todos) não deve
         lançar nem confundir outra tool com a checklist."""
         await session_store.create_session("thread-sem-todos", user_id="alice")
@@ -525,7 +533,7 @@ class TestAgetThreadTodosNativo:
 
     async def test_ultima_chamada_com_erro_e_ignorada_usa_a_anterior_valida(
         self, session_store: SessionStore
-    ):
+    ) -> None:
         import json
 
         await session_store.create_session("thread-todos-erro", user_id="alice")

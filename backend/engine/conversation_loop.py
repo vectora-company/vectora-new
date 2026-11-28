@@ -40,6 +40,8 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import uuid4
 
+from pydantic import TypeAdapter
+
 from backend.engine.delegation_policy import user_disabled_subagent_delegation
 from backend.engine.guardrails import LoopCapConfig, TurnBudget
 from backend.engine.hooks import MAX_RESPONSE_REVISIONS, response_denial_feedback
@@ -86,7 +88,7 @@ from backend.persistence.native.ledger import (
 )
 from backend.services.context_planner import compute_transcript_hash
 from backend.services.memory_store import MemoryRecord
-from backend.vtypes.contracts import ToolOption
+from backend.vtypes.contracts import JsonObject, JsonValue, ToolOption
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -117,7 +119,8 @@ def _record_turn_telemetry[**RunArgs, RunResult](
         config = kwargs.get("config")
         run_id = getattr(config, "run_id", None)
         turn_id = str(run_id or f"turn-{uuid4().hex}")
-        thread_id = kwargs.get("thread_id")
+        raw_thread_id = kwargs.get("thread_id")
+        thread_id = raw_thread_id if isinstance(raw_thread_id, str) else None
         from backend.persistence.telemetry import telemetry
 
         started = time.perf_counter()
@@ -177,12 +180,15 @@ async def _bind_decision_model_snapshot(
 
     current = decision_model_preferences(ctx)
     surfaces = current.get("surfaces")
-    effective = {
+    surface_flags: JsonObject = (
+        {str(name): enabled is True for name, enabled in surfaces.items()}
+        if isinstance(surfaces, dict)
+        else {}
+    )
+    effective: JsonObject = {
         "enabled": current.get("enabled") is True,
         "provider": current.get("provider"),
-        "surfaces": {str(name): enabled is True for name, enabled in surfaces.items()}
-        if isinstance(surfaces, dict)
-        else {},
+        "surfaces": surface_flags,
     }
     provider = effective["provider"] if isinstance(effective["provider"], str) else None
     model_by_provider = {
@@ -192,12 +198,13 @@ async def _bind_decision_model_snapshot(
         "jev-api": settings.systemone_jev_api_model,
         "openrouter-api": settings.systemone_openrouter_model,
     }
-    runtime = {
-        "preferences_revision": await asyncio.to_thread(
-            runtime_settings.get_decision_model_revision,
-            ctx.user_id or "local",
-            ctx.workspace_id or None,
-        ),
+    revision = await asyncio.to_thread(
+        runtime_settings.get_decision_model_revision,
+        ctx.user_id or "local",
+        ctx.workspace_id or None,
+    )
+    runtime: JsonObject = {
+        "preferences_revision": {**revision},
         "provider_config_fingerprint": decision_model_runtime_fingerprint(provider),
         "model": model_by_provider.get(provider) if isinstance(provider, str) else None,
         "systemone_enabled": settings.systemone_enabled,
@@ -235,7 +242,7 @@ async def _bind_decision_model_snapshot(
                 ctx._extra.pop("decision_model_revoked", None)
             ctx._extra["decision_model_snapshot"] = previous
         return
-    snapshot = {
+    snapshot: JsonObject = {
         "kind": "decision_model_snapshot",
         "evidence_id": evidence_id,
         "run_id": run_id,
@@ -257,14 +264,16 @@ async def _bind_decision_model_snapshot(
     if persisted != snapshot:
         ctx._extra["decision_model_revoked"] = True
         snapshot = persisted
-        effective = persisted.get("preferences", effective)
+        recorded = persisted.get("preferences")
+        if isinstance(recorded, dict):
+            effective = recorded
     else:
         ctx._extra.pop("decision_model_revoked", None)
     ctx._extra["decision_model_preferences"] = effective
     ctx._extra["decision_model_snapshot"] = snapshot
 
 
-def _build_selected_decision_harness(ctx: ToolContext) -> Any | None:
+def _build_selected_decision_harness(ctx: ToolContext) -> SystemOneHarness | None:
     """Build only the explicitly selected decision provider for this run."""
     from backend.llm.systemone.preferences import selected_decision_model_provider
 
@@ -284,7 +293,7 @@ async def _persist_decision_model_record(
     thread_id: str,
     tool_call: ToolCall,
     surface: str | tuple[str, ...],
-    record: dict[str, Any],
+    record: Mapping[str, JsonValue],
 ) -> None:
     """Persist a redacted decision in AgentRun and the thread ledger."""
     if not run_id:
@@ -298,20 +307,20 @@ async def _persist_decision_model_record(
 
     from backend.engine.decision_record import DecisionRecord
 
-    record = DecisionRecord.model_validate(
+    validated = DecisionRecord.model_validate(
         {key: value for key, value in record.items() if key != "raw_response"}
     ).model_dump(exclude_none=True)
     args_digest = hashlib.sha256(
         json.dumps(tool_call.args, sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()
     call_id = tool_call.id or f"{tool_call.name}:{args_digest}"
-    payload = {
+    payload: JsonObject = {
         "tool_name": tool_call.name,
         "tool_call_id": call_id,
         "args_digest": args_digest,
         "surface": list(surface) if isinstance(surface, tuple) else surface,
         **{
-            key: record[key]
+            key: validated[key]
             for key in (
                 "decision",
                 "reason",
@@ -322,17 +331,17 @@ async def _persist_decision_model_record(
                 "policy_version",
                 "decision_id",
             )
-            if key in record
+            if key in validated
         },
     }
-    evidence = {
+    evidence: JsonObject = {
         "type": "decision_model_decision",
         "evidence_id": make_decision_model_decision_key(run_id, call_id),
         "run_id": run_id,
         "thread_id": thread_id,
         **payload,
     }
-    response_redacted = record.get("response_redacted")
+    response_redacted = validated.get("response_redacted")
     if isinstance(response_redacted, dict):
         evidence["response_redacted"] = response_redacted
     await session_store.record_run_evidence(
@@ -457,7 +466,7 @@ async def _consume_preapproval_grant(
     ).hexdigest()
     call_id = tool_call.id or f"{tool_call.name}:{args_digest}"
     event_key = hashlib.sha256(f"preapproval:{run_id}:{grant_id}".encode()).hexdigest()
-    evidence = {
+    evidence: JsonObject = {
         "type": "hitl_preapproval_consumed",
         "evidence_id": event_key,
         "run_id": run_id,
@@ -563,16 +572,26 @@ async def _read_persistent_context_memories(ctx: ToolContext) -> list[MemoryReco
 
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Mapping
+    from typing import Unpack
 
     from backend.engine.hitl import ApprovalGate
-    from backend.engine.stream_events import EventSink
+    from backend.engine.hooks import HookOutcome
+    from backend.engine.stream_events import EngineEvent, EventSink
     from backend.llm.base import ChatClient
+    from backend.llm.systemone.harness import SystemOneHarness
+    from backend.persistence.native.agent_run import AgentRunStatus
     from backend.persistence.native.session_store import SessionStore
     from backend.services.context_planner import PlannedContext
     from backend.services.policy_compiler import PolicySnapshot
     from backend.tools.context import ToolContext
     from backend.tools.registry import ToolRegistry
+    from backend.vtypes.engine import (
+        ApprovalPredicate,
+        ToolCallFragment,
+        ToolDecisionFields,
+    )
+    from backend.vtypes.persistence import RunEvidence
 
 
 @dataclass(slots=True)
@@ -606,16 +625,16 @@ class LoopResult:
     tool_names: tuple[str, ...] = ()
 
 
-async def _noop_event(_event: object) -> None:
-    """Executa a operação  noop event."""
-    return
+async def _noop_event(event: EngineEvent) -> None:
+    """Descarta o evento quando ninguém está ouvindo."""
+    del event
 
 
 async def _safe_update_agent_run_status(
-    session_store: Any,
+    session_store: SessionStore,
     run_id: str | None,
     *,
-    status: str,
+    status: AgentRunStatus,
     detail: str | None = None,
     error_code: str | None = None,
     metrics: AgentRunMetrics | None = None,
@@ -637,7 +656,7 @@ async def _safe_update_agent_run_status(
         )
 
 
-async def _pre_response_hooks(ctx: ToolContext, text: str) -> Any | None:
+async def _pre_response_hooks(ctx: ToolContext, text: str) -> HookOutcome | None:
     """Roda os hooks ``pre_response``; devolve o desfecho que negou a resposta."""
     from backend.engine.hooks import blocking_outcome, run_hooks
     from backend.engine.tool_batch import _record_hook_outcomes
@@ -655,7 +674,7 @@ async def _pre_response_hooks(ctx: ToolContext, text: str) -> Any | None:
 
 
 async def _safe_record_run_evidence(
-    session_store: Any, run_id: str | None, **evidence: Any
+    session_store: SessionStore, run_id: str | None, **evidence: Unpack[RunEvidence]
 ) -> None:
     """Persiste evidências de forma best-effort, sem perder o resultado da tool."""
     if not run_id or not hasattr(session_store, "record_run_evidence"):
@@ -669,7 +688,7 @@ async def _safe_record_run_evidence(
 
 
 async def _record_evaluation_metric(
-    session_store: Any,
+    session_store: SessionStore,
     *,
     run_id: str | None,
     scenario_id: str,
@@ -722,7 +741,11 @@ async def _record_evaluation_metric(
     )
 
 
-def _safe_evaluation_label(value: object) -> str | None:
+def _optional_label(value: JsonValue) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _safe_evaluation_label(value: JsonValue) -> str | None:
     """Aceita apenas rótulos curtos de provider/model sem payload ou credencial."""
     if not isinstance(value, str) or not re.fullmatch(
         r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}", value
@@ -778,14 +801,14 @@ def _reported_cost_usd(
 
 
 async def _record_evaluation_provenance(
-    session_store: Any,
+    session_store: SessionStore,
     *,
     run_id: str,
     scenario_id: str,
     provider: str | None,
     model: str | None,
     identity: str,
-    configuration: dict[str, object],
+    configuration: JsonObject,
     runtime_version: str,
 ) -> None:
     """Persiste somente metadados e o digest da configuração permitida."""
@@ -858,7 +881,7 @@ def _sanitize_tool_call(tc: ToolCall, ctx: ToolContext) -> ToolCall:
     return replace(tc, args=args)
 
 
-def _args_preview(args: dict[str, Any]) -> str:
+def _args_preview(args: JsonObject) -> str:
     """Preview curto (≤80 chars) dos args de uma tool call, pra exibir na
     linha de status do agente (AgentStatusLine) enquanto a tool roda —
     prioriza campos semânticos comuns, com fallback pros 2 primeiros
@@ -1072,7 +1095,7 @@ def _call_signature(tool_call: ToolCall) -> tuple[str, str]:
     return (tool_call.name, json.dumps(tool_call.args, sort_keys=True))
 
 
-def _resolve_tool_calls(acumulado: dict[int, dict[str, Any]]) -> list[ToolCall]:
+def _resolve_tool_calls(acumulado: dict[int, ToolCallFragment]) -> list[ToolCall]:
     """Monta `ToolCall`s completas a partir dos fragmentos acumulados por
     `index` — `arguments` inválido não derruba o turno, vira `_parse_error`
     (mesmo padrão já usado nos 5 chat clients nativos)."""
@@ -1080,6 +1103,7 @@ def _resolve_tool_calls(acumulado: dict[int, dict[str, Any]]) -> list[ToolCall]:
     for indice in sorted(acumulado):
         item = acumulado[indice]
         args_texto = item["args_fragment"] or "{}"
+        args: JsonObject
         try:
             args = json.loads(args_texto)
         except json.JSONDecodeError:
@@ -1132,7 +1156,7 @@ async def _report_media_routing(
     *,
     model_id: str,
     downgraded: bool,
-    emit: Callable[[Any], Awaitable[None]],
+    emit: EventSink,
     session_store: SessionStore,
     run_id: str | None,
     thread_id: str,
@@ -1161,7 +1185,7 @@ async def _report_media_routing(
                         name=str(entry["name"]),
                         media_kind=str(entry["media_kind"]),
                         mime_type=str(entry["mime_type"]),
-                        size_bytes=int(cast("int", entry["size_bytes"])),
+                        size_bytes=int(str(entry["size_bytes"])),
                         mode=str(entry["mode"]),
                         reason=str(entry["reason"]),
                         model=model_id,
@@ -1180,7 +1204,7 @@ async def _report_media_routing(
                     "run_id": run_id,
                     "thread_id": thread_id,
                     "model": model_id,
-                    "attachments": entries,
+                    "attachments": [*entries],
                 },
             )
         except Exception:
@@ -1197,10 +1221,7 @@ async def run_conversation(  # noqa: PLR0911
     thread_id: str,
     config: LoopConfig,
     on_event: EventSink | None = None,
-    should_require_approval: Callable[
-        [str, ToolContext, dict[str, Any], list[VMessage]], bool
-    ]
-    | None = None,
+    should_require_approval: ApprovalPredicate | None = None,
     approval_gate: ApprovalGate | None = None,
     policy_snapshot: PolicySnapshot | None = None,
 ) -> LoopResult:
@@ -1341,7 +1362,7 @@ async def run_conversation(  # noqa: PLR0911
             )
             current_history = await session_store.get_history(thread_id)
             checkpoint_sequence = (
-                int(cast("int", checkpoint.get("last_sequence", 0)))
+                int(checkpoint.get("last_sequence", 0))
                 if checkpoint is not None
                 else -1
             )
@@ -1506,7 +1527,7 @@ async def run_conversation(  # noqa: PLR0911
             )
 
         partes_texto: list[str] = []
-        tool_call_chunks_por_indice: dict[int, dict[str, Any]] = {}
+        tool_call_chunks_por_indice: dict[int, ToolCallFragment] = {}
         chunk_count = 0
         text_chunk_count = 0
         reasoning_chars = 0
@@ -2092,14 +2113,16 @@ async def run_conversation(  # noqa: PLR0911
                                 )
                                 if agent_run is not None:
                                     v_entry = v_res.to_evidence_entry()
-                                    v_entry["artifact_refs"] = sorted(
-                                        {
-                                            str(artifact.get("artifact_id"))
-                                            for artifact in agent_run.artifacts
-                                            if isinstance(artifact, dict)
-                                            and artifact.get("artifact_id")
-                                        }
-                                    )
+                                    v_entry["artifact_refs"] = [
+                                        *sorted(
+                                            {
+                                                str(artifact.get("artifact_id"))
+                                                for artifact in agent_run.artifacts
+                                                if isinstance(artifact, dict)
+                                                and artifact.get("artifact_id")
+                                            }
+                                        )
+                                    ]
                                     agent_run.evidence.append(v_entry)
                                     agent_run.metrics = iter_metrics
                                     agent_run.detail = v_res.detail
@@ -2284,7 +2307,7 @@ async def run_conversation(  # noqa: PLR0911
                 interrupt_id = str(uuid4())
                 stable_call_id = (pendente.id or "").strip() or interrupt_id
                 approval_args = dict(pendente.args)
-                approval_metadata: dict[str, Any] | None = None
+                approval_metadata: JsonObject | None = None
                 if pendente.name == "write_terminal":
                     raw_input = str(approval_args.pop("input_data", ""))
                     approval_args["input_preview"] = "<redacted>"
@@ -2374,7 +2397,7 @@ async def run_conversation(  # noqa: PLR0911
                             "interrupt_id": interrupt_id,
                             "tool_name": pendente.name,
                             "tool_call_id": stable_call_id,
-                            "options": options,
+                            "options": TypeAdapter(JsonValue).validate_python(options),
                             "priority": priority,
                         },
                     )
@@ -2426,19 +2449,22 @@ async def run_conversation(  # noqa: PLR0911
             extras = spec.extras if spec is not None else None
             _started_at.setdefault(tc.id, time.monotonic())
             preview = _previews.setdefault(tc.id, _args_preview(tc.args))
-            decision_data: dict[str, Any] = {}
+            decision_data: ToolDecisionFields = {}
             try:
                 from backend.engine.hitl import _risk_assessment_key
 
                 decisions = ctx._extra.get("systemone_decisions", {})
                 candidate = decisions.get(_risk_assessment_key(tc.name, tc.args))
                 if isinstance(candidate, dict):
+                    confidence = candidate.get("confidence")
                     decision_data = {
-                        "decision": candidate.get("decision"),
-                        "decision_reason": candidate.get("reason"),
-                        "decision_provider": candidate.get("provider"),
-                        "decision_model": candidate.get("model"),
-                        "decision_confidence": candidate.get("confidence"),
+                        "decision": _optional_label(candidate.get("decision")),
+                        "decision_reason": _optional_label(candidate.get("reason")),
+                        "decision_provider": _optional_label(candidate.get("provider")),
+                        "decision_model": _optional_label(candidate.get("model")),
+                        "decision_confidence": confidence
+                        if isinstance(confidence, int | float)
+                        else None,
                     }
             except Exception:
                 logger.debug(
@@ -2757,14 +2783,16 @@ async def run_conversation(  # noqa: PLR0911
                                                 ),
                                             )
                                             v_entry = v_res.to_evidence_entry()
-                                            v_entry["artifact_refs"] = sorted(
-                                                {
-                                                    str(artifact.get("artifact_id"))
-                                                    for artifact in agent_run.artifacts
-                                                    if isinstance(artifact, dict)
-                                                    and artifact.get("artifact_id")
-                                                }
-                                            )
+                                            v_entry["artifact_refs"] = [
+                                                *sorted(
+                                                    {
+                                                        str(artifact.get("artifact_id"))
+                                                        for artifact in agent_run.artifacts
+                                                        if isinstance(artifact, dict)
+                                                        and artifact.get("artifact_id")
+                                                    }
+                                                )
+                                            ]
                                             v_entry["step_id"] = step_key
                                             v_entry["quality_gate"] = gate_key
                                             agent_run.evidence.append(v_entry)
@@ -3064,7 +3092,7 @@ async def resume_conversation(
     ctx: ToolContext,
     thread_id: str,
     decision: str,
-    edited_args: dict[str, Any] | None = None,
+    edited_args: JsonObject | None = None,
     decided_by: str | None = None,
     interrupt_id: str | None = None,
     approval_gate: ApprovalGate | None = None,
@@ -3143,7 +3171,7 @@ async def resume_conversation(
 
     async def _execute_resume_tool(
         tc: ToolCall,
-        args: dict[str, Any] | None = None,
+        args: JsonObject | None = None,
         policy_snapshot: PolicySnapshot | None = None,
         human_approved: bool = False,
     ) -> VMessage:
@@ -3171,7 +3199,7 @@ async def resume_conversation(
                     _extra={**ctx._extra, "systemone_decisions": remaining},
                 )
 
-        async def record(event_type: str, payload: dict[str, Any]) -> None:
+        async def record(event_type: str, payload: JsonObject) -> None:
             """Executa a operação record."""
             if not resume_run_id:
                 return

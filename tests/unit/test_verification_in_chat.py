@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from backend.engine.conversation_loop import LoopConfig, run_conversation
-from backend.engine.stream_events import VerificationFinished
+from backend.engine.stream_events import EngineEvent, VerificationFinished
 from backend.persistence.native.session_store import SessionStore
 from backend.services.verification.engine import VerificationResult
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
-from backend.tools.registry import ToolRegistry
-from backend.vtypes.message import MessageRole, VMessageChunk, text_message
+from backend.tools.registry import ToolRegistry, ToolSpec
+from backend.vtypes.message import MessageRole, VMessage, VMessageChunk, text_message
 
 
 def test_verification_event_becomes_sse_event() -> None:
@@ -32,17 +34,29 @@ def test_verification_event_becomes_sse_event() -> None:
 
 
 class _AnsweringClient:
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         yield VMessageChunk(delta_text="feito")
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         raise NotImplementedError
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "verify.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -54,8 +68,12 @@ async def session_store(tmp_path):
         await pool.close()
 
 
-async def _run_with_verification(session_store, monkeypatch, result):
-    async def fake_run_verification(*_args, **_kwargs):
+async def _run_with_verification(
+    session_store: SessionStore,
+    monkeypatch: pytest.MonkeyPatch,
+    result: VerificationResult,
+) -> list[VerificationFinished]:
+    async def fake_run_verification(*_args: str | None, **_kwargs: str | None):
         return result
 
     monkeypatch.setattr(
@@ -64,9 +82,9 @@ async def _run_with_verification(session_store, monkeypatch, result):
     await session_store.append_message(
         "thread-v", text_message(MessageRole.USER, "faça")
     )
-    events: list[object] = []
+    events: list[EngineEvent] = []
 
-    async def on_event(event: object) -> None:
+    async def on_event(event: EngineEvent) -> None:
         events.append(event)
 
     await run_conversation(
@@ -82,7 +100,7 @@ async def _run_with_verification(session_store, monkeypatch, result):
 
 
 async def test_loop_emits_verification_when_a_gate_ran(
-    session_store, monkeypatch
+    session_store: SessionStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     result = VerificationResult(
         passed=True, status="passed", snapshot_sha256="abc", outcome="passed"
@@ -94,7 +112,7 @@ async def test_loop_emits_verification_when_a_gate_ran(
 
 
 async def test_loop_stays_quiet_for_a_plain_chat_turn(
-    session_store, monkeypatch
+    session_store: SessionStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     result = VerificationResult(
         passed=False, status="degraded", snapshot_sha256="abc", outcome="not_run"
@@ -123,10 +141,12 @@ async def test_history_verification_goes_on_the_turns_last_answer() -> None:
     plain_run = SimpleNamespace(run_id="r2", detail="", evidence=[])
 
     class _Store:
-        async def list_agent_runs(self, thread_id: str, *, limit: int = 50):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int = 50
+        ) -> list[SimpleNamespace]:
             return [run, plain_run]
 
-        async def latest_assistant_message_id(self, thread_id: str, run_id: str):
+        async def latest_assistant_message_id(self, thread_id: str, run_id: str) -> int:
             return {"r1": 42, "r2": 43}[run_id]
 
     verifications = await _history_verifications(_Store(), "t")  # ty: ignore[invalid-argument-type]
@@ -159,10 +179,12 @@ async def test_history_hides_not_verified_on_a_plain_chat_turn() -> None:
     )
 
     class _Store:
-        async def list_agent_runs(self, thread_id: str, *, limit: int = 50):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int = 50
+        ) -> list[SimpleNamespace]:
             return [chat_run]
 
-        async def latest_assistant_message_id(self, thread_id: str, run_id: str):
+        async def latest_assistant_message_id(self, thread_id: str, run_id: str) -> int:
             return 42
 
     assert await _history_verifications(_Store(), "t") == {}  # ty: ignore[invalid-argument-type]
@@ -179,10 +201,12 @@ async def test_history_keeps_not_verified_when_the_turn_touched_files() -> None:
     )
 
     class _Store:
-        async def list_agent_runs(self, thread_id: str, *, limit: int = 50):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int = 50
+        ) -> list[SimpleNamespace]:
             return [edit_run]
 
-        async def latest_assistant_message_id(self, thread_id: str, run_id: str):
+        async def latest_assistant_message_id(self, thread_id: str, run_id: str) -> int:
             return 42
 
     verifications = await _history_verifications(_Store(), "t")  # ty: ignore[invalid-argument-type]

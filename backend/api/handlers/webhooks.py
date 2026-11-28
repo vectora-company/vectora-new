@@ -28,6 +28,7 @@ Configuração (env vars / Settings):
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import hmac
@@ -37,10 +38,15 @@ import os
 import time
 import uuid
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+
+from backend.vtypes.contracts import JsonObject
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -291,10 +297,10 @@ _SUPPORTED_PROVIDERS = frozenset(_VERIFIERS) | frozenset(_HANDLERS) | {"sendgrid
 CHANNEL_SSE = "vectora:sse"
 
 # Fila global de eventos webhook SSE (asyncio.Queue por conexão aberta)
-_sse_queues: list[Any] = []
+_sse_queues: list[asyncio.Queue[JsonObject]] = []
 
 
-def _emit_sse_event(provider: str, event_type: str, data: dict[str, Any]) -> None:
+def _emit_sse_event(provider: str, event_type: str, data: JsonObject) -> None:
     from backend.persistence.kv import publish_soon
 
     event = {
@@ -516,16 +522,12 @@ async def receive_webhook(provider: str, request: Request) -> Response:
 
 
 @router.get("/webhook/events")
-async def webhook_events_stream(request: Request) -> Any:
+async def webhook_events_stream(request: Request) -> StreamingResponse:
     """SSE stream de eventos webhook recebidos em tempo real."""
-    import asyncio
-
-    from fastapi.responses import StreamingResponse
-
-    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=200)
+    queue: asyncio.Queue[JsonObject] = asyncio.Queue(maxsize=200)
     _sse_queues.append(queue)
 
-    async def _stream() -> Any:
+    async def _stream() -> AsyncGenerator[str]:
         try:
             # Heartbeat inicial
             yield 'data: {"type":"connected","provider":"system"}\n\n'

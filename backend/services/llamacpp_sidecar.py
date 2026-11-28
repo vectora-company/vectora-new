@@ -15,6 +15,8 @@ from pathlib import Path
 import httpx
 
 from backend.services.subprocess_logging import pipe_to_logger
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.desktop import LlamacppStatus
 
 logger = logging.getLogger(__name__)
 
@@ -156,22 +158,24 @@ def _health_url(host: str, port: int) -> str:
     return f"http://{url_host}:{port}/health"
 
 
-def llamacpp_status() -> dict[str, int | bool | str | None]:
+def llamacpp_status() -> LlamacppStatus:
     """Retorna somente o estado do processo iniciado por este módulo."""
     process = _process
     running = process is not None and process.returncode is None
     spec = _process_spec if running else None
-    persisted: dict[str, object] | None = None
+    persisted: JsonObject = {}
     if not running:
         try:
-            persisted = json.loads(_state_path().read_text(encoding="utf-8"))
+            loaded = json.loads(_state_path().read_text(encoding="utf-8"))
+            persisted = loaded if isinstance(loaded, dict) else {}
         except (FileNotFoundError, json.JSONDecodeError, OSError):
-            persisted = None
+            persisted = {}
     stale = False
-    persisted_pid = persisted.get("pid") if persisted else None
-    if isinstance(persisted_pid, int):
+    stored_pid = persisted.get("pid")
+    persisted_pid = stored_pid if isinstance(stored_pid, int) else None
+    if persisted_pid is not None:
         stale = not _pid_exists(persisted_pid)
-        persisted_started = persisted.get("started_at") if persisted else None
+        persisted_started = persisted.get("started_at")
         actual_started = _process_creation_time(persisted_pid)
         if (
             not stale

@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING
 
 # Fração da janela reservada ao histórico; o resto fica para schema de tools,
 # prompt de sistema, resposta e a margem entre a contagem estimada e a real.
+if TYPE_CHECKING:
+    from backend.vtypes.services import ToolDefinitions
+
 HISTORY_WINDOW_FRACTION = 0.5
 # Teto: histórico de centenas de milhares de tokens encarece cada chamada e
 # degrada a atenção do modelo muito antes de a janela acabar.
@@ -45,7 +48,7 @@ def _is_known(model: str) -> bool:
     return model in MODEL_CONTEXT_WINDOWS
 
 
-def estimate_tools_tokens(tools: Sequence[Any]) -> int:
+def estimate_tools_tokens(tools: ToolDefinitions) -> int:
     """Estimativa do custo em tokens do schema das tools enviadas."""
     total = 0
     for tool in tools:

@@ -13,12 +13,14 @@ import base64
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
+from backend.services.assets import Asset
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage
 
 logger = logging.getLogger(__name__)
 
-AssetReader = Callable[..., tuple[object, bytes] | None]
+AssetReader = Callable[..., tuple[Asset | None, bytes] | None]
 
 
 def _unavailable_text(block: ContentBlock) -> str:
@@ -64,7 +66,7 @@ def _recent_tool_images(messages: Sequence[VMessage]) -> set[tuple[int, int]]:
 
 def _hydrate_media(
     block: ContentBlock,
-    load: Callable[[ContentBlock], tuple[object, bytes] | None],
+    load: Callable[[ContentBlock], tuple[Asset | None, bytes] | None],
 ) -> ContentBlock:
     """Carrega o arquivo (quando algum provider o aceita) e as prévias."""
     from backend.llm.media_parts import wants_bytes
@@ -120,7 +122,7 @@ def hydrate_media_blocks(
     latest_user = _latest_user_index(messages)
     recent_tool_images = _recent_tool_images(messages)
 
-    def _load(block: ContentBlock) -> tuple[object, bytes] | None:
+    def _load(block: ContentBlock) -> tuple[Asset | None, bytes] | None:
         if not block.asset_id:
             return None
         try:

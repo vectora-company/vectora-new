@@ -15,7 +15,7 @@ import pytest
 from backend.tools.github import github_fetch_pr_diff, github_post_pr_comment
 
 
-def _mock_httpx(response: MagicMock):
+def _mock_httpx(response: MagicMock) -> AsyncMock:
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
     mock_ctx.__aexit__ = AsyncMock(return_value=False)
@@ -134,6 +134,64 @@ class TestGithubFetchPrDiff:
         assert rate_limit_result["rate_limited"] is True
         assert permission_result["status"] == "error"
         assert "rate_limited" not in permission_result
+
+    @pytest.mark.asyncio
+    async def test_diff_grande_demais_e_montado_pela_lista_de_arquivos(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("GITHUB_TOKEN", "ghp_fake")
+        too_large = MagicMock(
+            status_code=406, text='{"errors":[{"code":"too_large"}]}', headers={}
+        )
+        first = MagicMock(status_code=200)
+        first.json.return_value = [
+            {"filename": f"src/{n}.py", "patch": f"@@ -0,0 +1 @@\n+{n}"}
+            for n in range(100)
+        ]
+        second = MagicMock(status_code=200)
+        second.json.return_value = [
+            {"filename": "novo.png", "previous_filename": "antigo.png"}
+        ]
+        client = _mock_httpx(too_large)
+        client.get = AsyncMock(side_effect=[too_large, first, second])
+
+        with patch("httpx.AsyncClient", return_value=client):
+            result = json.loads(
+                await github_fetch_pr_diff(owner="vectora", repo="vectora", pr_number=7)
+            )
+
+        assert result["status"] == "ok"
+        assert result["truncated"] is False
+        assert "diff --git a/src/0.py b/src/0.py\n@@ -0,0 +1 @@\n+0" in result["diff"]
+        assert "diff --git a/antigo.png b/novo.png" in result["diff"]
+        assert client.get.call_args.kwargs["params"] == {"per_page": 100, "page": 2}
+
+    @pytest.mark.asyncio
+    async def test_lista_de_arquivos_e_limitada_e_erro_e_informado(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("GITHUB_TOKEN", "ghp_fake")
+        too_large = MagicMock(
+            status_code=406, text='{"errors":[{"code":"too_large"}]}', headers={}
+        )
+        full = MagicMock(status_code=200)
+        full.json.return_value = [{"filename": "a.py", "patch": "+a"}] * 100
+        failed = MagicMock(status_code=500, text="falha", headers={})
+        client = _mock_httpx(too_large)
+        client.get = AsyncMock(side_effect=[too_large, full, full, full])
+        with patch("httpx.AsyncClient", return_value=client):
+            limited = json.loads(
+                await github_fetch_pr_diff(owner="vectora", repo="vectora", pr_number=7)
+            )
+        client.get = AsyncMock(side_effect=[too_large, failed])
+        with patch("httpx.AsyncClient", return_value=client):
+            error = json.loads(
+                await github_fetch_pr_diff(owner="vectora", repo="vectora", pr_number=7)
+            )
+
+        assert limited["truncated"] is True
+        assert error["status"] == "error"
+        assert "500" in error["error"]
 
     @pytest.mark.asyncio
     async def test_erro_de_rede_nunca_propaga(

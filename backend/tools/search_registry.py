@@ -18,7 +18,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+
+from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +35,12 @@ class SearchBackend:
     #: Sem credencial configurada o backend não entra na resolução automática
     #: e é recusado na escolha explícita.
     is_available: Callable[[], bool]
-    search: Callable[..., Awaitable[list[dict]]]
+    search: Callable[..., Awaitable[list[JsonObject]]]
     #: True quando não exige credencial nenhuma.
     keyless: bool = False
 
 
-async def _search_tavily(query: str, max_results: int = 5) -> list[dict]:
+async def _search_tavily(query: str, max_results: int = 5) -> list[JsonObject]:
     from backend.settings import settings
     from backend.tools.tavily.client import TavilyClient
 
@@ -52,7 +53,7 @@ async def _search_tavily(query: str, max_results: int = 5) -> list[dict]:
         await client.aclose()
 
 
-async def _search_ollama_web(query: str, max_results: int = 5) -> list[dict]:
+async def _search_ollama_web(query: str, max_results: int = 5) -> list[JsonObject]:
     from backend.llm.ollama.web_search import ollama_web_search
     from backend.settings import settings
 
@@ -63,14 +64,14 @@ async def _search_ollama_web(query: str, max_results: int = 5) -> list[dict]:
     )
 
 
-async def _search_browser(query: str, max_results: int = 5) -> list[dict]:
+async def _search_browser(query: str, max_results: int = 5) -> list[JsonObject]:
     """Busca no Chromium do Electron, reaproveitando os logins do usuário."""
     from backend.browser.search_fallback import search_fallback
 
     return search_fallback(query, max_results=max_results)
 
 
-async def _search_duckduckgo(query: str, max_results: int = 5) -> list[dict]:
+async def _search_duckduckgo(query: str, max_results: int = 5) -> list[JsonObject]:
     from backend.browser.search_fallback import search_fallback
 
     return search_fallback(query, max_results=max_results)
@@ -177,7 +178,7 @@ def resolve_backend() -> SearchBackend:
     raise SearchBackendUnavailableError(msg)
 
 
-def backend_choices() -> list[dict[str, Any]]:
+def backend_choices() -> list[JsonObject]:
     """Opções pro seletor das Settings, com disponibilidade por item."""
     return [
         {

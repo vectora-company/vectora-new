@@ -29,6 +29,7 @@ from backend.persistence.native.session_store import (
     _RunEvidenceLockRegistry,
 )
 from backend.storage.sqlite.pool import AsyncConnectionPool
+from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture
@@ -66,7 +67,7 @@ class TestRedaction:
 
     def test_redact_sensitive_data_dict_keys(self) -> None:
         """Verifica o comportamento de redact sensitive data dict keys."""
-        payload = {
+        payload: JsonObject = {
             "api_key": "minha-chave-secreta",
             "x-auth-token": "meu-token-secreto",
             "db-password": "senha-super-forte",
@@ -81,8 +82,10 @@ class TestRedaction:
         assert res["x-auth-token"] == "[REDACTED]"
         assert res["db-password"] == "[REDACTED]"
         assert res["normal_field"] == "conteudo livre"
-        assert res["nested"]["token"] == "[REDACTED]"
-        assert res["nested"]["safe"] == "ok"
+        nested = res["nested"]
+        assert isinstance(nested, dict)
+        assert nested["token"] == "[REDACTED]"
+        assert nested["safe"] == "ok"
 
     def test_redact_preserves_numeric_usage_counters(self) -> None:
         """Evidence keeps token accounting while still redacting credentials."""
@@ -602,7 +605,7 @@ class TestAgentRunLifecycle:
 
     async def test_upsert_preserves_untrusted_content_provenance(
         self, store: SessionStore
-    ):
+    ) -> None:
         """Verifica o comportamento de upsert preserves untrusted content provenance."""
         await store.create_session("thread-untrusted-preservation", user_id="user-xyz")
         run_id = "run-untrusted-1"

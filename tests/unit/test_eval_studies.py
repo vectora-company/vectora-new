@@ -11,10 +11,11 @@ from pydantic import ValidationError
 
 from backend.cli.eval import _handle_study_validate
 from backend.evaluation.studies import TechnicalStudy
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
-def _study(**updates: object) -> dict[str, object]:
-    study: dict[str, object] = {
+def _study(**updates: JsonValue) -> JsonObject:
+    study: JsonObject = {
         "study_id": "context-cache-study",
         "title": "Teste de hipótese de cache",
         "state": "planned",
@@ -80,14 +81,15 @@ def test_study_cannot_conclude_before_running_or_duplicate_evidence_ids() -> Non
     with pytest.raises(ValidationError, match="estudo planejado"):
         TechnicalStudy.model_validate(_study(conclusion="supported"))
 
-    duplicate_evidence = {
+    duplicate_evidence: JsonObject = {
         "evidence_id": "claim-1",
         "kind": "external_claim",
         "source": "https://example.invalid/paper",
         "observation": "O artigo relata melhora de latência.",
         "limitations": ["Resultado externo ainda não reproduzido."],
     }
-    duplicated = _study(evidence=[duplicate_evidence, duplicate_evidence.copy()])
+    evidence: list[JsonValue] = [duplicate_evidence, duplicate_evidence.copy()]
+    duplicated = _study(evidence=evidence)
     with pytest.raises(ValidationError, match="evidence_id precisa ser único"):
         TechnicalStudy.model_validate(duplicated)
 

@@ -9,7 +9,7 @@ import pytest
 
 
 class TestMinHash:
-    def test_initial_hashvalues_are_max(self):
+    def test_initial_hashvalues_are_max(self) -> None:
         from backend.context_graph._minhash import MinHash
 
         mh = MinHash(num_perm=16)
@@ -17,7 +17,7 @@ class TestMinHash:
         # All values start at _MH mask
         assert len(mh.hashvalues) == 16
 
-    def test_update_reduces_hashvalues(self):
+    def test_update_reduces_hashvalues(self) -> None:
         from backend.context_graph._minhash import MinHash
 
         mh = MinHash(num_perm=16)
@@ -26,7 +26,7 @@ class TestMinHash:
         # At least some values should change
         assert not all(mh.hashvalues == initial)
 
-    def test_same_content_same_hashvalues(self):
+    def test_same_content_same_hashvalues(self) -> None:
         from backend.context_graph._minhash import MinHash
 
         mh1 = MinHash(num_perm=32)
@@ -36,7 +36,7 @@ class TestMinHash:
             mh2.update(word)
         assert all(mh1.hashvalues == mh2.hashvalues)
 
-    def test_different_content_different_hashvalues(self):
+    def test_different_content_different_hashvalues(self) -> None:
         from backend.context_graph._minhash import MinHash
 
         mh1 = MinHash(num_perm=64)
@@ -47,7 +47,7 @@ class TestMinHash:
 
 
 class TestMinHashLSH:
-    def test_insert_and_query_identical(self):
+    def test_insert_and_query_identical(self) -> None:
         from backend.context_graph._minhash import MinHash, MinHashLSH
 
         lsh = MinHashLSH(threshold=0.5, num_perm=64)
@@ -59,7 +59,7 @@ class TestMinHashLSH:
         results = lsh.query(mh)
         assert "doc1" in results
 
-    def test_duplicate_key_raises(self):
+    def test_duplicate_key_raises(self) -> None:
         from backend.context_graph._minhash import MinHash, MinHashLSH
 
         lsh = MinHashLSH(threshold=0.5, num_perm=64)
@@ -69,7 +69,7 @@ class TestMinHashLSH:
         with pytest.raises(ValueError, match="already exists"):
             lsh.insert("key1", mh)
 
-    def test_similar_documents_are_candidates(self):
+    def test_similar_documents_are_candidates(self) -> None:
         from backend.context_graph._minhash import MinHash, MinHashLSH
 
         lsh = MinHashLSH(threshold=0.4, num_perm=64)
@@ -86,7 +86,7 @@ class TestMinHashLSH:
         candidates = lsh.query(mh2)
         assert "doc1" in candidates
 
-    def test_dissimilar_documents_not_candidates(self):
+    def test_dissimilar_documents_not_candidates(self) -> None:
         from backend.context_graph._minhash import MinHash, MinHashLSH
 
         lsh = MinHashLSH(threshold=0.9, num_perm=128)
@@ -101,7 +101,7 @@ class TestMinHashLSH:
         candidates = lsh.query(mh2)
         assert "docA" not in candidates
 
-    def test_query_empty_lsh(self):
+    def test_query_empty_lsh(self) -> None:
         from backend.context_graph._minhash import MinHash, MinHashLSH
 
         lsh = MinHashLSH(threshold=0.5, num_perm=32)
@@ -111,7 +111,7 @@ class TestMinHashLSH:
 
 
 class TestOptimalLSHParams:
-    def test_returns_valid_bands_rows(self):
+    def test_returns_valid_bands_rows(self) -> None:
         from backend.context_graph._minhash import _optimal_lsh_params
 
         b, r = _optimal_lsh_params(0.5, 32)
@@ -119,7 +119,7 @@ class TestOptimalLSHParams:
         assert r >= 1
         assert b * r <= 32
 
-    def test_cached_result_is_same(self):
+    def test_cached_result_is_same(self) -> None:
         from backend.context_graph._minhash import _optimal_lsh_params
 
         b1, r1 = _optimal_lsh_params(0.7, 64)
@@ -128,13 +128,13 @@ class TestOptimalLSHParams:
 
 
 class TestLSHIntegrate:
-    def test_constant_function(self):
+    def test_constant_function(self) -> None:
         from backend.context_graph._minhash import _lsh_integrate
 
         result = _lsh_integrate(lambda s: 1.0, 0.0, 1.0, n=100)
         assert abs(result - 1.0) < 0.02
 
-    def test_linear_function(self):
+    def test_linear_function(self) -> None:
         from backend.context_graph._minhash import _lsh_integrate
 
         result = _lsh_integrate(lambda x: x, 0.0, 1.0, n=1000)

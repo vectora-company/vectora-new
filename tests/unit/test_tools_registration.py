@@ -29,13 +29,13 @@ _INTEGRATION_TOOLS = {
 }
 
 
-def test_integration_tools_estao_em_all_tools():
+def test_integration_tools_estao_em_all_tools() -> None:
     names = {t.name for t in ALL_TOOLS}
     faltando = _INTEGRATION_TOOLS - names
     assert not faltando, f"tools de integração não registradas: {sorted(faltando)}"
 
 
-def test_godot_validation_is_available_only_in_workspace_toolset():
+def test_godot_validation_is_available_only_in_workspace_toolset() -> None:
     all_specs = {tool.name: tool for tool in ALL_TOOLS}
     chat_names = {tool.name for tool in CHAT_TOOLS}
 
@@ -44,7 +44,7 @@ def test_godot_validation_is_available_only_in_workspace_toolset():
     assert "validate_godot_project" not in chat_names
 
 
-def test_chat_tools_exclui_dev_e_inclui_conversacional():
+def test_chat_tools_exclui_dev_e_inclui_conversacional() -> None:
     """CHAT_TOOLS (modo Chat) é conversacional puro: web/RAG/memória/integrações,
     SEM filesystem/git/terminal/workspace. Erro/borda no mesmo teste: nenhuma tool
     de dev pode vazar, e o conjunto é subconjunto de ALL_TOOLS."""
@@ -71,7 +71,7 @@ def test_chat_tools_exclui_dev_e_inclui_conversacional():
     assert names <= {t.name for t in ALL_TOOLS}
 
 
-def test_all_tools_sem_nomes_duplicados():
+def test_all_tools_sem_nomes_duplicados() -> None:
     """Erro/borda: registrar muitas tools não pode introduzir nome duplicado
     (o dict de ToolNode silenciaria a colisão, escondendo a perda de uma tool)."""
     names = [t.name for t in ALL_TOOLS]

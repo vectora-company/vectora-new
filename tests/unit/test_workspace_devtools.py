@@ -11,12 +11,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import backend.api.handlers.workspaces as ws_mod
+from backend.vtypes.contracts import JsonObject
 
 
 class TestDevtoolsTabs:
     @pytest.mark.asyncio
-    async def test_lista_abas_da_sessao_do_agente(self, monkeypatch):
-        async def _fake_list_tabs(workspace_id):
+    async def test_lista_abas_da_sessao_do_agente(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def _fake_list_tabs(workspace_id: str) -> list[JsonObject]:
             assert workspace_id == "ws1"
             return [{"tab_id": "t1", "url": "http://localhost:3000", "active": True}]
 
@@ -29,8 +32,10 @@ class TestDevtoolsTabs:
         assert result.tabs[0].active is True
 
     @pytest.mark.asyncio
-    async def test_sem_sessao_devolve_lista_vazia(self, monkeypatch):
-        async def _fake_list_tabs(workspace_id):
+    async def test_sem_sessao_devolve_lista_vazia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def _fake_list_tabs(workspace_id: str):
             return []
 
         monkeypatch.setattr("backend.browser.session.list_tabs", _fake_list_tabs)
@@ -42,7 +47,9 @@ class TestDevtoolsTabs:
 
 class TestDevtoolsConsole:
     @pytest.mark.asyncio
-    async def test_lista_mensagens_de_console(self, monkeypatch):
+    async def test_lista_mensagens_de_console(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         tab = MagicMock()
         tab.console_log = [
             {"type": "log", "text": "hello"},
@@ -57,7 +64,9 @@ class TestDevtoolsConsole:
         assert [m.text for m in result.messages] == ["hello", "boom"]
 
     @pytest.mark.asyncio
-    async def test_sem_aba_devolve_lista_vazia_nao_erro(self, monkeypatch):
+    async def test_sem_aba_devolve_lista_vazia_nao_erro(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             "backend.browser.session.get_tab_state", lambda ws, tid=None: None
         )
@@ -67,7 +76,7 @@ class TestDevtoolsConsole:
         assert result.messages == []
 
     @pytest.mark.asyncio
-    async def test_limpar_console(self, monkeypatch):
+    async def test_limpar_console(self, monkeypatch: pytest.MonkeyPatch) -> None:
         tab = MagicMock()
         tab.console_log = MagicMock()
         monkeypatch.setattr(
@@ -80,7 +89,9 @@ class TestDevtoolsConsole:
         assert result.status == "ok"
 
     @pytest.mark.asyncio
-    async def test_limpar_console_sem_aba_retorna_erro_tipado(self, monkeypatch):
+    async def test_limpar_console_sem_aba_retorna_erro_tipado(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             "backend.browser.session.get_tab_state", lambda ws, tid=None: None
         )
@@ -92,7 +103,9 @@ class TestDevtoolsConsole:
 
 class TestDevtoolsNetwork:
     @pytest.mark.asyncio
-    async def test_lista_requisicoes_filtrando_por_resource_type(self, monkeypatch):
+    async def test_lista_requisicoes_filtrando_por_resource_type(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         tab = MagicMock()
         tab.network_log = [
             {
@@ -120,7 +133,9 @@ class TestDevtoolsNetwork:
         assert result.requests[0].request_id == "2"
 
     @pytest.mark.asyncio
-    async def test_sem_aba_devolve_lista_vazia(self, monkeypatch):
+    async def test_sem_aba_devolve_lista_vazia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             "backend.browser.session.get_tab_state", lambda ws, tid=None: None
         )
@@ -132,7 +147,9 @@ class TestDevtoolsNetwork:
 
 class TestDevtoolsEvaluate:
     @pytest.mark.asyncio
-    async def test_avalia_script_com_sucesso(self, monkeypatch):
+    async def test_avalia_script_com_sucesso(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         tab = MagicMock()
         tab.page.evaluate = AsyncMock(return_value=42)
         monkeypatch.setattr(
@@ -147,7 +164,9 @@ class TestDevtoolsEvaluate:
         assert result.result == 42
 
     @pytest.mark.asyncio
-    async def test_script_com_excecao_nao_propaga(self, monkeypatch):
+    async def test_script_com_excecao_nao_propaga(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         tab = MagicMock()
         tab.page.evaluate = AsyncMock(side_effect=RuntimeError("SyntaxError"))
         monkeypatch.setattr(
@@ -163,7 +182,9 @@ class TestDevtoolsEvaluate:
         assert "SyntaxError" in result.error
 
     @pytest.mark.asyncio
-    async def test_sem_aba_devolve_erro_tipado(self, monkeypatch):
+    async def test_sem_aba_devolve_erro_tipado(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             "backend.browser.session.get_tab_state", lambda ws, tid=None: None
         )

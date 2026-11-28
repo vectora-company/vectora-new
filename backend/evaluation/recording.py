@@ -106,9 +106,9 @@ def cassette_from_run(run: AgentRun) -> Cassette:
             interaction.systemone_decision_evidence = redact_sensitive_data(
                 {
                     "snapshot": snapshot,
-                    "decisions": decisions,
-                    "tool_results": results,
-                    "approval_events": approval_events,
+                    "decisions": [*decisions],
+                    "tool_results": [*results],
+                    "approval_events": [*approval_events],
                     "outcomes_complete": call_ids
                     == {item.get("tool_call_id") for item in results},
                 }

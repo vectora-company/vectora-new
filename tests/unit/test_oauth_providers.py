@@ -13,10 +13,12 @@ Cobre:
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import urlsplit
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.middleware.base import _CachedRequest
 
 from backend.api.handlers.oauth import router
 
@@ -26,7 +28,7 @@ def client() -> TestClient:
     app = FastAPI()
     app.include_router(router)
 
-    def fake_user(request):
+    def fake_user(request: _CachedRequest) -> None:
         from types import SimpleNamespace
 
         request.state.user = SimpleNamespace(id="user-123")
@@ -138,7 +140,7 @@ class TestGoogleOAuth:
             r = client.get("/auth/google")
         assert r.status_code == 302
         loc = r.headers["location"]
-        assert "accounts.google.com" in loc
+        assert urlsplit(loc).hostname == "accounts.google.com"
         assert "drive.readonly" in loc
         assert "gmail.readonly" in loc
 

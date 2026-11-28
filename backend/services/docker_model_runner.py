@@ -22,6 +22,15 @@ from typing import Final, Literal
 from urllib.parse import urlparse
 
 import httpx
+from pydantic import TypeAdapter
+
+from backend.vtypes.contracts import JsonObject, JsonValue
+from backend.vtypes.dmr import (
+    DmrJobPhase,
+    DmrJobState,
+    DmrOperation,
+    DockerHostInfo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,32 +118,15 @@ class DmrJob:
     """Estado observável de uma operação local do Model Runner."""
 
     id: str
-    operation: Literal["prepare", "start"]
+    operation: DmrOperation
     reference: str
     context_size: int | None
     progress: int
-    phase: Literal[
-        "queued",
-        "pulling",
-        "configuring",
-        "starting",
-        "checking",
-        "completed",
-        "failed",
-        "cancelled",
-        "interrupted",
-    ]
-    status: Literal[
-        "queued",
-        "running",
-        "completed",
-        "failed",
-        "cancelled",
-        "interrupted",
-    ]
+    phase: DmrJobPhase
+    status: DmrJobState
     output: str = ""
     error: str | None = None
-    metadata: dict[str, object] = field(default_factory=dict)
+    metadata: JsonObject = field(default_factory=dict)
 
 
 _jobs: dict[str, DmrJob] = {}
@@ -151,7 +143,7 @@ def _jobs_store_path() -> Path:
     return settings.vectora_home / "docker-model-runner-jobs.json"
 
 
-def _job_record(job: DmrJob) -> dict[str, object]:
+def _job_record(job: DmrJob) -> JsonObject:
     """Executa a operação job record."""
     return {
         "id": job.id,
@@ -167,7 +159,7 @@ def _job_record(job: DmrJob) -> dict[str, object]:
     }
 
 
-def _job_from_record(record: object) -> DmrJob | None:
+def _job_from_record(record: JsonValue) -> DmrJob | None:
     """Executa a operação job from record."""
     if not isinstance(record, dict):
         return None
@@ -205,12 +197,15 @@ def _job_from_record(record: object) -> DmrJob | None:
     metadata = record.get("metadata")
     return DmrJob(
         id=job_id,
-        operation=operation,
+        operation=TypeAdapter(DmrOperation).validate_python(operation),
         reference=reference,
         context_size=context_size,
         progress=progress,
-        phase=phase or status,
-        status=status,
+        # Registros antigos sem fase: ``running`` não é uma fase válida.
+        phase=TypeAdapter(DmrJobPhase).validate_python(
+            phase or ("starting" if status == "running" else status)
+        ),
+        status=TypeAdapter(DmrJobState).validate_python(status),
         output=str(record.get("output") or "")[-MAX_OUTPUT_BYTES:],
         error=(str(record["error"])[:2000] if record.get("error") else None),
         metadata=metadata if isinstance(metadata, dict) else {},
@@ -373,7 +368,11 @@ async def run_docker_model(
     return text
 
 
-async def docker_host_info() -> dict[str, object]:
+def _optional_int(value: JsonValue) -> int | None:
+    return value if isinstance(value, int) else None
+
+
+async def docker_host_info() -> DockerHostInfo:
     """Obtém capacidades do host Docker sem executar shell arbitrário."""
     process = await asyncio.create_subprocess_exec(
         _docker_executable(),
@@ -425,10 +424,8 @@ async def docker_host_info() -> dict[str, object]:
         "os": str(payload.get("OSType") or "") or None,
         "architecture": str(payload.get("Architecture") or "") or None,
         "server_version": str(payload.get("ServerVersion") or "") or None,
-        "cpus": payload.get("NCPU") if isinstance(payload.get("NCPU"), int) else None,
-        "memory_bytes": payload.get("MemTotal")
-        if isinstance(payload.get("MemTotal"), int)
-        else None,
+        "cpus": _optional_int(payload.get("NCPU")),
+        "memory_bytes": _optional_int(payload.get("MemTotal")),
         "runtimes": runtime_names,
         "gpu_backends": gpu_backends,
         "warnings": warning_values[-10:],
@@ -567,7 +564,7 @@ async def remove_model(reference: str) -> str:
     return await run_docker_model("rm", validate_model_reference(reference))
 
 
-async def inspect_model(reference: str) -> dict[str, object]:
+async def inspect_model(reference: str) -> JsonObject:
     """Lê metadados fornecidos pelo Docker sem confiar em texto do usuário."""
     output = await run_docker_model("inspect", validate_model_reference(reference))
     try:

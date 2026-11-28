@@ -10,9 +10,14 @@ import subprocess  # nosec B404
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
+
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+if TYPE_CHECKING:
+    from typing_extensions import TypeForm
 
 
 def _setup_isolation_env() -> Path:
@@ -77,9 +82,13 @@ def export_http(contracts_dir: Path) -> None:
     sanitized_openapi = redact_payload(openapi_schema)
     # `info.version` seguiria a versão do app e mudaria a cada release, gerando
     # drift sem mudança de contrato; o contrato carrega a própria versão.
-    sanitized_openapi.setdefault("info", {})["version"] = (
-        (_contracts_root() / "VERSION").read_text(encoding="utf-8").strip()
-    )
+    if not isinstance(sanitized_openapi, dict):
+        raise TypeError("OpenAPI sanitizado deve ser um objeto")
+    info = sanitized_openapi.get("info")
+    sanitized_openapi["info"] = {
+        **(info if isinstance(info, dict) else {}),
+        "version": (_contracts_root() / "VERSION").read_text(encoding="utf-8").strip(),
+    }
 
     http_dir = contracts_dir / "http"
     http_dir.mkdir(parents=True, exist_ok=True)
@@ -88,7 +97,7 @@ def export_http(contracts_dir: Path) -> None:
         dumps_normalized(sanitized_openapi), encoding="utf-8"
     )
 
-    routes_inventory: list[dict[str, Any]] = []
+    routes_inventory: list[JsonObject] = []
     routes_map: dict[str, set[str]] = {}
     for path, path_item in openapi_schema.get("paths", {}).items():
         methods = [
@@ -103,21 +112,21 @@ def export_http(contracts_dir: Path) -> None:
             if isinstance(m, dict) and "operationId" in m:
                 name = m["operationId"]
                 break
-        routes_inventory.append({"path": path, "methods": methods, "name": name})
+        routes_inventory.append({"path": path, "methods": [*methods], "name": name})
         routes_map.setdefault(path, set()).update(methods)
 
-    def _methods_str(r: dict[str, object]) -> str:
+    def _methods_str(r: JsonObject) -> str:
         """Normaliza a representação dos métodos HTTP do inventário."""
         m = r.get("methods")
         return "".join(str(x) for x in m) if isinstance(m, list) else ""
 
     routes_inventory.sort(key=lambda r: (str(r.get("path") or ""), _methods_str(r)))
     (http_dir / "routes.json").write_text(
-        dumps_normalized(routes_inventory), encoding="utf-8"
+        dumps_normalized([*routes_inventory]), encoding="utf-8"
     )
 
     # Overlay curado de rotas críticas
-    critical_routes: list[dict[str, Any]] = [
+    critical_routes: list[JsonObject] = [
         {"path": "/health", "methods": ["GET"], "auth": False},
         {"path": "/health/live", "methods": ["GET"], "auth": False},
         {"path": "/health/ready", "methods": ["GET"], "auth": False},
@@ -140,13 +149,13 @@ def export_http(contracts_dir: Path) -> None:
         cr_path = str(cr["path"])
         if cr_path not in routes_map:
             raise ValueError(f"Rota crítica inexistente na aplicação: {cr_path}")
-        cr_methods: list[str] = list(cr["methods"])  # type: ignore[arg-type]
-        for m in cr_methods:
+        declared = cr["methods"]
+        for m in (str(item) for item in declared) if isinstance(declared, list) else ():
             if m not in routes_map[cr_path]:
                 raise ValueError(f"Método {m} inexistente na rota crítica {cr_path}")
 
     (http_dir / "critical-routes.json").write_text(
-        dumps_normalized(critical_routes), encoding="utf-8"
+        dumps_normalized([*critical_routes]), encoding="utf-8"
     )
     print("Exported HTTP contracts.")
 
@@ -160,7 +169,7 @@ def export_tools(contracts_dir: Path) -> None:
     tools_dir = contracts_dir / "tools"
     tools_dir.mkdir(parents=True, exist_ok=True)
 
-    catalog: list[dict[str, object]] = []
+    catalog: list[JsonObject] = []
     for spec in ALL_TOOL_SPECS:
         schema = {}
         if spec.args_model is not None:
@@ -177,7 +186,9 @@ def export_tools(contracts_dir: Path) -> None:
         )
 
     catalog.sort(key=lambda t: str(t["name"]))
-    (tools_dir / "catalog.json").write_text(dumps_normalized(catalog), encoding="utf-8")
+    (tools_dir / "catalog.json").write_text(
+        dumps_normalized([*catalog]), encoding="utf-8"
+    )
     print("Exported Tools catalog.")
 
 
@@ -242,7 +253,7 @@ def export_errors(contracts_dir: Path) -> None:
     errors_dir = contracts_dir / "errors"
     errors_dir.mkdir(parents=True, exist_ok=True)
 
-    matrix = {
+    matrix: JsonObject = {
         "UNAUTHORIZED": {"status_code": 401, "retryable": False, "category": "auth"},
         "FORBIDDEN": {"status_code": 403, "retryable": False, "category": "auth"},
         "NOT_FOUND": {"status_code": 404, "retryable": False, "category": "client"},
@@ -365,7 +376,7 @@ def export_harness(contracts_dir: Path) -> None:
     print("Exported execution runtime schema.")
 
 
-def _python_type_to_ts(annotation: Any) -> str:  # noqa: PLR0911
+def _python_type_to_ts(annotation: TypeForm | None) -> str:  # noqa: PLR0911
     """Executa a operação python type to ts."""
     import types
     import typing
@@ -387,6 +398,10 @@ def _python_type_to_ts(annotation: Any) -> str:  # noqa: PLR0911
         if has_none:
             ts_types.append("null")
         return " | ".join(ts_types)
+    if annotation is JsonValue:
+        return "unknown"
+    if isinstance(annotation, typing.TypeAliasType):
+        return _python_type_to_ts(annotation.__value__)
     if annotation is str:
         return "string"
     if annotation in (int, float):
@@ -420,7 +435,7 @@ def _generate_ts_interface(
     return "\n".join(lines)
 
 
-def _extract_schema_refs(obj: Any) -> set[str]:
+def _extract_schema_refs(obj: JsonValue) -> set[str]:
     """Extrai nomes de schemas referenciados via #/components/schemas/<Name>."""
     refs: set[str] = set()
     if isinstance(obj, dict):
@@ -439,9 +454,15 @@ def _extract_schema_refs(obj: Any) -> set[str]:
     return refs
 
 
-def _classify_openapi_schemas(openapi: dict[str, Any]) -> tuple[set[str], set[str]]:
+def _component_schemas(openapi: JsonObject) -> JsonObject:
+    components = openapi.get("components")
+    schemas = components.get("schemas") if isinstance(components, dict) else None
+    return schemas if isinstance(schemas, dict) else {}
+
+
+def _classify_openapi_schemas(openapi: JsonObject) -> tuple[set[str], set[str]]:
     """Classifica schemas em (request_schemas, response_schemas) transitivamente a partir dos endpoints."""
-    all_schemas = openapi.get("components", {}).get("schemas", {})
+    all_schemas = _component_schemas(openapi)
     request_roots: set[str] = set()
     response_roots: set[str] = set()
 
@@ -485,9 +506,7 @@ def _classify_openapi_schemas(openapi: dict[str, Any]) -> tuple[set[str], set[st
     return _expand_transitive(request_roots), _expand_transitive(response_roots)
 
 
-def _removed_operations(
-    baseline: dict[str, Any], new: dict[str, Any]
-) -> list[tuple[str, str]]:
+def _removed_operations(baseline: JsonObject, new: JsonObject) -> list[tuple[str, str]]:
     """Identifica operações HTTP removidas em paths entre baseline e new."""
     old_paths = baseline.get("paths", {})
     new_paths = new.get("paths", {})
@@ -518,12 +537,10 @@ def _removed_operations(
     return removed
 
 
-def _removed_request_schemas(
-    baseline: dict[str, Any], new: dict[str, Any]
-) -> list[str]:
+def _removed_request_schemas(baseline: JsonObject, new: JsonObject) -> list[str]:
     """Identifica schemas de request presentes no baseline mas removidos em new."""
-    old_schemas = baseline.get("components", {}).get("schemas", {})
-    new_schemas = new.get("components", {}).get("schemas", {})
+    old_schemas = _component_schemas(baseline)
+    new_schemas = _component_schemas(new)
     old_req_schemas, _ = _classify_openapi_schemas(baseline)
     removed: list[str] = []
     if isinstance(old_schemas, dict):
@@ -815,7 +832,7 @@ def check_all(contracts_dir: Path) -> int:
                 has_diff = True
 
             # Se for schema OpenAPI ou SSE, executa check_schema_compatibility
-            baseline_data: dict[str, Any] | None = None
+            baseline_data: JsonObject | None = None
             if baseline_sha and not baseline_has_contracts:
                 continue
             try:

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 from fastapi import HTTPException
 from starlette.requests import Request
 
@@ -15,7 +18,7 @@ from backend.scheduling.dag import DAGStage, DAGStore
 
 @pytest.mark.asyncio
 async def test_approve_dag_checks_thread_and_dispatches_after_approval(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "dag-api.db"
     db = await aiosqlite.connect(db_path)
@@ -27,13 +30,15 @@ async def test_approve_dag_checks_thread_and_dispatches_after_approval(
     await db.close()
 
     class Sessions:
-        async def list_agent_runs(self, thread_id: str, *, limit: int):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int
+        ) -> list[SimpleNamespace]:
             return [SimpleNamespace(run_id="run-owned")]
 
     async def get_sessions():
         return Sessions()
 
-    async def connect_db():
+    async def connect_db() -> Connection:
         return await aiosqlite.connect(db_path)
 
     dispatched: list[str] = []
@@ -62,7 +67,9 @@ async def test_approve_dag_checks_thread_and_dispatches_after_approval(
 
 
 @pytest.mark.asyncio
-async def test_plan_from_another_thread_is_not_visible(tmp_path, monkeypatch) -> None:
+async def test_plan_from_another_thread_is_not_visible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     db_path = tmp_path / "dag-api-owner.db"
     db = await aiosqlite.connect(db_path)
     store = DAGStore(db)
@@ -73,13 +80,15 @@ async def test_plan_from_another_thread_is_not_visible(tmp_path, monkeypatch) ->
     await db.close()
 
     class Sessions:
-        async def list_agent_runs(self, thread_id: str, *, limit: int):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int
+        ) -> list[SimpleNamespace]:
             return [SimpleNamespace(run_id="run-owned")]
 
     async def get_sessions():
         return Sessions()
 
-    async def connect_db():
+    async def connect_db() -> Connection:
         return await aiosqlite.connect(db_path)
 
     monkeypatch.setattr(dag, "_assert_owns_thread", _async_noop)
@@ -94,12 +103,12 @@ async def test_plan_from_another_thread_is_not_visible(tmp_path, monkeypatch) ->
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["read", "approve", "cancel"])
 async def test_dag_operations_reject_a_thread_the_user_cannot_access(
-    operation: str, monkeypatch
+    operation: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def denied(*_args, **_kwargs) -> None:
+    async def denied(*_args: Request | str, **_kwargs: bool) -> NoReturn:
         raise HTTPException(status_code=404, detail="Thread not found")
 
-    async def unexpected(*_args, **_kwargs):
+    async def unexpected(*_args, **_kwargs) -> NoReturn:
         raise AssertionError("a operação não deve consultar nem alterar a DAG")
 
     monkeypatch.setattr(dag, "_assert_owns_thread", denied)
@@ -125,7 +134,7 @@ async def test_dag_operations_reject_a_thread_the_user_cannot_access(
     assert exc.value.status_code == 404
 
 
-async def _async_noop(*_args, **_kwargs) -> None:
+async def _async_noop(*_args: Request | str, **_kwargs: bool) -> None:
     return None
 
 

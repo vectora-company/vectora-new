@@ -15,10 +15,10 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any
 
 from backend.sandbox.landlock import apply_landlock, set_no_new_privs
 from backend.sandbox.rlimits import apply_rlimits, limits_from_environment
+from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +27,29 @@ logger = logging.getLogger(__name__)
 _state: dict[str, bool] = {"no_new_privs": False, "landlock": False, "rlimits": False}
 
 
-async def handle_request(req: dict[str, Any]) -> dict[str, Any]:
+def _optional_str(request: JsonObject, key: str) -> str | None:
+    value = request.get(key)
+    if value is not None and not isinstance(value, str):
+        raise TypeError(f"{key} deve ser texto")
+    return value
+
+
+async def handle_request(req: JsonObject) -> JsonObject:
     op = req.get("op")
     req_id = req.get("id")
     try:
         if op == "exec":
-            stdin_text = req.get("stdin")
+            stdin_text = _optional_str(req, "stdin")
+            command, env = req["command"], req.get("env")
+            if not isinstance(command, list):
+                raise TypeError("command deve ser uma lista")
             # `env` substitui o ambiente herdado do worker (hooks rodam sem as
             # credenciais do backend); ausente, o comando herda como antes.
             proc = await asyncio.create_subprocess_exec(
-                *req["command"],
-                env=req.get("env"),
+                *(str(part) for part in command),
+                env={name: str(value) for name, value in env.items()}
+                if isinstance(env, dict)
+                else None,
                 stdin=asyncio.subprocess.PIPE if stdin_text is not None else None,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -54,12 +66,15 @@ async def handle_request(req: dict[str, Any]) -> dict[str, Any]:
         if op == "status":
             return {"id": req_id, **_state}
         if op == "read_file":
-            content = Path(req["path"]).read_text(encoding="utf-8")
+            content = Path(str(req["path"])).read_text(encoding="utf-8")
             return {"id": req_id, "content": content}
         if op == "write_file":
-            target = Path(req["path"])
+            target = Path(str(req["path"]))
+            text = req["content"]
+            if not isinstance(text, str):
+                raise TypeError("content deve ser texto")
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(req["content"], encoding="utf-8")
+            target.write_text(text, encoding="utf-8")
             return {"id": req_id, "ok": True}
         return {"id": req_id, "error": f"op desconhecida: {op!r}"}
     except Exception as exc:

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from backend.llm.ollama.chat_client import OllamaChatClient
 from backend.llm.ollama.client import OllamaClient
 from backend.llm.systemone.laya_local import LayaLocalAdapter
+from backend.llm.systemone.settings import DecisionProviderType
 from backend.llm.systemone.types import (
     ChoiceQuestion,
     NoulQuestion,
@@ -74,7 +75,7 @@ class _ToolArgs(BaseModel):
     path: str
 
 
-async def _read_fixture(**_: object) -> str:
+async def _read_fixture[**P](*_args: P.args, **_: P.kwargs) -> str:
     """Executa a operação read fixture."""
     return "fixture"
 
@@ -319,8 +320,11 @@ async def test_laya_returns_all_typed_decision_kinds() -> None:
 )
 @pytest.mark.parametrize("scenario", ["read", "destructive"])
 async def test_selected_decision_adapter_live_contract(
-    provider, scenario, monkeypatch, record_testsuite_property
-):
+    provider: DecisionProviderType,
+    scenario: str,
+    monkeypatch: pytest.MonkeyPatch,
+    record_testsuite_property,
+) -> None:
     """Exercise the selected adapter; local chat is not evidence for a cloud adapter."""
     import time
 

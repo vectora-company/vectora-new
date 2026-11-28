@@ -18,10 +18,11 @@ import pytest
 from backend.api.native_stream import stream_engine_events
 from backend.engine.stream_events import ToolCallStarted, ToolResult
 from backend.services.terminal_stream import emit_terminal_line
+from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence):
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 
@@ -30,14 +31,14 @@ def _parse(sse: str) -> dict:
     return json.loads(sse[len("data: ") :].strip())
 
 
-async def _collect(gen):
+async def _collect(gen) -> list[JsonObject]:
     return [_parse(s) async for s in gen]
 
 
 def _slow_terminal_run(delay: float):
     """Simula o motor nativo ficando parado enquanto a tool `terminal` roda."""
 
-    async def run(on_event):
+    async def run(on_event) -> str:
         await asyncio.sleep(delay)
         await on_event(
             ToolCallStarted(
@@ -54,7 +55,7 @@ def _slow_terminal_run(delay: float):
 
 
 def _slow_other_tool_run(delay: float):
-    async def run(on_event):
+    async def run(on_event) -> str:
         await asyncio.sleep(delay)
         await on_event(
             ToolCallStarted(
@@ -69,19 +70,19 @@ def _slow_other_tool_run(delay: float):
 
 
 def _noop_run():
-    async def run(on_event):
+    async def run(on_event) -> str:
         return "stop"
 
     return run
 
 
 @pytest.mark.asyncio
-async def test_terminal_lines_emitted_while_engine_is_idle():
+async def test_terminal_lines_emitted_while_engine_is_idle() -> None:
     """Linhas emitidas via emit_terminal_line chegam ANTES do próximo evento
     do motor nativo, mesmo que ele não produza nada por um tempo."""
     gen = stream_engine_events(_slow_terminal_run(delay=0.2), thread_id="tid")
 
-    async def _emit_lines_soon():
+    async def _emit_lines_soon() -> None:
         await asyncio.sleep(0.02)
         emit_terminal_line("added 42 packages")
         await asyncio.sleep(0.02)
@@ -105,7 +106,7 @@ async def test_terminal_lines_emitted_while_engine_is_idle():
 
 
 @pytest.mark.asyncio
-async def test_no_terminal_lines_when_none_emitted():
+async def test_no_terminal_lines_when_none_emitted() -> None:
     """Erro/borda: sem chamada a emit_terminal_line, não gera terminal_line."""
     out = await _collect(
         stream_engine_events(_slow_other_tool_run(delay=0.0), thread_id="tid")
@@ -114,7 +115,7 @@ async def test_no_terminal_lines_when_none_emitted():
 
 
 @pytest.mark.asyncio
-async def test_terminal_callback_unregistered_after_stream_ends():
+async def test_terminal_callback_unregistered_after_stream_ends() -> None:
     """Erro/borda: callback não deve vazar entre streams — o próximo
     stream_engine_events não deve receber linhas de uma emissão tardia do
     stream anterior."""

@@ -13,13 +13,18 @@ Invariante: provider que falha aparece **com o erro**, nunca zerado. Um
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import NoReturn
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from backend.llm.openrouter import OpenRouterClient
+from backend.tools.tavily import TavilyClient
+
 
 @pytest.fixture(autouse=True)
-def _sem_credenciais(monkeypatch):
+def _sem_credenciais(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Sem credencial e sem cache.
 
     O cache é module-level: sem limpar, o resultado bom de um teste vaza pro
@@ -37,13 +42,15 @@ def _sem_credenciais(monkeypatch):
 
 class TestAgregador:
     @pytest.mark.asyncio
-    async def test_sem_credencial_nenhuma_lista_vem_vazia(self):
+    async def test_sem_credencial_nenhuma_lista_vem_vazia(self) -> None:
         from backend.api.handlers.usage import collect_provider_usage
 
         assert await collect_provider_usage() == []
 
     @pytest.mark.asyncio
-    async def test_tavily_configurado_aparece_com_o_consumo(self, monkeypatch):
+    async def test_tavily_configurado_aparece_com_o_consumo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers.usage import collect_provider_usage
         from backend.settings import settings as _s
 
@@ -67,7 +74,9 @@ class TestAgregador:
         assert tavily["error"] is None
 
     @pytest.mark.asyncio
-    async def test_openrouter_junta_credits_e_key(self, monkeypatch):
+    async def test_openrouter_junta_credits_e_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """São dois endpoints: `/credits` tem o saldo, `/key` tem os limites
         da chave. Mostrar só um deixa o número sem contexto."""
         from backend.api.handlers.usage import collect_provider_usage
@@ -75,7 +84,7 @@ class TestAgregador:
 
         monkeypatch.setattr(_s, "openrouter_api_key", "sk-or-test", raising=False)
 
-        async def _get_json(_self, path: str):
+        async def _get_json(_self: OpenRouterClient, path: str):
             if path.endswith("/credits"):
                 return {"data": {"total_credits": 50.0, "total_usage": 12.5}}
             return {"data": {"limit": 100, "limit_remaining": 87.5}}
@@ -91,7 +100,9 @@ class TestAgregador:
         assert openrouter["remaining"] == pytest.approx(37.5)
 
     @pytest.mark.asyncio
-    async def test_provider_que_falha_vem_com_erro_e_nao_zerado(self, monkeypatch):
+    async def test_provider_que_falha_vem_com_erro_e_nao_zerado(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda crítico: `used: 0` faria o usuário achar que não gastou
         nada, quando na verdade a consulta falhou."""
         from backend.api.handlers.usage import collect_provider_usage
@@ -110,14 +121,16 @@ class TestAgregador:
         assert tavily["used"] is None, "zerou o consumo em vez de sinalizar a falha"
 
     @pytest.mark.asyncio
-    async def test_falha_de_um_nao_derruba_o_outro(self, monkeypatch):
+    async def test_falha_de_um_nao_derruba_o_outro(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers.usage import collect_provider_usage
         from backend.settings import settings as _s
 
         monkeypatch.setattr(_s, "tavily_api_key", "tvly-test", raising=False)
         monkeypatch.setattr(_s, "openrouter_api_key", "sk-or-test", raising=False)
 
-        async def _get_json(_self, path: str):
+        async def _get_json(_self: OpenRouterClient, path: str):
             if path.endswith("/credits"):
                 return {"data": {"total_credits": 10.0, "total_usage": 1.0}}
             return {"data": {}}
@@ -141,7 +154,9 @@ class TestAgregador:
 
 class TestCache:
     @pytest.mark.asyncio
-    async def test_consulta_repetida_usa_o_cache(self, monkeypatch):
+    async def test_consulta_repetida_usa_o_cache(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """O popover abre a cada mensagem; bater na API do provider toda vez
         é desperdício e convida rate limit."""
         from backend.api.handlers import usage as mod
@@ -152,7 +167,7 @@ class TestCache:
 
         chamadas = 0
 
-        async def _usage(_self):
+        async def _usage(_self: TavilyClient) -> dict[str, dict[str, int]]:
             nonlocal chamadas
             chamadas += 1
             return {"key": {"usage": 1, "limit": 10}}
@@ -164,7 +179,9 @@ class TestCache:
         assert chamadas == 1
 
     @pytest.mark.asyncio
-    async def test_cache_nao_guarda_resultado_com_erro(self, monkeypatch):
+    async def test_cache_nao_guarda_resultado_com_erro(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: cachear a falha prenderia o usuário na mensagem de erro
         por minutos, mesmo depois de a rede voltar."""
         from backend.api.handlers import usage as mod
@@ -175,7 +192,7 @@ class TestCache:
 
         chamadas = 0
 
-        async def _usage(_self):
+        async def _usage(_self: TavilyClient) -> NoReturn:
             nonlocal chamadas
             chamadas += 1
             raise RuntimeError("instável")

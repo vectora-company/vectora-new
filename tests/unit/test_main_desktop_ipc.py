@@ -10,6 +10,7 @@ substituídos por mocks.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextlib
 import os
@@ -18,6 +19,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from backend.vtypes.contracts import JsonObject
 
 # ---------------------------------------------------------------------------
 # ipc_pipe_win — pipe_name e PIPE_ENV_VAR
@@ -57,16 +60,16 @@ def test_desktop_uds_config_not_tcp() -> None:
     """Com VECTORA_DESKTOP=1 em Linux/macOS, uvicorn.Config recebe uds=<path>."""
     import argparse
 
-    captured_config_kwargs: dict[str, Any] = {}
+    captured_config_kwargs: JsonObject = {}
 
     class _FakeConfig:
-        def __init__(self, *_: Any, **kwargs: Any) -> None:
+        def __init__(self, *_: str, **kwargs: str | int | None) -> None:
             captured_config_kwargs.update(kwargs)
 
     class _FakeServer:
         should_exit = False
 
-        def __init__(self, *_: Any) -> None:
+        def __init__[**P](self, *_: P.args, **_kwargs: P.kwargs) -> None:
             pass
 
     args = argparse.Namespace(
@@ -92,7 +95,7 @@ def test_desktop_uds_config_not_tcp() -> None:
         _run_start(args)
 
     assert "uds" in captured_config_kwargs, "uvicorn.Config deveria receber uds="
-    assert captured_config_kwargs["uds"].endswith("vectora.sock")
+    assert str(captured_config_kwargs["uds"]).endswith("vectora.sock")
     assert "host" not in captured_config_kwargs, "Não deve abrir porta TCP no desktop"
 
 
@@ -111,9 +114,9 @@ def test_desktop_uds_path_under_home_vectora() -> None:
     captured: dict[str, str] = {}
 
     class _FakeConfig:
-        def __init__(self, *_: Any, **kwargs: Any) -> None:
+        def __init__(self, *_: str, **kwargs: str | int | None) -> None:
             if "uds" in kwargs:
-                captured["uds"] = kwargs["uds"]
+                captured["uds"] = str(kwargs["uds"])
 
     args = argparse.Namespace(
         headless=False,
@@ -145,10 +148,10 @@ def test_non_desktop_uses_tcp_host() -> None:
     """Sem VECTORA_DESKTOP, uvicorn.Config recebe host= (modo servidor/VPS)."""
     import argparse
 
-    captured_config_kwargs: dict[str, Any] = {}
+    captured_config_kwargs: JsonObject = {}
 
     class _FakeConfig:
-        def __init__(self, *_: Any, **kwargs: Any) -> None:
+        def __init__(self, *_: str, **kwargs: str | int | None) -> None:
             captured_config_kwargs.update(kwargs)
 
     args = argparse.Namespace(
@@ -256,10 +259,10 @@ def test_desktop_windows_no_tcp_host() -> None:
     """No modo Windows desktop, uvicorn.Config recebe port= efêmera, não host fixo."""
     import argparse
 
-    captured_config_kwargs: dict[str, Any] = {}
+    captured_config_kwargs: JsonObject = {}
 
     class _FakeConfig:
-        def __init__(self, *_: Any, **kwargs: Any) -> None:
+        def __init__(self, *_: str, **kwargs: str | int | None) -> None:
             captured_config_kwargs.update(kwargs)
 
     args = argparse.Namespace(
@@ -341,7 +344,7 @@ def test_desktop_windows_shutdown_calls_os_exit() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _base_args(*, headless: bool = False) -> Any:
+def _base_args(*, headless: bool = False) -> argparse.Namespace:
     import argparse
 
     return argparse.Namespace(

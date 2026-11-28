@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 import httpcore
 import httpx
@@ -14,6 +14,11 @@ from backend.services.egress_policy import EgressPolicy, async_is_url_allowed
 from backend.services.policy_compiler import PolicySnapshot
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from httpcore import SOCKET_OPTION
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +37,7 @@ class _PinIPBackend(AutoBackend):
         port: int,
         timeout: float | None = None,  # noqa: ASYNC109
         local_address: str | None = None,
-        socket_options: Any
-        | None = None,  # Any justified: assinatura herdada de httpcore.AutoBackend.connect_tcp
+        socket_options: Iterable[SOCKET_OPTION] | None = None,
     ) -> httpcore.AsyncNetworkStream:
         """Executa a operação connect tcp."""
         return await super().connect_tcp(
@@ -51,10 +55,9 @@ class PinIPTransport(httpx.AsyncHTTPTransport):
     def __init__(
         self,
         pinned_ip: str,
-        **kwargs: Any,  # Any justified: repasse transparente de opções de httpx.AsyncHTTPTransport
     ) -> None:
         """Inicializa o estado da instância."""
-        super().__init__(**kwargs)
+        super().__init__()
         pool = self._pool
         ssl_context = getattr(pool, "_ssl_context", None)
         self._pool = httpcore.AsyncConnectionPool(

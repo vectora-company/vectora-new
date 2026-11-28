@@ -23,7 +23,16 @@ import re
 import socket
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from nats.aio.client import Client
+    from nats.aio.msg import Msg
+    from nats.aio.subscription import Subscription
+    from nats.js.kv import KeyValue
+    from redis.asyncio.client import PubSub
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +176,7 @@ class RedisKV:
 
         self._redis = aredis.from_url(url, decode_responses=True)
         self._subs: dict[str, list[Subscriber]] = {}
-        self._pubsub: Any = None
+        self._pubsub: PubSub | None = None
         self._reader: asyncio.Task | None = None
 
     async def get(self, key: str) -> str | None:
@@ -194,11 +203,11 @@ class RedisKV:
             return
         self._pubsub = self._redis.pubsub()
         await self._pubsub.subscribe(*self._subs.keys())
-        self._reader = asyncio.create_task(self._read_loop())
+        self._reader = asyncio.create_task(self._read_loop(self._pubsub))
 
-    async def _read_loop(self) -> None:
+    async def _read_loop(self, pubsub: PubSub) -> None:
         try:
-            async for message in self._pubsub.listen():
+            async for message in pubsub.listen():
                 if message.get("type") != "message":
                     continue
                 channel = str(message.get("channel", ""))
@@ -235,8 +244,8 @@ class NatsKV:
 
     def __init__(self, url: str) -> None:
         self._url = url
-        self._nc: Any = None
-        self._kv: Any = None
+        self._nc: Client | None = None
+        self._kv: KeyValue | None = None
         self._subs: dict[str, list[Subscriber]] = {}
         self._reader: asyncio.Task | None = None
         self._closing = False
@@ -244,7 +253,7 @@ class NatsKV:
             False  # True após esgotar reconexões — força reset do singleton
         )
 
-    async def _connect(self) -> Any:
+    async def _connect(self) -> KeyValue:
         if self._failed:
             raise RuntimeError("kv: NATS permanentemente desconectado — use fallback")
         if self._kv is None:
@@ -292,6 +301,11 @@ class NatsKV:
                 self._kv = await js.create_key_value(bucket=self._BUCKET)
         return self._kv
 
+    def _client(self) -> Client:
+        if self._nc is None:
+            raise RuntimeError("kv: NATS sem conexão ativa")
+        return self._nc
+
     async def get(self, key: str) -> str | None:
         kv = await self._connect()
         try:
@@ -313,7 +327,7 @@ class NatsKV:
 
     async def publish(self, channel: str, payload: str) -> None:
         await self._connect()
-        await self._nc.publish(channel, payload.encode("utf-8"))
+        await self._client().publish(channel, payload.encode("utf-8"))
 
     def subscribe(self, channel: str, callback: Subscriber) -> None:
         self._subs.setdefault(channel, []).append(callback)
@@ -326,7 +340,8 @@ class NatsKV:
 
     async def _read_loop(self) -> None:
         try:
-            subs = [await self._nc.subscribe(channel) for channel in self._subs]
+            client = self._client()
+            subs = [await client.subscribe(channel) for channel in self._subs]
             async for msg in _merge_subscriptions(subs):
                 payload = msg.data.decode("utf-8")
                 for callback in self._subs.get(msg.subject, []):
@@ -348,11 +363,11 @@ class NatsKV:
                 await self._nc.close()
 
 
-async def _merge_subscriptions(subs: list[Any]) -> Any:
+async def _merge_subscriptions(subs: list[Subscription]) -> AsyncIterator[Msg]:
     """Intercala mensagens de várias subscriptions NATS num único async generator."""
-    queue: asyncio.Queue[Any] = asyncio.Queue()
+    queue: asyncio.Queue[Msg] = asyncio.Queue()
 
-    async def _pump(sub: Any) -> None:
+    async def _pump(sub: Subscription) -> None:
         async for msg in sub.messages:
             await queue.put(msg)
 

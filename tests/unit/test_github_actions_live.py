@@ -20,11 +20,13 @@ import shutil
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
 
 from backend.api.handlers import github
+from tests.fake_requests import fake_request
 
 pytestmark = [pytest.mark.live, pytest.mark.asyncio]
 
@@ -41,8 +43,8 @@ READ_ONLY = {
 }
 
 
-def _request():
-    return SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(id="live")))
+def _request() -> MagicMock:
+    return fake_request(state=SimpleNamespace(user=SimpleNamespace(id="live")))
 
 
 @pytest.fixture(scope="module")
@@ -104,7 +106,7 @@ async def _first_completed_run() -> github.RunSummary:
     return response.runs[0]
 
 
-async def test_run_list_returns_real_runs(real_gh) -> None:
+async def test_run_list_returns_real_runs(real_gh: list[list[str]]) -> None:
     response = await github.list_runs(_request(), None, None, None, "ws")
 
     assert response.status == "ok"
@@ -124,7 +126,9 @@ async def test_run_list_returns_real_runs(real_gh) -> None:
     assert real_gh[0][:2] == ["run", "list"]
 
 
-async def test_run_list_filters_reach_gh_and_narrow_the_result(real_gh) -> None:
+async def test_run_list_filters_reach_gh_and_narrow_the_result(
+    real_gh: list[list[str]],
+) -> None:
     response = await github.list_runs(_request(), "completed", "master", None, None)
 
     assert response.status == "ok"
@@ -135,7 +139,9 @@ async def test_run_list_filters_reach_gh_and_narrow_the_result(real_gh) -> None:
     assert args[args.index("--branch") + 1] == "master"
 
 
-async def test_run_detail_matches_the_listed_run_and_has_real_jobs(real_gh) -> None:
+async def test_run_detail_matches_the_listed_run_and_has_real_jobs(
+    real_gh: list[list[str]],
+) -> None:
     run = await _first_completed_run()
 
     detail = await github.get_run(_request(), run.id, None)
@@ -149,7 +155,7 @@ async def test_run_detail_matches_the_listed_run_and_has_real_jobs(real_gh) -> N
             assert [s.number for s in job.steps] == sorted(s.number for s in job.steps)
 
 
-async def test_job_log_of_a_finished_job_is_real_text(real_gh) -> None:
+async def test_job_log_of_a_finished_job_is_real_text(real_gh: list[list[str]]) -> None:
     run = await _first_completed_run()
     detail = await github.get_run(_request(), run.id, None)
     assert detail.run is not None
@@ -167,14 +173,14 @@ async def test_job_log_of_a_finished_job_is_real_text(real_gh) -> None:
     assert real_gh[-1][:4] == ["run", "view", str(run.id), "--job"]
 
 
-async def test_workflows_are_real(real_gh) -> None:
+async def test_workflows_are_real(real_gh: list[list[str]]) -> None:
     response = await github.list_workflows(_request(), None)
 
     assert response.status == "ok"
     assert response.workflows and all(w.name for w in response.workflows)
 
 
-async def test_pull_and_issue_detail_match_the_lists(real_gh) -> None:
+async def test_pull_and_issue_detail_match_the_lists(real_gh: list[list[str]]) -> None:
     pulls = await github.list_pulls(_request(), "all", None)
     issues = await github.list_issues(_request(), "all", None)
     assert pulls.status == "ok" and pulls.pulls
@@ -187,7 +193,9 @@ async def test_pull_and_issue_detail_match_the_lists(real_gh) -> None:
     assert issue.issue is not None and issue.issue.title == issues.issues[0].title
 
 
-async def test_everything_the_tests_asked_of_gh_was_read_only(real_gh) -> None:
+async def test_everything_the_tests_asked_of_gh_was_read_only(
+    real_gh: list[list[str]],
+) -> None:
     await github.list_runs(_request(), None, None, None, None)
     await github.list_workflows(_request(), None)
     await github.list_pulls(_request(), "open", None)
@@ -199,14 +207,18 @@ async def test_everything_the_tests_asked_of_gh_was_read_only(real_gh) -> None:
 # ----- negativos reais -------------------------------------------------------
 
 
-async def test_unknown_run_id_is_an_error_not_an_empty_run(real_gh) -> None:
+async def test_unknown_run_id_is_an_error_not_an_empty_run(
+    real_gh: list[list[str]],
+) -> None:
     response = await github.get_run(_request(), 1, None)
 
     assert response.status in {"error", "unavailable"}
     assert response.run is None
 
 
-async def test_invalid_status_is_rejected_before_calling_gh(real_gh) -> None:
+async def test_invalid_status_is_rejected_before_calling_gh(
+    real_gh: list[list[str]],
+) -> None:
     with pytest.raises(HTTPException) as error:
         await github.list_runs(_request(), "--repo=outro/repo", None, None, None)
 

@@ -14,7 +14,7 @@ from backend.services.usage import UsageTracker
 # ---------------------------------------------------------------------------
 
 
-def test_empty_usage_is_zero():
+def test_empty_usage_is_zero() -> None:
     t = UsageTracker(limit=60, window_seconds=60)
     u = t.usage("user1", now=1000.0)
     assert u["used"] == 0
@@ -22,7 +22,7 @@ def test_empty_usage_is_zero():
     assert u["remaining"] == 60
 
 
-def test_record_increments_used():
+def test_record_increments_used() -> None:
     t = UsageTracker(limit=60, window_seconds=60)
     t.record("user1", now=1000.0)
     t.record("user1", now=1001.0)
@@ -36,7 +36,7 @@ def test_record_increments_used():
 # ---------------------------------------------------------------------------
 
 
-def test_users_are_isolated():
+def test_users_are_isolated() -> None:
     t = UsageTracker(limit=60, window_seconds=60)
     t.record("a", now=1000.0)
     t.record("a", now=1000.5)
@@ -50,7 +50,7 @@ def test_users_are_isolated():
 # ---------------------------------------------------------------------------
 
 
-def test_old_events_drop_out_of_window():
+def test_old_events_drop_out_of_window() -> None:
     t = UsageTracker(limit=60, window_seconds=60)
     t.record("u", now=1000.0)
     t.record("u", now=1030.0)
@@ -59,7 +59,7 @@ def test_old_events_drop_out_of_window():
     assert u["used"] == 1
 
 
-def test_all_events_expire():
+def test_all_events_expire() -> None:
     t = UsageTracker(limit=60, window_seconds=60)
     t.record("u", now=1000.0)
     u = t.usage("u", now=2000.0)
@@ -72,7 +72,7 @@ def test_all_events_expire():
 # ---------------------------------------------------------------------------
 
 
-def test_remaining_never_negative():
+def test_remaining_never_negative() -> None:
     t = UsageTracker(limit=2, window_seconds=60)
     for i in range(5):
         t.record("u", now=1000.0 + i)
@@ -81,7 +81,7 @@ def test_remaining_never_negative():
     assert u["remaining"] == 0
 
 
-def test_reset_in_seconds_counts_down_from_oldest():
+def test_reset_in_seconds_counts_down_from_oldest() -> None:
     t = UsageTracker(limit=60, window_seconds=60)
     t.record("u", now=1000.0)
     # 20s depois → faltam 40s para o evento mais antigo sair da janela
@@ -89,13 +89,13 @@ def test_reset_in_seconds_counts_down_from_oldest():
     assert u["reset_in_seconds"] == 40.0
 
 
-def test_reset_in_seconds_zero_when_empty():
+def test_reset_in_seconds_zero_when_empty() -> None:
     t = UsageTracker(limit=60, window_seconds=60)
     u = t.usage("u", now=1000.0)
     assert u["reset_in_seconds"] == 0.0
 
 
-def test_window_seconds_reported():
+def test_window_seconds_reported() -> None:
     t = UsageTracker(limit=10, window_seconds=120)
     u = t.usage("u", now=1.0)
     assert u["window_seconds"] == 120

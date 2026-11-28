@@ -98,7 +98,9 @@ def test_build_icon_image_fallback_sem_arquivo(tmp_path: Path) -> None:
     assert result.size == (64, 64)
     assert result.mode == "RGBA"
     # Canal alpha não-zero no centro (pixel roxo)
-    assert result.getpixel((32, 32))[3] > 0
+    pixel = result.getpixel((32, 32))
+    assert isinstance(pixel, tuple)
+    assert pixel[3] > 0
 
 
 def test_build_icon_image_fallback_arquivo_corrompido(tmp_path: Path) -> None:
@@ -166,7 +168,7 @@ def test_enable_dark_mode_delegates_to_windows_module(
 # ---------------------------------------------------------------------------
 
 
-def _fake_server() -> Any:
+def _fake_server() -> MagicMock:
     srv = MagicMock()
     srv.should_exit = False
     srv.run = MagicMock()

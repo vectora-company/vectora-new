@@ -15,10 +15,13 @@ import shutil
 import signal
 import subprocess  # nosec B404 - only used for CREATE_NEW_PROCESS_GROUP
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from backend.vtypes.terminal import SidecarProcessOptions
 
 
-def sidecar_process_options() -> dict[str, Any]:
+def sidecar_process_options() -> SidecarProcessOptions:
     """Keep console signals on the backend process owner.
 
     Sidecars stay direct children of Vectora. Windows isolates console

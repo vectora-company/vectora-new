@@ -22,7 +22,11 @@ Uso:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, NotRequired, TypedDict, Unpack
+
+if TYPE_CHECKING:
+    from backend.settings import Settings
+    from backend.vtypes.storage import QdrantCloudConfig, RecipeHealth
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +43,7 @@ def build_config(
     api_key: str,
     collections: list[str] | None = None,
     retrieval_mode: str = "hybrid",
-) -> dict[str, Any]:
+) -> QdrantCloudConfig:
     """Monta a configuração para QdrantVectorStore.
 
     Args:
@@ -71,7 +75,21 @@ def build_config(
     }
 
 
-def configure_settings(settings: Any, **kwargs: Any) -> None:
+class _QdrantCloudParams(TypedDict):
+    """Argumentos repassados a ``build_config``."""
+
+    api_key: str
+    url: NotRequired[str]
+    cluster_id: NotRequired[str]
+    region: NotRequired[str]
+    provider: NotRequired[str]
+    collections: NotRequired[list[str] | None]
+    retrieval_mode: NotRequired[str]
+
+
+def configure_settings(
+    settings: Settings, **kwargs: Unpack[_QdrantCloudParams]
+) -> None:
     """Aplica flags Qdrant Cloud ao objeto settings.
 
     Define ``storage_mode = "complete"``, ``qdrant_url`` e ``qdrant_api_key``.
@@ -89,7 +107,7 @@ def configure_settings(settings: Any, **kwargs: Any) -> None:
 async def healthcheck(
     url: str | None = None,
     api_key: str | None = None,
-) -> dict[str, Any]:
+) -> RecipeHealth:
     """Smoke test de conectividade ao Qdrant Cloud.
 
     Verifica conexão e lista as collections existentes.

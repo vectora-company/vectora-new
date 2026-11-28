@@ -40,7 +40,7 @@ def _free_port() -> int:
 
 
 @pytest.mark.asyncio
-async def test_is_port_open_true_for_listening_socket():
+async def test_is_port_open_true_for_listening_socket() -> None:
     server = await asyncio.start_server(lambda r, w: None, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
     try:
@@ -51,17 +51,17 @@ async def test_is_port_open_true_for_listening_socket():
 
 
 @pytest.mark.asyncio
-async def test_is_port_open_false_for_closed_port():
+async def test_is_port_open_false_for_closed_port() -> None:
     port = _free_port()
     assert await _is_port_open("127.0.0.1", port) is False
 
 
 @pytest.mark.asyncio
-async def test_wait_port_open_returns_true_once_server_starts():
+async def test_wait_port_open_returns_true_once_server_starts() -> None:
     port = _free_port()
     server_holder: dict[str, asyncio.AbstractServer] = {}
 
-    async def _start_server_after_delay():
+    async def _start_server_after_delay() -> None:
         await asyncio.sleep(0.3)
         server_holder["server"] = await asyncio.start_server(
             lambda r, w: None, "127.0.0.1", port
@@ -80,7 +80,7 @@ async def test_wait_port_open_returns_true_once_server_starts():
 
 
 @pytest.mark.asyncio
-async def test_wait_port_open_times_out_when_nothing_listens():
+async def test_wait_port_open_times_out_when_nothing_listens() -> None:
     port = _free_port()
     ok = await _wait_port_open("127.0.0.1", port, total_timeout=0.5, interval=0.1)
     assert ok is False
@@ -93,7 +93,7 @@ async def test_wait_port_open_times_out_when_nothing_listens():
 
 
 @pytest.mark.asyncio
-async def test_wait_port_open_or_exit_returns_open_true_when_port_opens():
+async def test_wait_port_open_or_exit_returns_open_true_when_port_opens() -> None:
     from unittest.mock import MagicMock
 
     port = _free_port()
@@ -111,7 +111,7 @@ async def test_wait_port_open_or_exit_returns_open_true_when_port_opens():
 
 
 @pytest.mark.asyncio
-async def test_wait_port_open_or_exit_returns_early_when_process_dies():
+async def test_wait_port_open_or_exit_returns_early_when_process_dies() -> None:
     from unittest.mock import MagicMock
 
     port = _free_port()  # nada escutando aqui de propósito
@@ -138,7 +138,9 @@ async def test_wait_port_open_or_exit_returns_early_when_process_dies():
 
 class TestPreviewStatus:
     @pytest.mark.asyncio
-    async def test_running_false_when_process_alive_but_port_closed(self, monkeypatch):
+    async def test_running_false_when_process_alive_but_port_closed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
         import backend.api.handlers.workspaces as ws_mod
@@ -157,7 +159,9 @@ class TestPreviewStatus:
         assert result.servers[0].running is False
 
     @pytest.mark.asyncio
-    async def test_running_true_when_process_alive_and_port_open(self, monkeypatch):
+    async def test_running_true_when_process_alive_and_port_open(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
         import backend.api.handlers.workspaces as ws_mod
@@ -178,8 +182,8 @@ class TestPreviewStatus:
 
     @pytest.mark.asyncio
     async def test_running_true_when_port_open_even_with_pid_dead_or_untracked(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Caso central do bug "Full Stack (Turbo)": comandos tipo `turbo run
         # dev`/`pnpm dev` no Windows encerram o processo pai capturado em
         # browser_start enquanto os processos reais (Next.js etc.) seguem
@@ -224,8 +228,8 @@ class TestPreviewStatus:
 class TestPreviewStart:
     @pytest.mark.asyncio
     async def test_returns_error_early_when_process_dies_before_port_opens(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
         import backend.api.handlers.workspaces as ws_mod
@@ -283,7 +287,9 @@ class TestPreviewStart:
 
 class TestPreviewLogsEndpoint:
     @pytest.mark.asyncio
-    async def test_returns_empty_list_when_never_started(self, monkeypatch):
+    async def test_returns_empty_list_when_never_started(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.api.handlers.workspaces as ws_mod
 
         monkeypatch.setattr(ws_mod, "_browser_log_buffers", {})
@@ -293,7 +299,9 @@ class TestPreviewLogsEndpoint:
         assert result.lines == []
 
     @pytest.mark.asyncio
-    async def test_returns_buffered_lines(self, monkeypatch):
+    async def test_returns_buffered_lines(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import collections
 
         import backend.api.handlers.workspaces as ws_mod
@@ -306,7 +314,9 @@ class TestPreviewLogsEndpoint:
         assert result.lines == ["line1", "line2"]
 
     @pytest.mark.asyncio
-    async def test_buffer_survives_after_preview_stop(self, monkeypatch):
+    async def test_buffer_survives_after_preview_stop(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Erro/borda: parar o servidor não pode apagar o histórico — é
         # exatamente nesse momento (diagnosticar por que morreu) que ele
         # mais precisa continuar disponível.
@@ -339,7 +349,9 @@ class TestPreviewLogsEndpoint:
 
 class TestPreviewStartPopulatesLogBuffer:
     @pytest.mark.asyncio
-    async def test_lines_written_by_pipe_end_up_in_buffer(self, monkeypatch):
+    async def test_lines_written_by_pipe_end_up_in_buffer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import AsyncMock, MagicMock
 
         import backend.api.handlers.workspaces as ws_mod
@@ -361,10 +373,10 @@ class TestPreviewStartPopulatesLogBuffer:
         launch_cfg.configurations = [cfg_entry]
 
         class _FakeStdout:
-            def __init__(self, lines):
+            def __init__(self, lines: list[bytes]) -> None:
                 self._lines = list(lines)
 
-            async def readline(self):
+            async def readline(self) -> bytes:
                 if not self._lines:
                     return b""
                 return self._lines.pop(0)

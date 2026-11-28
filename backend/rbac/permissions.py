@@ -32,9 +32,12 @@ import fnmatch
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import HTTPException
+
+if TYPE_CHECKING:
+    from backend.vtypes.auth import Principal
 
 logger = logging.getLogger(__name__)
 
@@ -51,14 +54,14 @@ def role_level(role: str) -> int:
     return _ROLE_LEVEL.get(role, -1)
 
 
-def has_min_role(user: Any, min_role: str) -> bool:
+def has_min_role(user: Principal | None, min_role: str) -> bool:
     """True se o usuário tem pelo menos o role mínimo exigido."""
     if user is None:
         return False
     return role_level(getattr(user, "role", "")) >= role_level(min_role)
 
 
-def require_min_role(user: Any, min_role: str) -> None:
+def require_min_role(user: Principal | None, min_role: str) -> None:
     """Lança HTTPException 403 se o usuário não tiver o role mínimo."""
     if not has_min_role(user, min_role):
         raise HTTPException(
@@ -67,7 +70,7 @@ def require_min_role(user: Any, min_role: str) -> None:
         )
 
 
-def can_access_thread(user: Any, thread_owner_id: str | None) -> bool:
+def can_access_thread(user: Principal | None, thread_owner_id: str | None) -> bool:
     """True se o usuário pode ler/escrever na thread.
 
     - root e admin: qualquer thread
@@ -80,7 +83,7 @@ def can_access_thread(user: Any, thread_owner_id: str | None) -> bool:
     return thread_owner_id is None or thread_owner_id == user.id
 
 
-def can_delete_thread(user: Any, thread_owner_id: str | None) -> bool:
+def can_delete_thread(user: Principal | None, thread_owner_id: str | None) -> bool:
     """True se o usuário pode deletar a thread."""
     if user is None:
         return False
@@ -89,7 +92,7 @@ def can_delete_thread(user: Any, thread_owner_id: str | None) -> bool:
     return thread_owner_id == user.id
 
 
-def can_run_terminal(user: Any, workspace_owner_id: str | None) -> bool:
+def can_run_terminal(user: Principal | None, workspace_owner_id: str | None) -> bool:
     """True se o usuário pode executar comandos de terminal no workspace.
 
     - root/admin: qualquer workspace
@@ -105,12 +108,12 @@ def can_run_terminal(user: Any, workspace_owner_id: str | None) -> bool:
     return False
 
 
-def can_read_audit(user: Any) -> bool:
+def can_read_audit(user: Principal | None) -> bool:
     """True se o usuário pode ver o audit log completo."""
     return has_min_role(user, "admin")
 
 
-def can_manage_users(user: Any) -> bool:
+def can_manage_users(user: Principal | None) -> bool:
     """True se o usuário pode criar/deletar/modificar outros usuários."""
     return has_min_role(user, "root")
 

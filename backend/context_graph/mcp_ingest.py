@@ -13,7 +13,6 @@ import json
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any
 
 from .ids import make_id as _shared_make_id
 from .security import sanitize_label
@@ -31,11 +30,15 @@ _MAX_BYTES = 1_048_576  # 1 MiB
 _MAX_SERVERS_PER_FILE = 200
 
 
+from backend.vtypes.context_graph import ExtractionResult
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+
 def is_mcp_config_path(path: Path) -> bool:
     return path.name in MCP_CONFIG_FILENAMES
 
 
-def extract_mcp_config(path: Path) -> dict[str, Any]:
+def extract_mcp_config(path: Path) -> ExtractionResult:
     try:
         with path.open("rb") as fh:
             raw = fh.read(_MAX_BYTES + 1)
@@ -68,8 +71,8 @@ def extract_mcp_config(path: Path) -> dict[str, Any]:
 
     str_path = str(path)
     file_nid = _make_id(str_path)
-    nodes: list[dict[str, Any]] = []
-    edges: list[dict[str, Any]] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_node_ids: set[str] = set()
     seen_edge_keys: set[tuple[str, str, str]] = set()
 
@@ -111,12 +114,12 @@ def extract_mcp_config(path: Path) -> dict[str, Any]:
 def _emit_server(
     *,
     server_name: str,
-    spec: dict[str, Any],
+    spec: JsonObject,
     file_nid: str,
     file_stem: str,
     source_file: str,
-    nodes: list[dict[str, Any]],
-    edges: list[dict[str, Any]],
+    nodes: list[JsonObject],
+    edges: list[JsonObject],
     seen_node_ids: set[str],
     seen_edge_keys: set[tuple[str, str, str]],
 ) -> None:
@@ -222,7 +225,7 @@ _PY_MCP_PKG_RE = re.compile(
 _ARG_FLAG_RE = re.compile(r"^-{1,2}\w")
 
 
-def _detect_package_from_args(args: list[Any]) -> str | None:
+def _detect_package_from_args(args: list[JsonValue]) -> str | None:
     for raw in args:
         if not isinstance(raw, str):
             continue
@@ -245,7 +248,7 @@ def _strip_version(pkg: str) -> str:
 
 
 def _add_node(
-    nodes: list[dict[str, Any]],
+    nodes: list[JsonObject],
     seen: set[str],
     *,
     nid: str,
@@ -270,7 +273,7 @@ def _add_node(
 
 
 def _add_edge(
-    edges: list[dict[str, Any]],
+    edges: list[JsonObject],
     seen: set[tuple[str, str, str]],
     *,
     source: str,
@@ -286,7 +289,7 @@ def _add_edge(
     if key in seen:
         return
     seen.add(key)
-    edge: dict[str, Any] = {
+    edge: JsonObject = {
         "source": source,
         "target": target,
         "relation": relation,

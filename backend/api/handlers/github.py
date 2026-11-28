@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.github_cli import github_auth_epoch
 from backend.services.github_cli import run_gh_command as _gh_run
+from backend.vtypes.contracts import JsonObject, JsonValue, as_int
 
 router = APIRouter(prefix="/github", tags=["github"])
 
@@ -140,7 +141,7 @@ def _github_repository(cwd: str | None) -> str | None:
     return "/".join(parts[:2]) if len(parts) == 2 and all(parts) else None
 
 
-def _included_json(output: str) -> object:
+def _included_json(output: str) -> JsonValue:
     """Read the JSON payload following the response headers from gh api."""
     output = output.replace("\r\n", "\n")
     _headers, separator, body = output.partition("\n\n")
@@ -152,7 +153,7 @@ async def _github_api_list(  # noqa: PLR0911
     state: str,
     cwd: str | None,
     user_id: str,
-) -> tuple[list[dict] | None, dict | None]:
+) -> tuple[list[JsonObject] | None, JsonObject | None]:
     repository = _github_repository(cwd)
     if repository is None:
         return None, {
@@ -214,7 +215,7 @@ async def _github_api_list(  # noqa: PLR0911
             "code": "invalid_response",
             "message": "Resposta inválida da API do GitHub.",
         }
-    items = raw
+    items = [item for item in raw if isinstance(item, dict)]
     if endpoint == "pulls" and state == "merged":
         items = [item for item in items if item.get("merged_at")]
     if endpoint == "issues":
@@ -387,7 +388,7 @@ def _workspace_cwd(workspace_id: str | None) -> str | None:
     return workspace.cwd if workspace else None
 
 
-def _checks_summary(rollup: object) -> PullChecks:
+def _checks_summary(rollup: JsonValue) -> PullChecks:
     """Conta os checks por desfecho; vazio ou formato desconhecido vira zero."""
     summary = PullChecks()
     if not isinstance(rollup, list):
@@ -415,7 +416,17 @@ def _checks_summary(rollup: object) -> PullChecks:
     return summary
 
 
-def _author(raw: object) -> str:
+def _ref_name(raw: JsonValue) -> str:
+    return str(raw.get("ref", "")) if isinstance(raw, dict) else ""
+
+
+def _label_names(raw: JsonValue) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [str(label.get("name", "")) for label in raw if isinstance(label, dict)]
+
+
+def _author(raw: JsonValue) -> str:
     return str(raw.get("login", "")) if isinstance(raw, dict) else ""
 
 
@@ -463,13 +474,13 @@ async def list_pulls(
         return PullListResponse(**_list_error(error or {}))
     pulls = [
         PullSummary(
-            number=int(item["number"]),
+            number=as_int(item["number"]),
             title=str(item.get("title", "")),
             state=str(item.get("state", "")).upper(),
             is_draft=bool(item.get("draft", False)),
             author=_author(item.get("user")),
-            head_ref=str((item.get("head") or {}).get("ref", "")),
-            base_ref=str((item.get("base") or {}).get("ref", "")),
+            head_ref=_ref_name(item.get("head")),
+            base_ref=_ref_name(item.get("base")),
             updated_at=str(item.get("updated_at", "")),
             url=str(item.get("html_url", "")),
         )
@@ -499,18 +510,14 @@ async def list_issues(
         return IssueListResponse(**_list_error(error or {}))
     issues = [
         IssueSummary(
-            number=int(item["number"]),
+            number=as_int(item["number"]),
             title=str(item.get("title", "")),
             state=str(item.get("state", "")).upper(),
             author=_author(item.get("user")),
-            labels=[
-                str(label.get("name", ""))
-                for label in item.get("labels") or []
-                if isinstance(label, dict)
-            ],
+            labels=_label_names(item.get("labels")),
             updated_at=str(item.get("updated_at", "")),
             url=str(item.get("html_url", "")),
-            comments=int(item.get("comments") or 0),
+            comments=as_int(item.get("comments") or 0),
         )
         for item in raw
         if isinstance(item, dict) and "number" in item
@@ -523,7 +530,7 @@ async def list_issues(
     )
 
 
-def _names(items: object, *keys: str) -> list[str]:
+def _names(items: JsonValue, *keys: str) -> list[str]:
     """Nomes de uma lista de objetos do gh (login, ou name para times/labels)."""
     names: list[str] = []
     for item in items if isinstance(items, list) else []:
@@ -535,7 +542,7 @@ def _names(items: object, *keys: str) -> list[str]:
     return names
 
 
-def _comments(items: object) -> list[GithubComment]:
+def _comments(items: JsonValue) -> list[GithubComment]:
     return [
         GithubComment(
             author=_author(item.get("author")),
@@ -548,7 +555,7 @@ def _comments(items: object) -> list[GithubComment]:
     ]
 
 
-def _milestone(raw: object) -> str:
+def _milestone(raw: JsonValue) -> str:
     return str(raw.get("title", "")) if isinstance(raw, dict) else ""
 
 
@@ -580,7 +587,7 @@ def _pull_detail(item: dict) -> PullDetail:
         if isinstance(f, dict) and f.get("path")
     ]
     return PullDetail(
-        number=int(item["number"]),
+        number=as_int(item["number"]),
         title=str(item.get("title", "")),
         state=str(item.get("state", "")),
         is_draft=bool(item.get("isDraft", False)),
@@ -780,7 +787,7 @@ class JobLogResponse(BaseModel):
     truncated: bool = False
 
 
-def _int(value: object, default: int = 0) -> int:
+def _int(value: JsonValue, default: int = 0) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else default
 
 

@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from functools import total_ordering
 from pathlib import Path
 from threading import Lock
-from typing import cast
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 _SEMVER = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -19,6 +22,10 @@ _SEMVER = re.compile(
 )
 _LOCKS: dict[Path, Lock] = {}
 _LOCKS_GUARD = Lock()
+
+
+type SkillCandidate = tuple[str, dict[str, str]]
+"""Versão de uma skill e as restrições das dependências."""
 
 
 @total_ordering
@@ -43,9 +50,7 @@ class Version:
             raise ValueError(f"versão SemVer inválida: {value}")
         return cls(int(major), int(minor), int(patch), identifiers)
 
-    def __lt__(self, other: object) -> bool:  # noqa: PLR0911
-        if not isinstance(other, Version):
-            return NotImplemented
+    def __lt__(self, other: Version) -> bool:  # noqa: PLR0911
         base = (self.major, self.minor, self.patch)
         other_base = (other.major, other.minor, other.patch)
         if base != other_base:
@@ -94,7 +99,7 @@ def satisfies(version: Version, constraint: str) -> bool:
 
 
 def resolve_dependencies(
-    candidates: Mapping[str, object],
+    candidates: Mapping[str, SkillCandidate | list[SkillCandidate]],
 ) -> list[str]:
     """Resolve por busca com retrocesso até atingir um ponto fixo."""
 
@@ -102,11 +107,7 @@ def resolve_dependencies(
         raw = candidates.get(skill_id)
         if raw is None:
             raise ValueError(f"dependência ausente: {skill_id}")
-        values = (
-            [cast("tuple[str, dict[str, str]]", raw)]
-            if isinstance(raw, tuple)
-            else cast("list[tuple[str, dict[str, str]]]", raw)
-        )
+        values = [raw] if isinstance(raw, tuple) else raw
         return sorted(
             (
                 (Version.parse(version), (version, requirements))
@@ -197,7 +198,7 @@ def resolve_dependencies(
     return ordered
 
 
-def write_lockfile(path: Path, entries: dict[str, dict[str, object]]) -> None:
+def write_lockfile(path: Path, entries: Mapping[str, JsonObject]) -> None:
     """Write a stable, versioned lockfile atomically."""
     validate_lock_entries(entries)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,7 +231,7 @@ def write_lockfile(path: Path, entries: dict[str, dict[str, object]]) -> None:
             temporary_path.unlink(missing_ok=True)
 
 
-def validate_lock_entries(entries: dict[str, dict[str, object]]) -> None:
+def validate_lock_entries(entries: Mapping[str, JsonValue]) -> None:
     """Valida entradas sem executar conteúdo das skills."""
     allowed = {"version", "source", "revision", "integrity", "requires_skills"}
     normalized_ids: dict[str, str] = {}
@@ -266,7 +267,9 @@ def validate_lock_entries(entries: dict[str, dict[str, object]]) -> None:
                     f"dependência não resolvida para skill {skill_id}"
                 ) from exc
     for skill_id, entry in entries.items():
-        requirements = entry.get("requires_skills", {})
+        requirements = (
+            entry.get("requires_skills", {}) if isinstance(entry, dict) else None
+        )
         if not isinstance(requirements, dict):
             raise ValueError(f"dependências inválidas para skill {skill_id}")
         for dependency, constraint in requirements.items():
@@ -275,8 +278,8 @@ def validate_lock_entries(entries: dict[str, dict[str, object]]) -> None:
                 normalized_ids.get(normalized_dependency, "")
             )
             if (
-                dependency_entry is None
-                or dependency_entry.get("version") != constraint.strip()
+                not isinstance(dependency_entry, dict)
+                or dependency_entry.get("version") != str(constraint).strip()
             ):
                 raise ValueError(
                     f"dependência não fechada para skill {skill_id}: "
@@ -284,14 +287,15 @@ def validate_lock_entries(entries: dict[str, dict[str, object]]) -> None:
                 )
 
 
-def read_lockfile(path: Path) -> dict[str, object]:
+def read_lockfile(path: Path) -> JsonObject:
     """Read and validate the lockfile shape without executing skill content."""
     payload = json.loads(path.read_text(encoding="utf-8"))
+    skills = payload.get("skills") if isinstance(payload, dict) else None
     if (
         not isinstance(payload, dict)
         or payload.get("format_version") != 1
-        or not isinstance(payload.get("skills"), dict)
+        or not isinstance(skills, dict)
     ):
         raise ValueError("skills.lock.json inválido")
-    validate_lock_entries(payload["skills"])
+    validate_lock_entries(skills)
     return payload

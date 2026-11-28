@@ -40,7 +40,9 @@ class _FakeTable:
         self.optimize_calls: list[dict] = []
         self._should_fail = False
 
-    async def optimize(self, *, cleanup_older_than=None, **_kwargs):
+    async def optimize(
+        self, *, cleanup_older_than: timedelta | None = None, **_kwargs
+    ) -> _FakeOptimizeStats:
         self.optimize_calls.append({"cleanup_older_than": cleanup_older_than})
         if self._should_fail:
             msg = "storage backend indisponível"
@@ -49,7 +51,7 @@ class _FakeTable:
 
 
 class TestOptimizeTable:
-    async def test_chama_optimize_unificado_e_retorna_true(self):
+    async def test_chama_optimize_unificado_e_retorna_true(self) -> None:
         table = _FakeTable()
 
         ok = await optimize_table(table, cleanup_older_than_s=3600)
@@ -62,7 +64,7 @@ class TestOptimizeTable:
         # este teste protege).
         assert not hasattr(table, "cleanup_old_versions")
 
-    async def test_falha_no_optimize_retorna_false_sem_propagar(self):
+    async def test_falha_no_optimize_retorna_false_sem_propagar(self) -> None:
         table = _FakeTable()
         table._should_fail = True
 
@@ -72,7 +74,7 @@ class TestOptimizeTable:
 
 
 class TestScheduleOptimize:
-    async def test_loop_roda_optimize_apos_o_intervalo(self):
+    async def test_loop_roda_optimize_apos_o_intervalo(self) -> None:
         table = _FakeTable()
 
         task = schedule_optimize(table, interval_s=0.01, cleanup_older_than_s=60)
@@ -84,7 +86,7 @@ class TestScheduleOptimize:
 
         assert len(table.optimize_calls) >= 1
 
-    async def test_erro_inesperado_no_loop_nao_encerra_a_task(self):
+    async def test_erro_inesperado_no_loop_nao_encerra_a_task(self) -> None:
         table = _FakeTable()
         table._should_fail = True
 

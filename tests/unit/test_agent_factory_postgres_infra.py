@@ -10,6 +10,8 @@ de iniciar).
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,7 +20,7 @@ from backend.services import agent_factory
 
 
 @pytest.fixture(autouse=True)
-async def _reset_infra_singletons():
+async def _reset_infra_singletons() -> AsyncIterator[None]:
     agent_factory._store = None
     agent_factory._store_ctx = None
     agent_factory._session_store_pool = None
@@ -34,7 +36,9 @@ async def _reset_infra_singletons():
 
 
 @pytest.mark.asyncio
-async def test_ensure_infra_uses_postgres_store_in_complete_mode(tmp_path):
+async def test_ensure_infra_uses_postgres_store_in_complete_mode(
+    tmp_path: Path,
+) -> None:
     fake_pool = MagicMock()
     fake_store = MagicMock()
     fake_store.setup = AsyncMock()
@@ -63,7 +67,9 @@ async def test_ensure_infra_uses_postgres_store_in_complete_mode(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_ensure_infra_falls_back_to_sqlite_when_postgres_fails(tmp_path):
+async def test_ensure_infra_falls_back_to_sqlite_when_postgres_fails(
+    tmp_path: Path,
+) -> None:
     """Edge — DSN ruim/Postgres fora do ar não impede a sessão de iniciar."""
     fake_settings = MagicMock(
         storage_mode="complete",
@@ -96,7 +102,7 @@ async def test_ensure_infra_falls_back_to_sqlite_when_postgres_fails(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_ensure_infra_uses_sqlite_in_lite_mode(tmp_path):
+async def test_ensure_infra_uses_sqlite_in_lite_mode(tmp_path: Path) -> None:
     """Modo lite (default) nunca tenta abrir Postgres."""
     fake_settings = MagicMock(
         storage_mode="lite", postgres_dsn=None, vectora_home=tmp_path

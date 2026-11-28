@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from backend.services import service_auth
 
 
-def test_sends_account_token_only_to_official_services_host(monkeypatch) -> None:
+def test_sends_account_token_only_to_official_services_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         service_auth, "get_license_token", lambda: "vectora-account-token"
     )
@@ -21,7 +25,7 @@ def test_sends_account_token_only_to_official_services_host(monkeypatch) -> None
 
 
 def test_does_not_create_authorization_header_without_account_token(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(service_auth, "get_license_token", lambda: None)
 

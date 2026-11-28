@@ -35,6 +35,10 @@ PACKAGE_MANIFEST_NAMES: dict[str, str] = {
 _MAX_MANIFEST_BYTES = 2_000_000
 
 
+from backend.vtypes.context_graph import ExtractionResult
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+
 def is_package_manifest_path(path: Path) -> bool:
     return path.name.lower() in PACKAGE_MANIFEST_NAMES
 
@@ -43,7 +47,7 @@ def _pkg_id(name: str) -> str:
     return make_id("pkg", name)
 
 
-def extract_package_manifest(path: Path) -> dict[str, Any]:
+def extract_package_manifest(path: Path) -> ExtractionResult:
     try:
         if path.stat().st_size > _MAX_MANIFEST_BYTES:
             return {"nodes": [], "edges": [], "error": "manifest too large to index"}
@@ -62,7 +66,7 @@ def extract_package_manifest(path: Path) -> dict[str, Any]:
     name = info["name"]
     str_path = str(path)
     pkg_nid = _pkg_id(name)
-    node: dict[str, Any] = {
+    node: JsonObject = {
         "id": pkg_nid,
         "label": name,
         "file_type": "code",
@@ -100,7 +104,7 @@ def extract_package_manifest(path: Path) -> dict[str, Any]:
     return {"nodes": nodes, "edges": edges}
 
 
-def _coerce_deps(value: Any) -> list[str]:
+def _coerce_deps(value: JsonValue) -> list[str]:
     if isinstance(value, dict):
         return [str(k) for k in value]
     if isinstance(value, list):

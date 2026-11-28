@@ -12,6 +12,8 @@ necessário.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 __all__ = [
     "BackgroundEmbeddingWorker",
     "curate_workspace_knowledge",
@@ -19,7 +21,13 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> object:
+if TYPE_CHECKING:
+    from types import FunctionType
+
+    from backend.embedding.background import BackgroundEmbeddingWorker
+
+
+def __getattr__(name: str) -> FunctionType | type[BackgroundEmbeddingWorker]:
     if name == "get_embedding_queue":
         from backend.embedding.queue import get_embedding_queue
 

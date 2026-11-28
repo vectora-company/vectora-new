@@ -11,13 +11,18 @@ import hashlib
 import hmac
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.scheduling import background_tasks
 from backend.scheduling.nl_schedule import parse_natural_schedule, parse_one_shot_delay
 from backend.scheduling.subagent_runner import SUBAGENT_TYPES
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.sql import SqlRow
+
+if TYPE_CHECKING:
+    from backend.scheduling.background_tasks import BackgroundTask
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +41,7 @@ def _capability_token(task_id: str) -> str:
     ).hexdigest()
 
 
-def _requires_capability_token(task: Any) -> bool:
+def _requires_capability_token(task: BackgroundTask) -> bool:
     """Só tasks criadas por `schedule_subagent_task` (têm `subagent_type`
     no trigger_config) exigem token — tasks de `create_background_task`
     continuam acessíveis como sempre, sem quebrar o fluxo existente."""
@@ -51,7 +56,7 @@ def _valid_capability_token(task_id: str, token: str | None) -> bool:
 
 async def _find_task_by_correlation_id(
     session_id: str, correlation_id: str
-) -> Any | None:
+) -> BackgroundTask | None:
     """Task já existente na mesma sessão com o mesmo `correlation_id` —
     usado por `schedule_subagent_task` pra deduplicar retry/race sem criar
     uma segunda delegação da mesma intenção."""
@@ -76,7 +81,7 @@ async def create_background_task(
     kind: str,
     trigger_type: str,
     ctx: ToolContext,
-    trigger_config: dict[str, Any] | None = None,
+    trigger_config: JsonObject | None = None,
 ) -> str:
     """Cria uma tarefa em segundo plano para esta sessão.
 
@@ -282,7 +287,7 @@ async def schedule_subagent_task(
                     }
                 )
 
-        trigger_config: dict[str, Any] = {"subagent_type": subagent_type}
+        trigger_config: JsonObject = {"subagent_type": subagent_type}
         if correlation_id:
             trigger_config["correlation_id"] = correlation_id
 
@@ -332,9 +337,9 @@ async def list_background_tasks(ctx: ToolContext) -> str:
 
         tasks = await background_tasks.list_tasks(session_id)
         runs = await background_tasks.list_runs(session_id)
-        latest_by_task: dict[str, dict[str, Any]] = {}
+        latest_by_task: dict[str, SqlRow] = {}
         for r in runs:  # list_runs vem ordenado por started_at DESC
-            latest_by_task.setdefault(r["task_id"], r)
+            latest_by_task.setdefault(str(r["task_id"]), r)
 
         out = []
         for t in tasks:
@@ -350,7 +355,7 @@ async def list_background_tasks(ctx: ToolContext) -> str:
                         {
                             "run_id": last["id"],
                             "status": last["status"],
-                            "summary": (last.get("summary") or "")[:300],
+                            "summary": str(last.get("summary") or "")[:300],
                         }
                         if last
                         else None
@@ -395,7 +400,7 @@ async def get_task_status(
             {
                 "run_id": r["id"],
                 "status": r["status"],
-                "summary": (r.get("summary") or "")[:300],
+                "summary": str(r.get("summary") or "")[:300],
                 "started_at": r.get("started_at"),
                 "finished_at": r.get("finished_at"),
             }
@@ -583,7 +588,7 @@ async def get_task_result(
         run = await background_tasks._get_run(run_id)
         if run is None:
             return json.dumps({"status": "error", "error": "run não encontrada"})
-        owner_task = await background_tasks.get_task(run["task_id"])
+        owner_task = await background_tasks.get_task(str(run["task_id"]))
         if owner_task is not None and _requires_capability_token(owner_task):
             if not _valid_capability_token(owner_task.id, capability_token):
                 return json.dumps(

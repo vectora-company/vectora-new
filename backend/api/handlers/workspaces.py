@@ -30,16 +30,24 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from backend.services.git_people import GitPerson
+from backend.vtypes.api import RemoteFileStat
+from backend.vtypes.contracts import JsonObject, JsonValue, as_int
+from backend.vtypes.embedding_queue import RagJobMeta
 from backend.vtypes.git import GitOperationSnapshot
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from git import Repo
+
     from backend.rbac.safe_roots import SafeRootRegistry
     from backend.sandbox.policy import SandboxPolicy
+    from backend.services.commit_message import ChangeContext
+    from backend.transport import TransportBackend
+    from backend.workspace.workspace import Workspace
 
 router = APIRouter(prefix="/vectora.workspace.v1.WorkspaceService", tags=["workspaces"])
 
@@ -325,7 +333,7 @@ def _is_privileged(request: Request) -> bool:
     return role in {"root", "admin"}
 
 
-def can_access_workspace(ws: Any, request: Request) -> bool:
+def can_access_workspace(ws: Workspace, request: Request) -> bool:
     """True se o usuário do request pode acessar ``ws``.
 
     Regras: root/admin sempre podem; workspace sem ``owner_id`` (legado ou
@@ -341,7 +349,7 @@ def can_access_workspace(ws: Any, request: Request) -> bool:
     return owner_id == _user_id(request)
 
 
-def require_workspace_access(workspace_id: str, request: Request) -> Any:
+def require_workspace_access(workspace_id: str, request: Request) -> Workspace | None:
     """Garante que o request pode acessar ``workspace_id``, se ele existir.
 
     Levanta 403 se o workspace existe mas pertence a outro usuário. Workspace
@@ -374,7 +382,7 @@ async def _enforce_workspace_ownership(workspace_id: str, request: Request) -> N
     require_workspace_access(workspace_id, request)
 
 
-def _hooks_rules_pending(ws: Any) -> bool:
+def _hooks_rules_pending(ws: Workspace) -> bool:
     """Há ``[[hooks.rules]]`` no ``vectora.toml`` que ainda não foram aprovadas."""
     from backend.workspace.workspace_config import hook_rules_pending
 
@@ -388,7 +396,7 @@ def _hooks_rules_pending(ws: Any) -> bool:
         return False
 
 
-def _to_info(ws: Any) -> WorkspaceInfo:
+def _to_info(ws: Workspace) -> WorkspaceInfo:
     """Converte um ``vectora.types.Workspace`` (duck-typed para evitar import cycle)."""
     return WorkspaceInfo(
         id=ws.id,
@@ -588,10 +596,10 @@ async def git_init_workspace(request: Request, body: GitInitRequest) -> StatusRe
 
     result = git_init_repo(ws.cwd)
     if result.get("status") == "error":
-        return StatusResponse(status="error", message=result.get("message", ""))
+        return StatusResponse(status="error", message=str(result.get("message", "")))
 
     info = detect_git_info(ws.cwd)
-    ws.is_git_repo = info.get("is_git_repo", False)
+    ws.is_git_repo = info["is_git_repo"]
     ws.git_current_branch = info.get("git_current_branch")
     ws.git_remote = info.get("git_remote")
     workspace_registry._save()
@@ -1011,21 +1019,11 @@ async def list_worktrees(
     from backend.tools.context import ctx_from_config
     from backend.tools.git import _git_worktree_impl, _open_repo
 
-    repo, err = _open_repo(workspace_id or None, ctx_from_config(None))
-    if err:
+    repo = _open_repo(workspace_id or None, ctx_from_config(None))
+    if isinstance(repo, str):
         return ListWorktreesResponse(worktrees=[])
     result = _git_worktree_impl(repo, workspace_id, action="list")
-    items = result.get("worktrees", []) if result.get("status") == "ok" else []
-    return ListWorktreesResponse(
-        worktrees=[
-            WorktreeInfo(
-                path=w.get("path", ""),
-                branch=w.get("branch"),
-                head=w.get("head"),
-            )
-            for w in items
-        ]
-    )
+    return ListWorktreesResponse(worktrees=_worktree_infos(result))
 
 
 @router.post("/CreateWorktree", response_model=StatusResponse)
@@ -1034,10 +1032,10 @@ async def create_worktree(body: CreateWorktreeRequest) -> StatusResponse:
     from backend.tools.context import ctx_from_config
     from backend.tools.git import _git_worktree_impl, _open_repo
 
-    repo, err = _open_repo(body.workspace_id or None, ctx_from_config(None))
-    if err:
+    repo = _open_repo(body.workspace_id or None, ctx_from_config(None))
+    if isinstance(repo, str):
         return StatusResponse(
-            status="error", message=json.loads(err).get("message", "")
+            status="error", message=json.loads(repo).get("message", "")
         )
     result = await _execute_workspace_git_write(
         body.workspace_id,
@@ -1047,9 +1045,7 @@ async def create_worktree(body: CreateWorktreeRequest) -> StatusResponse:
             repo, body.workspace_id, action="add", name=body.name, branch=body.branch
         ),
     )
-    return StatusResponse(
-        status=result.get("status", "error"), message=result.get("message", "")
-    )
+    return _status_response(result)
 
 
 # ---------------------------------------------------------------------------
@@ -1077,7 +1073,7 @@ workspace_scoped_router = APIRouter(
 @workspace_scoped_router.post("/godot/validate")
 async def validate_workspace_godot_project(
     workspace_id: str, request: Request, body: GodotValidationRequest
-) -> dict[str, Any]:
+) -> JsonObject:
     """Executa a validação headless no projeto raiz de um workspace confiável."""
     from backend.rbac import tool_policy
     from backend.tools.context import ToolContext
@@ -1635,7 +1631,7 @@ def _resolve_inside(workspace_id: str, rel_path: str) -> Path | None:
     return resolve_within_workspace(str(candidate), base)
 
 
-def _workspace_root_for_path(ws: Any, rel_path: str) -> tuple[Path, str]:
+def _workspace_root_for_path(ws: Workspace, rel_path: str) -> tuple[Path, str]:
     """Resolve a virtual ``@root-<id>/...`` prefix to an approved project root."""
     match = re.match(r"^@root-([0-9a-f]{8})(?:/(.*))?$", rel_path)
     if match:
@@ -1651,7 +1647,7 @@ def _workspace_root_for_path(ws: Any, rel_path: str) -> tuple[Path, str]:
 
 async def _remote_fs_context(
     workspace_id: str, rel_path: str
-) -> tuple[Any, Any, str] | None:
+) -> tuple[Workspace, TransportBackend, str] | None:
     """Resolve um caminho remoto confinado; ``None`` para workspace local."""
     from fastapi import HTTPException
 
@@ -1669,7 +1665,9 @@ async def _remote_fs_context(
     return ws, transport, resolved
 
 
-async def _remote_fs_stat(transport: Any, ws: Any, path: str) -> dict[str, Any]:
+async def _remote_fs_stat(
+    transport: TransportBackend, ws: Workspace, path: str
+) -> RemoteFileStat:
     """Retorna metadados limitados de um caminho remoto."""
     import json
 
@@ -1685,13 +1683,15 @@ async def _remote_fs_stat(transport: Any, ws: Any, path: str) -> dict[str, Any]:
     )
     if result.exit_code != 0:
         raise RuntimeError(result.stderr or "Falha ao consultar caminho remoto.")
-    value = json.loads(result.stdout)
-    if not isinstance(value, dict):
-        raise RuntimeError("Resposta inválida do filesystem remoto.")
-    return value
+    try:
+        return TypeAdapter(RemoteFileStat).validate_json(result.stdout)
+    except ValidationError as exc:
+        raise RuntimeError("Resposta inválida do filesystem remoto.") from exc
 
 
-async def _remote_fs_run(transport: Any, ws: Any, script: str, *args: str) -> None:
+async def _remote_fs_run(
+    transport: TransportBackend, ws: Workspace, script: str, *args: str
+) -> None:
     result = await transport.run(
         ["python3", "-c", script, *args],
         cwd=getattr(ws, "remote_path", None) or ".",
@@ -1947,7 +1947,7 @@ async def update_workspace_sandbox_policy(
     return await asyncio.to_thread(_sandbox_policy_payload, root)
 
 
-def _require_workspace_credential_owner(request: Request, workspace: Any) -> str:
+def _require_workspace_credential_owner(request: Request, workspace: Workspace) -> str:
     """Exige usuário autenticado que confiou o workspace ou modo local."""
     user = getattr(request.state, "user", None)
     user_id = str(getattr(user, "id", "") or "local")
@@ -2192,7 +2192,7 @@ class SandboxAuditEvent(BaseModel):
     seq: int
     ts: str
     event: str
-    data: dict[str, Any] = Field(default_factory=dict)
+    data: JsonObject = Field(default_factory=dict)
 
 
 class SandboxAuditResponse(BaseModel):
@@ -2223,10 +2223,10 @@ async def workspace_sandbox_audit(
     return SandboxAuditResponse(
         events=[
             SandboxAuditEvent(
-                seq=int(record["seq"]),
+                seq=as_int(record["seq"]),
                 ts=str(record["ts"]),
                 event=str(record["event"]),
-                data=dict(record.get("data") or {}),
+                data=_json_object(record.get("data")),
             )
             for record in records
         ],
@@ -2899,7 +2899,33 @@ def _chosen_repo_dir(cwd: str) -> Path | None:
     return resolve_repo_dir(root, configured) if configured else None
 
 
-def _open_repo_at(cwd: str) -> Any:
+def _json_object(value: JsonValue) -> JsonObject:
+    return value if isinstance(value, dict) else {}
+
+
+def _status_response(result: JsonObject) -> StatusResponse:
+    """Resposta de uma operação git do workbench."""
+    return StatusResponse(
+        status=str(result.get("status", "error")),
+        message=str(result.get("message", "")),
+    )
+
+
+def _string_list(value: JsonValue) -> list[str]:
+    return [str(item) for item in value] if isinstance(value, list) else []
+
+
+def _worktree_infos(result: JsonObject) -> list[WorktreeInfo]:
+    """Worktrees de uma listagem bem-sucedida."""
+    items = result.get("worktrees") if result.get("status") == "ok" else None
+    if not isinstance(items, list):
+        return []
+    return [
+        WorktreeInfo.model_validate(item) for item in items if isinstance(item, dict)
+    ]
+
+
+def _open_repo_at(cwd: str) -> Repo:
     """Abre o repositório que o Git workbench mostra para o workspace em ``cwd``.
 
     É o escolhido em ``[git] repo`` do ``vectora.toml`` (um repositório dentro do
@@ -2915,7 +2941,7 @@ def _open_repo_at(cwd: str) -> Any:
     return Repo(cwd, search_parent_directories=True)
 
 
-def _open_workspace_repo(workspace_id: str) -> Any | None:
+def _open_workspace_repo(workspace_id: str) -> Repo | None:
     """Abre o repositório git do workspace ou retorna None.
 
     Retorna None quando o workspace não existe, não é um repositório git ou
@@ -2935,10 +2961,10 @@ def _open_workspace_repo(workspace_id: str) -> Any | None:
 
 async def _execute_workspace_git_write(
     workspace_id: str,
-    repo: Any,
+    repo: Repo,
     operation: str,
-    callback: Callable[[], object],
-) -> dict[str, Any]:
+    callback: Callable[[], JsonObject],
+) -> JsonObject:
     """Run every workbench Git mutation under the shared repository lock."""
     from backend.services.git import GitOperationError, git_service
 
@@ -2946,11 +2972,7 @@ async def _execute_workspace_git_write(
         _operation, result = await git_service.execute(
             workspace_id, repo, operation, callback
         )
-        return (
-            cast("dict[str, Any]", result)
-            if isinstance(result, dict)
-            else {"status": "ok"}
-        )
+        return result if isinstance(result, dict) else {"status": "ok"}
     except GitOperationError as exc:
         return {"status": "error", "message": str(exc)}
     except Exception as exc:
@@ -3133,7 +3155,7 @@ async def git_log(
 
     log_commits: list[GitLogCommit] = []
     for commit in commits:
-        lines = commit.message.strip().splitlines()
+        lines = str(commit.message).strip().splitlines()
         log_commits.append(
             GitLogCommit(
                 sha=commit.hexsha,
@@ -3211,7 +3233,9 @@ class GitCommitSuggestionRequest(BaseModel):
     paths: list[str] = Field(default_factory=list, max_length=500)
 
 
-def _git_commit_context_sync(workspace_id: str, paths: list[str] | None) -> Any | None:
+def _git_commit_context_sync(
+    workspace_id: str, paths: list[str] | None
+) -> ChangeContext | None:
     """Lê as alterações (staged, unstaged e novas) sem bloquear o event loop."""
     from backend.services.commit_message import (
         ChangeContext,
@@ -3291,7 +3315,7 @@ async def git_stage(workspace_id: str, body: GitPathRequest) -> StatusResponse:
     result = await _execute_workspace_git_write(
         workspace_id, repo, "stage", lambda: _git_stage_impl(repo, body.path)
     )
-    return StatusResponse(status=result["status"], message=result.get("message", ""))
+    return _status_response(result)
 
 
 @workspace_scoped_router.post("/git/unstage", response_model=StatusResponse)
@@ -3305,7 +3329,7 @@ async def git_unstage(workspace_id: str, body: GitPathRequest) -> StatusResponse
     result = await _execute_workspace_git_write(
         workspace_id, repo, "unstage", lambda: _git_unstage_impl(repo, body.path)
     )
-    return StatusResponse(status=result["status"], message=result.get("message", ""))
+    return _status_response(result)
 
 
 @workspace_scoped_router.post("/git/discard", response_model=StatusResponse)
@@ -3319,7 +3343,7 @@ async def git_discard(workspace_id: str, body: GitPathRequest) -> StatusResponse
     result = await _execute_workspace_git_write(
         workspace_id, repo, "discard", lambda: _git_restore_impl(repo, body.path)
     )
-    return StatusResponse(status=result["status"], message=result.get("message", ""))
+    return _status_response(result)
 
 
 @workspace_scoped_router.post("/git/commit", response_model=StatusResponse)
@@ -3350,10 +3374,10 @@ async def git_commit_inline(
         }
         if hook_result["passed"]:
             return StatusResponse(
-                status="hooks_ok", message=hook_result.get("output", "")
+                status="hooks_ok", message=str(hook_result.get("output", ""))
             )
         return StatusResponse(
-            status="hooks_failed", message=hook_result.get("output", "")
+            status="hooks_failed", message=str(hook_result.get("output", ""))
         )
     # `git commit --amend` executa o pre-commit por conta própria. Rodar o
     # hook manualmente antes dele duplicava efeitos e podia alterar o índice
@@ -3372,7 +3396,7 @@ async def git_commit_inline(
         }
         if not hook_result["passed"]:
             return StatusResponse(
-                status="hooks_failed", message=hook_result.get("output", "")
+                status="hooks_failed", message=str(hook_result.get("output", ""))
             )
     result = await _execute_workspace_git_write(
         workspace_id,
@@ -3388,7 +3412,7 @@ async def git_commit_inline(
             bypass=body.bypass,
         ),
     )
-    return StatusResponse(status=result["status"], message=result.get("message", ""))
+    return _status_response(result)
 
 
 @workspace_scoped_router.post("/git/squash", response_model=StatusResponse)
@@ -3407,7 +3431,7 @@ async def git_squash_inline(
         "squash",
         lambda: _git_squash_impl(repo, body.base_ref, body.message, body=body.body),
     )
-    return StatusResponse(status=result["status"], message=result.get("message", ""))
+    return _status_response(result)
 
 
 @workspace_scoped_router.post("/git/reorder", response_model=StatusResponse)
@@ -3426,7 +3450,7 @@ async def git_reorder_inline(
         "reorder",
         lambda: _git_reorder_impl(repo, body.commits),
     )
-    return StatusResponse(status=result["status"], message=result.get("message", ""))
+    return _status_response(result)
 
 
 @workspace_scoped_router.post("/git/cherry-pick", response_model=StatusResponse)
@@ -3445,7 +3469,7 @@ async def git_cherry_pick_inline(
         "cherry_pick",
         lambda: _git_cherry_pick_impl(repo, body.sha, no_commit=body.no_commit),
     )
-    return StatusResponse(status=result["status"], message=result.get("message", ""))
+    return _status_response(result)
 
 
 # ---------------------------------------------------------------------------
@@ -3459,21 +3483,11 @@ async def list_workspace_worktrees(workspace_id: str) -> ListWorktreesResponse:
     from backend.tools.context import ctx_from_config
     from backend.tools.git import _git_worktree_impl, _open_repo
 
-    repo, err = _open_repo(workspace_id, ctx_from_config(None))
-    if err:
+    repo = _open_repo(workspace_id, ctx_from_config(None))
+    if isinstance(repo, str):
         return ListWorktreesResponse(worktrees=[])
     result = _git_worktree_impl(repo, workspace_id, action="list")
-    items = result.get("worktrees", []) if result.get("status") == "ok" else []
-    return ListWorktreesResponse(
-        worktrees=[
-            WorktreeInfo(
-                path=w.get("path", ""),
-                branch=w.get("branch"),
-                head=w.get("head"),
-            )
-            for w in items
-        ]
-    )
+    return ListWorktreesResponse(worktrees=_worktree_infos(result))
 
 
 @workspace_scoped_router.post("/worktrees", response_model=StatusResponse)
@@ -3484,10 +3498,10 @@ async def create_workspace_worktree(
     from backend.tools.context import ctx_from_config
     from backend.tools.git import _git_worktree_impl, _open_repo
 
-    repo, err = _open_repo(workspace_id, ctx_from_config(None))
-    if err:
+    repo = _open_repo(workspace_id, ctx_from_config(None))
+    if isinstance(repo, str):
         return StatusResponse(
-            status="error", message=json.loads(err).get("message", "")
+            status="error", message=json.loads(repo).get("message", "")
         )
     result = await _execute_workspace_git_write(
         workspace_id,
@@ -3497,9 +3511,7 @@ async def create_workspace_worktree(
             repo, workspace_id, action="add", name=body.name, branch=body.branch
         ),
     )
-    return StatusResponse(
-        status=result.get("status", "error"), message=result.get("message", "")
-    )
+    return _status_response(result)
 
 
 # ---------------------------------------------------------------------------
@@ -3634,16 +3646,19 @@ async def git_revert_commit(
     if repo is None:
         return StatusResponse(status="error", message="Repositório git não encontrado.")
 
+    if body.sha.startswith("-"):
+        return StatusResponse(status="error", message="Commit inválido.")
     try:
-        args = ["revert", "--no-edit"]
+        options = ["--no-edit"]
         if body.no_commit:
-            args.append("--no-commit")
-        args.append(body.sha)
+            options.append("--no-commit")
+
+        def revert() -> JsonObject:
+            repo.git.revert(*options, body.sha)
+            return {"status": "ok"}
+
         result = await _execute_workspace_git_write(
-            workspace_id,
-            repo,
-            "revert",
-            lambda: repo.git.execute(args) and {"status": "ok"},
+            workspace_id, repo, "revert", revert
         )
         if result.get("status") != "ok":
             return StatusResponse(
@@ -3845,8 +3860,8 @@ async def git_branches(workspace_id: str) -> GitBranchesResponse:
     except Exception:
         pass
     return GitBranchesResponse(
-        current=info.get("current", ""),
-        branches=info.get("branches", []),
+        current=str(info.get("current", "")),
+        branches=_string_list(info.get("branches")),
         remotes=remotes,
     )
 
@@ -3865,7 +3880,7 @@ async def git_checkout(workspace_id: str, body: GitCheckoutRequest) -> StatusRes
     if repo is None:
         return StatusResponse(status="error", message="Repositório git não encontrado.")
 
-    def checkout() -> dict[str, object]:
+    def checkout() -> JsonObject:
         if body.create:
             created = _git_branch_impl(repo, "create", name=body.ref)
             if created.get("status") != "ok":
@@ -3875,9 +3890,7 @@ async def git_checkout(workspace_id: str, body: GitCheckoutRequest) -> StatusRes
     result = await _execute_workspace_git_write(
         workspace_id, repo, "checkout", checkout
     )
-    return StatusResponse(
-        status=result.get("status", "error"), message=result.get("message", "")
-    )
+    return _status_response(result)
 
 
 class GitSyncRequest(BaseModel):
@@ -3991,7 +4004,7 @@ async def git_merge(workspace_id: str, body: GitMergeRequest) -> GitMergeRespons
         )
     try:
 
-        def merge() -> dict[str, object]:
+        def merge() -> JsonObject:
             try:
                 repo.git.merge(body.branch)
                 return {"status": "ok"}
@@ -4002,7 +4015,7 @@ async def git_merge(workspace_id: str, body: GitMergeRequest) -> GitMergeRespons
                     return {
                         "status": "conflict",
                         "message": f"merge {body.branch}: conflitos em {len(conflicts)} arquivo(s)",
-                        "conflicts": conflicts,
+                        "conflicts": [*conflicts],
                     }
                 return {"status": "error", "message": str(exc)}
 
@@ -4010,7 +4023,7 @@ async def git_merge(workspace_id: str, body: GitMergeRequest) -> GitMergeRespons
         return GitMergeResponse(
             status=str(result.get("status", "error")),
             message=str(result.get("message", f"merge {body.branch}")),
-            conflicts=list(result.get("conflicts", [])),
+            conflicts=_string_list(result.get("conflicts")),
         )
     except Exception as exc:
         conflicts: list[str] = []
@@ -4463,7 +4476,7 @@ async def resolve_conflict(  # noqa: PLR0911
 
     try:
 
-        def resolve() -> dict[str, str]:
+        def resolve() -> JsonObject:
             if body.resolution in ("ours", "theirs"):
                 repo.git.checkout(f"--{body.resolution}", "--", git_pathspec)
             elif body.resolution == "content":
@@ -4539,11 +4552,11 @@ async def git_stash(workspace_id: str, body: StashRequest) -> StashResponse:
         result = await _execute_workspace_git_write(workspace_id, repo, "stash", stash)
 
     if result.get("status") == "error":
-        return StashResponse(action=body.action, message=result.get("message", ""))
+        return StashResponse(action=body.action, message=str(result.get("message", "")))
 
     # Se list, parseia as entradas.
     if body.action == "list":
-        raw_entries: list[str] = result.get("entries", [])
+        raw_entries = _string_list(result.get("entries"))
         entries = []
         for i, label in enumerate(raw_entries):
             entries.append(StashEntry(index=i, label=label))
@@ -4551,7 +4564,7 @@ async def git_stash(workspace_id: str, body: StashRequest) -> StashResponse:
 
     return StashResponse(
         action=body.action,
-        message=result.get("message", ""),
+        message=str(result.get("message", "")),
     )
 
 
@@ -5720,7 +5733,7 @@ class DevtoolsEvaluateRequest(BaseModel):
 
 class DevtoolsEvaluateResponse(BaseModel):
     status: str
-    result: Any = None
+    result: JsonValue = None
     error: str | None = None
 
 
@@ -5864,9 +5877,9 @@ class RagJobStatus(BaseModel):
 
 # Registro em memória dos jobs disparados neste processo (path + total para a
 # barra de progresso). O progresso real vem da embedding queue (get_job_stats).
-_RAG_JOBS: dict[str, dict[str, Any]] = {}
+_RAG_JOBS: dict[str, RagJobMeta] = {}
 # Mantém referência às tasks de enqueue em andamento (evita GC prematuro).
-_RAG_TASKS: set[Any] = set()
+_RAG_TASKS: set[asyncio.Task[None]] = set()
 # Última assinatura "status:faixa_de_progresso" emitida por job — evita
 # reemitir o mesmo evento em toda escrita da fila (mark_success dispara a
 # cada chunk, mas só interessa notificar em mudanças de status ou saltos de
@@ -5874,7 +5887,7 @@ _RAG_TASKS: set[Any] = set()
 _RAG_LAST_EMITTED_STATUS: dict[str, str] = {}
 
 
-async def _save_rag_job(job_id: str, meta: dict[str, Any]) -> None:
+async def _save_rag_job(job_id: str, meta: RagJobMeta) -> None:
     from backend.embedding.queue import get_embedding_queue
     from backend.settings import settings
 
@@ -5895,11 +5908,17 @@ async def _load_rag_jobs(workspace_id: str) -> None:
 
     queue = await get_embedding_queue(settings.embedding_queue_dsn)
     for job in await queue.list_ingestion_jobs(workspace_id):
-        job_id = str(job.pop("job_id"))
+        job_id = job["job_id"]
         current = _RAG_JOBS.get(job_id)
         if current is None or current.get("preparation_unknown"):
-            job["preparation_unknown"] = not bool(job.get("enqueue_done"))
-            _RAG_JOBS[job_id] = job
+            _RAG_JOBS[job_id] = {
+                "workspace_id": job["workspace_id"],
+                "path": job["path"],
+                "total_chunks": job["total_chunks"],
+                "enqueue_done": job["enqueue_done"],
+                "enqueue_error": job["enqueue_error"],
+                "preparation_unknown": not job["enqueue_done"],
+            }
 
 
 def _rag_job_status(job_id: str, stats: dict[str, int]) -> RagJobStatus:

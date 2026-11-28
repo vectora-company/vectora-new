@@ -8,7 +8,7 @@ from backend.services.agent_factory import _ORCHESTRATOR_PROMPT
 CODER_PROMPT = SOUL_CATALOG["coder"].system_prompt
 
 
-def test_orchestrator_remains_responsible_after_delegation():
+def test_orchestrator_remains_responsible_after_delegation() -> None:
     assert "Delegation through `task()` is optional" in _ORCHESTRATOR_PROMPT
     assert (
         "remain responsible for integrating and verifying the result"
@@ -16,18 +16,18 @@ def test_orchestrator_remains_responsible_after_delegation():
     )
 
 
-def test_orchestrator_does_not_finish_with_raw_subagent_output():
+def test_orchestrator_does_not_finish_with_raw_subagent_output() -> None:
     assert "never finish with only raw subagent output" in _ORCHESTRATOR_PROMPT
 
 
-def test_coder_confirma_path_do_artifact_e_contagem_de_todos():
+def test_coder_confirma_path_do_artifact_e_contagem_de_todos() -> None:
     assert "create_artifact" in CODER_PROMPT
     assert "file path" in CODER_PROMPT
     assert "write_todos" in CODER_PROMPT
     assert "how many tasks" in CODER_PROMPT
 
 
-def test_writer_docs_e_planner_tambem_confirmam_path_do_artifact():
+def test_writer_docs_e_planner_tambem_confirmam_path_do_artifact() -> None:
     """Gap real (revisão de 2026-08-30): `writer-docs` e `planner` também
     usam `create_artifact` (pra salvar doc/plano), mas só `coder` tinha a
     instrução de confirmar o path no texto final — as duas ficavam sujeitas

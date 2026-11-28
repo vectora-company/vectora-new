@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +19,7 @@ from backend.engine.stream_events import MessageChunk
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence):
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 
@@ -33,7 +35,7 @@ def _parse(sse: str) -> dict:
 
 
 def _token_run(texts: list[str], *, node: str = "model"):
-    async def run(on_event):
+    async def run(on_event) -> str:
         for text in texts:
             await on_event(MessageChunk(content=text, node=node))
         return "stop"
@@ -42,14 +44,14 @@ def _token_run(texts: list[str], *, node: str = "model"):
 
 
 def _empty_run():
-    async def run(on_event):
+    async def run(on_event) -> str:
         return "stop"
 
     return run
 
 
 @pytest.mark.asyncio
-async def test_each_chunk_emits_one_token_in_order():
+async def test_each_chunk_emits_one_token_in_order() -> None:
     run = _token_run(["Hello", " ", "world"])
     out = [_parse(s) async for s in stream_engine_events(run, thread_id="tid")]
 
@@ -61,19 +63,20 @@ async def test_each_chunk_emits_one_token_in_order():
 
 
 @pytest.mark.asyncio
-async def test_explicit_cancel_stops_server_run_and_finishes_stream():
+async def test_explicit_cancel_stops_server_run_and_finishes_stream() -> None:
     """The stop action must cancel server work, not only disconnect SSE."""
     from backend.api.native_stream import cancel_active_runs
 
     started = asyncio.Event()
     cancelled = asyncio.Event()
 
-    async def slow_run(_on_event):
+    async def slow_run(_on_event) -> str:
         started.set()
         try:
             await asyncio.Event().wait()
         finally:
             cancelled.set()
+        return ""
 
     gen = stream_engine_events(slow_run, thread_id="cancel-thread")
     first = _parse(await gen.__anext__())
@@ -95,7 +98,7 @@ async def test_explicit_cancel_stops_server_run_and_finishes_stream():
 
 
 @pytest.mark.asyncio
-async def test_loop_cap_exceeded_persists_failed_terminal_outcome():
+async def test_loop_cap_exceeded_persists_failed_terminal_outcome() -> None:
     """Um limite de segurança não pode deixar o AgentRun preso em ``running``."""
     store = MagicMock()
     store.get_session = AsyncMock(return_value=object())
@@ -107,7 +110,7 @@ async def test_loop_cap_exceeded_persists_failed_terminal_outcome():
     store.get_branch_head_id = AsyncMock(return_value=None)
     store.append_message = AsyncMock()
 
-    async def run(_on_event):
+    async def run(_on_event) -> str:
         return "loop_cap_exceeded"
 
     with patch(
@@ -123,7 +126,7 @@ async def test_loop_cap_exceeded_persists_failed_terminal_outcome():
 
 
 @pytest.mark.asyncio
-async def test_thread_event_carries_resolved_workspace_id():
+async def test_thread_event_carries_resolved_workspace_id() -> None:
     """Frontend sincroniza o seletor de workspace a partir desse campo (ver
     use-stream-handler.ts) — sem ele, um workspace criado via
     ChatConfig.create_new_workspace nunca aparece na UI. Par de erro: sem
@@ -147,11 +150,11 @@ async def test_thread_event_carries_resolved_workspace_id():
 
 
 @pytest.mark.asyncio
-async def test_tokens_are_incremental_not_buffered():
+async def test_tokens_are_incremental_not_buffered() -> None:
     """Dirige o gerador passo a passo: token N sai ANTES do chunk N+1 entrar."""
     pulled: list[str] = []
 
-    async def run(on_event):
+    async def run(on_event) -> str:
         for text in ["um", "dois", "tres"]:
             pulled.append(text)
             await on_event(MessageChunk(content=text, node="model"))
@@ -177,7 +180,7 @@ async def test_tokens_are_incremental_not_buffered():
 
 
 @pytest.mark.asyncio
-async def test_empty_chunk_still_emits_token_event():
+async def test_empty_chunk_still_emits_token_event() -> None:
     """O bridge SSE não filtra ``MessageChunk`` vazio — mapeia pra
     ``TokenEvent(content="")`` como qualquer outro chunk (o motor nativo não
     filtra deltas vazios do provider antes de emitir; o adaptador antigo
@@ -193,7 +196,7 @@ async def test_empty_chunk_still_emits_token_event():
 
 
 @pytest.mark.asyncio
-async def test_first_token_marks_thread_as_having_real_content():
+async def test_first_token_marks_thread_as_having_real_content() -> None:
     """Thread só deve virar visível em ListThreads quando o LLM de fato produz
     conteúdo — não quando o turno só começa. Regressão do bug de sessão
     fantasma: `_increment_message_count` disparava antes do primeiro token,
@@ -215,7 +218,7 @@ async def test_first_token_marks_thread_as_having_real_content():
 
 
 @pytest.mark.asyncio
-async def test_no_token_never_marks_thread_as_having_content():
+async def test_no_token_never_marks_thread_as_having_content() -> None:
     """Par de erro do teste acima: turno que nunca produz token (ex.: erro de
     quota antes do 1º chunk) NÃO deve marcar a thread como tendo conteúdo
     real — senão ela vira sessão fantasma na sidebar."""
@@ -234,8 +237,8 @@ async def test_no_token_never_marks_thread_as_having_content():
 
 @pytest.mark.asyncio
 async def test_stops_consuming_events_when_client_disconnects_mid_stream(
-    _no_nats_sidecar,
-):
+    _no_nats_sidecar: None,
+) -> None:
     """Regressão: cancelar o fetch no cliente não tinha efeito enquanto o
     modelo estivesse "pensando" sem produzir token — o backend seguia
     rodando até o próximo evento aparecer sozinho. A checagem de desconexão
@@ -248,7 +251,7 @@ async def test_stops_consuming_events_when_client_disconnects_mid_stream(
     """
     torn_down = {"value": False}
 
-    async def run(on_event):
+    async def run(on_event) -> str:
         try:
             await on_event(MessageChunk(content="um", node="model"))
             # Modelo "pensando" — nunca produz o próximo token sozinho; só a
@@ -291,7 +294,7 @@ async def test_stops_consuming_events_when_client_disconnects_mid_stream(
 
 
 @pytest.mark.asyncio
-async def test_survives_false_positive_disconnect_reading():
+async def test_survives_false_positive_disconnect_reading() -> None:
     """Regressão: um único ``is_disconnected() == True`` isolado (ruído —
     ex.: possível artefato do BaseHTTPMiddleware de auth envolvendo a
     StreamingResponse) não pode cortar um stream que o cliente nunca largou
@@ -300,7 +303,7 @@ async def test_survives_false_positive_disconnect_reading():
     """
     torn_down = {"value": False}
 
-    async def run(on_event):
+    async def run(on_event) -> str:
         try:
             await on_event(MessageChunk(content="um", node="model"))
             await asyncio.sleep(0.05)
@@ -330,10 +333,10 @@ async def test_survives_false_positive_disconnect_reading():
 
 
 @pytest.mark.asyncio
-async def test_provider_error_midstream_becomes_clean_rate_limit():
+async def test_provider_error_midstream_becomes_clean_rate_limit() -> None:
     """429 no meio do stream vira ErrorEvent limpo (RATE_LIMIT), não JSON cru."""
 
-    async def run(on_event):
+    async def run(on_event) -> NoReturn:
         await on_event(MessageChunk(content="parcial", node="model"))
         raise RuntimeError(
             "Error calling model 'gemini-2.5-flash' (Too Many Requests): 429 "
@@ -355,8 +358,8 @@ async def test_provider_error_midstream_becomes_clean_rate_limit():
 
 @pytest.mark.asyncio
 async def test_record_turn_checkpoint_nonexistent_directory_no_error(
-    tmp_path, monkeypatch, caplog
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """_record_turn_checkpoint não loga ERROR quando diretório do workspace não existe.
 
     Regressão do NoSuchPathError — o diretório referenciado pelo workspace pode
@@ -388,8 +391,8 @@ async def test_record_turn_checkpoint_nonexistent_directory_no_error(
 
 @pytest.mark.asyncio
 async def test_record_turn_checkpoint_nonexistent_directory_returns_silently(
-    tmp_path, monkeypatch
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """_record_turn_checkpoint retorna sem levantar exceção se diretório não existe."""
     from unittest.mock import MagicMock
 
@@ -408,7 +411,9 @@ async def test_record_turn_checkpoint_nonexistent_directory_returns_silently(
 
 
 @pytest.mark.asyncio
-async def test_resume_stream_recebe_o_que_o_cliente_perdeu_ao_cair(_no_nats_sidecar):
+async def test_resume_stream_recebe_o_que_o_cliente_perdeu_ao_cair(
+    _no_nats_sidecar: None,
+) -> None:
     store = MagicMock()
     store.get_session = AsyncMock(return_value=object())
     store.start_run = AsyncMock()
@@ -425,14 +430,14 @@ async def test_resume_stream_recebe_o_que_o_cliente_perdeu_ao_cair(_no_nats_side
         await _resume_stream_scenario()
 
 
-async def _resume_stream_scenario():
+async def _resume_stream_scenario() -> None:
     """Cliente cai depois do 1º token; o run termina sem ele e a retomada pelo
     cursor entrega o restante, com o evento terminal."""
     from backend.api.sse_sequence import get_run_log
 
     release = asyncio.Event()
 
-    async def run(on_event):
+    async def run(on_event) -> str:
         await on_event(MessageChunk(content="um", node="model"))
         await release.wait()
         await on_event(MessageChunk(content="dois", node="model"))

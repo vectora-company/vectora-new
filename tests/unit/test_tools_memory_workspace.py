@@ -6,30 +6,31 @@ import pytest
 
 from backend.tools.context import ToolContext
 from backend.tools.memory import _user_id_from_ctx
+from backend.vtypes.contracts import JsonObject
 
 # ---------------------------------------------------------------------------
 # _user_id_from_ctx
 # ---------------------------------------------------------------------------
 
 
-def test_workspace_namespace_when_workspace_id_present():
+def test_workspace_namespace_when_workspace_id_present() -> None:
     """workspace_id presente → namespace workspace_<id>."""
     ctx = ToolContext(workspace_id="abc12345", thread_id="001")
     assert _user_id_from_ctx(ctx) == "workspace_abc12345"
 
 
-def test_session_namespace_fallback_no_workspace_id():
+def test_session_namespace_fallback_no_workspace_id() -> None:
     """Sem workspace_id → fallback para session_<thread_id>."""
     ctx = ToolContext(thread_id="001")
     assert _user_id_from_ctx(ctx) == "session_001"
 
 
-def test_default_session_when_ctx_bare():
+def test_default_session_when_ctx_bare() -> None:
     """ctx sem nenhum identificador → "local"."""
     assert _user_id_from_ctx(ToolContext()) == "local"
 
 
-def test_workspace_takes_priority_over_thread_id():
+def test_workspace_takes_priority_over_thread_id() -> None:
     """workspace_id tem prioridade sobre thread_id."""
     ctx = ToolContext(workspace_id="ws001", thread_id="t999")
     result = _user_id_from_ctx(ctx)
@@ -103,7 +104,7 @@ async def test_listing_skips_expired_scoped_copy_before_deduplicating(
     store = NativeInMemoryStore()
     ctx = ToolContext(user_id="alice", workspace_id="first", store=store)
     legacy = ("user", "alice", "memories")
-    expired = {"content": "expired", "valid_until": "2000-01-01T00:00:00Z"}
+    expired: JsonObject = {"content": "expired", "valid_until": "2000-01-01T00:00:00Z"}
     await store.aput(legacy, "key", {"content": "shared"})
     await store.aput(_memory_namespace(ctx), "key", expired)
 

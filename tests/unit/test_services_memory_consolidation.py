@@ -23,13 +23,14 @@ from backend.scheduling.memory_consolidation import (
     split_by_category,
 )
 from backend.settings import Settings
+from backend.vtypes import VMessage
 
 # ---------------------------------------------------------------------------
 # _build_consolidation_prompt
 # ---------------------------------------------------------------------------
 
 
-def test_build_prompt_includes_all_threads():
+def test_build_prompt_includes_all_threads() -> None:
     """O prompt deve mencionar cada thread passada."""
     threads = [
         [("human", "oi"), ("assistant", "olá")],
@@ -40,14 +41,14 @@ def test_build_prompt_includes_all_threads():
     assert "corrigi o JWT" in prompt
 
 
-def test_build_prompt_empty_threads_returns_valid_string():
+def test_build_prompt_empty_threads_returns_valid_string() -> None:
     """Sem threads, deve retornar string não-vazia (template mínimo)."""
     prompt = _build_consolidation_prompt([])
     assert isinstance(prompt, str)
     assert len(prompt) > 0
 
 
-def test_build_prompt_caps_per_thread():
+def test_build_prompt_caps_per_thread() -> None:
     """Cada thread não deve ultrapassar ~2000 chars no prompt (evita tokens demais)."""
     long_msg = "a" * 3000
     threads = [
@@ -63,20 +64,20 @@ def test_build_prompt_caps_per_thread():
 # ---------------------------------------------------------------------------
 
 
-def test_parse_llm_output_returns_stripped_text():
+def test_parse_llm_output_returns_stripped_text() -> None:
     raw = "  Aprendi que o projeto usa SQLite.  "
     result = _parse_llm_output(raw)
     assert result == "Aprendi que o projeto usa SQLite."
 
 
-def test_parse_llm_output_strips_markdown_fences():
+def test_parse_llm_output_strips_markdown_fences() -> None:
     raw = "```markdown\n# Memória\nConteúdo\n```"
     result = _parse_llm_output(raw)
     assert "```" not in result
     assert "Conteúdo" in result
 
 
-def test_parse_llm_output_empty_returns_empty():
+def test_parse_llm_output_empty_returns_empty() -> None:
     assert _parse_llm_output("") == ""
     assert _parse_llm_output("   ") == ""
 
@@ -87,7 +88,7 @@ def test_parse_llm_output_empty_returns_empty():
 
 
 class TestSplitByCategory:
-    def test_parses_all_three_sections(self):
+    def test_parses_all_three_sections(self) -> None:
         text = (
             "## decisions\nUsar SQLite.\n\n"
             "## gotchas\nJWT expira em 15min.\n\n"
@@ -100,7 +101,7 @@ class TestSplitByCategory:
             "preferences": "Respostas curtas.",
         }
 
-    def test_missing_section_is_simply_absent(self):
+    def test_missing_section_is_simply_absent(self) -> None:
         """LLM que só produz decisions não inventa gotchas/preferences vazias."""
         text = "## decisions\nUsar Postgres."
         sections = split_by_category(text)
@@ -108,14 +109,14 @@ class TestSplitByCategory:
         assert "gotchas" not in sections
         assert "preferences" not in sections
 
-    def test_header_without_content_is_dropped(self):
+    def test_header_without_content_is_dropped(self) -> None:
         """Cabeçalho seguido de nada (ou só espaço) não vira seção vazia."""
         text = "## decisions\n\n## gotchas\nConteúdo real."
         sections = split_by_category(text)
         assert "decisions" not in sections
         assert sections["gotchas"] == "Conteúdo real."
 
-    def test_text_without_any_known_header_returns_empty_dict(self):
+    def test_text_without_any_known_header_returns_empty_dict(self) -> None:
         """Saída do LLM que não segue o formato esperado não quebra — dict vazio."""
         assert split_by_category("Só um parágrafo solto, sem cabeçalho.") == {}
 
@@ -126,7 +127,7 @@ class TestSplitByCategory:
 
 
 class TestApplyConsolidationSections:
-    def test_writes_section_and_archives_previous_version(self, tmp_path: Path):
+    def test_writes_section_and_archives_previous_version(self, tmp_path: Path) -> None:
         """Rodada com conteúdo novo grava a seção certa e preserva a versão
         anterior no histórico (regressão do bug original: sobrescrita sem
         rastro)."""
@@ -142,7 +143,7 @@ class TestApplyConsolidationSections:
         assert len(history_files) == 1
         assert history_files[0].read_text(encoding="utf-8") == "Versão antiga."
 
-    def test_unchanged_content_does_not_touch_history(self, tmp_path: Path):
+    def test_unchanged_content_does_not_touch_history(self, tmp_path: Path) -> None:
         """Segunda rodada sem mudança real de conteúdo não gera entrada de
         histórico redundante."""
         path = section_path("gotchas", tmp_path)
@@ -155,7 +156,7 @@ class TestApplyConsolidationSections:
         history_dir = tmp_path / ".history"
         assert not history_dir.exists() or not list(history_dir.glob("*"))
 
-    def test_unknown_category_is_ignored(self, tmp_path: Path):
+    def test_unknown_category_is_ignored(self, tmp_path: Path) -> None:
         """Categoria fora de CONSOLIDATION_CATEGORIES nunca vira arquivo —
         proteção contra o LLM inventar um cabeçalho não previsto."""
         changed = apply_consolidation_sections(
@@ -164,7 +165,9 @@ class TestApplyConsolidationSections:
         assert changed == []
         assert not any(tmp_path.iterdir())
 
-    def test_recovering_history_across_two_different_rounds(self, tmp_path: Path):
+    def test_recovering_history_across_two_different_rounds(
+        self, tmp_path: Path
+    ) -> None:
         """Regressão explícita: rodar consolidação duas vezes com conteúdos
         diferentes deixa a primeira versão recuperável do histórico (o bug
         original — sobrescrita sem rastro — teria feito isso falhar)."""
@@ -179,7 +182,7 @@ class TestApplyConsolidationSections:
             history_files[0].read_text(encoding="utf-8").strip() == "Primeira versão."
         )
 
-    def test_all_categories_covered(self):
+    def test_all_categories_covered(self) -> None:
         assert set(CONSOLIDATION_CATEGORIES) == {
             "decisions",
             "gotchas",
@@ -192,14 +195,14 @@ class TestApplyConsolidationSections:
 # ---------------------------------------------------------------------------
 
 
-def _fake_llm_response(content: str):
+def _fake_llm_response(content: str) -> VMessage:
     from backend.vtypes.message import MessageRole, text_message
 
     return text_message(MessageRole.ASSISTANT, content)
 
 
 @pytest.mark.asyncio
-async def test_consolidate_memory_no_threads_skips_llm():
+async def test_consolidate_memory_no_threads_skips_llm() -> None:
     """Sem threads recentes, não deve chamar o LLM."""
     with (
         patch(
@@ -218,8 +221,8 @@ async def test_consolidate_memory_no_threads_skips_llm():
 
 @pytest.mark.asyncio
 async def test_consolidate_memory_skips_without_provider_but_runs_with_one(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Job periódico, sem usuário no loop — nunca pode chamar o LLM sem
     nenhum provider configurado (ex.: instalação recém-extraída ainda sem
     setup). Caso de borda no mesmo teste: com 1 provider, roda normal."""
@@ -247,7 +250,7 @@ async def test_consolidate_memory_skips_without_provider_but_runs_with_one(
 
 
 @pytest.mark.asyncio
-async def test_consolidate_memory_llm_failure_does_not_raise():
+async def test_consolidate_memory_llm_failure_does_not_raise() -> None:
     """Falha do LLM não deve propagar — é best-effort."""
     with (
         patch(
@@ -265,7 +268,7 @@ async def test_consolidate_memory_llm_failure_does_not_raise():
 
 
 @pytest.mark.asyncio
-async def test_consolidate_memory_output_without_known_headers_is_ignored():
+async def test_consolidate_memory_output_without_known_headers_is_ignored() -> None:
     """LLM que não segue o formato de seções esperado não escreve nada nem
     propõe artifact — apenas loga e retorna."""
     with (
@@ -294,7 +297,7 @@ async def test_consolidate_memory_output_without_known_headers_is_ignored():
 
 
 @pytest.mark.asyncio
-async def test_consolidate_memory_proposes_when_approval_required():
+async def test_consolidate_memory_proposes_when_approval_required() -> None:
     """`require_approval=True` (default) propõe via artifact em vez de
     escrever direto — dá o mesmo tratamento HITL de `save_learned_fact`."""
     with (
@@ -324,7 +327,7 @@ async def test_consolidate_memory_proposes_when_approval_required():
 @pytest.mark.asyncio
 async def test_consolidate_memory_writes_directly_when_approval_not_required(
     tmp_path: Path,
-):
+) -> None:
     """`require_approval=False` grava direto (comportamento anterior, sem
     a etapa de proposta)."""
     with (
@@ -366,7 +369,7 @@ class TestRunConsolidationForAllUsers:
     colunas que nunca existiram em ``vectora_sessions``, falhando toda vez
     que o scheduler rodava)."""
 
-    async def test_consolida_cada_usuario_ativo_encontrado(self):
+    async def test_consolida_cada_usuario_ativo_encontrado(self) -> None:
         from backend.scheduling.memory_consolidation import (
             run_consolidation_for_all_users,
         )
@@ -389,7 +392,7 @@ class TestRunConsolidationForAllUsers:
         called_users = [c.args[0] for c in mock_consolidate.await_args_list]
         assert called_users == ["alice", "bob"]
 
-    async def test_falha_ao_consultar_store_nao_propaga(self):
+    async def test_falha_ao_consultar_store_nao_propaga(self) -> None:
         """Erro/borda: operação best-effort — falha na consulta ao
         SessionStore nunca derruba o scheduler."""
         from backend.scheduling.memory_consolidation import (

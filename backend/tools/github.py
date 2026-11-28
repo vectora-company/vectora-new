@@ -16,10 +16,13 @@ import httpx
 
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
 _GITHUB_API = "https://api.github.com"
+_FILES_PER_PAGE = 100
+_MAX_FILE_PAGES = 3
 
 
 async def _github_token(ctx: ToolContext | None = None) -> str:
@@ -45,6 +48,52 @@ async def _github_token(ctx: ToolContext | None = None) -> str:
     return os.environ.get("GITHUB_TOKEN", "").strip()
 
 
+def _file_diff(file: JsonObject) -> str:
+    """Trecho de diff de um arquivo devolvido pela lista de arquivos do PR."""
+    name = file.get("filename")
+    previous = file.get("previous_filename") or name
+    patch = file.get("patch")
+    body = patch if isinstance(patch, str) else "(sem trecho: binário ou grande)"
+    return f"diff --git a/{previous} b/{name}\n{body}"
+
+
+async def _diff_from_files(url: str, headers: dict[str, str]) -> str:
+    """Monta o diff pela lista paginada de arquivos.
+
+    O GitHub recusa o diff de PRs com mais de 300 arquivos; a lista é lida até
+    esse mesmo volume e o resultado informa se ficou incompleto.
+    """
+    headers = {**headers, "Accept": "application/vnd.github+json"}
+    parts: list[str] = []
+    truncated = True
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for page in range(1, _MAX_FILE_PAGES + 1):
+            resp = await client.get(
+                f"{url}/files",
+                headers=headers,
+                params={"per_page": _FILES_PER_PAGE, "page": page},
+            )
+            if resp.status_code != 200:
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "error": f"GitHub API respondeu {resp.status_code} ao listar os arquivos do PR.",
+                    }
+                )
+            files: JsonValue = resp.json()
+            if not isinstance(files, list):
+                return json.dumps(
+                    {"status": "error", "error": "Lista de arquivos do PR inválida."}
+                )
+            parts.extend(_file_diff(item) for item in files if isinstance(item, dict))
+            if len(files) < _FILES_PER_PAGE:
+                truncated = False
+                break
+    return json.dumps(
+        {"status": "ok", "diff": "\n".join(parts), "truncated": truncated}
+    )
+
+
 @vtool(
     extras=ToolExtras(
         render_hint="diff",
@@ -67,7 +116,9 @@ async def github_fetch_pr_diff(
         pr_number: número do PR.
 
     Returns:
-        JSON com o diff em texto, ou um objeto JSON com status de erro.
+        JSON com o diff em texto, ou um objeto JSON com status de erro. Em PRs
+        grandes demais para o diff único, o texto é montado arquivo a arquivo e
+        ``truncated`` informa se algum ficou de fora.
     """
     url = f"{_GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}"
     headers = {
@@ -108,6 +159,8 @@ async def github_fetch_pr_diff(
             return json.dumps(
                 {"status": "error", "error": "GitHub não retornou resposta."}
             )
+        if resp.status_code == 406 and "too_large" in resp.text:
+            return await _diff_from_files(url, headers)
         if resp.status_code != 200:
             error: dict[str, str | bool] = {
                 "status": "error",

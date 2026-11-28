@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
-from typing import Any, TypeVar
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +225,7 @@ async def try_with_fallback(  # noqa: UP047
     fn: Callable[[str], Awaitable[T]],
     model_id: str,
     *,
-    on_switch: Callable[[str, str], Any] | None = None,
+    on_switch: Callable[[str, str], None] | None = None,
 ) -> T:
     """Executa somente o modelo selecionado e preserva erro de quota tipado."""
     try:

@@ -18,9 +18,13 @@ import sys
 import threading
 import webbrowser
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from backend.services.log_setup import mark_shutdown_requested
+
+if TYPE_CHECKING:
+    from PIL.Image import Image
+    from pystray import Icon, MenuItem
 
 
 class _ServerLike(Protocol):
@@ -64,7 +68,7 @@ def _enable_dark_mode_win32() -> None:
     enable_dark_mode()
 
 
-def _build_icon_image() -> Any:
+def _build_icon_image() -> Image:
     """Carrega o ícone real do Vectora; fallback para quadrado roxo com 'V'."""
     from PIL import Image
 
@@ -95,7 +99,7 @@ def run_server_with_tray(
     url: str,
     *,
     headless: bool,
-    icon_ref: list[Any] | None = None,
+    icon_ref: list[Icon | None] | None = None,
 ) -> None:
     """Sobe o ``uvicorn.Server`` e, quando possível, uma bandeja do sistema.
 
@@ -141,10 +145,10 @@ def run_server_with_tray(
     server_thread = threading.Thread(target=server.run, name="uvicorn", daemon=True)
     server_thread.start()
 
-    def _open(_icon: object = None, _item: object = None) -> None:
+    def _open(_icon: Icon | None = None, _item: MenuItem | None = None) -> None:
         webbrowser.open(url)
 
-    def _quit(icon: Any, _item: object = None) -> None:
+    def _quit(icon: Icon, _item: MenuItem | None = None) -> None:
         mark_shutdown_requested()
         server.should_exit = True
         icon.stop()

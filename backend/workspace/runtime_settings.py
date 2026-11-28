@@ -33,9 +33,12 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+
+from pydantic import TypeAdapter
 
 from backend.runtime_profile import resolve_runtime_home
+from backend.vtypes.contracts import JsonObject, JsonValue, as_int
+from backend.vtypes.services import RagSettings, ServiceStartup
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +62,7 @@ _DB_PATH = _bootstrap_vectora_home() / "checkpoints.db"
 #: default aqui seria adotado silenciosamente por qualquer chamador
 #: antes do usuário escolher provider/modelo nenhum (ver docstring do
 #: módulo). `theme`/`language` são cosméticos, sem esse risco.
-_DEFAULTS: dict = {
+_DEFAULTS: JsonObject = {
     "theme": "dark",
     "language": "en",
 }
@@ -105,7 +108,7 @@ class RuntimeSettings:
 
     def __init__(self, path: Path = _DB_PATH) -> None:
         self._path = path
-        self._data: dict = {}
+        self._data: JsonObject = {}
         self._lock = threading.Lock()
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
@@ -137,7 +140,7 @@ class RuntimeSettings:
             )
             self._data = {}
             return
-        data: dict = {}
+        data: JsonObject = {}
         for key, raw in rows:
             try:
                 data[key] = json.loads(raw)
@@ -148,7 +151,7 @@ class RuntimeSettings:
         self._data = data
         logger.debug("runtime_settings: carregado de %s", self._path)
 
-    def _persist(self, key: str, value: object) -> None:
+    def _persist(self, key: str, value: JsonValue) -> None:
         """Grava uma chave no SQLite. Chamar só dentro de `self._lock`."""
         now = datetime.now(UTC).isoformat()
         payload = json.dumps(value, ensure_ascii=False)
@@ -196,7 +199,7 @@ class RuntimeSettings:
 
     # ─── Acesso genérico ─────────────────────────────────────────────────────
 
-    def get(self, key: str, default: object = None) -> object:
+    def get(self, key: str, default: JsonValue = None) -> JsonValue:
         """Retorna valor do cache em memória, com fallback para _DEFAULTS."""
         return self._data.get(key, _DEFAULTS.get(key, default))
 
@@ -209,7 +212,7 @@ class RuntimeSettings:
         """
         return key in self._data
 
-    def set(self, key: str, value: object) -> None:
+    def set(self, key: str, value: JsonValue) -> None:
         """Persiste um valor de forma thread-safe (SQLite + cache em memória)."""
         with self._lock:
             previous = self._data.get(key)
@@ -224,8 +227,8 @@ class RuntimeSettings:
                 raise
 
     def update_list(
-        self, key: str, update: Callable[[list[object]], list[object]]
-    ) -> list[object]:
+        self, key: str, update: Callable[[list[JsonValue]], list[JsonValue]]
+    ) -> list[JsonValue]:
         """Atualiza uma lista atomicamente entre threads e processos.
 
         A leitura precisa ocorrer dentro da transação SQLite: o cache local
@@ -350,7 +353,7 @@ class RuntimeSettings:
     def storage_mode(self, value: str) -> None:
         self.set("storage_mode", value if value in ("lite", "complete") else "lite")
 
-    def get_service_startup(self, service: str) -> dict:
+    def get_service_startup(self, service: str) -> ServiceStartup:
         """Configuração de auto-start para um serviço self-hosted do modo
         "complete" (``postgres`` | ``redis`` | ``qdrant``).
 
@@ -362,12 +365,12 @@ class RuntimeSettings:
         services = self.get("storage_services", {})
         if not isinstance(services, dict):
             return {"self_hosted": False, "start_command": None}
-        cfg = cast("dict[str, Any]", services).get(service)
+        cfg = services.get(service)
         if not isinstance(cfg, dict):
             return {"self_hosted": False, "start_command": None}
         return {
             "self_hosted": bool(cfg.get("self_hosted", False)),
-            "start_command": cfg.get("start_command") or None,
+            "start_command": str(cfg.get("start_command") or "") or None,
         }
 
     def set_service_startup(
@@ -436,15 +439,13 @@ class RuntimeSettings:
         self.set("user_timezone", clean)
 
     @property
-    def rag_settings(self) -> dict[str, object]:
+    def rag_settings(self) -> RagSettings:
         """Settings de RAG configuráveis em runtime (aba de memória).
 
         Providers são inferidos do ID canônico do modelo selecionado.
         """
         val = self.get("rag_settings", {})
-        data: dict[str, object] = (
-            {str(k): v for k, v in val.items()} if isinstance(val, dict) else {}
-        )
+        data: JsonObject = val if isinstance(val, dict) else {}
         raw_top_k = data.get("reranker_top_k", 5)
         top_k = int(raw_top_k) if isinstance(raw_top_k, (int, float, str)) else 5
         raw_types = data.get("ingest_file_types")
@@ -458,17 +459,17 @@ class RuntimeSettings:
             ),
         }
 
-    def set_rag_settings(self, **changes: object) -> dict[str, object]:
+    def set_rag_settings(self, **changes: JsonValue) -> RagSettings:
         """Mescla mudanças nos settings de RAG e persiste; devolve o estado final."""
-        merged = {
-            **self.rag_settings,
+        merged: JsonObject = {
+            **TypeAdapter(JsonObject).validate_python(self.rag_settings),
             **{k: v for k, v in changes.items() if v is not None},
         }
         self.set("rag_settings", merged)
         return self.rag_settings
 
     @property
-    def media_settings(self) -> dict[str, object]:
+    def media_settings(self) -> JsonObject:
         """Modelo escolhido por provider+capacidade de mídia.
 
         Chaves no formato `{provider}_{capability}_model` (ex.
@@ -479,12 +480,12 @@ class RuntimeSettings:
         val = self.get("media_settings", {})
         if not isinstance(val, dict):
             return {}
-        return {str(k): v for k, v in val.items()}
+        return dict(val)
 
-    def set_media_settings(self, **changes: object) -> dict[str, object]:
+    def set_media_settings(self, **changes: JsonValue) -> JsonObject:
         """Mescla e persiste. String vazia **limpa** a escolha (volta a valer a
         env var, se houver) — por isso o filtro é `is not None`, não truthy."""
-        merged = {
+        merged: JsonObject = {
             **self.media_settings,
             **{k: v for k, v in changes.items() if v is not None},
         }
@@ -506,12 +507,12 @@ class RuntimeSettings:
     def set_session_for_dir(self, cwd: str, thread_id: str) -> None:
         """Persist the last thread_id used in the given directory."""
         with self._lock:
-            mapping = dict(self.last_session_by_dir)
+            mapping: JsonObject = {**self.last_session_by_dir}
             mapping[cwd] = thread_id
             self._data["last_session_by_dir"] = mapping
             self._persist("last_session_by_dir", mapping)
 
-    def _read_frontend_prefs(self) -> dict[str, object]:
+    def _read_frontend_prefs(self) -> JsonObject:
         """Read durable preferences under the instance lock; propagate storage errors."""
         row = self._conn.execute(
             "SELECT value FROM app_settings WHERE key = ?", ("frontend_prefs",)
@@ -536,15 +537,15 @@ class RuntimeSettings:
                 else {}
             )
             return {
-                "user": int(user.get("_decision_model_revision", 0)),
-                "workspace": int(scoped.get("_decision_model_revision", 0))
+                "user": as_int(user.get("_decision_model_revision", 0)),
+                "workspace": as_int(scoped.get("_decision_model_revision", 0))
                 if isinstance(scoped, dict)
                 else 0,
             }
 
     def get_frontend_prefs(
         self, user_id: str, workspace_id: str | None = None
-    ) -> dict[str, object]:
+    ) -> JsonObject:
         """Preferências do frontend web persistidas para ``user_id``.
 
         Chave por usuário — numa instância multi-usuário (VPS), as
@@ -579,10 +580,10 @@ class RuntimeSettings:
     def set_frontend_prefs(
         self,
         user_id: str,
-        changes: dict[str, object],
+        changes: JsonObject,
         *,
         workspace_id: str | None = None,
-    ) -> dict[str, object]:
+    ) -> JsonObject:
         """Mescla ``changes`` nas preferências do frontend de ``user_id`` e persiste.
 
         Chaves fora de ``_ALLOWED_FRONTEND_PREF_KEYS`` são ignoradas
@@ -662,7 +663,7 @@ class RuntimeSettings:
                     for key, value in allowed.items()
                 ):
                     user_prefs["_decision_model_revision"] = (
-                        int(user_prefs.get("_decision_model_revision", 0)) + 1
+                        as_int(user_prefs.get("_decision_model_revision", 0)) + 1
                     )
                 user_prefs.update(allowed)
                 if workspace_id and workspace_decision_changes:
@@ -685,7 +686,7 @@ class RuntimeSettings:
                         for key, value in workspace_decision_changes.items()
                     ):
                         scoped["_decision_model_revision"] = (
-                            int(scoped.get("_decision_model_revision", 0)) + 1
+                            as_int(scoped.get("_decision_model_revision", 0)) + 1
                         )
                     scoped.update(workspace_decision_changes)
                     workspace_prefs[workspace_id] = scoped

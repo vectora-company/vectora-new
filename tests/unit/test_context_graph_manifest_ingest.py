@@ -10,49 +10,49 @@ from pathlib import Path
 
 
 class TestIsPackageManifestPath:
-    def test_pyproject_toml(self):
+    def test_pyproject_toml(self) -> None:
         from backend.context_graph.manifest_ingest import (
             is_package_manifest_path,
         )
 
         assert is_package_manifest_path(Path("pyproject.toml")) is True
 
-    def test_go_mod(self):
+    def test_go_mod(self) -> None:
         from backend.context_graph.manifest_ingest import (
             is_package_manifest_path,
         )
 
         assert is_package_manifest_path(Path("go.mod")) is True
 
-    def test_pom_xml(self):
+    def test_pom_xml(self) -> None:
         from backend.context_graph.manifest_ingest import (
             is_package_manifest_path,
         )
 
         assert is_package_manifest_path(Path("pom.xml")) is True
 
-    def test_apm_yaml(self):
+    def test_apm_yaml(self) -> None:
         from backend.context_graph.manifest_ingest import (
             is_package_manifest_path,
         )
 
         assert is_package_manifest_path(Path("apm.yaml")) is True
 
-    def test_random_file_not_manifest(self):
+    def test_random_file_not_manifest(self) -> None:
         from backend.context_graph.manifest_ingest import (
             is_package_manifest_path,
         )
 
         assert is_package_manifest_path(Path("requirements.txt")) is False
 
-    def test_case_insensitive_pom(self):
+    def test_case_insensitive_pom(self) -> None:
         from backend.context_graph.manifest_ingest import (
             is_package_manifest_path,
         )
 
         assert is_package_manifest_path(Path("POM.XML")) is True
 
-    def test_apm_uppercase(self):
+    def test_apm_uppercase(self) -> None:
         from backend.context_graph.manifest_ingest import (
             is_package_manifest_path,
         )
@@ -61,7 +61,7 @@ class TestIsPackageManifestPath:
 
 
 class TestExtractPackageManifestPyproject:
-    def test_basic_pyproject(self, tmp_path: Path):
+    def test_basic_pyproject(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -76,7 +76,7 @@ class TestExtractPackageManifestPyproject:
         assert len(result["nodes"]) >= 1
         assert any(n["label"] == "mypackage" for n in result["nodes"])
 
-    def test_deps_as_edges(self, tmp_path: Path):
+    def test_deps_as_edges(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -90,7 +90,7 @@ class TestExtractPackageManifestPyproject:
         assert len(result["edges"]) >= 1
         assert any(e["relation"] == "depends_on" for e in result["edges"])
 
-    def test_no_name_returns_empty(self, tmp_path: Path):
+    def test_no_name_returns_empty(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -100,7 +100,7 @@ class TestExtractPackageManifestPyproject:
         result = extract_package_manifest(p)
         assert result["nodes"] == []
 
-    def test_version_stored(self, tmp_path: Path):
+    def test_version_stored(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -113,7 +113,7 @@ class TestExtractPackageManifestPyproject:
 
 
 class TestExtractPackageManifestGoMod:
-    def test_basic_go_mod(self, tmp_path: Path):
+    def test_basic_go_mod(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -126,10 +126,10 @@ class TestExtractPackageManifestGoMod:
         )
         result = extract_package_manifest(p)
         assert len(result["nodes"]) >= 1
-        node_labels = [n["label"] for n in result["nodes"]]
+        node_labels = [str(n["label"]) for n in result["nodes"]]
         assert any("myapp" in lbl for lbl in node_labels)
 
-    def test_no_module_returns_empty(self, tmp_path: Path):
+    def test_no_module_returns_empty(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -141,7 +141,7 @@ class TestExtractPackageManifestGoMod:
 
 
 class TestExtractPackageManifestPomXml:
-    def test_basic_pom(self, tmp_path: Path):
+    def test_basic_pom(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -165,7 +165,7 @@ class TestExtractPackageManifestPomXml:
         result = extract_package_manifest(p)
         assert len(result["nodes"]) >= 1
 
-    def test_invalid_xml_returns_error(self, tmp_path: Path):
+    def test_invalid_xml_returns_error(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -177,7 +177,7 @@ class TestExtractPackageManifestPomXml:
 
 
 class TestExtractPackageManifestApm:
-    def test_basic_apm_yaml(self, tmp_path: Path):
+    def test_basic_apm_yaml(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -191,7 +191,7 @@ class TestExtractPackageManifestApm:
         assert any(n["label"] == "myservice" for n in result["nodes"])
         assert len(result["edges"]) >= 1
 
-    def test_apm_no_name_returns_empty(self, tmp_path: Path):
+    def test_apm_no_name_returns_empty(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -203,7 +203,7 @@ class TestExtractPackageManifestApm:
 
 
 class TestExtractPackageManifestEdgeCases:
-    def test_file_too_large_returns_error(self, tmp_path: Path):
+    def test_file_too_large_returns_error(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             _MAX_MANIFEST_BYTES,
             extract_package_manifest,
@@ -214,7 +214,7 @@ class TestExtractPackageManifestEdgeCases:
         result = extract_package_manifest(p)
         assert "error" in result
 
-    def test_oserror_returns_error(self, tmp_path: Path):
+    def test_oserror_returns_error(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -224,7 +224,7 @@ class TestExtractPackageManifestEdgeCases:
         result = extract_package_manifest(p)
         assert "error" in result
 
-    def test_self_dep_ignored(self, tmp_path: Path):
+    def test_self_dep_ignored(self, tmp_path: Path) -> None:
         from backend.context_graph.manifest_ingest import (
             extract_package_manifest,
         )
@@ -238,7 +238,7 @@ class TestExtractPackageManifestEdgeCases:
             assert e["source"] != e["target"]
 
 
-def test_maven_manifest_rejects_entity_expansion(tmp_path):
+def test_maven_manifest_rejects_entity_expansion(tmp_path: Path) -> None:
     from backend.context_graph.manifest_ingest import extract_package_manifest
 
     path = tmp_path / "pom.xml"

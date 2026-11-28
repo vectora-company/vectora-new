@@ -10,6 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import aiosqlite
     import asyncpg
 
     from backend.storage.sqlite.pool import AsyncConnectionPool
@@ -505,7 +506,7 @@ _FTS_BACKFILL = (
 )
 
 
-async def setup_message_search_index(conn: Any) -> None:
+async def setup_message_search_index(conn: aiosqlite.Connection) -> None:
     """Índice FTS5 das mensagens (busca entre conversas), mantido por triggers.
 
     O ``rowid`` do índice é o ``id`` da mensagem, então apagar e reindexar é
@@ -524,7 +525,9 @@ async def setup_message_search_index(conn: Any) -> None:
             "BEGIN DELETE FROM messages_fts WHERE rowid = OLD.id; END"
         )
         await conn.execute(_FTS_TRIGGER_AU.replace("{text}", new_text))
-        indexed = await conn.execute_fetchall("SELECT 1 FROM messages_fts LIMIT 1")
+        indexed = list(
+            await conn.execute_fetchall("SELECT 1 FROM messages_fts LIMIT 1")
+        )
         if not indexed:
             await conn.execute(
                 _FTS_BACKFILL.replace(

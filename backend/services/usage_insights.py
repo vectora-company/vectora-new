@@ -9,7 +9,30 @@ from __future__ import annotations
 import contextlib
 from collections import Counter
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING
+
+import aiosqlite
+
+type UsageDatabase = aiosqlite.Connection | asyncpg.Pool
+
+#: Colunas lidas para a agregação, na ordem das consultas.
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    import asyncpg
+
+    from backend.vtypes.services import UsageInsight
+    from backend.vtypes.sql import SqlValue
+
+_COLUMNS = (
+    "event_id",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "estimated_cost_cents",
+    "tool_names",
+)
 
 
 class UsageInsightStore:
@@ -29,8 +52,8 @@ class UsageInsightStore:
         end = week_start + timedelta(days=7)
         return end - timedelta(days=7 * weeks), end
 
-    async def ensure_schema(self, db: Any) -> None:
-        if hasattr(db, "acquire"):
+    async def ensure_schema(self, db: UsageDatabase) -> None:
+        if not isinstance(db, aiosqlite.Connection):
             return
         await db.execute(
             """
@@ -65,7 +88,7 @@ class UsageInsightStore:
 
     async def record(
         self,
-        db: Any,
+        db: UsageDatabase,
         *,
         user_id: str,
         event_id: str,
@@ -81,7 +104,7 @@ class UsageInsightStore:
         import json
 
         when = (occurred_at or datetime.now(UTC)).isoformat()
-        if hasattr(db, "acquire"):
+        if not isinstance(db, aiosqlite.Connection):
             async with db.acquire() as connection:
                 await connection.execute(
                     """INSERT INTO usage_insight_events
@@ -121,19 +144,19 @@ class UsageInsightStore:
 
     async def aggregate(
         self,
-        db: Any,
+        db: UsageDatabase,
         *,
         user_id: str,
         weeks: int = 1,
         now: datetime | None = None,
-    ) -> dict[str, Any]:
+    ) -> UsageInsight:
         """Agrega a janela móvel permitida sem retornar eventos brutos."""
         if weeks not in {1, 2, 4}:
             raise ValueError("weeks deve ser 1, 2 ou 4")
         start, end = self.window_bounds(weeks, now=now)
-        if hasattr(db, "acquire"):
+        if not isinstance(db, aiosqlite.Connection):
             async with db.acquire() as connection:
-                rows = await connection.fetch(
+                records = await connection.fetch(
                     """SELECT event_id, model, input_tokens, output_tokens, total_tokens,
                               estimated_cost_cents, tool_names
                        FROM usage_insight_events
@@ -142,7 +165,9 @@ class UsageInsightStore:
                     start,
                     end,
                 )
-            return self._aggregate_rows(rows, weeks, start=start, end=end)
+            return self._aggregate_rows(
+                [dict(record) for record in records], weeks, start=start, end=end
+            )
         async with db.execute(
             """SELECT event_id, model, input_tokens, output_tokens, total_tokens,
                       estimated_cost_cents, tool_names
@@ -150,13 +175,20 @@ class UsageInsightStore:
                WHERE user_id = ? AND occurred_at >= ? AND occurred_at < ?""",
             (user_id, start.isoformat(), end.isoformat()),
         ) as cursor:
-            rows = await cursor.fetchall()
+            rows = [
+                dict(zip(_COLUMNS, row, strict=True)) for row in await cursor.fetchall()
+            ]
 
         return self._aggregate_rows(rows, weeks, start=start, end=end)
 
     def _aggregate_rows(
-        self, rows: list[Any], weeks: int, *, start: datetime, end: datetime
-    ) -> dict[str, Any]:
+        self,
+        rows: Sequence[Mapping[str, SqlValue]],
+        weeks: int,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> UsageInsight:
         """Agrega linhas SQLite ou asyncpg com o mesmo contrato público."""
         import json
 
@@ -168,21 +200,9 @@ class UsageInsightStore:
         turn_ids: set[str] = set()
         counted_tools_turns: set[str] = set()
         for row in rows:
-            if hasattr(row, "get"):
-                event_id, model, inp, out, total, cost, names = (
-                    row.get("event_id"),
-                    row.get("model"),
-                    row.get("input_tokens"),
-                    row.get("output_tokens"),
-                    row.get("total_tokens"),
-                    row.get("estimated_cost_cents"),
-                    row.get("tool_names"),
-                )
-            elif len(row) == 7:
-                event_id, model, inp, out, total, cost, names = row
-            else:
-                event_id = ""
-                model, inp, out, total, cost, names = row
+            event_id, model, inp, out, total, cost, names = (
+                row.get(column) for column in _COLUMNS
+            )
             event_key = str(event_id or "")
             turn_key = (
                 event_key.rsplit(":call:", 1)[0] if ":call:" in event_key else event_key
@@ -200,7 +220,9 @@ class UsageInsightStore:
                 known_cost += float(cost)
             if turn_key not in counted_tools_turns:
                 with contextlib.suppress(TypeError, ValueError):
-                    tool_counts.update(str(name) for name in json.loads(names or "[]"))
+                    tool_counts.update(
+                        str(name) for name in json.loads(str(names or "[]"))
+                    )
                 counted_tools_turns.add(turn_key)
         return {
             "window_weeks": weeks,
@@ -231,7 +253,7 @@ class UsageInsightStore:
 usage_insight_store = UsageInsightStore()
 
 
-async def get_usage_database() -> Any:
+async def get_usage_database() -> UsageDatabase:
     """Retorna o backend ativo: SQLite no modo lite e pool Postgres no complete."""
     from backend.services.license import get_effective_storage_mode
 

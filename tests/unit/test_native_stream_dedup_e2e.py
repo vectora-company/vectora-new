@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from itertools import pairwise
+from pathlib import Path
 
 import pytest
 
@@ -24,12 +25,12 @@ from backend.engine.conversation_loop import LoopConfig, run_conversation
 from backend.persistence.native.session_store import SessionStore
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
-from backend.tools.registry import ToolRegistry
-from backend.vtypes.message import MessageRole, VMessageChunk, text_message
+from backend.tools.registry import ToolRegistry, ToolSpec
+from backend.vtypes.message import MessageRole, VMessage, VMessageChunk, text_message
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "dedup.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -48,14 +49,24 @@ class _RealTokenStreamChatClient:
         self._tokens = tokens
 
     async def astream(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> AsyncIterator[VMessageChunk]:
         for token in self._tokens:
             yield VMessageChunk(delta_text=token)
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         msg = "não usado (astream-only)"
         raise NotImplementedError(msg)
 

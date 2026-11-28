@@ -4,14 +4,14 @@ import base64
 import hashlib
 import json
 import re
-from typing import Any
+from types import ModuleType
 
 from backend.tools.registry import ToolExtras, vtool
 
 try:
     import jwt as _jwt
 
-    jwt: Any = _jwt
+    jwt: ModuleType | None = _jwt
 except ImportError:
     jwt = None
 

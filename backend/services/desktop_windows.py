@@ -14,8 +14,11 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from backend.vtypes.desktop import NativeWindow, WindowAdapter, WindowCapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -44,16 +47,31 @@ class WindowInfo:
 @dataclass(slots=True)
 class _Selection:
     window_id: str
-    native: Any
+    native: NativeWindow
     info: WindowInfo
     created_at: float
+
+
+class _PyGetWindow:
+    """Expõe o ``pygetwindow`` pelo contrato usado pelo registro."""
+
+    def __init__(self) -> None:
+        import pygetwindow
+
+        self._module = pygetwindow
+
+    def getAllWindows(self) -> list[NativeWindow]:  # noqa: N802
+        return self._module.getAllWindows()
+
+    def getActiveWindow(self) -> NativeWindow | None:  # noqa: N802
+        return self._module.getActiveWindow()
 
 
 class DesktopWindowRegistry:
     """Resolve janelas apenas dentro do contexto efêmero que as descobriu."""
 
     def __init__(self) -> None:
-        self._candidates: dict[tuple[str, str, str], dict[str, Any]] = {}
+        self._candidates: dict[tuple[str, str, str], dict[str, NativeWindow]] = {}
         self._selections: dict[tuple[str, str, str], _Selection] = {}
         self._action_times: dict[tuple[str, str, str], list[float]] = {}
         self._action_lock = threading.Lock()
@@ -67,13 +85,11 @@ class DesktopWindowRegistry:
         return user_id, workspace_id, thread_id
 
     @staticmethod
-    def _adapter() -> Any:
+    def _adapter() -> WindowAdapter | None:
         if platform.system() != "Windows":
             return None
         try:
-            import pygetwindow
-
-            return pygetwindow
+            return _PyGetWindow()
         except Exception:
             return None
 
@@ -83,7 +99,7 @@ class DesktopWindowRegistry:
         return "[REDACTED]" if _SENSITIVE_TITLE.search(title) else title
 
     @classmethod
-    def capabilities(cls) -> dict[str, Any]:
+    def capabilities(cls) -> WindowCapabilities:
         return {
             "platform": platform.system().lower(),
             "window_control": cls._adapter() is not None,
@@ -99,7 +115,7 @@ class DesktopWindowRegistry:
         adapter = self._adapter()
         if adapter is None:
             raise RuntimeError("controle de janelas indisponível nesta plataforma")
-        candidates: dict[str, Any] = {}
+        candidates: dict[str, NativeWindow] = {}
         result: list[WindowInfo] = []
         for native in adapter.getAllWindows():
             try:
@@ -147,7 +163,7 @@ class DesktopWindowRegistry:
         selection.info = self._inspect(selection.window_id, selection.native)
         return selection
 
-    def _inspect(self, window_id: str, native: Any) -> WindowInfo:
+    def _inspect(self, window_id: str, native: NativeWindow) -> WindowInfo:
         try:
             left, top = int(native.left), int(native.top)
             width, height = int(native.width), int(native.height)

@@ -18,6 +18,7 @@ from backend.llm.systemone.types import (
     SystemOneResponse,
     parse_systemone_response,
 )
+from backend.vtypes.contracts import JsonValue
 
 
 @pytest.mark.parametrize(
@@ -42,12 +43,12 @@ from backend.llm.systemone.types import (
 )
 async def test_adapters_reject_invalid_responses(
     adapter: ClefLocalAdapter | ClefApiAdapter | JevApiAdapter,
-    answers: object,
+    answers: JsonValue,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """All adapters reject malformed, extra, mismatched and out-of-range answers."""
 
-    async def post(*args: object, **kwargs: object) -> httpx.Response:
+    async def post[**P](*args: P.args, **kwargs: P.kwargs) -> httpx.Response:
         """Executa a operação post."""
         return httpx.Response(200, json={"answers": answers})
 
@@ -81,17 +82,18 @@ def test_choice_distribution_matches_request(distribution: dict[str, float]) -> 
             "q": ChoiceQuestion(options=["a", "b"]),
         },
     )
+    envelope: JsonValue = {
+        "answers": {
+            "q": {
+                "type": "choice",
+                "selection": "a",
+                "distribution": {**distribution},
+            }
+        }
+    }
     with pytest.raises(SystemOneValidationError):
         parse_systemone_response(
-            {
-                "answers": {
-                    "q": {
-                        "type": "choice",
-                        "selection": "a",
-                        "distribution": distribution,
-                    }
-                }
-            },
+            envelope,
             request,
             provider="test",
             latency_ms=1,
@@ -144,7 +146,7 @@ def test_empty_answers_require_hitl() -> None:
         {"answers": {"q": {"type": "score", "score": 0.5}}, "usage": []},
     ],
 )
-def test_invalid_envelopes_are_safe(payload: object) -> None:
+def test_invalid_envelopes_are_safe(payload: JsonValue) -> None:
     """Invalid envelopes and usage never escape as untyped exceptions."""
     request = SystemOneRequest(
         model="test",
@@ -172,7 +174,7 @@ async def test_http_errors_do_not_expose_response_body(
 ) -> None:
     """Provider bodies must not appear in returned policy reasons or logs."""
 
-    async def post(*args: object, **kwargs: object) -> httpx.Response:
+    async def post[**P](*args: P.args, **kwargs: P.kwargs) -> httpx.Response:
         """Executa a operação post."""
         return httpx.Response(400, text="secret-state-and-credential")
 

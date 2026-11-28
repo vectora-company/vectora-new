@@ -6,6 +6,7 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import TracebackType
 
 import pytest
 
@@ -36,11 +37,13 @@ class TestBootstrapVectoraHome:
 
     def test_respeita_vectora_home_quando_setado(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         monkeypatch.setenv("VECTORA_HOME", str(tmp_path))
         assert lic._bootstrap_vectora_home() == tmp_path
 
-    def test_cai_pro_home_real_sem_vectora_home(self, monkeypatch: pytest.MonkeyPatch):
+    def test_cai_pro_home_real_sem_vectora_home(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("VECTORA_HOME", raising=False)
         assert lic._bootstrap_vectora_home() == Path.home() / ".vectora"
 
@@ -138,14 +141,19 @@ def _patch_remote(
     monkeypatch: pytest.MonkeyPatch, payload: dict, status_code: int = 200
 ) -> None:
     class _FakeClient:
-        def __init__(self, *args: object, **kwargs: object) -> None: ...
+        def __init__[**P](self, *args: P.args, **kwargs: P.kwargs) -> None: ...
 
         async def __aenter__(self) -> _FakeClient:
             return self
 
-        async def __aexit__(self, *exc: object) -> None: ...
+        async def __aexit__(
+            self,
+            _exc_type: type[BaseException] | None,
+            _exc: BaseException | None,
+            _traceback: TracebackType | None,
+        ) -> None: ...
 
-        async def post(self, *args: object, **kwargs: object) -> _FakeResponse:
+        async def post[**P](self, *args: P.args, **kwargs: P.kwargs) -> _FakeResponse:
             return _FakeResponse(payload, status_code)
 
     monkeypatch.setattr(lic.httpx, "AsyncClient", _FakeClient)

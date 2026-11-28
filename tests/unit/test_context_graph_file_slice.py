@@ -10,13 +10,13 @@ from pathlib import Path
 
 
 class TestUnitPath:
-    def test_path_returns_itself(self):
+    def test_path_returns_itself(self) -> None:
         from backend.context_graph.file_slice import unit_path
 
         p = Path("file.py")
         assert unit_path(p) == p
 
-    def test_file_slice_returns_path(self, tmp_path: Path):
+    def test_file_slice_returns_path(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import FileSlice, unit_path
 
         p = tmp_path / "doc.md"
@@ -25,7 +25,7 @@ class TestUnitPath:
 
 
 class TestIsSplittableText:
-    def test_md_is_splittable(self, tmp_path: Path):
+    def test_md_is_splittable(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import is_splittable_text
 
         assert is_splittable_text(Path("README.md"))
@@ -34,14 +34,14 @@ class TestIsSplittableText:
         assert is_splittable_text(Path("docs.rst"))
         assert is_splittable_text(Path("file.markdown"))
 
-    def test_code_is_not_splittable(self):
+    def test_code_is_not_splittable(self) -> None:
         from backend.context_graph.file_slice import is_splittable_text
 
         assert not is_splittable_text(Path("main.py"))
         assert not is_splittable_text(Path("index.ts"))
         assert not is_splittable_text(Path("app.go"))
 
-    def test_uppercase_extension(self):
+    def test_uppercase_extension(self) -> None:
         from backend.context_graph.file_slice import is_splittable_text
 
         assert is_splittable_text(Path("README.MD"))
@@ -49,7 +49,7 @@ class TestIsSplittableText:
 
 
 class TestBestCut:
-    def test_cuts_at_heading_boundary(self):
+    def test_cuts_at_heading_boundary(self) -> None:
         from backend.context_graph.file_slice import _best_cut
 
         text = "Intro\n# Section\nContent"
@@ -57,21 +57,21 @@ class TestBestCut:
         # Should cut just before '#'
         assert text[cut - 1] == "\n"
 
-    def test_cuts_at_blank_line(self):
+    def test_cuts_at_blank_line(self) -> None:
         from backend.context_graph.file_slice import _best_cut
 
         text = "Para 1\n\nPara 2"
         cut = _best_cut(text, 0, len(text))
         assert cut > 0
 
-    def test_cuts_at_newline(self):
+    def test_cuts_at_newline(self) -> None:
         from backend.context_graph.file_slice import _best_cut
 
         text = "Line1\nLine2"
         cut = _best_cut(text, 0, len(text))
         assert cut > 0
 
-    def test_fallback_hard_cut(self):
+    def test_fallback_hard_cut(self) -> None:
         from backend.context_graph.file_slice import _best_cut
 
         text = "NoNewlinesHere"
@@ -80,14 +80,14 @@ class TestBestCut:
 
 
 class TestSliceBoundaries:
-    def test_no_split_needed(self):
+    def test_no_split_needed(self) -> None:
         from backend.context_graph.file_slice import slice_boundaries
 
         text = "Short text"
         bounds = slice_boundaries(text, max_chars=100)
         assert bounds == [(0, len(text))]
 
-    def test_splits_into_parts(self):
+    def test_splits_into_parts(self) -> None:
         from backend.context_graph.file_slice import slice_boundaries
 
         text = "A" * 100 + "\n" + "B" * 100
@@ -97,7 +97,7 @@ class TestSliceBoundaries:
         for i in range(1, len(bounds)):
             assert bounds[i][0] == bounds[i - 1][1]
 
-    def test_covers_entire_text(self):
+    def test_covers_entire_text(self) -> None:
         from backend.context_graph.file_slice import slice_boundaries
 
         text = "Section1\n\nSection2\n\nSection3" * 5
@@ -105,7 +105,7 @@ class TestSliceBoundaries:
         assert bounds[0][0] == 0
         assert bounds[-1][1] == len(text)
 
-    def test_each_slice_within_limit(self):
+    def test_each_slice_within_limit(self) -> None:
         from backend.context_graph.file_slice import slice_boundaries
 
         text = "x" * 200
@@ -116,7 +116,7 @@ class TestSliceBoundaries:
 
 
 class TestExpandOversizedFiles:
-    def test_small_file_passthrough(self, tmp_path: Path):
+    def test_small_file_passthrough(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import expand_oversized_files
 
         f = tmp_path / "small.md"
@@ -124,7 +124,7 @@ class TestExpandOversizedFiles:
         result = expand_oversized_files([f], max_chars=1000)
         assert result == [f]
 
-    def test_non_splittable_passthrough(self, tmp_path: Path):
+    def test_non_splittable_passthrough(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import expand_oversized_files
 
         f = tmp_path / "main.py"
@@ -132,7 +132,7 @@ class TestExpandOversizedFiles:
         result = expand_oversized_files([f], max_chars=100)
         assert result == [f]
 
-    def test_oversized_md_split_into_slices(self, tmp_path: Path):
+    def test_oversized_md_split_into_slices(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import (
             FileSlice,
             expand_oversized_files,
@@ -148,7 +148,7 @@ class TestExpandOversizedFiles:
         slices = [s for s in result if isinstance(s, FileSlice)]
         assert all(s.path == f for s in slices)
 
-    def test_unreadable_file_passthrough(self, tmp_path: Path):
+    def test_unreadable_file_passthrough(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import expand_oversized_files
 
         f = tmp_path / "ghost.md"
@@ -158,7 +158,7 @@ class TestExpandOversizedFiles:
 
 
 class TestReadSliceText:
-    def test_reads_correct_range(self, tmp_path: Path):
+    def test_reads_correct_range(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import FileSlice, read_slice_text
 
         f = tmp_path / "doc.md"
@@ -168,7 +168,7 @@ class TestReadSliceText:
 
 
 class TestBisectSlice:
-    def test_bisects_slice(self, tmp_path: Path):
+    def test_bisects_slice(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import FileSlice, bisect_slice
 
         content = "A" * 40 + "\n" + "B" * 40
@@ -182,7 +182,7 @@ class TestBisectSlice:
         assert right.end == len(content)
         assert left.end == right.start
 
-    def test_too_small_to_bisect(self, tmp_path: Path):
+    def test_too_small_to_bisect(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import FileSlice, bisect_slice
 
         f = tmp_path / "doc.md"
@@ -190,14 +190,14 @@ class TestBisectSlice:
         fs = FileSlice(path=f, start=0, end=1, index=0, total=1)
         assert bisect_slice(fs) is None
 
-    def test_unreadable_file_returns_none(self, tmp_path: Path):
+    def test_unreadable_file_returns_none(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import FileSlice, bisect_slice
 
         f = tmp_path / "ghost.md"
         fs = FileSlice(path=f, start=0, end=100, index=0, total=1)
         assert bisect_slice(fs) is None
 
-    def test_no_newline_fallback(self, tmp_path: Path):
+    def test_no_newline_fallback(self, tmp_path: Path) -> None:
         from backend.context_graph.file_slice import FileSlice, bisect_slice
 
         content = "A" * 100

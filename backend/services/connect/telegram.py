@@ -9,10 +9,19 @@ from __future__ import annotations
 
 import importlib.util
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.services.connect.runner import process_incoming
 from backend.services.gateway.messaging import IncomingMessage
+
+if TYPE_CHECKING:
+    from telegram.ext import Application, ContextTypes
+
+    from backend.vtypes.connect import (
+        TelegramApp,
+        TelegramIncoming,
+        TelegramUpdateWithReply,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +33,7 @@ PLATFORM = "telegram"
 TELEGRAM_AVAILABLE = importlib.util.find_spec("telegram") is not None
 
 
-def to_incoming(update: Any) -> IncomingMessage | None:
+def to_incoming(update: TelegramIncoming) -> IncomingMessage | None:
     """Traduz um `telegram.Update` pro formato comum.
 
     `None` para update sem texto (sticker, foto sem legenda, entrada/saída de
@@ -48,7 +57,9 @@ def to_incoming(update: Any) -> IncomingMessage | None:
     )
 
 
-async def handle_update(update: Any, context: Any = None) -> None:
+async def handle_update(
+    update: TelegramUpdateWithReply, context: ContextTypes.DEFAULT_TYPE | None = None
+) -> None:
     """Handler registrado no `Application`. Defensivo: exceção aqui derrubaria
     o loop de polling e a integração ficaria muda até o próximo boot."""
     del context
@@ -57,12 +68,14 @@ async def handle_update(update: Any, context: Any = None) -> None:
         if incoming is None:
             return
         outgoing = await process_incoming(incoming)
-        await update.message.reply_text(outgoing.text)
+        message = update.message
+        if message is not None:
+            await message.reply_text(outgoing.text)
     except Exception:
         logger.exception("connect.telegram: falha ao tratar update")
 
 
-def build_application(token: str) -> Any:
+def build_application(token: str) -> TelegramApp:
     """Monta o `Application` com o handler de texto registrado."""
     if not TELEGRAM_AVAILABLE:
         msg = (
@@ -77,23 +90,26 @@ def build_application(token: str) -> Any:
     return app
 
 
-async def start(token: str) -> Any:
+async def start(token: str) -> TelegramApp:
     """Inicia o polling como task asyncio no processo do backend (não
     subprocess) e devolve o `Application` para o manager parar depois."""
     app = build_application(token)
     await app.initialize()
     await app.start()
+    if app.updater is None:
+        msg = "Application do Telegram criado sem updater"
+        raise RuntimeError(msg)
     await app.updater.start_polling()
     logger.info("connect.telegram: polling iniciado")
     return app
 
 
-async def stop(app: Any) -> None:
+async def stop(app: TelegramApp | None) -> None:
     """Parada idempotente — chamar de novo num app já parado não levanta."""
     if app is None:
         return
     try:
-        if getattr(app, "updater", None) is not None:
+        if app.updater is not None:
             await app.updater.stop()
         await app.stop()
         await app.shutdown()

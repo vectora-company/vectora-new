@@ -8,14 +8,17 @@ usuários específico (livre vs. em uso).
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from aiosqlite import Connection
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     db_file = str(tmp_path / "test_api_auth_username.db")
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "true")
 
@@ -26,7 +29,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(auth_mod, "_db_conn", None)
     monkeypatch.setattr(auth_mod, "_get_secret", lambda: "api-username-test-secret-xx")
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)
@@ -43,7 +46,7 @@ def client(tmp_path, monkeypatch):
     app = create_app(serve_static=False)
     yield TestClient(app, raise_server_exceptions=False)
 
-    async def _close():
+    async def _close() -> None:
         if auth_mod._db_conn is not None:
             await auth_mod._db_conn.close()
             auth_mod._db_conn = None
@@ -51,19 +54,19 @@ def client(tmp_path, monkeypatch):
     asyncio.run(_close())
 
 
-def test_available_true_em_banco_vazio(client):
+def test_available_true_em_banco_vazio(client: TestClient) -> None:
     r = client.get("/auth/username-available", params={"username": "bruno"})
     assert r.status_code == 200
     assert r.json() == {"normalized": "bruno", "available": True, "suggestion": "bruno"}
 
 
-def test_normaliza_a_consulta(client):
+def test_normaliza_a_consulta(client: TestClient) -> None:
     r = client.get("/auth/username-available", params={"username": "  Bruno! "})
     assert r.status_code == 200
     assert r.json()["normalized"] == "bruno"
 
 
-def test_available_false_com_sugestao_quando_em_uso(client):
+def test_available_false_com_sugestao_quando_em_uso(client: TestClient) -> None:
     # Primeiro usuário (root) fica com username "bruno".
     r = client.post(
         "/auth/signup",
@@ -79,7 +82,7 @@ def test_available_false_com_sugestao_quando_em_uso(client):
     assert body["suggestion"].split("#", 1)[1].isdigit()
 
 
-def test_signup_persiste_username_explicito(client):
+def test_signup_persiste_username_explicito(client: TestClient) -> None:
     r = client.post(
         "/auth/signup",
         json={
@@ -93,7 +96,9 @@ def test_signup_persiste_username_explicito(client):
     assert r.json()["user"]["username"] == "brunocoder"
 
 
-def test_signup_username_em_uso_retorna_409(client, monkeypatch):
+def test_signup_username_em_uso_retorna_409(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Par de erro: username já em uso no signup → 409 (não 400 nem 200)."""
     import backend.rbac.auth as auth_mod
 

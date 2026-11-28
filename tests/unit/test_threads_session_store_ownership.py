@@ -285,7 +285,7 @@ class TestListThreadsReflectsSessionStore:
         assert result.threads == []
 
     async def test_subagent_legado_nao_consumo_o_limite_da_listagem(
-        self, session_store: SessionStore, checkpoints_db
+        self, session_store: SessionStore, checkpoints_db: aiosqlite.Connection
     ) -> None:
         """Uma linha legada recente não pode esconder thread regular mais antiga."""
         await session_store.create_session(
@@ -580,7 +580,7 @@ class TestMarkThreadRead:
     """Garante que o cursor de leitura é isolado, monotônico e idempotente."""
 
     async def test_usuario_so_nao_gera_notificacao_de_resposta(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         """Tool calls e a mensagem do usuário não viram notificações falsas."""
         await session_store.create_session("thread-user-only", user_id="alice")
@@ -592,7 +592,9 @@ class TestMarkThreadRead:
 
         assert await th._unread_count("thread-user-only", "alice") == 0
 
-    async def test_tools_nao_sao_contadas_como_respostas(self, session_store) -> None:
+    async def test_tools_nao_sao_contadas_como_respostas(
+        self, session_store: SessionStore
+    ) -> None:
         """Verifica o comportamento de tools nao sao contadas como respostas."""
         await session_store.create_session("thread-tools", user_id="alice")
         await session_store.append_message(
@@ -668,7 +670,7 @@ class TestMarkThreadRead:
         assert exc_info.value.status_code == 404
 
     async def test_repetir_leitura_e_idempotente_e_novas_mensagens_voltam_a_contar(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         """Verifica o comportamento de repetir leitura e idempotente e novas mensagens voltam a contar."""
         await session_store.create_session("thread-alice", user_id="alice")
@@ -683,7 +685,7 @@ class TestMarkThreadRead:
         assert await th._unread_count("thread-alice", "alice") == 1
 
     async def test_cursor_nao_regride_em_atualizacao_concorrente(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         """Verifica o comportamento de cursor nao regride em atualizacao concorrente."""
         await session_store.create_session("thread-alice", user_id="alice")

@@ -18,12 +18,16 @@ Tool nativa (`@vtool`) — chamada como função async direta com
 
 from __future__ import annotations
 
+import io
 import json
 import sys
 import time
 import types
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -34,6 +38,7 @@ from backend.services.desktop_windows import (
 )
 from backend.tools import computer_use as cu
 from backend.tools.context import ToolContext
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 def _ctx(workspace_id: str = "ws1") -> ToolContext:
@@ -94,7 +99,7 @@ class TestOptIn:
 
 class TestAcoes:
     @pytest.fixture(autouse=True)
-    def _habilitado(self, monkeypatch):
+    def _habilitado(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(cu, "_computer_use_enabled", lambda _workspace_id: True)
         info = WindowInfo("window-1", "Fixture", 0, 0, 1200, 800, True)
         selection = SimpleNamespace(
@@ -169,7 +174,7 @@ class TestAcoes:
         """Regra 11: tool defensiva — exceção vira observação pro LLM, o
         grafo não cai."""
 
-        def _explode(_x, _y):
+        def _explode(_x, _y) -> NoReturn:
             raise RuntimeError("X11 display não encontrado")
 
         monkeypatch.setattr(cu, "_click_sync", _explode)
@@ -177,7 +182,7 @@ class TestAcoes:
         saida = json.loads(await cu.computer_use(action="click", x=1, y=1, ctx=_ctx()))
         assert saida == {"status": "error", "code": "platform_failure"}
 
-    async def test_acao_desconhecida_e_recusada(self):
+    async def test_acao_desconhecida_e_recusada(self) -> None:
         saida = json.loads(await cu.computer_use(action="explodir_tudo", ctx=_ctx()))
         assert saida == {"status": "error", "code": "invalid_action"}
         assert "explodir_tudo" not in saida
@@ -187,7 +192,7 @@ class TestApisWindowsSimuladas:
     def test_clique_converte_coordenadas_e_publica_na_hwnd_validada(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        calls: list[tuple[object, ...]] = []
+        calls: list[tuple[int, ...]] = []
         win32api = types.SimpleNamespace(MAKELONG=lambda x, y: (x, y))
         win32con = types.SimpleNamespace(WM_LBUTTONDOWN=1, WM_LBUTTONUP=2, MK_LBUTTON=4)
         win32gui = types.SimpleNamespace(
@@ -208,7 +213,7 @@ class TestApisWindowsSimuladas:
     def test_texto_publica_cada_caractere_somente_na_hwnd(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        calls: list[tuple[object, ...]] = []
+        calls: list[tuple[int, ...]] = []
         win32con = types.SimpleNamespace(WM_CHAR=3)
         win32gui = types.SimpleNamespace(PostMessage=lambda *args: calls.append(args))
         monkeypatch.setattr(
@@ -223,15 +228,15 @@ class TestApisWindowsSimuladas:
     def test_hwnd_invalida_falha_fechado(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("platform.system", lambda: "Windows")
         with pytest.raises(RuntimeError, match="HWND"):
-            cu._native_window_handle(types.SimpleNamespace(_hWnd=0))
+            cu._native_window_handle(MagicMock(_hWnd=0))
 
     def test_captura_passes_a_hwnd_validada_ao_imagegrab(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        chamadas: list[dict[str, object]] = []
+        chamadas: list[JsonObject] = []
 
         class FakeImage:
-            def save(self, buffer: object, **kwargs: object) -> None:
+            def save(self, buffer: io.BytesIO, **kwargs: str) -> None:
                 assert kwargs["format"] == "PNG"
 
         image_grab = types.SimpleNamespace(
@@ -247,7 +252,7 @@ class TestApisWindowsSimuladas:
 
 
 class TestAprovacaoSempreObrigatoria:
-    def test_computer_use_pausa_mesmo_em_bypass(self):
+    def test_computer_use_pausa_mesmo_em_bypass(self) -> None:
         """Invariante de maior risco do plano: nenhuma tool além desta
         ignora o `permission_mode` da sessão — `bypass`/`auto` normalmente
         nunca pausam, mas `computer_use` sempre pausa."""
@@ -258,14 +263,14 @@ class TestAprovacaoSempreObrigatoria:
             assert _mode_should_interrupt(modo, "select_desktop_window", []) is True
             assert _mode_should_interrupt(modo, "focus_desktop_window", []) is True
 
-    def test_esta_em_require_approval(self):
+    def test_esta_em_require_approval(self) -> None:
         from backend.engine.hitl import REQUIRE_APPROVAL
 
         assert "computer_use" in REQUIRE_APPROVAL
         assert "select_desktop_window" in REQUIRE_APPROVAL
         assert "focus_desktop_window" in REQUIRE_APPROVAL
 
-    def test_registrada_em_all_tools(self):
+    def test_registrada_em_all_tools(self) -> None:
         from backend.nodes.tools import ALL_TOOLS
 
         assert "computer_use" in {t.name for t in ALL_TOOLS}
@@ -334,19 +339,19 @@ class TestJanelaSelecionada:
         monkeypatch.setattr(
             cu.desktop_window_registry, "allow_action", lambda **_: True
         )
-        auditorias: list[dict[str, object]] = []
+        auditorias: list[JsonObject] = []
         monkeypatch.setattr(
             cu.desktop_window_registry,
             "require_focus",
             lambda _selection: (_ for _ in ()).throw(PermissionError("foco perdido")),
         )
 
-        async def _capture_audit(*args: object, **kwargs: object) -> None:
+        async def _capture_audit(*args: str, **kwargs: JsonValue) -> None:
             del args
             auditorias.append(kwargs)
 
         monkeypatch.setattr(cu, "_audit_event", _capture_audit)
-        entrada: list[tuple[object, ...]] = []
+        entrada: list[tuple[int | str, ...]] = []
         monkeypatch.setattr(cu, "_click_sync", lambda *args: entrada.append(args))
 
         result = json.loads(await cu.computer_use(action="click", x=2, y=3, ctx=_ctx()))
@@ -366,17 +371,30 @@ def test_desktop_registry_invalidate_e_rate_limit_atomico() -> None:
     assert registry.allow_action(**scope) is True
 
 
+@dataclass
+class _JanelaInerte:
+    title: str = "Editor"
+    left: int = 0
+    top: int = 0
+    width: int = 1
+    height: int = 1
+    isMinimized: bool = False  # noqa: N815 — nome do pygetwindow
+
+    def activate(self) -> None:
+        pass
+
+
 def test_desktop_registry_expira_selecao_e_isola_contextos() -> None:
     registry = DesktopWindowRegistry()
     registry._selections[("u1", "w1", "t1")] = _Selection(
         "w1",
-        SimpleNamespace(),
+        _JanelaInerte(),
         WindowInfo("w1", "Editor", 0, 0, 1, 1, True),
         time.monotonic() - 9999,
     )
     registry._selections[("u2", "w1", "t1")] = _Selection(
         "w2",
-        SimpleNamespace(),
+        _JanelaInerte(),
         WindowInfo("w2", "Editor", 0, 0, 1, 1, True),
         time.monotonic() - 9999,
     )

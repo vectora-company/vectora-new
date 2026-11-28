@@ -23,6 +23,8 @@ específico é necessário.
 
 from __future__ import annotations
 
+from types import FunctionType
+
 __all__ = [
     "affected_summary",
     "build_workspace_graph",
@@ -32,7 +34,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> object:
+def __getattr__(name: str) -> FunctionType:
     if name == "build_workspace_graph":
         from backend.context_graph.pipeline import build_workspace_graph
 

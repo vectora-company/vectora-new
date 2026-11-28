@@ -14,7 +14,12 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import httpx
+
+    from backend.vtypes.contracts import JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +52,7 @@ class OllamaClient:
         *,
         base_url: str = DEFAULT_BASE_URL,
         api_key: str = "",
-        http_client: Any = None,
+        http_client: httpx.AsyncClient | None = None,
         timeout_s: float = _DEFAULT_TIMEOUT_S,
     ) -> None:
         self._base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
@@ -63,7 +68,7 @@ class OllamaClient:
         # Bearer só no Ollama Cloud; o servidor local ignora o header.
         return {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
 
-    async def _ensure_client(self) -> Any:
+    async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
             import httpx
 
@@ -85,7 +90,7 @@ class OllamaClient:
         )
         return OllamaUnreachableError(msg)
 
-    def _raise_for_status(self, status: int, corpo: Any, *, path: str) -> None:
+    def _raise_for_status(self, status: int, corpo: JsonValue, *, path: str) -> None:
         if status < 400:
             return
         detalhe = ""

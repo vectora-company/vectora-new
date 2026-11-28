@@ -10,7 +10,7 @@ import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 _LOG_EXTRA_FIELDS: frozenset[str] = frozenset(
@@ -41,6 +41,7 @@ _LOG_EXTRA_FIELDS: frozenset[str] = frozenset(
         "request_id",
     }
 )
+
 _SECRET_KEY_RE = re.compile(
     r"(?:token|secret|password|passwd|authorization|api[_-]?key|private[_-]?key|signature)",
     re.IGNORECASE,
@@ -52,6 +53,10 @@ _COMMAND_SECRET_RE = re.compile(
 )
 
 _shutdown_requested = False
+
+
+from backend.vtypes.contracts import JsonObject, JsonValue
+from backend.vtypes.logging import LogValue
 
 
 def mark_shutdown_requested() -> None:
@@ -117,7 +122,7 @@ def _redact_url(value: str) -> str:
         return value
 
 
-def _safe_log_value(key: str, value: Any) -> Any:
+def _safe_log_value(key: str, value: LogValue) -> JsonValue:
     """Return an allowlisted, bounded log value without credentials."""
     if value is None:
         return None
@@ -140,7 +145,7 @@ def _safe_log_value(key: str, value: Any) -> Any:
     return str(value)[:300]
 
 
-def _structured_extras(record: logging.LogRecord) -> dict[str, Any]:
+def _structured_extras(record: logging.LogRecord) -> JsonObject:
     """Select safe structured context; arbitrary LogRecord extras are excluded."""
     return {
         key: _safe_log_value(key, getattr(record, key))
@@ -154,7 +159,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Executa a operação format."""
-        log_obj: dict[str, Any] = {
+        log_obj: JsonObject = {
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
@@ -165,18 +170,18 @@ class JSONFormatter(logging.Formatter):
             log_obj["exception"] = self.formatException(record.exc_info)
 
         if hasattr(record, "thread_id"):
-            log_obj["thread_id"] = record.thread_id
+            log_obj["thread_id"] = record.__dict__["thread_id"]
         if hasattr(record, "user_type"):
-            log_obj["user_type"] = record.user_type
+            log_obj["user_type"] = record.__dict__["user_type"]
         if hasattr(record, "model"):
-            log_obj["model"] = record.model
+            log_obj["model"] = record.__dict__["model"]
 
         if hasattr(record, "retrieval_source"):
-            log_obj["retrieval_source"] = record.retrieval_source
+            log_obj["retrieval_source"] = record.__dict__["retrieval_source"]
         if hasattr(record, "reranking_applied"):
-            log_obj["reranking_applied"] = record.reranking_applied
+            log_obj["reranking_applied"] = record.__dict__["reranking_applied"]
         if hasattr(record, "routing_decision"):
-            log_obj["routing_decision"] = record.routing_decision
+            log_obj["routing_decision"] = record.__dict__["routing_decision"]
 
         log_obj.update(_structured_extras(record))
 

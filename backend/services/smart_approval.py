@@ -14,7 +14,12 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING
+
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+if TYPE_CHECKING:
+    from backend.workspace.runtime_settings import RuntimeSettings
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +51,10 @@ _PROMPT_SISTEMA = (
 )
 
 
-_AskLLM = Callable[[str, dict], Awaitable[bool]]
+_AskLLM = Callable[[str, JsonObject], Awaitable[bool]]
 
 
-def _runtime_settings() -> Any:
+def _runtime_settings() -> RuntimeSettings:
     from backend.workspace.runtime_settings import runtime_settings
 
     return runtime_settings
@@ -59,14 +64,14 @@ def _allowlist_key(workspace_id: str) -> str:
     return f"{_ALLOWLIST_KEY_PREFIX}:{workspace_id}"
 
 
-def _signature(tool_name: str, args: dict) -> str:
+def _signature(tool_name: str, args: JsonObject) -> str:
     """Hash determinístico dos argumentos completos da chamada."""
     payload = json.dumps(args, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return f"{tool_name}:{digest}"
 
 
-def args_digest(tool_name: str, args: dict) -> str:
+def args_digest(tool_name: str, args: JsonObject) -> str:
     """Return the hash of a tool call's complete canonical arguments."""
     return _signature(tool_name, args).partition(":")[2]
 
@@ -76,12 +81,14 @@ def allowlist_id(signature: str) -> str:
     return hashlib.sha256(signature.encode("utf-8")).hexdigest()
 
 
-def rule_id(tool_name: str, args: dict) -> str:
+def rule_id(tool_name: str, args: JsonObject) -> str:
     """Retorna o identificador opaco da regra derivada dos argumentos."""
     return allowlist_id(_signature(tool_name, args))
 
 
-def run_grant_id(workspace_id: str, run_id: str, tool_name: str, args: dict) -> str:
+def run_grant_id(
+    workspace_id: str, run_id: str, tool_name: str, args: JsonObject
+) -> str:
     """Return the opaque id used to audit and revoke this exact run grant."""
     return allowlist_id(f"{workspace_id}:{run_id}:{_signature(tool_name, args)}")
 
@@ -105,7 +112,7 @@ def get_allowlist(workspace_id: str) -> list[str]:
 def add_to_allowlist(
     workspace_id: str,
     tool_name: str,
-    args: dict,
+    args: JsonObject,
     *,
     run_id: str,
     ttl_seconds: int = _DEFAULT_GRANT_TTL_SECONDS,
@@ -123,7 +130,7 @@ def add_to_allowlist(
     sig = _signature(tool_name, args)
     grant_id = run_grant_id(workspace_id, run_id, tool_name, args)
     expires_at = (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat()
-    grant = {
+    grant: JsonObject = {
         "grant_id": grant_id,
         "workspace_id": workspace_id,
         "tool_name": tool_name,
@@ -132,7 +139,7 @@ def add_to_allowlist(
         "expires_at": expires_at,
     }
 
-    def append_once(current: list[object]) -> list[object]:
+    def append_once(current: list[JsonValue]) -> list[JsonValue]:
         current[:] = [item for item in current if not _is_expired_grant(item)]
         if not any(
             isinstance(item, dict) and item.get("grant_id") == grant_id
@@ -150,7 +157,7 @@ def remove_from_allowlist(workspace_id: str, signature: str) -> list[str]:
     if not workspace_id:
         return []
 
-    def remove_matching(current: list[object]) -> list[object]:
+    def remove_matching(current: list[JsonValue]) -> list[JsonValue]:
         return [
             item
             for item in current
@@ -166,14 +173,14 @@ def remove_from_allowlist_by_id(workspace_id: str, rule_id: str) -> list[str]:
     if not workspace_id:
         return []
 
-    def remove_matching_id(current: list[object]) -> list[object]:
+    def remove_matching_id(current: list[JsonValue]) -> list[JsonValue]:
         return [
             item
             for item in current
             if not (
                 isinstance(item, dict)
-                and isinstance(item.get("grant_id"), str)
-                and hmac.compare_digest(item["grant_id"], rule_id)
+                and isinstance(grant_id := item.get("grant_id"), str)
+                and hmac.compare_digest(grant_id, rule_id)
             )
         ]
 
@@ -181,12 +188,12 @@ def remove_from_allowlist_by_id(workspace_id: str, rule_id: str) -> list[str]:
     return get_allowlist(workspace_id)
 
 
-def is_allowlisted(workspace_id: str, tool_name: str, args: dict) -> bool:
+def is_allowlisted(workspace_id: str, tool_name: str, args: JsonObject) -> bool:
     """Legacy visual recognition is not an execution grant."""
     return False
 
 
-def _is_expired_grant(item: object) -> bool:
+def _is_expired_grant(item: JsonValue) -> bool:
     if not isinstance(item, dict):
         return True
     expires_at = item.get("expires_at")
@@ -199,7 +206,7 @@ def _is_expired_grant(item: object) -> bool:
 
 
 def consume_run_grant(
-    workspace_id: str, run_id: str, tool_name: str, args: dict
+    workspace_id: str, run_id: str, tool_name: str, args: JsonObject
 ) -> str | None:
     """Atomically consume one exact, unexpired pre-approval grant."""
     if not workspace_id or not run_id or tool_name not in _GRANTABLE_TOOLS:
@@ -207,9 +214,9 @@ def consume_run_grant(
     args_hash = args_digest(tool_name, args)
     consumed: str | None = None
 
-    def consume(current: list[object]) -> list[object]:
+    def consume(current: list[JsonValue]) -> list[JsonValue]:
         nonlocal consumed
-        retained: list[object] = []
+        retained: list[JsonValue] = []
         for item in current:
             if _is_expired_grant(item):
                 continue
@@ -230,7 +237,7 @@ def consume_run_grant(
     return consumed or None
 
 
-async def _default_ask_llm(tool_name: str, args: dict) -> bool:
+async def _default_ask_llm(tool_name: str, args: JsonObject) -> bool:
     """Avaliador auxiliar de verdade — modelo leve classifica o comando."""
     from backend.services.utils import load_native_llm
     from backend.vtypes.message import MessageRole, text_message
@@ -248,7 +255,7 @@ async def _default_ask_llm(tool_name: str, args: dict) -> bool:
 
 async def evaluate_command(
     tool_name: str,
-    args: dict,
+    args: JsonObject,
     *,
     workspace_id: str,
     ask_llm: _AskLLM | None = None,

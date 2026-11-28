@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from mcp import StdioServerParameters
 
 from backend.sandbox import jail_exec, mcp_launcher
 from backend.sandbox.egress_proxy import egress_registry
@@ -28,7 +29,7 @@ _FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "dummy_mcp_server.
 
 
 @pytest.fixture(autouse=True)
-def _pasta_de_trabalho_isolada(monkeypatch, tmp_path):
+def _pasta_de_trabalho_isolada(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Nenhum teste grava no `~/.vectora` de quem roda."""
     from backend.settings import settings
 
@@ -38,7 +39,9 @@ def _pasta_de_trabalho_isolada(monkeypatch, tmp_path):
 # ── lançador de seccomp ─────────────────────────────────────────────────────
 
 
-def test_with_seccomp_poe_o_descritor_herdavel_depois_do_bwrap(monkeypatch):
+def test_with_seccomp_poe_o_descritor_herdavel_depois_do_bwrap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(jail_exec, "build_seccomp_filter", lambda: b"BPF!")
 
     final = jail_exec.with_seccomp(["bwrap", "--unshare-pid", "--", "true"])
@@ -51,7 +54,9 @@ def test_with_seccomp_poe_o_descritor_herdavel_depois_do_bwrap(monkeypatch):
     os.close(fd)
 
 
-def test_sem_seccomp_segue_parcial_e_avisa(monkeypatch, capsys):
+def test_sem_seccomp_segue_parcial_e_avisa(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setattr(jail_exec, "build_seccomp_filter", lambda: None)
     argv = ["bwrap", "--", "true"]
 
@@ -59,7 +64,9 @@ def test_sem_seccomp_segue_parcial_e_avisa(monkeypatch, capsys):
     assert "parcial" in capsys.readouterr().err
 
 
-def test_sem_seccomp_com_exigencia_recusa_iniciar(monkeypatch, capsys):
+def test_sem_seccomp_com_exigencia_recusa_iniciar(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setattr(jail_exec, "build_seccomp_filter", lambda: None)
 
     with pytest.raises(SystemExit) as saida:
@@ -72,7 +79,7 @@ def test_sem_seccomp_com_exigencia_recusa_iniciar(monkeypatch, capsys):
 # ── política e pasta do servidor ────────────────────────────────────────────
 
 
-def test_politica_do_mcp_e_rede_filtrada_sem_nada_gravavel_alem_da_pasta():
+def test_politica_do_mcp_e_rede_filtrada_sem_nada_gravavel_alem_da_pasta() -> None:
     policy = mcp_policy(("api.exemplo.com",))
 
     assert policy.enabled and policy.network == "filtered"
@@ -80,7 +87,9 @@ def test_politica_do_mcp_e_rede_filtrada_sem_nada_gravavel_alem_da_pasta():
     assert policy.rw_paths == () and policy.git_writable is False
 
 
-def test_pasta_do_servidor_fica_em_vectora_home_e_o_nome_e_sanitizado(tmp_path):
+def test_pasta_do_servidor_fica_em_vectora_home_e_o_nome_e_sanitizado(
+    tmp_path: Path,
+) -> None:
     pasta = scratch_dir("../../etc/passwd")
 
     assert pasta.is_relative_to(tmp_path / "home" / "mcp-sandbox")
@@ -92,7 +101,9 @@ def test_pasta_do_servidor_fica_em_vectora_home_e_o_nome_e_sanitizado(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_comando_roda_o_bwrap_pelo_lancador_com_ambiente_herdado(monkeypatch):
+async def test_comando_roda_o_bwrap_pelo_lancador_com_ambiente_herdado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(mcp_launcher, "jail_available", lambda: True)
     try:
         launch = await build_jailed_launch(
@@ -116,8 +127,8 @@ async def test_comando_roda_o_bwrap_pelo_lancador_com_ambiente_herdado(monkeypat
 
 @pytest.mark.asyncio
 async def test_programa_fora_do_sistema_tem_a_pasta_de_instalacao_somente_leitura(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(mcp_launcher, "jail_available", lambda: True)
     instalacao = tmp_path / "ferramentas" / "node-20"
     (instalacao / "bin").mkdir(parents=True)
@@ -137,7 +148,9 @@ async def test_programa_fora_do_sistema_tem_a_pasta_de_instalacao_somente_leitur
 
 
 @pytest.mark.asyncio
-async def test_programa_inexistente_e_recusado_com_mensagem_clara(monkeypatch):
+async def test_programa_inexistente_e_recusado_com_mensagem_clara(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Isola a validação do comando da disponibilidade de bwrap no runner.
     monkeypatch.setattr(mcp_launcher, "jail_available", lambda: True)
     with pytest.raises(McpSandboxUnavailableError, match="não encontrado"):
@@ -145,7 +158,9 @@ async def test_programa_inexistente_e_recusado_com_mensagem_clara(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_sem_bwrap_falha_antes_de_iniciar(monkeypatch):
+async def test_sem_bwrap_falha_antes_de_iniciar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(mcp_launcher, "jail_available", lambda: False)
 
     with pytest.raises(McpSandboxUnavailableError, match="bwrap"):
@@ -153,7 +168,9 @@ async def test_sem_bwrap_falha_antes_de_iniciar(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_release_encerra_o_proxy_do_servidor(monkeypatch):
+async def test_release_encerra_o_proxy_do_servidor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(mcp_launcher, "jail_available", lambda: True)
     launch = await build_jailed_launch("srv", sys.executable, [])
     assert egress_registry.get("mcp:srv") is not None
@@ -163,7 +180,9 @@ async def test_release_encerra_o_proxy_do_servidor(monkeypatch):
     assert egress_registry.get("mcp:srv") is None
 
 
-def test_sandbox_embutido_conta_como_disponivel(monkeypatch):
+def test_sandbox_embutido_conta_como_disponivel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("VECTORA_MCP_STDIO_SANDBOX", raising=False)
     monkeypatch.delenv("VECTORA_MCP_STDIO_SANDBOX_LAUNCHER", raising=False)
     monkeypatch.setattr(mcp_launcher, "jail_available", lambda: True)
@@ -179,8 +198,8 @@ def test_sandbox_embutido_conta_como_disponivel(monkeypatch):
 @real_bwrap
 @pytest.mark.asyncio
 async def test_servidor_mcp_nao_verificado_roda_isolado_de_ponta_a_ponta(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setenv("VECTORA_SEGREDO_DO_BACKEND", "nao-deveria-vazar")
     monkeypatch.delenv("VECTORA_MCP_STDIO_SANDBOX_LAUNCHER", raising=False)
     script = scratch_dir("verdadeiro") / "server.py"
@@ -219,8 +238,8 @@ async def test_servidor_mcp_nao_verificado_roda_isolado_de_ponta_a_ponta(
 @real_bwrap
 @pytest.mark.asyncio
 async def test_servidor_mcp_isolado_nao_alcanca_a_rede_pelo_caminho_direto(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("VECTORA_MCP_STDIO_SANDBOX_LAUNCHER", raising=False)
     script = scratch_dir("rede") / "server.py"
     script.write_text(
@@ -259,7 +278,7 @@ async def test_servidor_mcp_isolado_nao_alcanca_a_rede_pelo_caminho_direto(
 # ── destinos do servidor ────────────────────────────────────────────────────
 
 
-def test_servidor_mcp_declara_destinos_validos_e_eles_chegam_a_conexao():
+def test_servidor_mcp_declara_destinos_validos_e_eles_chegam_a_conexao() -> None:
     from backend.workspace.plugins import McpServer, build_connection
 
     server = McpServer(
@@ -275,7 +294,7 @@ def test_servidor_mcp_declara_destinos_validos_e_eles_chegam_a_conexao():
 @pytest.mark.parametrize(
     "host", ["http://a.com", "a.com/x", "*", "sem-ponto", "a..com"]
 )
-def test_servidor_mcp_recusa_destino_invalido(host):
+def test_servidor_mcp_recusa_destino_invalido(host: str) -> None:
     from pydantic import ValidationError
 
     from backend.workspace.plugins import McpServer
@@ -284,14 +303,16 @@ def test_servidor_mcp_recusa_destino_invalido(host):
         McpServer(name="s", command="npx", allow_hosts=[host])
 
 
-def test_servidor_antigo_sem_allow_hosts_continua_valido():
+def test_servidor_antigo_sem_allow_hosts_continua_valido() -> None:
     from backend.workspace.plugins import McpServer
 
     assert McpServer(name="s", command="npx").allow_hosts == []
 
 
 @pytest.mark.asyncio
-async def test_cliente_passa_os_destinos_do_servidor_ao_jail(monkeypatch):
+async def test_cliente_passa_os_destinos_do_servidor_ao_jail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from contextlib import asynccontextmanager
 
     capturado = {}
@@ -301,13 +322,13 @@ async def test_cliente_passa_os_destinos_do_servidor_ao_jail(monkeypatch):
         return mcp_launcher.JailedLaunch(sys.executable, [], None)
 
     @asynccontextmanager
-    async def stdio(_params):
+    async def stdio(_params: StdioServerParameters):
         yield object(), object()
 
     @asynccontextmanager
     async def sessao(_r, _w):
         class _S:
-            async def initialize(self):
+            async def initialize(self) -> None:
                 return None
 
         yield _S()

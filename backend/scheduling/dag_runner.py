@@ -6,9 +6,12 @@ import contextlib
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, cast
 
 from backend.scheduling.dag import DAGStore
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +36,9 @@ async def dispatch_execution(execution_id: str) -> int:
             logger.warning("DAG %s não tem run de origem válido", execution_id)
             return 0
         scheduled = 0
-        stages = plan.get("execution", {}).get("stages", [])
-        by_id = {str(stage["stage_id"]): stage for stage in stages}
+        execution = plan["execution"]
+        stages = execution.get("stages", []) if execution else []
+        by_id = {stage["stage_id"]: stage for stage in stages}
         while True:
             claimed = await store.claim_ready_stage(execution_id)
             if claimed is None:
@@ -120,7 +124,7 @@ async def dispatch_all_active() -> int:
 
 
 async def finish_stage_from_task(
-    trigger_config: dict[str, Any], *, passed: bool, result: str
+    trigger_config: JsonObject, *, passed: bool, result: str
 ) -> None:
     """Persist a background stage result and dispatch newly ready dependents."""
     execution_id = trigger_config.get("dag_execution_id")
@@ -156,7 +160,7 @@ async def finish_stage_from_task(
         await dispatch_execution(execution_id)
 
 
-async def execution_cancelling_for_task(trigger_config: dict[str, Any]) -> bool:
+async def execution_cancelling_for_task(trigger_config: JsonObject) -> bool:
     execution_id = trigger_config.get("dag_execution_id")
     if not isinstance(execution_id, str) or not execution_id:
         return False
@@ -172,9 +176,7 @@ async def execution_cancelling_for_task(trigger_config: dict[str, Any]) -> bool:
             await db.close()
 
 
-async def cancel_stage_from_task(
-    trigger_config: dict[str, Any], *, reason: str
-) -> None:
+async def cancel_stage_from_task(trigger_config: JsonObject, *, reason: str) -> None:
     execution_id = trigger_config.get("dag_execution_id")
     stage_id = trigger_config.get("dag_stage_id")
     claim_token = trigger_config.get("dag_claim_token")

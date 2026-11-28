@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import os
 import signal
+from collections.abc import Callable
+from contextlib import AbstractContextManager
+from types import FrameType
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
@@ -31,7 +34,7 @@ class _FakeTimer:
 
     instances: list[_FakeTimer] = []
 
-    def __init__(self, interval: float, function: Any) -> None:
+    def __init__(self, interval: float, function: Callable[[], None]) -> None:
         self.interval = interval
         self.function = function
         self.daemon = False
@@ -52,12 +55,14 @@ class _FakeServer:
     def install_signal_handlers(self) -> None:
         pass
 
-    def capture_signals(self) -> Any:
+    def capture_signals(self) -> AbstractContextManager[None]:
         return MagicMock()
 
 
-def _get_handler(signum: int) -> Any:
-    return signal.getsignal(signum)
+def _get_handler(signum: int) -> Callable[[int, FrameType | None], None]:
+    handler = signal.getsignal(signum)
+    assert callable(handler) and not isinstance(handler, int)
+    return handler
 
 
 def test_shutdown_sets_should_exit_on_sigint() -> None:
@@ -65,7 +70,7 @@ def test_shutdown_sets_should_exit_on_sigint() -> None:
     from backend.main import _install_terminal_signals
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
 
     orig = {}
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -88,7 +93,7 @@ def test_shutdown_calls_icon_stop_when_present() -> None:
 
     server = _FakeServer()
     icon = MagicMock()
-    icon_ref: list[Any] = [icon]
+    icon_ref: list[MagicMock | None] = [icon]
 
     orig_int = signal.getsignal(signal.SIGINT)
     orig_term = signal.getsignal(signal.SIGTERM)
@@ -109,7 +114,7 @@ def test_shutdown_handler_is_idempotent_when_console_repeats_signal() -> None:
 
     server = _FakeServer()
     icon = MagicMock()
-    icon_ref: list[Any] = [icon]
+    icon_ref: list[MagicMock | None] = [icon]
     original = signal.getsignal(signal.SIGINT)
     try:
         _install_terminal_signals(server, icon_ref)
@@ -127,7 +132,7 @@ def test_shutdown_no_error_when_icon_is_none() -> None:
     from backend.main import _install_terminal_signals
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
 
     orig_int = signal.getsignal(signal.SIGINT)
     orig_term = signal.getsignal(signal.SIGTERM)
@@ -149,7 +154,7 @@ def test_shutdown_sighup_handling() -> None:
     from backend.main import _install_terminal_signals
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
 
     orig_int = signal.getsignal(signal.SIGINT)
     orig_term = signal.getsignal(signal.SIGTERM)
@@ -181,7 +186,7 @@ def test_shutdown_sigbreak_handling_when_available() -> None:
     from backend.main import _install_terminal_signals
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
     original = signal.getsignal(sigbreak)
     try:
         _install_terminal_signals(server, icon_ref)
@@ -231,7 +236,7 @@ def test_tray_exposes_icon_via_icon_ref() -> None:
     pystray_mock.MenuItem = MagicMock()
 
     server = _FakeServer()
-    icon_ref: list[Any] = [None]
+    icon_ref: list[MagicMock | None] = [None]
 
     with (
         patch.dict("sys.modules", {"pystray": pystray_mock}),
@@ -262,13 +267,17 @@ def test_tray_exposes_icon_via_icon_ref() -> None:
 class TestShouldInstallTerminalSignals:
     """Os modos desktop e web processam sinais mesmo sem stdin interativo."""
 
-    def test_terminal_interativo_puro_instala(self, monkeypatch):
+    def test_terminal_interativo_puro_instala(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.main import _should_install_terminal_signals
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
         assert _should_install_terminal_signals({}) is True
 
-    def test_backend_primario_dev_instala_mesmo_com_desktop_setado(self, monkeypatch):
+    def test_backend_primario_dev_instala_mesmo_com_desktop_setado(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Caso central desta correção: o próprio backend se autoelegeu
         # primário e subiu o Electron — sem handler, Ctrl+C/fechar o
         # terminal nunca aciona o shutdown gracioso, deixando o nats-server
@@ -279,7 +288,9 @@ class TestShouldInstallTerminalSignals:
         env = {"VECTORA_DESKTOP": "1", "VECTORA_SPAWN_ELECTRON": "1"}
         assert _should_install_terminal_signals(env) is True
 
-    def test_backend_primario_dev_instala_mesmo_sem_tty(self, monkeypatch):
+    def test_backend_primario_dev_instala_mesmo_sem_tty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Regressão ao vivo: o gate antigo caía em `sys.stdin.isatty()` mesmo
         # nesse caso — se `uv run`/o shell pai entregasse stdin como não-tty,
         # o handler nunca era instalado e Ctrl+C não fechava nada, só o
@@ -292,7 +303,9 @@ class TestShouldInstallTerminalSignals:
         env = {"VECTORA_DESKTOP": "1", "VECTORA_SPAWN_ELECTRON": "1"}
         assert _should_install_terminal_signals(env) is True
 
-    def test_producao_com_electron_dono_instala_handlers(self, monkeypatch):
+    def test_producao_com_electron_dono_instala_handlers(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # O backend também recebe SIGTERM do Electron e SIGINT do terminal;
         # ambos devem usar o caminho gracioso para fechar lifespan e sidecars.
         from backend.main import _should_install_terminal_signals
@@ -301,13 +314,15 @@ class TestShouldInstallTerminalSignals:
         env = {"VECTORA_DESKTOP": "1"}
         assert _should_install_terminal_signals(env) is True
 
-    def test_vps_docker_sem_tty_nao_instala(self, monkeypatch):
+    def test_vps_docker_sem_tty_nao_instala(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.main import _should_install_terminal_signals
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         assert _should_install_terminal_signals({}) is False
 
-    def test_web_instala_mesmo_sem_tty(self, monkeypatch):
+    def test_web_instala_mesmo_sem_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The web owner must receive Ctrl+C when launched by a VPS runner."""
         from backend.main import _should_install_terminal_signals
 

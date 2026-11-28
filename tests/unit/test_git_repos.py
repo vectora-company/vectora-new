@@ -158,7 +158,9 @@ class TestNormalizeAndResolve:
     @pytest.mark.parametrize(
         "value", ["/etc", "../x", "a/../../x", "C:\\dir", "c:/dir", "a\0b", None, 3]
     )
-    def test_recusa_o_que_pode_escapar_do_workspace(self, value: object) -> None:
+    def test_recusa_o_que_pode_escapar_do_workspace(
+        self, value: str | int | None
+    ) -> None:
         assert normalize_repo_path(value) is None
 
     def test_resolve_so_repositorio_dentro_do_workspace(self, tmp_path: Path) -> None:

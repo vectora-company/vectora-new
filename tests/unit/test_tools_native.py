@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from types import TracebackType
+from typing import NoReturn
 
 import pytest
 
@@ -252,7 +254,7 @@ class TestJwtDecode:
 
 class TestHttpRequest:
     @pytest.mark.asyncio
-    async def test_get_returns_body_text(self, monkeypatch) -> None:
+    async def test_get_returns_body_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import httpx
 
         from backend.tools.native.http_request import http_request
@@ -264,10 +266,15 @@ class TestHttpRequest:
             async def __aenter__(self) -> _FakeClient:
                 return self
 
-            async def __aexit__(self, *_: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 pass
 
-            async def request(self, *_: object, **__: object) -> _FakeResponse:
+            async def request[**P](self, *_: P.args, **__: P.kwargs) -> _FakeResponse:
                 return _FakeResponse()
 
         monkeypatch.setattr(httpx, "AsyncClient", lambda **_kw: _FakeClient())
@@ -275,7 +282,9 @@ class TestHttpRequest:
         assert result == '{"ok": true}'
 
     @pytest.mark.asyncio
-    async def test_connection_error_returns_error(self, monkeypatch) -> None:
+    async def test_connection_error_returns_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import httpx
 
         from backend.tools.native.http_request import http_request
@@ -284,10 +293,15 @@ class TestHttpRequest:
             async def __aenter__(self) -> _ErrorClient:
                 return self
 
-            async def __aexit__(self, *_: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 pass
 
-            async def request(self, *_: object, **__: object) -> None:
+            async def request[**P](self, *_: P.args, **__: P.kwargs) -> NoReturn:
                 raise httpx.ConnectError("connection refused")
 
         monkeypatch.setattr(httpx, "AsyncClient", lambda **_kw: _ErrorClient())

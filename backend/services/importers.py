@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject, JsonValue
+    from backend.vtypes.services import (
+        IgnoredImport,
+        McpImportPreview,
+        McpServerPreview,
+        SkillImportPreview,
+        SkillPreview,
+    )
 
 
 def _safe_preview_url(value: str) -> str:
@@ -23,10 +33,10 @@ def _safe_preview_url(value: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
-def preview_mcp_config(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def preview_mcp_config(payload: JsonObject) -> McpImportPreview:
     """Parse common ``mcpServers`` JSON without executing or resolving paths."""
-    valid: list[dict[str, Any]] = []
-    ignored: list[dict[str, Any]] = []
+    valid: list[McpServerPreview] = []
+    ignored: list[IgnoredImport] = []
     servers = payload.get("mcpServers")
     if not isinstance(servers, dict):
         return {"valid": [], "ignored": [{"reason": "mcpServers ausente"}]}
@@ -41,14 +51,15 @@ def preview_mcp_config(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]
             continue
         env = raw.get("env")
         env_vars = sorted(str(key) for key in env) if isinstance(env, dict) else []
+        arguments = raw.get("args")
         valid.append(
             {
                 "name": name,
                 "transport": "stdio" if isinstance(command, str) else "http",
                 "command": command if isinstance(command, str) else "",
-                "args": [
-                    str(item) for item in raw.get("args", []) if isinstance(item, str)
-                ],
+                "args": [item for item in arguments if isinstance(item, str)]
+                if isinstance(arguments, list)
+                else [],
                 "url": _safe_preview_url(url) if isinstance(url, str) else "",
                 "env_vars": env_vars,
             }
@@ -56,7 +67,7 @@ def preview_mcp_config(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]
     return {"valid": valid, "ignored": ignored}
 
 
-def preview_skill_config(payload: Any) -> dict[str, list[dict[str, Any]]]:
+def preview_skill_config(payload: JsonValue) -> SkillImportPreview:
     """Preview skill metadata while preserving only environment variable names."""
     entries = (
         payload
@@ -67,8 +78,8 @@ def preview_skill_config(payload: Any) -> dict[str, list[dict[str, Any]]]:
     )
     if not isinstance(entries, list):
         entries = []
-    valid: list[dict[str, Any]] = []
-    ignored: list[dict[str, Any]] = []
+    valid: list[SkillPreview] = []
+    ignored: list[IgnoredImport] = []
     for raw in entries:
         if not isinstance(raw, dict) or not raw.get("name") or not raw.get("source"):
             ignored.append({"reason": "name/source ausente"})

@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import logging
 import posixpath
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.transport.base import DirEntry, RunResult
+
+if TYPE_CHECKING:
+    import asyncssh
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +61,9 @@ class SshTransport:
         self._ssh_key_id = ssh_key_id
         self._user_id = user_id
         self._passphrase = passphrase
-        self._conn: Any | None = None  # asyncssh.SSHClientConnection
+        self._conn: asyncssh.SSHClientConnection | None = None
 
-    async def _ensure_connection(self) -> Any:
+    async def _ensure_connection(self) -> asyncssh.SSHClientConnection:
         """Abre conexão se ainda não existe (idempotente)."""
         if self._conn is not None:
             return self._conn
@@ -71,7 +74,7 @@ class SshTransport:
 
         user, host, port = _parse_host(self._remote_host)
 
-        client_keys: list[Any] = []
+        client_keys: list[asyncssh.SSHKey] = []
         if self._ssh_key_id:
             key_bytes = await self._load_key_bytes()
             if key_bytes is not None:

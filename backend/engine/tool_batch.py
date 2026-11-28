@@ -19,12 +19,14 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from backend.engine.guardrails import TurnBudget
+    from backend.engine.hooks import HookOutcome
     from backend.engine.stream_events import EventSink
     from backend.services.policy_compiler import PolicySnapshot
     from backend.tools.context import ToolContext
@@ -77,9 +79,7 @@ def _has_structured_result(spec: ToolSpec) -> bool:
     )
 
 
-def _decision_model_allow_block(
-    decision: dict[str, Any], ctx: ToolContext
-) -> str | None:
+def _decision_model_allow_block(decision: JsonObject, ctx: ToolContext) -> str | None:
     """Return a denial reason when an allow result no longer matches this run."""
     extra = getattr(ctx, "_extra", None)
     if decision.get("run_id") != getattr(ctx, "run_id", None) or decision.get(
@@ -237,13 +237,13 @@ async def _post_tool_hooks(
     return block_message(blocked), True
 
 
-def _record_hook_outcomes(ctx: ToolContext, outcomes: list[Any]) -> None:
+def _record_hook_outcomes(ctx: ToolContext, outcomes: list[HookOutcome]) -> None:
     """Acumula os desfechos no contexto; o loop os grava como evidência do run."""
     if outcomes:
         ctx._extra.setdefault("hook_outcomes", []).extend(outcomes)
 
 
-def drain_hook_outcomes(ctx: ToolContext) -> list[dict[str, Any]]:
+def drain_hook_outcomes(ctx: ToolContext) -> list[JsonObject]:
     """Retira e devolve, como evidências, os desfechos de hooks acumulados."""
     pending = ctx._extra.pop("hook_outcomes", [])
     return [item.evidence() for item in pending]

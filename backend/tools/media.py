@@ -20,7 +20,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from backend.settings import settings
@@ -30,7 +30,10 @@ from backend.tools.registry import ToolExtras, vtool
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from google import genai
+
     from backend.services.media_quota import QuotaReservation, QuotaState
+    from backend.vtypes.contracts import JsonValue
 
 
 def _session_id(ctx: ToolContext) -> str:
@@ -561,7 +564,7 @@ _GEMINI_VIDEO_MODEL = "veo-3.1-generate-preview"
 
 
 async def _gemini_video_bytes(
-    client: Any,
+    client: genai.Client,
     *,
     model: str,
     prompt: str,
@@ -604,7 +607,7 @@ async def _gemini_video_bytes(
     return bytes(raw) if raw else b""
 
 
-def _bytes_do_output_openrouter(output: Any) -> bytes:
+def _bytes_do_output_openrouter(output: JsonValue) -> bytes:
     """Extrai o binário do `output` do job de vídeo.
 
     A referência não fixa um formato único: o item vem com `b64_json` ou com

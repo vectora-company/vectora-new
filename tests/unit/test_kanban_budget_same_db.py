@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from aiosqlite import Connection
 
 import backend
 
@@ -31,7 +32,7 @@ _SCHEMA = (
 
 
 @pytest.fixture
-async def db_real(tmp_path, monkeypatch):
+async def db_real(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Aplica schema.sql no arquivo que `settings.db_dsn` aponta — igual
     `run_migrations` faz no boot real — sem tocar em `_get_db` de nenhum
     módulo do Kanban/budget."""
@@ -54,7 +55,9 @@ async def db_real(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_kanban_e_budget_convergem_pro_banco_de_background_tasks(db_real):
+async def test_kanban_e_budget_convergem_pro_banco_de_background_tasks(
+    db_real: Path,
+) -> None:
     from backend.scheduling import background_tasks as bg
     from backend.scheduling import budget, kanban
 
@@ -80,8 +83,8 @@ async def test_kanban_e_budget_convergem_pro_banco_de_background_tasks(db_real):
 
 @pytest.mark.asyncio
 async def test_kanban_no_checkpoints_db_falharia_com_tabela_ausente(
-    tmp_path, monkeypatch
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Erro/borda que documenta o bug original: se `_get_db` apontar pro
     banco de threads/checkpoints (sem `schema.sql` aplicado), a mesma
     chamada lança `OperationalError` — prova que o teste acima realmente
@@ -92,11 +95,9 @@ async def test_kanban_no_checkpoints_db_falharia_com_tabela_ausente(
 
     checkpoints_like = tmp_path / "checkpoints.db"
 
-    async def _get_db_errado():
-        conn: Any = await aiosqlite.connect(str(checkpoints_like))
-        conn.row_factory = lambda c, r: dict(
-            zip([col[0] for col in c.description], r, strict=False)
-        )
+    async def _get_db_errado() -> Connection:
+        conn = await aiosqlite.connect(str(checkpoints_like))
+        conn.row_factory = aiosqlite.Row
         return conn
 
     monkeypatch.setattr(kanban, "_get_db", _get_db_errado)

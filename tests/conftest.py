@@ -56,7 +56,7 @@ _isolated_vectora_home: str | None = None
 _previous_vectora_home: str | None = None
 
 
-def pytest_configure(config: Any) -> None:
+def pytest_configure(config: pytest.Config) -> None:
     """Isola `VECTORA_HOME` para a sessão inteira ANTES de qualquer módulo
     de teste ser coletado/importado — rede de segurança contra teste
     vazando pro `~/.vectora` real do usuário.
@@ -109,7 +109,7 @@ def pytest_configure(config: Any) -> None:
 _diag_test_count = 0
 
 
-def pytest_runtest_teardown(item: Any) -> None:
+def pytest_runtest_teardown(item: pytest.Item) -> None:
     """Executa a operação pytest runtest teardown."""
     global _diag_test_count
     _diag_test_count += 1
@@ -145,7 +145,7 @@ def pytest_sessionfinish(exitstatus: int) -> None:
     _exit_status = int(exitstatus)
 
 
-def pytest_unconfigure(config: Any) -> None:
+def pytest_unconfigure(config: pytest.Config) -> None:
     """Força o término do processo após o pytest concluir todo o relatório.
 
     Roda no fim do ciclo do pytest, depois que o summary e o coverage já foram

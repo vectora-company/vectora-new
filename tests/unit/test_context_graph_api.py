@@ -11,13 +11,17 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
+from typing import Literal, NoReturn
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from backend.vtypes.contracts import JsonObject
+
 # ---------------------------------------------------------------------------
 # Fixture helpers
 # ---------------------------------------------------------------------------
+from tests.json_values import as_list, as_object
 
 
 def _make_registry(tmp_path: Path) -> tuple[MagicMock, MagicMock]:
@@ -35,7 +39,7 @@ def _write_graph(tmp_path: Path, data: dict) -> Path:
     return d
 
 
-def _write_status(graph_dir: Path, status: str, **extra) -> None:
+def _write_status(graph_dir: Path, status: str, **extra: int | list[str] | str) -> None:
     payload = {"status": status, "built_at": "2026-01-01T00:00:00Z", **extra}
     (graph_dir / "build_status.json").write_text(json.dumps(payload), encoding="utf-8")
 
@@ -53,7 +57,7 @@ def _fake_request(user_id: str = "u1") -> MagicMock:
 
 
 class TestGraphDir:
-    def test_workspace_not_found_returns_none(self):
+    def test_workspace_not_found_returns_none(self) -> None:
         from backend.api.handlers.context_graph import _graph_dir
 
         registry = MagicMock()
@@ -61,7 +65,7 @@ class TestGraphDir:
         with patch("backend.workspace.workspace.workspace_registry", registry):
             assert _graph_dir("nonexistent") is None
 
-    def test_workspace_found_returns_expected_path(self, tmp_path):
+    def test_workspace_found_returns_expected_path(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import _graph_dir
 
         registry, _ = _make_registry(tmp_path)
@@ -76,14 +80,14 @@ class TestGraphDir:
 
 
 class TestReadStatusFile:
-    def test_returns_none_when_file_absent(self, tmp_path):
+    def test_returns_none_when_file_absent(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import _read_status_file
 
         graph_dir = tmp_path / ".vectora" / "context-graph"
         graph_dir.mkdir(parents=True)
         assert _read_status_file(graph_dir) is None
 
-    def test_reads_done_status_with_counts(self, tmp_path):
+    def test_reads_done_status_with_counts(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import _read_status_file
 
         graph_dir = tmp_path / ".vectora" / "context-graph"
@@ -95,7 +99,7 @@ class TestReadStatusFile:
         assert s.node_count == 5
         assert s.edge_count == 12
 
-    def test_reads_running_status(self, tmp_path):
+    def test_reads_running_status(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import _read_status_file
 
         graph_dir = tmp_path / ".vectora" / "context-graph"
@@ -105,7 +109,7 @@ class TestReadStatusFile:
         assert s is not None
         assert s.status == "running"
 
-    def test_reads_error_status(self, tmp_path):
+    def test_reads_error_status(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import _read_status_file
 
         graph_dir = tmp_path / ".vectora" / "context-graph"
@@ -116,7 +120,7 @@ class TestReadStatusFile:
         assert s.status == "error"
         assert "Pipeline falhou" in (s.error or "")
 
-    def test_reads_running_with_step_info(self, tmp_path):
+    def test_reads_running_with_step_info(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import _read_status_file
 
         graph_dir = tmp_path / ".vectora" / "context-graph"
@@ -147,7 +151,7 @@ class TestReadStatusFile:
 
 
 class TestRequireGraphJson:
-    def test_raises_404_when_file_missing(self, tmp_path):
+    def test_raises_404_when_file_missing(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import _require_graph_json
@@ -158,14 +162,14 @@ class TestRequireGraphJson:
                 _require_graph_json("ws1")
         assert exc.value.status_code == 404
 
-    def test_returns_parsed_data(self, tmp_path):
+    def test_returns_parsed_data(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import _require_graph_json
 
         _write_graph(tmp_path, {"nodes": [{"id": "x"}], "edges": []})
         registry, _ = _make_registry(tmp_path)
         with patch("backend.workspace.workspace.workspace_registry", registry):
             data = _require_graph_json("ws1")
-        assert data["nodes"][0]["id"] == "x"
+        assert as_object(as_list(data["nodes"])[0])["id"] == "x"
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +179,7 @@ class TestRequireGraphJson:
 
 class TestGetStatus:
     @pytest.mark.asyncio
-    async def test_running_from_status_file(self, tmp_path):
+    async def test_running_from_status_file(self, tmp_path: Path) -> None:
         from backend.api.handlers import context_graph as cg
         from backend.api.handlers.context_graph import get_status
 
@@ -191,7 +195,9 @@ class TestGetStatus:
         assert s.status == "running"
 
     @pytest.mark.asyncio
-    async def test_stale_running_without_active_task_returns_not_built(self, tmp_path):
+    async def test_stale_running_without_active_task_returns_not_built(
+        self, tmp_path: Path
+    ) -> None:
         # Status "running" no disco mas sem task ativa (processo morreu) → órfão.
         from backend.api.handlers import context_graph as cg
         from backend.api.handlers.context_graph import get_status
@@ -205,7 +211,9 @@ class TestGetStatus:
         assert s.status == "not_built"
 
     @pytest.mark.asyncio
-    async def test_stale_running_with_checkpoint_returns_paused(self, tmp_path):
+    async def test_stale_running_with_checkpoint_returns_paused(
+        self, tmp_path: Path
+    ) -> None:
         # Órfão mas com checkpoint AST → oferece resume (paused), não do zero.
         from backend.api.handlers import context_graph as cg
         from backend.api.handlers.context_graph import get_status
@@ -220,7 +228,7 @@ class TestGetStatus:
         assert s.status == "paused"
 
     @pytest.mark.asyncio
-    async def test_error_from_status_file(self, tmp_path):
+    async def test_error_from_status_file(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import get_status
 
         graph_dir = _write_graph(tmp_path, {})
@@ -232,7 +240,7 @@ class TestGetStatus:
         assert "Pipeline falhou" in (s.error or "")
 
     @pytest.mark.asyncio
-    async def test_done_from_status_file(self, tmp_path):
+    async def test_done_from_status_file(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import get_status
 
         graph_dir = _write_graph(tmp_path, {})
@@ -245,7 +253,9 @@ class TestGetStatus:
         assert s.edge_count == 25
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_graph_json_when_no_status_file(self, tmp_path):
+    async def test_falls_back_to_graph_json_when_no_status_file(
+        self, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.context_graph import get_status
 
         _write_graph(tmp_path, {"nodes": [{"id": "a"}], "edges": []})
@@ -255,7 +265,7 @@ class TestGetStatus:
         assert s.status == "done"
 
     @pytest.mark.asyncio
-    async def test_not_built_when_no_files(self, tmp_path):
+    async def test_not_built_when_no_files(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import get_status
 
         registry, _ = _make_registry(tmp_path)
@@ -294,7 +304,7 @@ SAMPLE_DATA = {
 
 class TestPostQuery:
     @pytest.mark.asyncio
-    async def test_matches_by_label(self, tmp_path):
+    async def test_matches_by_label(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import QueryRequest, post_query
 
         _write_graph(tmp_path, SAMPLE_DATA)
@@ -307,7 +317,7 @@ class TestPostQuery:
         assert "1" in resp.answer
 
     @pytest.mark.asyncio
-    async def test_no_match_returns_empty(self, tmp_path):
+    async def test_no_match_returns_empty(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import QueryRequest, post_query
 
         _write_graph(tmp_path, SAMPLE_DATA)
@@ -319,7 +329,7 @@ class TestPostQuery:
         assert resp.nodes == []
 
     @pytest.mark.asyncio
-    async def test_includes_neighborhood_edges(self, tmp_path):
+    async def test_includes_neighborhood_edges(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import QueryRequest, post_query
 
         _write_graph(tmp_path, SAMPLE_DATA)
@@ -338,7 +348,7 @@ class TestPostQuery:
 
 class TestPostExplain:
     @pytest.mark.asyncio
-    async def test_returns_node_and_neighbors(self, tmp_path):
+    async def test_returns_node_and_neighbors(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import ExplainRequest, post_explain
 
         _write_graph(tmp_path, SAMPLE_DATA)
@@ -352,7 +362,7 @@ class TestPostExplain:
         assert "n_login" in ids
 
     @pytest.mark.asyncio
-    async def test_raises_404_for_unknown_node(self, tmp_path):
+    async def test_raises_404_for_unknown_node(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import ExplainRequest, post_explain
@@ -374,7 +384,7 @@ class TestPostExplain:
 
 class TestPostPath:
     @pytest.mark.asyncio
-    async def test_returns_path_between_nodes(self, tmp_path):
+    async def test_returns_path_between_nodes(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import PathRequest, post_path
 
         _write_graph(tmp_path, SAMPLE_DATA)
@@ -389,7 +399,7 @@ class TestPostPath:
         assert "n_auth" in resp.answer
 
     @pytest.mark.asyncio
-    async def test_raises_404_when_no_path(self, tmp_path):
+    async def test_raises_404_when_no_path(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import PathRequest, post_path
@@ -413,7 +423,7 @@ class TestPostPath:
         assert exc.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_raises_404_for_unknown_source(self, tmp_path):
+    async def test_raises_404_for_unknown_source(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import PathRequest, post_path
@@ -435,7 +445,7 @@ class TestPostPath:
 
 class TestPostAffected:
     @pytest.mark.asyncio
-    async def test_seed_found_returns_answer(self, tmp_path):
+    async def test_seed_found_returns_answer(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import AffectedRequest, post_affected
 
         _write_graph(tmp_path, SAMPLE_DATA)
@@ -447,7 +457,7 @@ class TestPostAffected:
         assert len(resp.answer) > 0
 
     @pytest.mark.asyncio
-    async def test_no_graph_raises_404(self, tmp_path):
+    async def test_no_graph_raises_404(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import AffectedRequest, post_affected
@@ -463,7 +473,9 @@ class TestPostAffected:
 
 class TestPostCluster:
     @pytest.mark.asyncio
-    async def test_returns_community_members_without_persisting_them(self, tmp_path):
+    async def test_returns_community_members_without_persisting_them(
+        self, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.context_graph import post_cluster
 
         _write_graph(tmp_path, SAMPLE_DATA)
@@ -486,7 +498,9 @@ class TestPostCluster:
 
 class TestPostResolveSymbol:
     @pytest.mark.asyncio
-    async def test_returns_exact_candidates_and_rejects_bad_query(self, tmp_path):
+    async def test_returns_exact_candidates_and_rejects_bad_query(
+        self, tmp_path: Path
+    ) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import (
@@ -527,7 +541,7 @@ class TestPostResolveSymbol:
         assert exc.value.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_requires_authentication_and_graph(self, tmp_path):
+    async def test_requires_authentication_and_graph(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import (
@@ -552,7 +566,9 @@ class TestPostResolveSymbol:
         assert missing.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_rejects_graph_over_the_processing_limit(self, tmp_path):
+    async def test_rejects_graph_over_the_processing_limit(
+        self, tmp_path: Path
+    ) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import post_cluster
@@ -566,7 +582,9 @@ class TestPostResolveSymbol:
         assert exc.value.status_code == 413
 
     @pytest.mark.asyncio
-    async def test_keeps_isolated_nodes_as_singleton_communities(self, tmp_path):
+    async def test_keeps_isolated_nodes_as_singleton_communities(
+        self, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.context_graph import post_cluster
 
         _write_graph(tmp_path, {"nodes": [{"id": "n1"}, {"id": "n2"}], "links": []})
@@ -580,7 +598,7 @@ class TestPostResolveSymbol:
         ]
 
     @pytest.mark.asyncio
-    async def test_sanitizes_detector_failure(self, tmp_path):
+    async def test_sanitizes_detector_failure(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import post_cluster
@@ -601,7 +619,9 @@ class TestPostResolveSymbol:
         assert exc.value.detail == "Não foi possível agrupar este grafo"
 
     @pytest.mark.asyncio
-    async def test_rejects_a_second_concurrent_cluster_request(self, tmp_path):
+    async def test_rejects_a_second_concurrent_cluster_request(
+        self, tmp_path: Path
+    ) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import post_cluster
@@ -619,7 +639,7 @@ class TestPostResolveSymbol:
             cluster_service._cluster_semaphore.release()
 
     @pytest.mark.asyncio
-    async def test_missing_graph_returns_404(self, tmp_path):
+    async def test_missing_graph_returns_404(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import post_cluster
@@ -638,7 +658,7 @@ class TestPostResolveSymbol:
 
 class TestPostBuild:
     @pytest.mark.asyncio
-    async def test_enfileira_build_e_retorna_queued(self, tmp_path):
+    async def test_enfileira_build_e_retorna_queued(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import BuildRequest, post_build
 
         registry, _ = _make_registry(tmp_path)
@@ -656,7 +676,7 @@ class TestPostBuild:
         mock_task.add_done_callback.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_build_ja_em_andamento_retorna_running(self, tmp_path):
+    async def test_build_ja_em_andamento_retorna_running(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import BuildRequest, post_build
 
         graph_dir = tmp_path / ".vectora" / "context-graph"
@@ -670,7 +690,7 @@ class TestPostBuild:
         assert resp.status == "running"
 
     @pytest.mark.asyncio
-    async def test_workspace_nao_encontrado_levanta_404(self):
+    async def test_workspace_nao_encontrado_levanta_404(self) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import BuildRequest, post_build
@@ -684,13 +704,13 @@ class TestPostBuild:
         assert exc.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_resume_repassa_flag_ao_pipeline(self, tmp_path):
+    async def test_resume_repassa_flag_ao_pipeline(self, tmp_path: Path) -> None:
         """resume=True no BuildRequest deve chegar ao build_workspace_graph via _run_build."""
         from backend.api.handlers.context_graph import BuildRequest, _run_build
 
         registry, _ = _make_registry(tmp_path)
 
-        async def pipeline_ok(*_a, resume=False, **_k):
+        async def pipeline_ok(*_a: str, resume: bool = False, **_k) -> MagicMock:
             return MagicMock(error=None, node_count=0, edge_count=0)
 
         mock_pipeline = AsyncMock(side_effect=pipeline_ok)
@@ -708,13 +728,13 @@ class TestPostBuild:
         assert kwargs.get("resume") is True
 
     @pytest.mark.asyncio
-    async def test_file_types_repassa_ao_pipeline(self, tmp_path):
+    async def test_file_types_repassa_ao_pipeline(self, tmp_path: Path) -> None:
         # file_types do BuildRequest deve chegar ao pipeline (None quando vazio).
         from backend.api.handlers.context_graph import BuildRequest, _run_build
 
         registry, _ = _make_registry(tmp_path)
 
-        async def pipeline_ok(*_a, **_k):
+        async def pipeline_ok(*_a: str, **_k) -> MagicMock:
             return MagicMock(error=None, node_count=0, edge_count=0)
 
         mock_pipeline = AsyncMock(side_effect=pipeline_ok)
@@ -736,7 +756,7 @@ class TestPostBuild:
 
 class TestDeleteBuild:
     @pytest.mark.asyncio
-    async def test_cancela_task_ativa(self, tmp_path):
+    async def test_cancela_task_ativa(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import delete_build
 
         graph_dir = tmp_path / ".vectora" / "context-graph"
@@ -758,7 +778,7 @@ class TestDeleteBuild:
         assert not (graph_dir / "build_status.json").exists()
 
     @pytest.mark.asyncio
-    async def test_sem_task_ativa_nao_falha(self, tmp_path):
+    async def test_sem_task_ativa_nao_falha(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import delete_build
 
         registry, _ = _make_registry(tmp_path)
@@ -766,7 +786,7 @@ class TestDeleteBuild:
             await delete_build(_fake_request(), "ws1")
 
     @pytest.mark.asyncio
-    async def test_task_ja_concluida_nao_cancela(self, tmp_path):
+    async def test_task_ja_concluida_nao_cancela(self, tmp_path: Path) -> None:
         from backend.api.handlers.context_graph import delete_build
 
         mock_task = MagicMock()
@@ -806,10 +826,10 @@ class TestRunBuildStatus:
         return _read_status_file(tmp_path / ".vectora" / "context-graph")
 
     @pytest.mark.asyncio
-    async def test_quota_exhausted_writes_paused(self, tmp_path):
+    async def test_quota_exhausted_writes_paused(self, tmp_path: Path) -> None:
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        async def boom(*a, **k):
+        async def boom(*a: str, **k) -> NoReturn:
             raise QuotaExhaustedError("todos os providers esgotaram a quota")
 
         s = await self._run(tmp_path, boom)
@@ -818,8 +838,8 @@ class TestRunBuildStatus:
         assert "esgotaram" in (s.error or "")
 
     @pytest.mark.asyncio
-    async def test_generic_error_writes_error(self, tmp_path):
-        async def boom(*a, **k):
+    async def test_generic_error_writes_error(self, tmp_path: Path) -> None:
+        async def boom(*a: str, **k) -> NoReturn:
             raise ValueError("pipeline quebrou")
 
         s = await self._run(tmp_path, boom)
@@ -827,10 +847,10 @@ class TestRunBuildStatus:
         assert s.status == "error"
 
     @pytest.mark.asyncio
-    async def test_quota_not_classified_as_error(self, tmp_path):
+    async def test_quota_not_classified_as_error(self, tmp_path: Path) -> None:
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        async def boom(*a, **k):
+        async def boom(*a: str, **k) -> NoReturn:
             raise QuotaExhaustedError("quota")
 
         s = await self._run(tmp_path, boom)
@@ -838,13 +858,13 @@ class TestRunBuildStatus:
         assert s.status != "error"
 
     @pytest.mark.asyncio
-    async def test_success_writes_done_with_counts(self, tmp_path):
+    async def test_success_writes_done_with_counts(self, tmp_path: Path) -> None:
         result = MagicMock()
         result.error = None
         result.node_count = 7
         result.edge_count = 9
 
-        async def ok(*a, **k):
+        async def ok(*a: str, **k) -> MagicMock:
             return result
 
         s = await self._run(tmp_path, ok)
@@ -854,11 +874,11 @@ class TestRunBuildStatus:
         assert s.edge_count == 9
 
     @pytest.mark.asyncio
-    async def test_result_error_writes_error(self, tmp_path):
+    async def test_result_error_writes_error(self, tmp_path: Path) -> None:
         result = MagicMock()
         result.error = "extração falhou"
 
-        async def err(*a, **k):
+        async def err(*a: str, **k) -> MagicMock:
             return result
 
         s = await self._run(tmp_path, err)
@@ -867,7 +887,9 @@ class TestRunBuildStatus:
         assert s.error == "extração falhou"
 
     @pytest.mark.asyncio
-    async def test_paused_preserva_step_do_ultimo_on_progress(self, tmp_path):
+    async def test_paused_preserva_step_do_ultimo_on_progress(
+        self, tmp_path: Path
+    ) -> None:
         """Ao pausar por quota, step/step_total do último on_progress devem
         aparecer no status paused (para o frontend mostrar x/y passos)."""
         from backend.api.handlers.context_graph import BuildRequest, _run_build
@@ -875,7 +897,9 @@ class TestRunBuildStatus:
 
         registry, _ = _make_registry(tmp_path)
 
-        async def boom_after_progress(*a, on_progress=None, **k):
+        async def boom_after_progress(
+            *a: str, on_progress=None, **k: bool | str | None
+        ) -> NoReturn:
             if on_progress:
                 on_progress(3, 9, "Análise semântica", 5, 10)
             raise QuotaExhaustedError("quota")
@@ -899,11 +923,11 @@ class TestRunBuildStatus:
         assert s.partial is True
 
     @pytest.mark.asyncio
-    async def test_paused_sem_on_progress_nao_tem_step(self, tmp_path):
+    async def test_paused_sem_on_progress_nao_tem_step(self, tmp_path: Path) -> None:
         """Se quota estoura antes de qualquer on_progress, step deve ser None."""
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        async def boom_imediato(*a, **k):
+        async def boom_imediato(*a: str, **k) -> NoReturn:
             raise QuotaExhaustedError("quota imediata")
 
         s = await self._run(tmp_path, boom_imediato)
@@ -920,12 +944,12 @@ class TestRunBuildStatus:
 
 
 class TestCheckWorkspaceAccess:
-    def _fake_owned_workspace(self, owner_id: str | None):
+    def _fake_owned_workspace(self, owner_id: str | None) -> MagicMock:
         ws = MagicMock()
         ws.owner_id = owner_id
         return ws
 
-    def test_raises_403_for_other_users_workspace(self):
+    def test_raises_403_for_other_users_workspace(self) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import _check_workspace_access
@@ -943,7 +967,7 @@ class TestCheckWorkspaceAccess:
             _check_workspace_access(req, "ws-1")
         assert exc.value.status_code == 403
 
-    def test_allows_owner(self):
+    def test_allows_owner(self) -> None:
         from backend.api.handlers.context_graph import _check_workspace_access
 
         ws = self._fake_owned_workspace("alice")
@@ -955,7 +979,7 @@ class TestCheckWorkspaceAccess:
         with patch("backend.workspace.workspace.workspace_registry", registry):
             _check_workspace_access(req, "ws-1")  # não levanta
 
-    def test_allows_workspace_without_owner(self):
+    def test_allows_workspace_without_owner(self) -> None:
         from backend.api.handlers.context_graph import _check_workspace_access
 
         ws = self._fake_owned_workspace(None)
@@ -967,7 +991,7 @@ class TestCheckWorkspaceAccess:
         with patch("backend.workspace.workspace.workspace_registry", registry):
             _check_workspace_access(req, "ws-1")  # não levanta — legado/sem dono
 
-    def test_allows_root_regardless_of_owner(self):
+    def test_allows_root_regardless_of_owner(self) -> None:
         from backend.api.handlers.context_graph import _check_workspace_access
 
         ws = self._fake_owned_workspace("alice")
@@ -984,7 +1008,11 @@ class TestGraphExport:
     @pytest.mark.parametrize(
         "export_format", ["graphml", "cypher", "canvas", "svg", "obsidian"]
     )
-    def test_exports_workspace_graph_to_download(self, tmp_path, export_format):
+    def test_exports_workspace_graph_to_download(
+        self,
+        tmp_path: Path,
+        export_format: Literal["graphml", "cypher", "canvas", "svg", "obsidian"],
+    ) -> None:
         from backend.api.handlers.context_graph import get_export
 
         graph_dir = _write_graph(
@@ -1053,7 +1081,9 @@ class TestGraphExport:
 
 
 class TestFalkorDBDestination:
-    async def test_configuration_keeps_credentials_out_of_runtime_settings(self):
+    async def test_configuration_keeps_credentials_out_of_runtime_settings(
+        self,
+    ) -> None:
         from backend.api.handlers.context_graph import (
             FalkorDBConfigRequest,
             put_falkordb_config,
@@ -1096,7 +1126,7 @@ class TestFalkorDBDestination:
             "u1", "CONTEXT_GRAPH_FALKORDB_PASSWORD", "top-secret"
         )
 
-    async def test_rejects_destination_before_saving_credentials(self):
+    async def test_rejects_destination_before_saving_credentials(self) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import (
@@ -1126,7 +1156,7 @@ class TestFalkorDBDestination:
         assert exc.value.status_code == 403
         provider.set.assert_not_awaited()
 
-    async def test_push_requires_explicit_confirmation(self):
+    async def test_push_requires_explicit_confirmation(self) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import (
@@ -1140,7 +1170,9 @@ class TestFalkorDBDestination:
             )
         assert exc.value.status_code == 400
 
-    async def test_push_uses_validated_destination_and_returns_counts(self, tmp_path):
+    async def test_push_uses_validated_destination_and_returns_counts(
+        self, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.context_graph import (
             FalkorDBPushRequest,
             push_graph_to_falkordb,
@@ -1186,7 +1218,7 @@ class TestFalkorDBDestination:
         assert args[-1] is True  # TLS obrigatório no endpoint de envio
         assert push.call_args.kwargs["pinned_ip"] == "203.0.113.8"
 
-    async def test_push_fails_closed_when_vault_is_locked(self):
+    async def test_push_fails_closed_when_vault_is_locked(self) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import (
@@ -1220,7 +1252,9 @@ class TestFalkorDBDestination:
         assert "vault locked" not in str(exc.value.detail)
         graph.assert_not_called()
 
-    async def test_push_sanitizes_remote_authentication_failure(self, tmp_path, caplog):
+    async def test_push_sanitizes_remote_authentication_failure(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import (
@@ -1267,7 +1301,7 @@ class TestFalkorDBDestination:
         assert "remote-secret" not in str(exc.value.detail)
         assert "remote-secret" not in caplog.text
 
-    def test_exporter_pins_socket_and_keeps_tls_hostname(self):
+    def test_exporter_pins_socket_and_keeps_tls_hostname(self) -> None:
         import socket
         import sys
         import types
@@ -1280,30 +1314,30 @@ class TestFalkorDBDestination:
         queries = []
 
         class FakeSSLConnection:
-            def __init__(self, **kwargs):
+            def __init__(self, **kwargs: int | str | None) -> None:
                 self.__dict__.update(kwargs)
 
-            def _wrap_socket_with_ssl(self, sock):
+            def _wrap_socket_with_ssl(self, sock: str) -> tuple[str, str]:
                 host = self.__dict__["host"]
                 connections["tls_hostname"] = host
                 return (sock, host)
 
         class FakeConnectionPool:
-            def __init__(self, **kwargs):
+            def __init__(self, **kwargs) -> None:
                 connections["pool"] = kwargs
 
         class FakeGraph:
-            def query(self, query, params):
+            def query(self, query: str, params: JsonObject) -> None:
                 queries.append((query, params))
 
         class FakeFalkorDB:
-            def __init__(self, *, connection_pool):
+            def __init__(self, *, connection_pool) -> None:
                 self.connection_pool = connection_pool
 
-            def select_graph(self, _name):
+            def select_graph(self, _name: str):
                 return FakeGraph()
 
-            def close(self):
+            def close(self) -> None:
                 connections["closed"] = True
 
         falkordb_module = types.ModuleType("falkordb")
@@ -1354,7 +1388,7 @@ class TestFalkorDBDestination:
 
 
 class TestGraphExportRemaining:
-    def test_rejects_unknown_export_format(self):
+    def test_rejects_unknown_export_format(self) -> None:
         from typing import Literal, cast
 
         from fastapi import HTTPException
@@ -1371,7 +1405,7 @@ class TestGraphExportRemaining:
             )
         assert exc.value.status_code == 422
 
-    def test_export_requires_existing_graph(self, tmp_path):
+    def test_export_requires_existing_graph(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import get_export
@@ -1384,7 +1418,7 @@ class TestGraphExportRemaining:
             get_export(_fake_request(), "ws1", "cypher")
         assert exc.value.status_code == 404
 
-    def test_svg_reports_missing_optional_renderer(self, tmp_path):
+    def test_svg_reports_missing_optional_renderer(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import get_export
@@ -1402,7 +1436,7 @@ class TestGraphExportRemaining:
             get_export(_fake_request(), "ws1", "svg")
         assert exc.value.status_code == 501
 
-    def test_svg_rejects_graph_over_layout_limit(self, tmp_path):
+    def test_svg_rejects_graph_over_layout_limit(self, tmp_path: Path) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.context_graph import get_export

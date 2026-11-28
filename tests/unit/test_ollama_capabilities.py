@@ -12,8 +12,12 @@ resultar em "tudo suportado", senão a UI oferece o que vai falhar depois.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import NoReturn
+
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.ollama.capabilities import (
     ModelCapabilities,
@@ -32,7 +36,7 @@ def _client(handler) -> OllamaClient:
 
 
 @pytest.fixture(autouse=True)
-def _limpa_cache():
+def _limpa_cache() -> Iterator[None]:
     clear_capabilities_cache()
     yield
     clear_capabilities_cache()
@@ -40,8 +44,8 @@ def _limpa_cache():
 
 class TestApiShow:
     @pytest.mark.asyncio
-    async def test_capabilities_do_modelo_sao_lidas(self):
-        def handler(_req):
+    async def test_capabilities_do_modelo_sao_lidas(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -59,8 +63,8 @@ class TestApiShow:
         assert caps.context_length == 128000
 
     @pytest.mark.asyncio
-    async def test_modelo_de_embedding_e_reconhecido(self):
-        def handler(_req):
+    async def test_modelo_de_embedding_e_reconhecido(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"capabilities": ["embedding"]})
 
         caps = await fetch_model_capabilities(_client(handler), "nomic-embed-text")
@@ -69,11 +73,11 @@ class TestApiShow:
         assert caps.vision is False
 
     @pytest.mark.asyncio
-    async def test_servidor_antigo_sem_capabilities_cai_no_fallback(self):
+    async def test_servidor_antigo_sem_capabilities_cai_no_fallback(self) -> None:
         """Erro/borda: servidor anterior ao campo `capabilities` — o Hermes
         usa o mesmo fallback (`model_info.*.vision.block_count`)."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -90,11 +94,11 @@ class TestApiShow:
         assert caps.context_length == 4096
 
     @pytest.mark.asyncio
-    async def test_servidor_fora_do_ar_falha_fechado(self):
+    async def test_servidor_fora_do_ar_falha_fechado(self) -> None:
         """Erro/borda crítico: sem resposta, **nenhuma** capacidade é
         assumida. Falhar aberto faria a UI oferecer o que vai quebrar."""
 
-        def handler(_req):
+        def handler(_req: Request) -> NoReturn:
             raise httpx.ConnectError("connection refused")
 
         caps = await fetch_model_capabilities(_client(handler), "qualquer")
@@ -103,10 +107,10 @@ class TestApiShow:
         assert not any((caps.vision, caps.thinking, caps.tools, caps.embedding))
 
     @pytest.mark.asyncio
-    async def test_resultado_e_cacheado_por_modelo(self):
+    async def test_resultado_e_cacheado_por_modelo(self) -> None:
         chamadas = 0
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             nonlocal chamadas
             chamadas += 1
             return httpx.Response(200, json={"capabilities": ["vision"]})
@@ -118,7 +122,7 @@ class TestApiShow:
         assert chamadas == 1, "consultou /api/show duas vezes pro mesmo modelo"
 
     @pytest.mark.asyncio
-    async def test_modelos_diferentes_nao_compartilham_cache(self):
+    async def test_modelos_diferentes_nao_compartilham_cache(self) -> None:
         """Erro/borda: cache por servidor em vez de por modelo daria a
         capacidade de um modelo a outro."""
         vistos: list[str] = []
@@ -138,27 +142,27 @@ class TestApiShow:
 
 class TestEmbeddings:
     @pytest.mark.asyncio
-    async def test_devolve_um_vetor_por_documento(self):
-        def handler(_req):
+    async def test_devolve_um_vetor_por_documento(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"embeddings": [[0.1, 0.2], [0.3, 0.4]]})
 
         emb = OllamaEmbeddings(model="nomic-embed-text", client=_client(handler))
         assert await emb.aembed_documents(["um", "dois"]) == [[0.1, 0.2], [0.3, 0.4]]
 
     @pytest.mark.asyncio
-    async def test_query_devolve_um_vetor_so(self):
-        def handler(_req):
+    async def test_query_devolve_um_vetor_so(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"embeddings": [[0.5]]})
 
         emb = OllamaEmbeddings(model="m", client=_client(handler))
         assert await emb.aembed_query("consulta") == [0.5]
 
     @pytest.mark.asyncio
-    async def test_embeddings_vazio_vira_erro_e_nao_lista_vazia(self):
+    async def test_embeddings_vazio_vira_erro_e_nao_lista_vazia(self) -> None:
         """Erro/borda: `[]` gravaria vetores nulos no índice do RAG — mesma
         trava do OpenRouter. Melhor falhar a ingestão."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"embeddings": []})
 
         emb = OllamaEmbeddings(model="m", client=_client(handler))
@@ -166,11 +170,11 @@ class TestEmbeddings:
             await emb.aembed_documents(["algo"])
 
     @pytest.mark.asyncio
-    async def test_quantidade_diferente_do_pedido_falha(self):
+    async def test_quantidade_diferente_do_pedido_falha(self) -> None:
         """Erro/borda: 2 textos e 1 vetor de volta significa que algum chunk
         ficaria sem embedding — associar na ordem corromperia o índice."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"embeddings": [[0.1]]})
 
         emb = OllamaEmbeddings(model="m", client=_client(handler))
@@ -178,7 +182,7 @@ class TestEmbeddings:
             await emb.aembed_documents(["um", "dois"])
 
     @pytest.mark.asyncio
-    async def test_lista_vazia_nao_chama_a_api(self):
+    async def test_lista_vazia_nao_chama_a_api(self) -> None:
         chamou = False
 
         def handler(_req):
@@ -192,7 +196,9 @@ class TestEmbeddings:
 
 
 class TestFactoryUsaClienteNativo:
-    def test_build_ollama_embeddings_anota_provider_e_modelo(self, monkeypatch):
+    def test_build_ollama_embeddings_anota_provider_e_modelo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import settings as _s
         from backend.storage import factory
 
@@ -201,6 +207,7 @@ class TestFactoryUsaClienteNativo:
 
         emb = factory._build_ollama_embeddings()
 
+        assert emb is not None
         assert emb.vectora_provider == "ollama"
         assert emb.vectora_model == "nomic-embed-text"
         assert isinstance(emb.inner, OllamaEmbeddings)
@@ -208,7 +215,9 @@ class TestFactoryUsaClienteNativo:
         # import quebrado falharia alto, não passaria silenciosamente.
         assert emb.inner.client.base_url == "http://127.0.0.1:11434"
 
-    def test_sem_modelo_configurado_devolve_none(self, monkeypatch):
+    def test_sem_modelo_configurado_devolve_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import settings as _s
         from backend.storage import factory
 

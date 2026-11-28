@@ -7,6 +7,7 @@ restart, sobre o SessionStore).
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Literal
 
@@ -22,11 +23,12 @@ from backend.engine.hitl import (
 from backend.persistence.native.session_store import SessionStore
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage, text_message
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     """Executa a operação session store."""
     pool = AsyncConnectionPool(str(tmp_path / "hitl.db"), min_size=1, max_size=2)
     await pool.open()
@@ -78,14 +80,14 @@ def test_decision_args_summary_is_bounded() -> None:
 
 
 class TestShouldRequireApproval:
-    def test_tool_fora_da_lista_nunca_interrompe(self):
+    def test_tool_fora_da_lista_nunca_interrompe(self) -> None:
         """Verifica o comportamento de tool fora da lista nunca interrompe."""
         assert (
             should_require_approval("web_search", _ctx(permission_mode="ask"), {}, [])
             is False
         )
 
-    def test_modo_ask_interrompe_tool_destrutiva(self):
+    def test_modo_ask_interrompe_tool_destrutiva(self) -> None:
         """Verifica o comportamento de modo ask interrompe tool destrutiva."""
         assert (
             should_require_approval("file_write", _ctx(permission_mode="ask"), {}, [])
@@ -109,24 +111,26 @@ class TestShouldRequireApproval:
             for spec in destrutivas
         )
 
-    def test_modo_desconhecido_cai_no_comportamento_mais_restritivo_de_ask(self):
+    def test_modo_desconhecido_cai_no_comportamento_mais_restritivo_de_ask(
+        self,
+    ) -> None:
         """Verifica o comportamento de modo desconhecido cai no comportamento mais restritivo de ask."""
         ctx = _ctx(permission_mode="modo-invalido")
         assert should_require_approval("file_write", ctx, {}, []) is True
 
-    def test_modo_accept_edits_auto_aprova_edicao_mas_nao_terminal(self):
+    def test_modo_accept_edits_auto_aprova_edicao_mas_nao_terminal(self) -> None:
         """Verifica o comportamento de modo accept edits auto aprova edicao mas nao terminal."""
         ctx = _ctx(permission_mode="accept_edits")
         assert should_require_approval("file_write", ctx, {}, []) is False
         assert should_require_approval("terminal", ctx, {}, []) is True
 
-    def test_modos_auto_e_bypass_nunca_interrompem(self):
+    def test_modos_auto_e_bypass_nunca_interrompem(self) -> None:
         """Verifica o comportamento de modos auto e bypass nunca interrompem."""
         for modo in ("auto", "bypass"):
             ctx = _ctx(permission_mode=modo)
             assert should_require_approval("file_write", ctx, {}, []) is False
 
-    def test_midia_falha_fechada_com_limiar_ausente_ou_invalido(self):
+    def test_midia_falha_fechada_com_limiar_ausente_ou_invalido(self) -> None:
         """Verifica o comportamento de midia falha fechada com limiar ausente ou invalido."""
         for threshold in (None, True, "1"):
             ctx = _ctx(permission_mode="auto", model="openai:gpt-image-1")
@@ -134,12 +138,12 @@ class TestShouldRequireApproval:
                 ctx._extra["media_approval_threshold"] = threshold
             assert should_require_approval("generate_image", ctx, {}, []) is True
 
-    def test_computer_use_sempre_interrompe_mesmo_em_bypass(self):
+    def test_computer_use_sempre_interrompe_mesmo_em_bypass(self) -> None:
         """Verifica o comportamento de computer use sempre interrompe mesmo em bypass."""
         ctx = _ctx(permission_mode="bypass")
         assert should_require_approval("computer_use", ctx, {}, []) is True
 
-    def test_modo_plan_interrompe_so_a_primeira_tool_destrutiva_do_turno(self):
+    def test_modo_plan_interrompe_so_a_primeira_tool_destrutiva_do_turno(self) -> None:
         """Verifica o comportamento de modo plan interrompe so a primeira tool destrutiva do turno."""
         ctx = _ctx(permission_mode="plan")
         historico_vazio: list[VMessage] = []
@@ -168,7 +172,7 @@ class TestShouldRequireApproval:
             is False
         )
 
-    def test_modo_plan_reinicia_a_cada_nova_mensagem_do_usuario(self):
+    def test_modo_plan_reinicia_a_cada_nova_mensagem_do_usuario(self) -> None:
         """Verifica o comportamento de modo plan reinicia a cada nova mensagem do usuario."""
         ctx = _ctx(permission_mode="plan")
         historico = [
@@ -183,21 +187,21 @@ class TestShouldRequireApproval:
         # Depois do 2º USER, nenhuma tool rodou ainda — volta a interromper.
         assert should_require_approval("file_write", ctx, {}, historico) is True
 
-    def test_kanban_update_status_da_propria_task_nunca_interrompe(self):
+    def test_kanban_update_status_da_propria_task_nunca_interrompe(self) -> None:
         """Verifica o comportamento de kanban update status da propria task nunca interrompe."""
         ctx = _ctx(permission_mode="ask", background_task_id="task-1")
-        args = {"task_id": "task-1"}
+        args: JsonObject = {"task_id": "task-1"}
         assert should_require_approval("kanban_update_status", ctx, args, []) is False
 
-    def test_kanban_update_status_de_outra_task_interrompe_normalmente(self):
+    def test_kanban_update_status_de_outra_task_interrompe_normalmente(self) -> None:
         """Verifica o comportamento de kanban update status de outra task interrompe normalmente."""
         ctx = _ctx(permission_mode="ask", background_task_id="task-1")
-        args = {"task_id": "task-2"}
+        args: JsonObject = {"task_id": "task-2"}
         assert should_require_approval("kanban_update_status", ctx, args, []) is True
 
     def test_workspace_jailed_dispensa_aprovacao_de_terminal_e_file_write(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de workspace jailed dispensa aprovacao de terminal e file write."""
         monkeypatch.setattr(
             "backend.engine.hitl._workspace_is_jailed", lambda _wsid: True
@@ -228,8 +232,8 @@ class TestShouldRequireApproval:
         assert should_require_approval("install_learned_skill", ctx, {}, []) is True
 
     def test_terminal_em_jail_com_rede_aberta_continua_pedindo_aprovacao(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Jail vivo, mas com a rede do host aberta: o terminal executa código
         arbitrário e poderia exfiltrar, então a pausa não é dispensada."""
         monkeypatch.setattr(
@@ -245,7 +249,9 @@ class TestShouldRequireApproval:
         assert should_require_approval("file_write", ctx, {}, []) is False
         assert should_require_approval("file_edit", ctx, {}, []) is False
 
-    def test_workspace_nao_jailed_continua_pedindo_aprovacao(self, monkeypatch):
+    def test_workspace_nao_jailed_continua_pedindo_aprovacao(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verifica o comportamento de workspace nao jailed continua pedindo aprovacao."""
         monkeypatch.setattr(
             "backend.engine.hitl._workspace_is_jailed", lambda _wsid: False
@@ -260,8 +266,8 @@ class TestApprovalGate:
     ) -> None:
         """Verifica o comportamento de midia persiste apenas metadados e mantem payload efemero."""
         gate = ApprovalGate(session_store)
-        args = {"prompt": "segredo", "size": "1024x1024"}
-        metadata = {
+        args: JsonObject = {"prompt": "segredo", "size": "1024x1024"}
+        metadata: JsonObject = {
             "operation": "generate_image",
             "provider": "openai",
             "model": "gpt-image-1",
@@ -307,7 +313,9 @@ class TestApprovalGate:
         assert pendente["tool_name"] == "file_write"
         assert pendente["args"] == {"path": "a.py"}
 
-    async def test_resolve_limpa_a_pendencia_e_libera_o_fast_path(self, session_store):
+    async def test_resolve_limpa_a_pendencia_e_libera_o_fast_path(
+        self, session_store: SessionStore
+    ) -> None:
         """Verifica o comportamento de resolve limpa a pendencia e libera o fast path."""
         gate = ApprovalGate(session_store)
         await gate.request_approval(
@@ -322,7 +330,9 @@ class TestApprovalGate:
 
         assert await session_store.get_pending_approval("thread-1") is None
 
-    async def test_resolve_limpa_args_efemeros_apos_claim(self, session_store) -> None:
+    async def test_resolve_limpa_args_efemeros_apos_claim(
+        self, session_store: SessionStore
+    ) -> None:
         """A limpeza usa o interrupt_id mesmo depois de a pendência ser consumida."""
         gate = ApprovalGate(session_store)
         await gate.request_approval(
@@ -344,8 +354,8 @@ class TestApprovalGate:
         assert gate.ephemeral_args("int-media") is None
 
     async def test_wait_for_resume_retorna_true_quando_resolve_e_chamado(
-        self, session_store
-    ):
+        self, session_store: SessionStore
+    ) -> None:
         """Verifica o comportamento de wait for resume retorna true quando resolve e chamado."""
         gate = ApprovalGate(session_store)
         await gate.request_approval(
@@ -356,7 +366,7 @@ class TestApprovalGate:
             args={},
         )
 
-        async def _resolver_logo():
+        async def _resolver_logo() -> None:
             """Executa a operação resolver logo."""
             await asyncio.sleep(0.01)
             await gate.resolve("thread-1")
@@ -368,8 +378,8 @@ class TestApprovalGate:
         assert liberado is True
 
     async def test_wait_for_resume_sem_pedido_previo_devolve_false_sem_travar(
-        self, session_store
-    ):
+        self, session_store: SessionStore
+    ) -> None:
         """Verifica o comportamento de wait for resume sem pedido previo devolve false sem travar."""
         gate = ApprovalGate(session_store)
 
@@ -378,8 +388,8 @@ class TestApprovalGate:
         assert liberado is False
 
     async def test_wait_for_resume_expira_no_timeout_se_ninguem_resolver(
-        self, session_store
-    ):
+        self, session_store: SessionStore
+    ) -> None:
         """Verifica o comportamento de wait for resume expira no timeout se ninguem resolver."""
         gate = ApprovalGate(session_store)
         await gate.request_approval(
@@ -395,7 +405,7 @@ class TestApprovalGate:
         assert liberado is False
 
 
-def test_call_requires_separate_approval():
+def test_call_requires_separate_approval() -> None:
     # Tools destrutivas padrão exigem aprovação
     """Verifica o comportamento de call requires separate approval."""
     assert call_requires_separate_approval("file_write") is True

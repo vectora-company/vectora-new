@@ -47,7 +47,7 @@ class TestParidadeComOSchemaPydantic:
     """Cada evento nativo precisa bater exatamente com o schema Pydantic
     que já é fonte de verdade do contrato SSE hoje."""
 
-    def test_thread_started(self):
+    def test_thread_started(self) -> None:
         nativo = to_sse_line(ThreadStarted(thread_id="t1", workspace_id="w1"))
         pydantic = schemas.encode_event(
             schemas.ThreadEvent(thread_id="t1", workspace_id="w1")
@@ -55,19 +55,19 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "thread"
 
-    def test_message_chunk(self):
+    def test_message_chunk(self) -> None:
         nativo = to_sse_line(MessageChunk(content="oi", node="agent"))
         pydantic = schemas.encode_event(schemas.TokenEvent(content="oi", node="agent"))
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "token"
 
-    def test_message_break(self):
+    def test_message_break(self) -> None:
         nativo = to_sse_line(MessageBreak())
         pydantic = schemas.encode_event(schemas.MessageBreakEvent())
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "message_break"
 
-    def test_tool_call_started(self):
+    def test_tool_call_started(self) -> None:
         nativo = to_sse_line(
             ToolCallStarted(
                 tool_name="file_read",
@@ -87,7 +87,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "tool_call"
 
-    def test_tool_call_started_carries_redacted_decision_summary(self):
+    def test_tool_call_started_carries_redacted_decision_summary(self) -> None:
         event = ToolCallStarted(
             tool_name="file_write",
             tool_call_id="call_sensitive",
@@ -106,7 +106,7 @@ class TestParidadeComOSchemaPydantic:
         assert payload["decision_confidence"] == 0.82
         assert "raw_response" not in payload
 
-    def test_tool_result(self):
+    def test_tool_result(self) -> None:
         nativo = to_sse_line(
             ToolResult(tool_call_id="call_1", content_json="ok", is_error=False)
         )
@@ -118,7 +118,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "tool_result"
 
-    def test_tool_activity(self):
+    def test_tool_activity(self) -> None:
         nativo = to_sse_line(
             ToolActivity(tool_name="terminal", tool_call_id="call_1", elapsed_ms=42)
         )
@@ -130,13 +130,13 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "tool_activity"
 
-    def test_terminal_line(self):
+    def test_terminal_line(self) -> None:
         nativo = to_sse_line(TerminalLine(line="$ ls"))
         pydantic = schemas.encode_event(schemas.TerminalLineEvent(line="$ ls"))
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "terminal_line"
 
-    def test_subagent_output(self):
+    def test_subagent_output(self) -> None:
         nativo = to_sse_line(
             SubagentOutput(subagent_type="coder", status="complete", content="feito")
         )
@@ -148,7 +148,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "subagent_output"
 
-    def test_node_status(self):
+    def test_node_status(self) -> None:
         nativo = to_sse_line(
             NodeStatus(node="agent", status="finished", duration_ms=120)
         )
@@ -158,7 +158,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "node"
 
-    def test_rag_citations(self):
+    def test_rag_citations(self) -> None:
         nativo = to_sse_line(
             RagCitations(
                 citations=[RagCitation(index=1, source="doc.md", chunk="trecho")]
@@ -174,7 +174,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "rag_citations"
 
-    def test_hitl_requested(self):
+    def test_hitl_requested(self) -> None:
         nativo = to_sse_line(
             HitlRequested(
                 tool_name="file_write",
@@ -198,7 +198,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "hitl"
 
-    def test_workbench_invalidate(self):
+    def test_workbench_invalidate(self) -> None:
         nativo = to_sse_line(WorkbenchInvalidate(tabs=["files", "git"]))
         pydantic = schemas.encode_event(
             schemas.WorkbenchInvalidateEvent(tabs=["files", "git"])
@@ -206,7 +206,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "workbench_invalidate"
 
-    def test_structured_question_requested(self):
+    def test_structured_question_requested(self) -> None:
         nativo = to_sse_line(
             StructuredQuestionRequested(
                 question_id="q1",
@@ -230,7 +230,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "structured_question"
 
-    def test_todos_updated(self):
+    def test_todos_updated(self) -> None:
         nativo = to_sse_line(
             TodosUpdated(todos=[TodoItem(content="fazer x", status="in_progress")])
         )
@@ -242,7 +242,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "todos_updated"
 
-    def test_model_switched(self):
+    def test_model_switched(self) -> None:
         nativo = to_sse_line(
             ModelSwitched(from_model="openai:gpt-4o", to_model="anthropic:claude")
         )
@@ -254,7 +254,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "model_switched"
 
-    def test_ui_metrics(self):
+    def test_ui_metrics(self) -> None:
         nativo = to_sse_line(UIMetrics(rag_hits=3, tool_calls={"file_read": 2}))
         pydantic = schemas.encode_event(
             schemas.UIMetricsEvent(rag_hits=3, tool_calls={"file_read": 2})
@@ -262,7 +262,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "ui_metrics"
 
-    def test_error_signal(self):
+    def test_error_signal(self) -> None:
         nativo = to_sse_line(ErrorSignal(message="deu ruim", code="RECURSION_LIMIT"))
         aviso = to_sse_line(
             ErrorSignal(
@@ -276,7 +276,7 @@ class TestParidadeComOSchemaPydantic:
         assert nativo == pydantic
         assert _parse(nativo)["type"] == "error"
 
-    def test_done(self):
+    def test_done(self) -> None:
         nativo = to_sse_line(Done(thread_id="t1", run_id="run-1"))
         pydantic = schemas.encode_event(
             schemas.DoneEvent(thread_id="t1", run_id="run-1")
@@ -286,7 +286,7 @@ class TestParidadeComOSchemaPydantic:
 
 
 class TestErroDeTipoDesconhecido:
-    def test_evento_fora_do_uniao_lanca_typeerror(self):
+    def test_evento_fora_do_uniao_lanca_typeerror(self) -> None:
         class _EventoFalso:
             pass
 

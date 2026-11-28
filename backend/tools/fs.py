@@ -26,7 +26,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.sandbox.policy import SandboxPolicy, resolve_policy
 from backend.sandbox.workspace_jail import WorkerSpawnError, jail_manager
@@ -45,6 +45,12 @@ from backend.settings import settings
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
 from backend.vtypes.documents import VALID_ARTIFACT_TYPES, ArtifactIntegrity
+
+if TYPE_CHECKING:
+    from backend.transport import TransportBackend
+    from backend.vtypes.contracts import JsonObject
+    from backend.vtypes.tools import PendingTerminal, TerminalReadState
+    from backend.workspace.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -284,7 +290,7 @@ def _assert_no_symlink_components(path: Path, root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _active_workspace(ctx: ToolContext) -> Any:
+def _active_workspace(ctx: ToolContext) -> Workspace:
     """Resolve o Workspace ativo a partir do ctx (workspace_id).
 
     Sem ``ctx.workspace_id`` (ou apontando pra um id que não existe mais no
@@ -306,13 +312,13 @@ def _active_workspace(ctx: ToolContext) -> Any:
     return workspace_registry.get_or_create()
 
 
-def _workspace_root(ctx: ToolContext) -> tuple[Path, Any]:
+def _workspace_root(ctx: ToolContext) -> tuple[Path, Workspace]:
     """Retorna (root, workspace) do workspace ativo."""
     ws = _active_workspace(ctx)
     return Path(ws.cwd), ws
 
 
-def _root_for_path(ws: Any, requested: str) -> tuple[Path, str]:
+def _root_for_path(ws: Workspace, requested: str) -> tuple[Path, str]:
     """Select a secondary project root using its explicit virtual prefix."""
     match = re.match(r"^@root-([0-9a-f]{8})(?:/(.*))?$", requested)
     if match:
@@ -375,7 +381,7 @@ def _require_local(ctx: ToolContext) -> str | None:
 
 
 async def _remote_workspace_path(
-    transport: Any, ws: Any, requested: str
+    transport: TransportBackend, ws: Workspace, requested: str
 ) -> tuple[str | None, str | None]:
     """Resolve um caminho remoto e bloqueia leitura/escrita de credenciais."""
     from backend.workspace.remote_fs import resolve_remote_workspace_path
@@ -444,7 +450,7 @@ def _build_hook_argv(cmd_template: str, path: Path) -> list[str]:
     return [tok.replace("{file}", str(path)) for tok in tokens]
 
 
-async def _run_hooks_and_autocommit(path: Path, root: Path, ws: Any) -> str:
+async def _run_hooks_and_autocommit(path: Path, root: Path, ws: Workspace) -> str:
     """Roda hooks ``post_file_write`` + auto-commit opcional (``vectora.toml``).
 
     Nunca propaga falha pra tool que chamou — retorna uma nota (string
@@ -625,7 +631,7 @@ async def file_edit(
                 logger.info("file_edit created new file", extra={"path": file_path})
                 note = await _run_hooks_and_autocommit(path, root, ws)
                 return f"[OK] File created: {file_path}" + (f"\n{note}" if note else "")
-            content = read_resp["content"]
+            content = str(read_resp["content"])
         else:
             # Cria arquivo novo quando old_text="" e arquivo não existe
             if old_text == "" and not path.exists():
@@ -1037,7 +1043,7 @@ async def list_dir(
 #: matar o processo: a tool devolve o controle ao agente quando fica idle
 #: por muito tempo com o processo ainda vivo, e uma chamada seguinte com
 #: ``stdin_input`` retoma a MESMA sessão em vez de spawnar um comando novo.
-_pending_terminal: dict[str, dict[str, Any]] = {}
+_pending_terminal: dict[str, PendingTerminal] = {}
 
 _IDLE_TIMEOUT = 6.0
 """Sem output novo por esse tempo + processo vivo → provavelmente esperando
@@ -1056,7 +1062,7 @@ async def _drain_terminal_output(
     proc: asyncio.subprocess.Process,
     output_lines: list[str],
     start: float,
-    read_state: dict[str, Any] | None = None,
+    read_state: TerminalReadState | None = None,
 ) -> str | None:
     """Aguarda output novo com idle-detection. None = processo terminou normalmente.
 
@@ -1209,7 +1215,7 @@ async def terminal(
 
         start = time.monotonic()
         idle_result = await _drain_terminal_output(
-            thread_id, proc, output_lines, start, read_state=pending.get("read_state")
+            thread_id, proc, output_lines, start, read_state=pending["read_state"]
         )
         if idle_result is not None:
             return idle_result
@@ -1344,7 +1350,7 @@ async def terminal(
             return f"Error: {exc}"
         if "error" in resp:
             return f"Error: {resp['error']}"
-        output = (resp.get("stdout", "") + resp.get("stderr", "")).strip()
+        output = (str(resp.get("stdout", "")) + str(resp.get("stderr", ""))).strip()
         logger.info(
             "terminal_command_sandboxed",
             extra={"command": command[:50], "exit_code": resp.get("exit_code")},
@@ -1499,7 +1505,7 @@ def _write_artifact_type_sidecar(
 
 def _write_artifact_integrity_sidecar(
     path: Path, *, retention_class: str = "run"
-) -> dict[str, object]:
+) -> JsonObject:
     """Persiste checksum/tamanho fora do payload, para auditoria e GC futuro."""
     metadata = ArtifactIntegrity(
         artifact_id=path.stem,
@@ -1538,7 +1544,7 @@ def _mirror_artifact_to_workspace(
 
 def _create_artifact_sync(
     ctx: ToolContext, artifact_type: str, slug: str, session_id: str, content: str
-) -> tuple[Path, dict[str, object]]:
+) -> tuple[Path, JsonObject]:
     """Executa a operação  create artifact sync."""
     artifact_dir = settings.vectora_home / "artifacts" / session_id
     artifact_dir.mkdir(parents=True, exist_ok=True)

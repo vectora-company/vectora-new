@@ -16,7 +16,7 @@ _GEMINI_429 = (
 )
 
 
-def test_rate_limit_429_classified():
+def test_rate_limit_429_classified() -> None:
     code, message = classify_stream_error(RuntimeError(_GEMINI_429))
     assert code == "RATE_LIMIT"
     assert message
@@ -25,37 +25,37 @@ def test_rate_limit_429_classified():
     assert "429" not in message
 
 
-def test_rate_limit_quota_wording():
+def test_rate_limit_quota_wording() -> None:
     code, _ = classify_stream_error(Exception("You exceeded your current quota"))
     assert code == "RATE_LIMIT"
 
 
-def test_auth_error_classified():
+def test_auth_error_classified() -> None:
     code, _ = classify_stream_error(Exception("401 Unauthorized: invalid api key"))
     assert code == "AUTH"
 
 
-def test_timeout_classified():
+def test_timeout_classified() -> None:
     code, message = classify_stream_error(Exception("ReadTimeout: request timed out"))
     assert code == "TIMEOUT"
     assert message
     assert "timeout" not in message.lower() or message  # mensagem limpa sem stack
 
 
-def test_timeout_connect():
+def test_timeout_connect() -> None:
     code, _ = classify_stream_error(
         Exception("ConnectTimeout connecting to generativelanguage")
     )
     assert code == "TIMEOUT"
 
 
-def test_generic_error_fallback():
+def test_generic_error_fallback() -> None:
     code, message = classify_stream_error(ValueError("algo inesperado"))
     assert code == "STREAM_ERROR"
     assert message
 
 
-def test_timeout_not_auth_not_rate_limit():
+def test_timeout_not_auth_not_rate_limit() -> None:
     """TIMEOUT deve ser distinto de RATE_LIMIT e AUTH."""
     t_code, _ = classify_stream_error(Exception("timed out"))
     r_code, _ = classify_stream_error(Exception("429 quota"))
@@ -63,7 +63,7 @@ def test_timeout_not_auth_not_rate_limit():
     assert len({t_code, r_code, a_code}) == 3
 
 
-def test_missing_key_getenv_classified():
+def test_missing_key_getenv_classified() -> None:
     from backend.services.env import GetEnvError
 
     code, message = classify_stream_error(
@@ -75,7 +75,7 @@ def test_missing_key_getenv_classified():
     assert "COHERE_API_KEY" not in message
 
 
-def test_missing_key_wrapped_in_attribute_error():
+def test_missing_key_wrapped_in_attribute_error() -> None:
     # GetEnvError pode chegar embrulhado num AttributeError (lib externa
     # tentando acessar um atributo que não existe na exceção) — o texto
     # ainda cita GetEnvError, então a classificação precisa pegar isso.
@@ -85,14 +85,14 @@ def test_missing_key_wrapped_in_attribute_error():
     assert code == "MISSING_KEYS"
 
 
-def test_missing_key_plain_env_message():
+def test_missing_key_plain_env_message() -> None:
     code, _ = classify_stream_error(
         Exception("Env variable 'GOOGLE_API_KEY' does not exist")
     )
     assert code == "MISSING_KEYS"
 
 
-def test_missing_key_takes_precedence_over_auth():
+def test_missing_key_takes_precedence_over_auth() -> None:
     # Falta de chave cita "api key" mas não é AUTH (401/403) — MISSING_KEYS ganha.
     from backend.services.env import GetEnvError
 
@@ -100,7 +100,7 @@ def test_missing_key_takes_precedence_over_auth():
     assert code == "MISSING_KEYS"
 
 
-def test_model_incompatible_not_confused_with_real_quota():
+def test_model_incompatible_not_confused_with_real_quota() -> None:
     """Bug reproduzido ao vivo: Cohere Command A+ rejeita `tool_plan` em
     TODOS os candidatos da cadeia de fallback — o fallback esgota e levanta
     QuotaExhaustedError, cuja mensagem contém a palavra "quota" e casava
@@ -124,14 +124,14 @@ def test_model_incompatible_not_confused_with_real_quota():
     assert "quota" not in message.lower()
 
 
-def test_direct_provider_incompatible_error_classified():
+def test_direct_provider_incompatible_error_classified() -> None:
     code, _ = classify_stream_error(
         Exception("`tool plan` cannot be used with this model.")
     )
     assert code == "MODEL_INCOMPATIBLE"
 
 
-def test_graph_recursion_error_classified():
+def test_graph_recursion_error_classified() -> None:
     """Bug reproduzido ao vivo: troca de provider por falso "quota esgotada"
     (ver test_config_settings::TestLlmKeyPrecedence) deixava o orchestrator
     em loop de delegação até estourar um limite de passos — a mensagem
@@ -151,7 +151,7 @@ def test_graph_recursion_error_classified():
     assert "50" not in message
 
 
-def test_graph_recursion_not_confused_with_rate_limit():
+def test_graph_recursion_not_confused_with_rate_limit() -> None:
     r_code, _ = classify_stream_error(Exception("recursion limit reached"))
     q_code, _ = classify_stream_error(Exception("429 quota"))
     assert r_code != q_code

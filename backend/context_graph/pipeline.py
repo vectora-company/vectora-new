@@ -15,11 +15,16 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+
+from pydantic import TypeAdapter
+
+from backend.vtypes.context_graph import ExtractionResult, SemanticFragment
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
 _GRAPH_DIR = ".vectora/context-graph"
+_EXTRACTION = TypeAdapter(ExtractionResult)
 
 
 @dataclass
@@ -48,7 +53,7 @@ def _graph_out_dir(workspace_path: Path) -> Path:
 _AST_CHECKPOINT = "checkpoint_ast.json"
 
 
-def _write_ast_checkpoint(out_dir: Path, ast_results: dict[str, Any]) -> None:
+def _write_ast_checkpoint(out_dir: Path, ast_results: ExtractionResult) -> None:
     """Persiste o resultado do AST (passo determinístico e CPU-pesado).
 
     Permite que um build pausado por quota retome a partir da semântica, sem
@@ -62,14 +67,14 @@ def _write_ast_checkpoint(out_dir: Path, ast_results: dict[str, Any]) -> None:
         logger.warning("context_graph: falha ao gravar checkpoint AST", exc_info=True)
 
 
-def _load_ast_checkpoint(out_dir: Path) -> dict[str, Any] | None:
+def _load_ast_checkpoint(out_dir: Path) -> ExtractionResult | None:
     """Carrega o checkpoint do AST se existir e for válido, senão None."""
     path = out_dir / _AST_CHECKPOINT
     if not path.exists():
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
+        return _EXTRACTION.validate_python(data)
     except Exception:
         logger.warning("context_graph: checkpoint AST inválido", exc_info=True)
         return None
@@ -197,7 +202,11 @@ async def build_workspace_graph(
 
         # ── Passo 2: extração AST (CPU-bound → thread) ────────────────────────
         _progress(2, "Extraindo AST...")
-        ast_results: dict[str, Any] = {"nodes": [], "edges": [], "hyperedges": []}
+        ast_results: ExtractionResult = {
+            "nodes": [],
+            "edges": [],
+            "hyperedges": [],
+        }
         cached_ast = _load_ast_checkpoint(out_dir) if resume else None
         if cached_ast is not None:
             # Retoma de um build pausado: reusa o AST já computado, pula direto
@@ -224,7 +233,7 @@ async def build_workspace_graph(
 
         # ── Passo 3: extração semântica (async LLM) ───────────────────────────
         _progress(3, "Análise semântica...", _files_total)
-        semantic_results: dict[str, Any] = {
+        semantic_results: SemanticFragment = {
             "nodes": [],
             "edges": [],
             "hyperedges": [],
@@ -249,8 +258,8 @@ async def build_workspace_graph(
                         model_id=model,
                         deep_mode=False,
                     )
-                    result.input_tokens = semantic_results.get("input_tokens", 0)
-                    result.output_tokens = semantic_results.get("output_tokens", 0)
+                    result.input_tokens = semantic_results["input_tokens"]
+                    result.output_tokens = semantic_results["output_tokens"]
                 except QuotaExhaustedError:
                     # Quota total: o checkpoint AST já está gravado. Propaga para o
                     # handler marcar "paused" — o usuário retoma com resume=True.
@@ -308,9 +317,9 @@ async def build_workspace_graph(
         _progress(6, "Analisando padrões...", _files_total)
         from .analyze import god_nodes, suggest_questions, surprising_connections
 
-        god_node_list: list[dict] = []
-        surprise_list: list[dict] = []
-        questions: list[dict] = []
+        god_node_list: list[JsonObject] = []
+        surprise_list: list[JsonObject] = []
+        questions: list[JsonObject] = []
 
         try:
             god_node_list = await asyncio.to_thread(god_nodes, graph)
@@ -455,14 +464,14 @@ def _run_ast_extraction(
     files: list[str],
     workspace_path: Path,
     on_file: Callable[[int], None] | None = None,
-) -> dict[str, Any]:
+) -> ExtractionResult:
     """Roda extração AST síncrona (chamada via asyncio.to_thread)."""
     from .cache import load_cached, save_cached
     from .extract import _get_extractor, _safe_extract
 
-    nodes: list[dict] = []
-    edges: list[dict] = []
-    hyperedges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
+    hyperedges: list[JsonValue] = []
 
     for i, file_str in enumerate(files):
         path = Path(file_str)

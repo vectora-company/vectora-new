@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import NoReturn, cast
 
 import pytest
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ from backend.services.policy_compiler import PolicySnapshot
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
 from backend.tools.registry import TOOL_REGISTRY, ToolExtras, ToolSpec
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.ids import CapabilityToken, CorrelationId
 from backend.vtypes.message import VMessage, VMessageChunk
 
@@ -60,7 +61,7 @@ class _DummyArgs(BaseModel):
     text: str = ""
 
 
-async def _dummy_handler(args: dict[str, object], ctx: ToolContext) -> str:
+async def _dummy_handler(args: JsonObject, ctx: ToolContext) -> str:
     """Executa a operação  dummy handler."""
     return str(args.get("text", "ok"))
 
@@ -211,8 +212,10 @@ async def test_subagent_reuses_parent_policy_snapshot(
     """A tarefa filha não pode recompilar um snapshot diferente do pai."""
     seen: list[PolicySnapshot | None] = []
 
-    async def fake_run_conversation(*_args: object, **kwargs: object) -> object:
-        seen.append(cast("PolicySnapshot | None", kwargs.get("policy_snapshot")))
+    async def fake_run_conversation(
+        *_args: str, **kwargs: PolicySnapshot | None
+    ) -> SimpleNamespace:
+        seen.append(kwargs.get("policy_snapshot"))
         return SimpleNamespace(
             final_message=SimpleNamespace(text=lambda: "ok"),
             stopped_reason="stop",
@@ -325,7 +328,7 @@ async def test_subagent_liveness_marks_child_cancelled(
     """Watchdog cancela a conversa e persiste o estado observável."""
     started = asyncio.Event()
 
-    async def stalled(*_args, **_kwargs):
+    async def stalled(*_args, **_kwargs) -> None:
         started.set()
         await asyncio.Future()
 
@@ -374,7 +377,7 @@ async def test_subagent_hard_interrupt_marks_child_cancelled(
     """Interrupção autorizada cancela a task e persiste cancelled."""
     started = asyncio.Event()
 
-    async def stalled(*_args, **_kwargs):
+    async def stalled(*_args, **_kwargs) -> None:
         started.set()
         await asyncio.Future()
 
@@ -422,7 +425,7 @@ async def test_subagent_exception_marks_child_failed_and_propagates(
 ) -> None:
     """Falha inesperada do loop fica persistida e não é engolida."""
 
-    async def failing(*_args, **_kwargs):
+    async def failing(*_args, **_kwargs) -> NoReturn:
         raise RuntimeError("boom")
 
     monkeypatch.setattr("backend.engine.subagents.run_conversation", failing)

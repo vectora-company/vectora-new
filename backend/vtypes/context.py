@@ -16,11 +16,14 @@ sem transformação extra.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING
 
 from pydantic import TypeAdapter, ValidationError
 
 from backend.vtypes.permission import PermissionMode
+
+if TYPE_CHECKING:
+    from backend.vtypes.store import AgentStore
 
 _PERMISSION_MODE = TypeAdapter(PermissionMode)
 
@@ -77,12 +80,10 @@ class VectoraContext:
     antes de aceitar uma mutação feita por uma execução em background.
     """
 
-    store: Any = None
+    store: AgentStore | None = None
     """Store persistente injetado pelo motor de execução (mesma instância
-    de ``backend.services.agent_factory.get_store()``). ``Any`` porque o
-    shape depende do backend ativo (``InMemoryStore``, Postgres/Qdrant via
-    ``CompositeBackend``) — todo consumidor chama só ``aget``/``aput``/
-    ``asearch``/``adelete``, contrato comum a qualquer implementação.
+    de ``backend.services.agent_factory.get_store()``). O contrato comum às
+    implementações é ``AgentStore``.
     ``None`` só quando o caller não populou (ex.: contexto de teste sem
     store configurado)."""
 

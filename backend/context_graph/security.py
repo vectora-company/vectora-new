@@ -23,6 +23,9 @@ _MAX_TEXT_BYTES = 10_485_760  # 10 MB hard cap for HTML / text
 _MAX_GRAPH_FILE_BYTES = 512 * 1024 * 1024  # 512 MiB
 
 
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+
 def _max_graph_file_bytes() -> int:
     raw = os.environ.get("GRAPH_MAX_GRAPH_BYTES", "").strip()
     if not raw:
@@ -250,15 +253,15 @@ _METADATA_MAX_VALUE_LEN = 512
 _METADATA_MAX_LIST_ITEMS = 50
 
 
-def _sanitize_metadata_string(value: object) -> str:
-    text = _CONTROL_CHAR_RE.sub("", str(value))
+def _sanitize_metadata_string(value: str) -> str:
+    text = _CONTROL_CHAR_RE.sub("", value)
     text = html.escape(text, quote=True)
     if len(text) > _METADATA_MAX_VALUE_LEN:
         text = text[:_METADATA_MAX_VALUE_LEN]
     return text
 
 
-def _sanitize_metadata_value(value: object) -> object:
+def _sanitize_metadata_value(value: JsonValue | Path) -> JsonValue:
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -271,13 +274,13 @@ def _sanitize_metadata_value(value: object) -> object:
         ]
     if isinstance(value, (int, float)) or value is None:
         return value
-    return _sanitize_metadata_string(value)
+    return _sanitize_metadata_string(str(value))
 
 
-def sanitize_metadata(metadata: Mapping[str, Any] | None) -> dict[str, object]:
+def sanitize_metadata(metadata: Mapping[str, JsonValue | Path] | None) -> JsonObject:
     if metadata is None:
         return {}
-    result: dict[str, object] = {}
+    result: JsonObject = {}
     for key, value in metadata.items():
         clean_key = _sanitize_metadata_string(key)
         if not clean_key:

@@ -7,6 +7,8 @@ mapeamento status → exceção tipada em vez de repetir.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import httpx
 import pytest
 
@@ -56,7 +58,7 @@ class TestAuthEHeaders:
         assert capturado["http-referer"]
         assert capturado["x-title"]
 
-    def test_sem_api_key_levanta_antes_de_qualquer_request(self):
+    def test_sem_api_key_levanta_antes_de_qualquer_request(self) -> None:
         """Erro/borda: key vazia tem que falhar na construção. Deixar passar
         rende um 401 confuso lá na frente, longe da causa."""
         with pytest.raises(OpenRouterAuthError, match="OPENROUTER_API_KEY"):
@@ -97,7 +99,7 @@ class TestMapeamentoDeErro:
         ],
     )
     @pytest.mark.asyncio
-    async def test_status_vira_excecao_tipada(self, status, excecao):
+    async def test_status_vira_excecao_tipada(self, status, excecao) -> None:
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(status, json={"error": {"message": "falhou"}})
 
@@ -106,7 +108,9 @@ class TestMapeamentoDeErro:
                 await c.post_json("/chat/completions", {"model": "x"})
 
     @pytest.mark.asyncio
-    async def test_corpo_nao_json_vira_erro_tipado_e_nao_json_decode_error(self):
+    async def test_corpo_nao_json_vira_erro_tipado_e_nao_json_decode_error(
+        self,
+    ) -> None:
         """Erro/borda: proxy/CDN no meio devolve HTML numa falha. Sem este
         tratamento o `.json()` estoura com JSONDecodeError cru, que não diz
         nada ao usuário sobre o que aconteceu."""
@@ -119,7 +123,7 @@ class TestMapeamentoDeErro:
                 await c.post_json("/chat/completions", {"model": "x"})
 
     @pytest.mark.asyncio
-    async def test_mensagem_do_erro_do_provider_chega_na_excecao(self):
+    async def test_mensagem_do_erro_do_provider_chega_na_excecao(self) -> None:
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(
                 402, json={"error": {"message": "Insufficient credits"}}
@@ -132,7 +136,7 @@ class TestMapeamentoDeErro:
 
 class TestStreamNdjsonSse:
     @pytest.mark.asyncio
-    async def test_stream_sse_entrega_um_evento_por_data(self):
+    async def test_stream_sse_entrega_um_evento_por_data(self) -> None:
         corpo = (
             b'data: {"choices":[{"delta":{"content":"Oi"}}]}\n\n'
             b'data: {"choices":[{"delta":{"content":" mundo"}}]}\n\n'
@@ -153,7 +157,7 @@ class TestStreamNdjsonSse:
         ]
 
     @pytest.mark.asyncio
-    async def test_linha_malformada_no_meio_do_stream_nao_derruba_o_turno(self):
+    async def test_linha_malformada_no_meio_do_stream_nao_derruba_o_turno(self) -> None:
         """Erro/borda: um chunk corrompido não pode abortar a resposta inteira
         — o que já chegou é conteúdo válido que o usuário está lendo."""
         corpo = (
@@ -190,7 +194,7 @@ class TestStreamSseRetryDeConexao:
     duplicaria conteúdo."""
 
     @pytest.mark.asyncio
-    async def test_connecterror_transitorio_reteta_e_entrega_o_stream(self):
+    async def test_connecterror_transitorio_reteta_e_entrega_o_stream(self) -> None:
         tentativas = {"n": 0}
         corpo = b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'
 
@@ -214,7 +218,7 @@ class TestStreamSseRetryDeConexao:
         assert eventos[0]["choices"][0]["delta"]["content"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_erro_persistente_esgota_as_tentativas_e_propaga(self):
+    async def test_erro_persistente_esgota_as_tentativas_e_propaga(self) -> None:
         """Erro/borda: falha permanente (provider genuinamente fora do ar)
         não pode ficar retentando pra sempre — esgota o teto e propaga o
         `ConnectError` original, sem mascarar a causa real."""
@@ -235,7 +239,7 @@ class TestStreamSseRetryDeConexao:
         assert 1 < tentativas["n"] <= 4
 
     @pytest.mark.asyncio
-    async def test_erro_apos_stream_ja_comecado_nao_reteta(self):
+    async def test_erro_apos_stream_ja_comecado_nao_reteta(self) -> None:
         """Erro/borda: um chunk já entregue ao chamador não pode ser
         retentado — reconectar reenviaria a resposta inteira, duplicando
         conteúdo que o usuário já está lendo."""
@@ -271,7 +275,7 @@ class _StreamQueQuebraNoMeio(httpx.AsyncByteStream):
     meio do stream (diferente de falhar ao conectar, que é síncrono e
     acontece antes de qualquer `yield`)."""
 
-    async def __aiter__(self):
+    async def __aiter__(self) -> AsyncIterator[bytes]:
         yield b'data: {"choices":[{"delta":{"content":"parcial"}}]}\n\n'
         raise httpx.ReadError("connection reset")
 

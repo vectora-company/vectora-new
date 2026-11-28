@@ -19,8 +19,8 @@ from backend.vtypes.message import MessageRole, text_message
 
 
 def test_export_run_cli_preserves_provenance_and_rejects_invalid_recording(
-    tmp_path, capsys
-):
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     from backend.persistence.native.agent_run import AgentRun
 
     interaction = CassetteInteraction(
@@ -66,7 +66,7 @@ def test_export_run_cli_preserves_provenance_and_rejects_invalid_recording(
 
 
 @pytest.mark.asyncio
-async def test_fixture_replay_preserves_tool_history_without_external_calls():
+async def test_fixture_replay_preserves_tool_history_without_external_calls() -> None:
     from backend.evaluation.verification import replay_cassette
 
     cassette = Cassette(
@@ -111,7 +111,9 @@ async def test_fixture_replay_preserves_tool_history_without_external_calls():
 
 
 @pytest.mark.parametrize("missing_side", ["baseline", "candidate"])
-def test_comparison_rejects_missing_decision_evidence_on_one_side(missing_side):
+def test_comparison_rejects_missing_decision_evidence_on_one_side(
+    missing_side: str,
+) -> None:
     recorded = Cassette(
         cassette_id="recorded",
         interactions=[
@@ -136,7 +138,7 @@ def test_comparison_rejects_missing_decision_evidence_on_one_side(missing_side):
     assert report.details[0]["decision_evidence_match"] is False
 
 
-def test_cassette_save_and_load_with_redaction(tmp_path: Path):
+def test_cassette_save_and_load_with_redaction(tmp_path: Path) -> None:
     """Verifica o comportamento de cassette save and load with redaction."""
     target = tmp_path / "test_cassette.json"
     cassette = Cassette(
@@ -177,7 +179,7 @@ def test_cassette_save_and_load_with_redaction(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_replay_chat_client():
+async def test_replay_chat_client() -> None:
     """Verifica o comportamento de replay chat client."""
     cassette = Cassette(
         cassette_id="cas-replay",
@@ -252,7 +254,7 @@ async def test_replay_chat_client_accepts_native_usage_keys() -> None:
     assert usage["total_tokens"] == 15
 
 
-def test_compare_cassettes():
+def test_compare_cassettes() -> None:
     """Verifica o comportamento de compare cassettes."""
     b_cassette = Cassette(
         cassette_id="baseline",
@@ -308,7 +310,7 @@ def test_compare_cassettes():
     }
 
 
-def test_compare_cassettes_unequal_lengths():
+def test_compare_cassettes_unequal_lengths() -> None:
     """Verifica o comportamento de compare cassettes unequal lengths."""
     b_cassette = Cassette(
         cassette_id="base",
@@ -564,7 +566,7 @@ def test_cassette_load_keeps_legacy_decision_string_compatible(
     assert interaction.systemone_decision_evidence is None
 
 
-def test_total_tokens_helper():
+def test_total_tokens_helper() -> None:
     """Verifica o comportamento de total tokens helper."""
     assert _total_tokens({}) == 0
     assert _total_tokens({"total": 120}) == 120
@@ -684,7 +686,7 @@ def test_cli_eval_missing_suite(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_empty_cassette_is_unsupported_not_success(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
-):
+) -> None:
     source = tmp_path / "empty-cassette.json"
     Cassette(
         cassette_id="empty",
@@ -767,7 +769,9 @@ def test_fixture_replay_reports_failed_case_and_continues_later_cases() -> None:
     ],
 )
 def test_fixture_replay_requires_a_complete_human_approval_audit(
-    approval_events, expected_status: str, expected_reason: str | None
+    approval_events: list[dict[str, str]],
+    expected_status: str,
+    expected_reason: str | None,
 ) -> None:
     from backend.evaluation.verification import replay_cassette
 
@@ -1017,7 +1021,9 @@ def test_cli_compare_reports_incomparable_cassettes_without_traceback(
 
 
 @pytest.mark.asyncio
-async def test_recorded_run_export_survives_store_restart_and_session_purge(tmp_path):
+async def test_recorded_run_export_survives_store_restart_and_session_purge(
+    tmp_path: Path,
+) -> None:
     from backend.evaluation.recording import cassette_from_run, record_interaction
     from backend.persistence.native.agent_run import AgentRun
     from backend.persistence.native.session_store import SessionStore

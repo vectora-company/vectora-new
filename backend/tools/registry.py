@@ -16,14 +16,20 @@ import inspect
 import json
 import logging
 import re
+import types
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from types import UnionType
-from typing import Any, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, get_args, get_origin, get_type_hints
 
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel, Field
+from pydantic.fields import FieldInfo
 
 from backend.tools.context import ToolContext
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject, JsonValue
+    from backend.vtypes.tools import Annotation, OpenAiToolSchema
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +64,7 @@ class ToolSpec:
     needs_ctx: bool
     ctx_param_name: str = _CTX_PARAM_NAME
 
-    def openai_schema(self) -> dict[str, Any]:
+    def openai_schema(self) -> OpenAiToolSchema:
         """JSON Schema no shape ``{"type":"function","function":{...}}`` —
         mesmo formato que os 5 chat clients (``backend/llm/*/chat.py``)
         já consomem hoje via ``convert_to_openai_tool``."""
@@ -73,7 +79,7 @@ class ToolSpec:
             },
         }
 
-    async def ainvoke(self, args: dict[str, Any], ctx: ToolContext) -> str:
+    async def ainvoke(self, args: JsonObject, ctx: ToolContext) -> str:
         """Chama o handler validando ``args`` contra ``args_model`` primeiro
         — erro de validação vira string de erro tipada, nunca exceção crua
         (CLAUDE.md regra 11)."""
@@ -222,7 +228,7 @@ def _parse_arg_descriptions(docstring: str | None) -> dict[str, str]:
 _NAME_KEYED_MAPS = ("properties", "$defs")
 
 
-def _strip_titles(node: Any) -> None:
+def _strip_titles(node: JsonValue) -> None:
     """Remove ``title`` recursivamente de todo NÓ de schema — Pydantic emite
     ``title`` por campo por padrão, mas ``convert_to_openai_tool`` (o
     gerador legado que este módulo substitui) nunca emitia; providers como
@@ -275,7 +281,7 @@ def vtool(
         hints = get_type_hints(fn)
         arg_descriptions = _parse_arg_descriptions(fn.__doc__)
 
-        fields: dict[str, Any] = {}
+        fields: dict[str, tuple[Annotation, FieldInfo]] = {}
         needs_ctx = False
         ctx_param_name: str | None = None
         for name, param in sig.parameters.items():
@@ -285,12 +291,15 @@ def vtool(
                 continue
             annotation = hints.get(name, Any)
             if param.default is inspect.Parameter.empty:
-                fields[name] = (annotation, ...)
-            else:
+                fields[name] = (annotation, Field())
+            elif isinstance(param.default, FieldInfo):
+                # Parâmetro declarado com ``Field(...)``: restrições preservadas.
                 fields[name] = (annotation, param.default)
+            else:
+                fields[name] = (annotation, Field(default=param.default))
 
         fn_name: str = fn.__name__  # ty: ignore[missing-attribute]
-        args_model = create_model(f"{fn_name}Args", **fields)
+        args_model = build_args_model(f"{fn_name}Args", fields)
         if arg_descriptions:
             for field_name, description in arg_descriptions.items():
                 if field_name in args_model.model_fields:
@@ -312,7 +321,30 @@ def vtool(
     return decorator
 
 
-def _is_tool_context_annotation(annotation: Any) -> bool:
+def build_args_model(
+    name: str, fields: dict[str, tuple[Annotation, FieldInfo]]
+) -> type[BaseModel]:
+    """Modelo Pydantic dos argumentos, com campos conhecidos só em execução.
+
+    As sobrecargas de ``pydantic.create_model`` não aceitam um mapeamento
+    desempacotado, então a classe é montada com o namespace equivalente.
+    """
+
+    def populate(namespace: dict[str, str | FieldInfo | dict[str, Annotation]]) -> None:
+        namespace["__module__"] = __name__
+        namespace["__annotations__"] = {
+            field_name: annotation for field_name, (annotation, _) in fields.items()
+        }
+        namespace.update({field_name: info for field_name, (_, info) in fields.items()})
+
+    model = types.new_class(name, (BaseModel,), exec_body=populate)
+    if not issubclass(model, BaseModel):
+        msg = f"modelo de argumentos inválido: {name}"
+        raise TypeError(msg)
+    return model
+
+
+def _is_tool_context_annotation(annotation: Annotation | None) -> bool:
     """Reconhece ``ToolContext`` também dentro de uniões opcionais.
 
     Algumas tools de integração podem ser chamadas diretamente fora do loop

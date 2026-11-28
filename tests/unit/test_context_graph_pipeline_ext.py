@@ -21,7 +21,7 @@ def _make_registry(cwd: Path) -> MagicMock:
 
 
 class TestGraphOutDir:
-    def test_returns_expected_path(self, tmp_path: Path):
+    def test_returns_expected_path(self, tmp_path: Path) -> None:
         from backend.context_graph.pipeline import _graph_out_dir
 
         result = _graph_out_dir(tmp_path)
@@ -29,7 +29,7 @@ class TestGraphOutDir:
 
 
 class TestGraphResult:
-    def test_default_values(self, tmp_path: Path):
+    def test_default_values(self, tmp_path: Path) -> None:
         from backend.context_graph.pipeline import GraphResult
 
         result = GraphResult(
@@ -44,7 +44,7 @@ class TestGraphResult:
         assert result.error is None
         assert result.god_nodes == []
 
-    def test_with_error(self, tmp_path: Path):
+    def test_with_error(self, tmp_path: Path) -> None:
         from backend.context_graph.pipeline import GraphResult
 
         result = GraphResult(
@@ -60,7 +60,7 @@ class TestGraphResult:
 
 class TestBuildWorkspaceGraphWorkspaceNotFound:
     @pytest.mark.asyncio
-    async def test_missing_workspace_returns_error(self):
+    async def test_missing_workspace_returns_error(self) -> None:
         from backend.context_graph.pipeline import build_workspace_graph
 
         registry = MagicMock()
@@ -73,12 +73,12 @@ class TestBuildWorkspaceGraphWorkspaceNotFound:
 
 class TestBuildWorkspaceGraphNoFiles:
     @pytest.mark.asyncio
-    async def test_no_files_returns_empty_result(self, tmp_path: Path):
+    async def test_no_files_returns_empty_result(self, tmp_path: Path) -> None:
         from backend.context_graph.pipeline import build_workspace_graph
 
         registry = _make_registry(tmp_path)
 
-        def _fake_detect(workspace_path):
+        def _fake_detect(workspace_path: Path):
             return {"files": {}}
 
         with (
@@ -92,7 +92,7 @@ class TestBuildWorkspaceGraphNoFiles:
 
 
 class TestRunAstExtraction:
-    def test_uses_cache_when_available(self, tmp_path: Path):
+    def test_uses_cache_when_available(self, tmp_path: Path) -> None:
         from backend.context_graph.pipeline import _run_ast_extraction
 
         f = tmp_path / "cached.py"
@@ -104,7 +104,7 @@ class TestRunAstExtraction:
 
         assert any(n["id"] == "from_cache" for n in result["nodes"])
 
-    def test_no_extractor_skips_file(self, tmp_path: Path):
+    def test_no_extractor_skips_file(self, tmp_path: Path) -> None:
         from backend.context_graph.pipeline import _run_ast_extraction
 
         f = tmp_path / "binary.abc123def"
@@ -113,14 +113,14 @@ class TestRunAstExtraction:
         result = _run_ast_extraction([str(f)], tmp_path)
         assert result["nodes"] == []
 
-    def test_empty_file_list(self, tmp_path: Path):
+    def test_empty_file_list(self, tmp_path: Path) -> None:
         from backend.context_graph.pipeline import _run_ast_extraction
 
         result = _run_ast_extraction([], tmp_path)
         assert result["nodes"] == []
         assert result["edges"] == []
 
-    def test_real_python_file_extracted(self, tmp_path: Path):
+    def test_real_python_file_extracted(self, tmp_path: Path) -> None:
         from backend.context_graph.pipeline import _run_ast_extraction
 
         f = tmp_path / "hello.py"

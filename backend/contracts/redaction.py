@@ -7,7 +7,6 @@ para os artefatos versionados em contracts/.
 from __future__ import annotations
 
 import re
-from typing import Any
 
 # Padrões conhecidos de segredos
 _SECRET_PATTERNS = [
@@ -59,6 +58,9 @@ _SENSITIVE_KEYS = {
 }
 
 
+from backend.vtypes.contracts import JsonValue
+
+
 def _is_sensitive_key(key: str) -> bool:
     """Executa a operação is sensitive key."""
     normalized = re.sub(r"[^a-z0-9]", "", key.lower())
@@ -93,11 +95,11 @@ def redact_string(value: str) -> str:
 
 
 def redact_payload(
-    obj: Any,
+    obj: JsonValue,
     *,
     _schema_context: bool = False,
     _preserve_map_keys: bool = False,
-) -> Any:
+) -> JsonValue:
     """Aplica redação recursivamente em dicionários, listas e primitivos.
 
     Preserva estruturas de JSON Schema contidas sob `properties` para não

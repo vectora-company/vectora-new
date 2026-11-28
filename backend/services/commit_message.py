@@ -14,9 +14,12 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from git import Repo
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +89,7 @@ def _clean_paths(paths: Iterable[str] | None) -> list[str]:
 
 
 def _numstat(
-    repo: Any, base: list[str], pathspec: list[str]
+    repo: Repo, base: list[str], pathspec: list[str]
 ) -> dict[str, tuple[int, int]]:
     stats: dict[str, tuple[int, int]] = {}
     try:
@@ -105,7 +108,7 @@ def _numstat(
     return stats
 
 
-def _status_map(repo: Any, base: list[str], pathspec: list[str]) -> dict[str, str]:
+def _status_map(repo: Repo, base: list[str], pathspec: list[str]) -> dict[str, str]:
     statuses: dict[str, str] = {}
     try:
         out = repo.git.diff(*base, "--name-status", "--", *pathspec)
@@ -137,7 +140,7 @@ def _split_diff_by_file(diff: str) -> dict[str, str]:
 
 
 def collect_change_context(
-    repo: Any, paths: Iterable[str] | None = None
+    repo: Repo, paths: Iterable[str] | None = None
 ) -> ChangeContext:
     """Junta os arquivos alterados (staged, unstaged e não rastreados) e seus diffs."""
     pathspec = _clean_paths(paths)
@@ -172,7 +175,9 @@ def collect_change_context(
             continue
         preview = ""
         try:
-            with (Path(repo.working_tree_dir) / path).open(encoding="utf-8") as handle:
+            with (Path(repo.working_tree_dir or "") / path).open(
+                encoding="utf-8"
+            ) as handle:
                 lines = [next(handle, "") for _ in range(_UNTRACKED_PREVIEW_LINES)]
             preview = "".join(lines)
         except (OSError, UnicodeDecodeError):
@@ -190,7 +195,7 @@ def collect_change_context(
     if has_head:
         try:
             recent = [
-                c.message.strip().splitlines()[0]
+                str(c.message).strip().splitlines()[0]
                 for c in repo.iter_commits(max_count=_RECENT_SUBJECTS)
                 if c.message.strip()
             ]

@@ -10,12 +10,15 @@ as tools da SOUL pedida quando uma task tem ``trigger_config.subagent_type``
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.agents.souls import Soul
 
 logger = logging.getLogger(__name__)
 
 
-def _spec_for(subagent_type: str) -> Any:
+def _spec_for(subagent_type: str) -> Soul:
     from backend.agents.souls import SOUL_CATALOG
 
     soul = SOUL_CATALOG.get(subagent_type)

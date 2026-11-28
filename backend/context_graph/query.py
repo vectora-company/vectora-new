@@ -11,12 +11,13 @@ import json
 import logging
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import networkx as nx
 from networkx.readwrite import json_graph
 
 from backend.vtypes.context_graph import GraphDocument, GraphEdge, GraphNode
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ def load_graph_nx(graph_file: Path) -> nx.DiGraph:
     return g
 
 
-def _nx_from_data(data: dict[str, Any]) -> nx.DiGraph:
+def _nx_from_data(data: GraphDocument | Mapping[str, JsonValue]) -> nx.DiGraph:
     raw = {**data, "directed": True}
     if "links" not in raw and "edges" in raw:
         raw = dict(raw, links=raw["edges"])
@@ -52,8 +53,14 @@ def _nx_from_data(data: dict[str, Any]) -> nx.DiGraph:
     return g
 
 
+def _objects(value: JsonValue) -> list[JsonObject]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
 def query_nodes(
-    data: GraphDocument | Mapping[str, Any],
+    data: GraphDocument | Mapping[str, JsonValue],
     question: str,
     top_k: int = 10,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
@@ -97,7 +104,7 @@ def query_nodes(
 
 
 def explain_node(
-    data: GraphDocument | Mapping[str, Any],
+    data: GraphDocument | Mapping[str, JsonValue],
     node_id: str,
     depth: int = 1,
 ) -> tuple[GraphNode | None, list[GraphNode], list[GraphEdge]]:
@@ -147,18 +154,18 @@ def explain_node(
 
 
 def path_between(
-    data: dict[str, Any],
+    data: Mapping[str, JsonValue],
     source: str,
     target: str,
-) -> tuple[list[dict], list[dict]]:
+) -> tuple[list[JsonObject], list[JsonObject]]:
     """Caminho mais curto entre dois nós. Aceita IDs ou labels via resolve_seed.
 
     Retorna (path_nodes, path_edges). Retorna ([], []) se caminho não existe.
     """
     from .affected import resolve_seed
 
-    nodes: list[dict] = data.get("nodes", [])
-    edges: list[dict] = data.get("edges", [])
+    nodes = _objects(data.get("nodes"))
+    edges = _objects(data.get("edges"))
 
     g = _nx_from_data(data)
 
@@ -185,7 +192,7 @@ def path_between(
 
 
 def affected_summary(
-    data: dict[str, Any],
+    data: Mapping[str, JsonValue],
     node_query: str,
     depth: int = 2,
 ) -> str:

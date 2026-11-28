@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from backend.storage.vectorstore.base import VectorHit
 from backend.tools.context import ToolContext
+from backend.vtypes import Document
+from backend.vtypes.rerank import RagHit
 
 
 class TestVectorSearch:
     @pytest.mark.asyncio
-    async def test_vector_search_full_path_no_rerank(self):
+    async def test_vector_search_full_path_no_rerank(self) -> None:
         """vector_search com VectorStoreBackend mockado (LanceDB ou Qdrant,
         indiferente pro tool — ele só fala com o Protocol) + Cohere embeddings."""
         from unittest.mock import AsyncMock, MagicMock, patch
@@ -64,7 +68,7 @@ class TestVectorSearch:
         assert data["retrieval"]["backend"] == "AsyncMock"
 
     @pytest.mark.asyncio
-    async def test_vector_search_table_not_found(self):
+    async def test_vector_search_table_not_found(self) -> None:
         """Coleção ausente: backend.search() devolve [] (contrato do
         Protocol), vector_search reporta no_results."""
         from unittest.mock import AsyncMock, MagicMock, patch
@@ -97,7 +101,7 @@ class TestVectorSearch:
         assert data["status"] == "no_results"
 
     @pytest.mark.asyncio
-    async def test_missing_dependencies_returns_message(self):
+    async def test_missing_dependencies_returns_message(self) -> None:
         """Verifica o comportamento de missing dependencies returns message."""
         from backend.tools.rag import vector_search
 
@@ -109,7 +113,7 @@ class TestVectorSearch:
         assert "missing" in result.lower() or isinstance(result, str)
 
     @pytest.mark.asyncio
-    async def test_missing_api_key_returns_error(self):
+    async def test_missing_api_key_returns_error(self) -> None:
         """Verifica o comportamento de missing api key returns error."""
         from backend.tools.rag import vector_search
 
@@ -126,7 +130,7 @@ class TestVectorSearch:
         assert data.get("status") in ("failed", "error")
 
     @pytest.mark.asyncio
-    async def test_rerank_preserva_id_colecao_e_score_de_retrieval(self):
+    async def test_rerank_preserva_id_colecao_e_score_de_retrieval(self) -> None:
         """Verifica o comportamento de rerank preserva id colecao e score de retrieval."""
         from backend.storage.vectorstore.base import VectorHit
         from backend.tools.rag import vector_search
@@ -140,7 +144,9 @@ class TestVectorSearch:
         )
 
         class _ReverseReranker:
-            async def acompress_documents(self, documents, query):
+            async def acompress_documents(
+                self, documents: list[Document], query: str
+            ) -> list[Document]:
                 """Executa a operação acompress documents."""
                 return list(reversed(documents))
 
@@ -173,7 +179,7 @@ class TestVectorSearch:
         assert data["retrieval"]["reranker_status"] == "applied"
 
     @pytest.mark.asyncio
-    async def test_no_results_emite_telemetria_com_contagem_zero(self):
+    async def test_no_results_emite_telemetria_com_contagem_zero(self) -> None:
         """Verifica o comportamento de no results emite telemetria com contagem zero."""
         from backend.tools.rag import vector_search
 
@@ -218,15 +224,15 @@ class TestReciprocalRankFusion:
     ranking textual (relevância) usando só a ORDEM de cada lista — não os
     valores absolutos, que têm escalas incompatíveis entre os dois métodos."""
 
-    def test_documento_presente_nos_dois_rankings_sobe_de_posicao(self):
+    def test_documento_presente_nos_dois_rankings_sobe_de_posicao(self) -> None:
         """Verifica o comportamento de documento presente nos dois rankings sobe de posicao."""
         from backend.tools.rag import _reciprocal_rank_fusion
 
-        vector_results = [
+        vector_results: list[RagHit] = [
             {"id": "a", "collection": "c", "score": 0.1, "content": "", "metadata": {}},
             {"id": "b", "collection": "c", "score": 0.2, "content": "", "metadata": {}},
         ]
-        text_results = [
+        text_results: list[RagHit] = [
             {"id": "b", "collection": "c", "score": 5.0, "content": "", "metadata": {}},
         ]
 
@@ -236,30 +242,30 @@ class TestReciprocalRankFusion:
         # ranks recíprocos supera "a" (só presente no vetorial, em 1º).
         assert fused[0]["id"] == "b"
 
-    def test_documento_presente_so_em_uma_lista_ainda_aparece(self):
+    def test_documento_presente_so_em_uma_lista_ainda_aparece(self) -> None:
         """Verifica o comportamento de documento presente so em uma lista ainda aparece."""
         from backend.tools.rag import _reciprocal_rank_fusion
 
-        vector_results = [
+        vector_results: list[RagHit] = [
             {"id": "a", "collection": "c", "score": 0.1, "content": "", "metadata": {}},
         ]
-        text_results: list[dict] = []
+        text_results: list[RagHit] = []
 
         fused = _reciprocal_rank_fusion(vector_results, text_results, limit=5)
 
         assert [r["id"] for r in fused] == ["a"]
 
-    def test_ambas_listas_vazias_retorna_lista_vazia(self):
+    def test_ambas_listas_vazias_retorna_lista_vazia(self) -> None:
         """Verifica o comportamento de ambas listas vazias retorna lista vazia."""
         from backend.tools.rag import _reciprocal_rank_fusion
 
         assert _reciprocal_rank_fusion([], [], limit=5) == []
 
-    def test_respeita_o_limit(self):
+    def test_respeita_o_limit(self) -> None:
         """Verifica o comportamento de respeita o limit."""
         from backend.tools.rag import _reciprocal_rank_fusion
 
-        vector_results = [
+        vector_results: list[RagHit] = [
             {
                 "id": str(i),
                 "collection": "c",
@@ -276,12 +282,20 @@ class TestReciprocalRankFusion:
 
 
 class TestRetrievalProvenance:
-    def test_attach_preserva_resultado_e_registra_rank(self):
+    def test_attach_preserva_resultado_e_registra_rank(self) -> None:
         """Verifica o comportamento de attach preserva resultado e registra rank."""
         from backend.tools.rag import _attach_retrieval_provenance
 
         result = _attach_retrieval_provenance(
-            [{"id": "a", "collection": "docs", "score": 0.2}],
+            [
+                {
+                    "id": "a",
+                    "collection": "docs",
+                    "score": 0.2,
+                    "content": "",
+                    "metadata": {},
+                }
+            ],
             backend_name="QdrantBackend",
             retrieval_method="hybrid_rrf",
         )
@@ -307,12 +321,14 @@ class TestRetrievalProvenance:
                     "collection": "qdrant_docs",
                     "score": 0.8,
                     "content": "b",
+                    "metadata": {},
                 },
                 {
                     "id": "a",
                     "collection": "articles",
                     "score": 0.2,
                     "content": "a",
+                    "metadata": {},
                 },
             ],
             backend_name="QdrantBackend",
@@ -330,7 +346,7 @@ class TestVectorSearchHybrid:
     backend além de `search`."""
 
     @pytest.mark.asyncio
-    async def test_hybrid_enabled_chama_search_text_e_funde_resultados(self):
+    async def test_hybrid_enabled_chama_search_text_e_funde_resultados(self) -> None:
         """Verifica o comportamento de hybrid enabled chama search text e funde resultados."""
         from backend.storage.vectorstore.base import VectorHit
         from backend.tools.rag import vector_search
@@ -388,7 +404,7 @@ class TestVectorSearchHybrid:
         assert "c2" in ids
 
     @pytest.mark.asyncio
-    async def test_hybrid_disabled_nao_chama_search_text(self):
+    async def test_hybrid_disabled_nao_chama_search_text(self) -> None:
         """Verifica o comportamento de hybrid disabled nao chama search text."""
         from backend.storage.vectorstore.base import VectorHit
         from backend.tools.rag import vector_search
@@ -438,7 +454,7 @@ class TestVectorSearchBucketFanout:
     workspace (backend/services/rag_buckets.py) — não a tabela `articles`
     inteira sempre."""
 
-    def _mock_backend(self, tables: dict[str, list[dict]]):
+    def _mock_backend(self, tables: dict[str, list[dict]]) -> AsyncMock:
         """`tables` mapeia nome de coleção -> lista de linhas (dicts com
         id/_distance/text/metadata) que essa coleção "contém". Devolve um
         `VectorStoreBackend` fake cujo `.search()` só sabe responder pelas
@@ -446,7 +462,9 @@ class TestVectorSearchBucketFanout:
         LanceDBBackend/QdrantBackend implementam de verdade."""
         from backend.storage.vectorstore.base import VectorHit
 
-        async def _search(collection: str, query_vector, limit: int):
+        async def _search(
+            collection: str, query_vector: MagicMock, limit: int
+        ) -> list[VectorHit]:
             """Executa a operação  search."""
             if collection not in tables:
                 return []
@@ -466,7 +484,9 @@ class TestVectorSearchBucketFanout:
         return mock_backend
 
     @pytest.mark.asyncio
-    async def test_searches_only_active_buckets_of_workspace(self, tmp_path):
+    async def test_searches_only_active_buckets_of_workspace(
+        self, tmp_path: Path
+    ) -> None:
         """Verifica o comportamento de searches only active buckets of workspace."""
         from backend.services import rag_buckets
         from backend.tools.rag import vector_search
@@ -516,8 +536,8 @@ class TestVectorSearchBucketFanout:
 
     @pytest.mark.asyncio
     async def test_no_active_buckets_falls_back_to_legacy_articles_table(
-        self, tmp_path
-    ):
+        self, tmp_path: Path
+    ) -> None:
         """Verifica o comportamento de no active buckets falls back to legacy articles table."""
         from backend.tools.rag import vector_search
         from backend.workspace.runtime_settings import RuntimeSettings
@@ -558,7 +578,9 @@ class TestVectorSearchBucketFanout:
         assert [r["content"] for r in data["results"]] == ["dado legado"]
 
     @pytest.mark.asyncio
-    async def test_explicit_collection_overrides_active_buckets(self, tmp_path):
+    async def test_explicit_collection_overrides_active_buckets(
+        self, tmp_path: Path
+    ) -> None:
         """Passar `collection` manualmente ignora os buckets ativos —
         comportamento avançado preservado (regressão)."""
         from backend.services import rag_buckets
@@ -609,7 +631,7 @@ class TestVectorSearchBucketFanout:
 
 class TestEmbedding:
     @pytest.mark.asyncio
-    async def test_queue_not_enabled_returns_error(self):
+    async def test_queue_not_enabled_returns_error(self) -> None:
         """Verifica o comportamento de queue not enabled returns error."""
         from backend.tools.rag import embedding
 
@@ -620,7 +642,7 @@ class TestEmbedding:
         assert data["status"] == "error"
 
     @pytest.mark.asyncio
-    async def test_enqueue_success_returns_fire_and_forget(self):
+    async def test_enqueue_success_returns_fire_and_forget(self) -> None:
         """Verifica o comportamento de enqueue success returns fire and forget."""
         from backend.tools.rag import embedding
 
@@ -642,7 +664,7 @@ class TestEmbedding:
         assert data["collection"] == "articles"
 
     @pytest.mark.asyncio
-    async def test_enqueue_exception_returns_error(self):
+    async def test_enqueue_exception_returns_error(self) -> None:
         """Verifica o comportamento de enqueue exception returns error."""
         from backend.tools.rag import embedding
 
@@ -662,7 +684,9 @@ class TestEmbedding:
 
 class TestIngestDocs:
     @pytest.mark.asyncio
-    async def test_sensitive_files_are_filtered_before_ingestion(self, tmp_path):
+    async def test_sensitive_files_are_filtered_before_ingestion(
+        self, tmp_path: Path
+    ) -> None:
         from backend.tools.rag import ingest_docs
 
         secret = tmp_path / ".env"
@@ -686,7 +710,7 @@ class TestIngestDocs:
         assert data["skipped_ignored"] >= 1
 
     @pytest.mark.asyncio
-    async def test_unsafe_path_denied(self):
+    async def test_unsafe_path_denied(self) -> None:
         """Verifica o comportamento de unsafe path denied."""
         from backend.tools.rag import ingest_docs
 
@@ -702,7 +726,7 @@ class TestIngestDocs:
         assert "denied" in result.lower() or "Access" in result
 
     @pytest.mark.asyncio
-    async def test_not_a_directory_returns_error(self, tmp_path):
+    async def test_not_a_directory_returns_error(self, tmp_path: Path) -> None:
         """Verifica o comportamento de not a directory returns error."""
         from backend.tools.rag import ingest_docs
 
@@ -720,7 +744,7 @@ class TestIngestDocs:
         assert "Not a directory" in result
 
     @pytest.mark.asyncio
-    async def test_no_files_found_returns_no_files(self, tmp_path):
+    async def test_no_files_found_returns_no_files(self, tmp_path: Path) -> None:
         """Verifica o comportamento de no files found returns no files."""
         from backend.tools.rag import ingest_docs
 
@@ -740,7 +764,7 @@ class TestIngestDocs:
         assert data["status"] == "no_files"
 
     @pytest.mark.asyncio
-    async def test_chunk_fail_counts_as_failure(self, tmp_path):
+    async def test_chunk_fail_counts_as_failure(self, tmp_path: Path) -> None:
         """Verifica o comportamento de chunk fail counts as failure."""
         from backend.tools.rag import ingest_docs
 
@@ -770,7 +794,7 @@ class TestIngestDocs:
         assert data["failed"] >= 1
 
     @pytest.mark.asyncio
-    async def test_gitignore_skip_counts_as_ignored(self, tmp_path):
+    async def test_gitignore_skip_counts_as_ignored(self, tmp_path: Path) -> None:
         """Covers is_ignored=True branch (lines 283-288)."""
         from backend.tools.rag import ingest_docs
 
@@ -796,7 +820,7 @@ class TestIngestDocs:
         assert data["skipped_ignored"] >= 1
 
     @pytest.mark.asyncio
-    async def test_always_skip_dirs_counted_in_ignored(self, tmp_path):
+    async def test_always_skip_dirs_counted_in_ignored(self, tmp_path: Path) -> None:
         """Dirs em ALWAYS_SKIP_DIRS contam em skipped_ignored (não silenciados).
 
         Com walk_files, __pycache__ é PODADO durante o os.walk (a subárvore
@@ -844,7 +868,7 @@ class TestIngestDocs:
         )
 
     @pytest.mark.asyncio
-    async def test_file_read_error_counts_as_failure(self, tmp_path):
+    async def test_file_read_error_counts_as_failure(self, tmp_path: Path) -> None:
         """Covers file read exception path (lines 310-316)."""
         from unittest.mock import mock_open, patch
 
@@ -876,7 +900,9 @@ class TestIngestDocs:
         assert data["failed"] >= 1
 
     @pytest.mark.asyncio
-    async def test_embedding_non_fire_and_forget_counts_as_failure(self, tmp_path):
+    async def test_embedding_non_fire_and_forget_counts_as_failure(
+        self, tmp_path: Path
+    ) -> None:
         """Covers else branch when embedding returns unexpected status (line 340)."""
         from backend.tools.rag import ingest_docs
 
@@ -909,7 +935,7 @@ class TestIngestDocs:
         assert data["failed"] >= 1
 
     @pytest.mark.asyncio
-    async def test_ingest_chama_embedding_diretamente(self, tmp_path):
+    async def test_ingest_chama_embedding_diretamente(self, tmp_path: Path) -> None:
         """`ingest_docs` chama `embedding` como função async direta — sem
         passar por adapter compatível com o motor de execução antigo."""
         from backend.tools.rag import ingest_docs
@@ -943,8 +969,8 @@ class TestIngestDocs:
 
     @pytest.mark.asyncio
     async def test_pdf_docx_xlsx_reais_extraem_texto_em_vez_de_binario_cru(
-        self, tmp_path
-    ):
+        self, tmp_path: Path
+    ) -> None:
         """PDF/DOCX/XLSX passavam por `read_text(errors="ignore")` puro —
         um arquivo binário real virava lixo decodificado, indexado no RAG
         sem nenhum valor. Assets reais de `tests/assets/` (não fixtures
@@ -967,7 +993,9 @@ class TestIngestDocs:
 
         capturado: list[str] = []
 
-        async def _fake_embedding(*, text, collection, metadata):
+        async def _fake_embedding(
+            *, text: str, collection: str, metadata: dict[str, str]
+        ) -> str:
             """Executa a operação  fake embedding."""
             capturado.append(text)
             return json.dumps({"status": "fire_and_forget", "queue_id": "q1"})
@@ -998,7 +1026,9 @@ class TestIngestDocs:
         # PDF corrompido: zero chunks pra ele, mas não quebra os demais.
         assert "not a real pdf" not in todo_texto
 
-    async def test_path_traversal_e_rejeitado_de_verdade(self, tmp_path, monkeypatch):
+    async def test_path_traversal_e_rejeitado_de_verdade(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """`directory_path` vem do modelo (tool call) — precisa da mesma
         defesa forte que `file_read`/`file_write` já usam
         (`resolve_within_workspace`), não a checagem leve de
@@ -1035,8 +1065,8 @@ class TestIngestDocs:
 
     @pytest.mark.asyncio
     async def test_path_dentro_do_workspace_continua_funcionando(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Regressão: path legítimo (relativo, dentro do workspace) segue
         indexando normalmente com a defesa forte — não é só o caminho de
         rejeição que muda."""
@@ -1088,7 +1118,7 @@ class TestManageRetriever:
     """Tool de gestão do RAG (list / delete / purge)."""
 
     @pytest.mark.asyncio
-    async def test_delete_without_source_errors_early(self):
+    async def test_delete_without_source_errors_early(self) -> None:
         """Verifica o comportamento de delete without source errors early."""
         from backend.tools.rag import manage_retriever
 
@@ -1098,7 +1128,7 @@ class TestManageRetriever:
         assert "source" in data["error"]
 
     @pytest.mark.asyncio
-    async def test_purge_drops_table(self):
+    async def test_purge_drops_table(self) -> None:
         """Verifica o comportamento de purge drops table."""
         from backend.tools.rag import manage_retriever
 
@@ -1113,7 +1143,7 @@ class TestManageRetriever:
         mock_backend.purge.assert_awaited_once_with("web_cache")
 
     @pytest.mark.asyncio
-    async def test_list_missing_collection(self):
+    async def test_list_missing_collection(self) -> None:
         """Verifica o comportamento de list missing collection."""
         from backend.tools.rag import manage_retriever
 
@@ -1146,7 +1176,7 @@ class TestManageRetriever:
         return mock_backend
 
     @pytest.mark.asyncio
-    async def test_list_returns_documents_via_pandas(self):
+    async def test_list_returns_documents_via_pandas(self) -> None:
         """Erro/borda coberto no mesmo teste: metadata sem 'source' cai no
         fallback vazio em vez de KeyError."""
         from backend.tools.rag import manage_retriever
@@ -1175,7 +1205,7 @@ class TestManageRetriever:
         }
 
     @pytest.mark.asyncio
-    async def test_delete_matches_by_source_via_pandas(self):
+    async def test_delete_matches_by_source_via_pandas(self) -> None:
         """Delete filtra por substring case-insensitive no source/url/title."""
         from backend.tools.rag import manage_retriever
 
@@ -1202,7 +1232,7 @@ class TestManageRetriever:
         mock_backend.delete.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_delete_no_match_via_pandas(self):
+    async def test_delete_no_match_via_pandas(self) -> None:
         """Delete sem match retorna no_match, sem chamar backend.delete."""
         from backend.tools.rag import manage_retriever
 
@@ -1225,7 +1255,7 @@ class TestManageRetriever:
 
 
 class TestBuildReranker:
-    def test_cohere_without_key_returns_none(self):
+    def test_cohere_without_key_returns_none(self) -> None:
         """Verifica o comportamento de cohere without key returns none."""
         from backend.tools.rag import _build_reranker
 
@@ -1243,7 +1273,7 @@ class TestBuildReranker:
             ms.get_cohere_api_key.return_value = None
             assert _build_reranker() is None
 
-    def test_voyage_without_key_returns_none(self):
+    def test_voyage_without_key_returns_none(self) -> None:
         """Verifica o comportamento de voyage without key returns none."""
         from backend.tools.rag import _build_reranker
 
@@ -1261,7 +1291,7 @@ class TestBuildReranker:
             ms.voyage_api_key = None
             assert _build_reranker() is None
 
-    def test_unknown_type_returns_none(self):
+    def test_unknown_type_returns_none(self) -> None:
         """Verifica o comportamento de unknown type returns none."""
         from backend.tools.rag import _build_reranker
 
@@ -1277,7 +1307,7 @@ class TestBuildReranker:
         ):
             assert _build_reranker() is None
 
-    def test_cohere_client_construction_failure_returns_none(self):
+    def test_cohere_client_construction_failure_returns_none(self) -> None:
         """Erro/borda: qualquer falha ao montar o client nativo (ex.: key
         vazia detectada dentro do construtor) é capturada e vira None, nunca
         propaga pro chamador de `_build_reranker`."""
@@ -1300,7 +1330,7 @@ class TestBuildReranker:
             ms.get_cohere_api_key.return_value = " "
             assert _build_reranker() is None
 
-    def test_voyage_with_key_returns_voyage_reranker(self):
+    def test_voyage_with_key_returns_voyage_reranker(self) -> None:
         """Verifica o comportamento de voyage with key returns voyage reranker."""
         from backend.llm.voyage.rerank import VectoraVoyageRerank
         from backend.tools.rag import _build_reranker
@@ -1325,7 +1355,7 @@ class TestBuildReranker:
         assert out.model == "rerank-2"
         assert out.top_k == 5
 
-    def test_reranker_disabled_returns_none(self):
+    def test_reranker_disabled_returns_none(self) -> None:
         # reranker_enabled=False nos settings de runtime → sem rerank (None).
         """Verifica o comportamento de reranker disabled returns none."""
         from backend.tools import rag as rag_mod
@@ -1343,7 +1373,7 @@ class TestBuildReranker:
             ms.get_cohere_api_key.return_value = "ck-1"
             assert _build_reranker() is None
 
-    def test_model_id_selects_provider_without_provider_preference(self):
+    def test_model_id_selects_provider_without_provider_preference(self) -> None:
         from backend.tools import rag as rag_mod
         from backend.tools.rag import _build_reranker
 

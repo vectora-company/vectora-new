@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from dataclasses import replace
+from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, NoReturn, TypedDict, Unpack
 from unittest.mock import AsyncMock, Mock
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 from fastapi import Request
 
 from backend.engine.conversation_loop import (
@@ -44,17 +48,27 @@ from backend.engine.stream_events import (
     ToolResult,
     WorkbenchInvalidate,
 )
+from backend.persistence.native.agent_run import AgentRun
 from backend.persistence.native.session_store import SessionStore
+from backend.persistence.native.store import Item, SearchItem
 from backend.persistence.telemetry import telemetry
 from backend.scheduling.dag import DAGStore
 from backend.services.context_planner import compute_transcript_hash
 from backend.services.policy_compiler import PolicySnapshot, compile_policy_snapshot
+from backend.services.verification import VerificationResult
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools import media as _media_module
 from backend.tools import planning as _planning_module
 from backend.tools.context import ToolContext
-from backend.tools.registry import TOOL_REGISTRY, ToolExtras, ToolRegistry, vtool
-from backend.vtypes.contracts import JsonObject
+from backend.tools.registry import (
+    TOOL_REGISTRY,
+    ToolExtras,
+    ToolRegistry,
+    ToolSpec,
+    vtool,
+)
+from backend.vtypes import VectoraContext
+from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -63,6 +77,12 @@ from backend.vtypes.message import (
     VMessage,
     VMessageChunk,
 )
+from tests.chat_fakes import ScriptedChatClient, tool_call_chunk
+
+
+class _ScheduledTask(TypedDict):
+    instruction: str
+    trigger_config: JsonObject
 
 
 @pytest.mark.parametrize(
@@ -70,7 +90,7 @@ from backend.vtypes.message import (
     [("success", "completed"), ("error", "error"), ("cancel", "cancelled")],
 )
 async def test_harness_telemetry_records_complete_turn_lifecycle(
-    monkeypatch, outcome: str, expected_status: str
+    monkeypatch: pytest.MonkeyPatch, outcome: str, expected_status: str
 ) -> None:
     start = AsyncMock()
     end = AsyncMock()
@@ -81,7 +101,7 @@ async def test_harness_telemetry_records_complete_turn_lifecycle(
     monkeypatch.setattr(telemetry, "turn_end", end)
     monkeypatch.setattr(telemetry, "record_error", record_error)
 
-    async def invoke(*, config: Any, thread_id: str) -> Any:
+    async def invoke(*, config: SimpleNamespace, thread_id: str) -> SimpleNamespace:
         if outcome == "error":
             raise ValueError("prompt and credential payload")
         if outcome == "cancel":
@@ -127,31 +147,6 @@ def _register(registry: ToolRegistry, nome: str) -> None:
     registry.register(spec)
 
 
-class _ScriptedChatClient:
-    """`astream` devolve um turno por chamada, na ordem do script — cada
-    turno é a lista de `VMessageChunk` que o iteração daquela volta do loop
-    deve produzir."""
-
-    def __init__(self, turnos: list[list[VMessageChunk]]) -> None:
-        """Inicializa o estado da instância."""
-        self._turnos = turnos
-        self.chamadas = 0
-
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
-        """Executa a operação astream."""
-        turno = self._turnos[self.chamadas]
-        self.chamadas += 1
-        for chunk in turno:
-            yield chunk
-
-    async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
-        """Executa a operação agenerate."""
-        msg = "não usado pelo loop (astream-only)"
-        raise NotImplementedError(msg)
-
-
 @pytest.mark.parametrize(
     ("usage", "expected_value", "expected_reason"),
     [
@@ -171,7 +166,7 @@ def test_reported_cost_requires_finite_nonnegative_usd(
 
 
 @pytest.fixture
-async def session_store(tmp_path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     """Executa a operação session store."""
     pool = AsyncConnectionPool(str(tmp_path / "loop.db"), min_size=1, max_size=2)
     await pool.open()
@@ -222,7 +217,7 @@ def test_missing_decision_provider_does_not_select_global_default(
         preferences, "selected_decision_model_provider", lambda _ctx: None
     )
 
-    def unexpected_default(_provider):
+    def unexpected_default(_provider) -> NoReturn:
         msg = "sem provider selecionado, não deve haver fallback global"
         raise AssertionError(msg)
 
@@ -243,7 +238,7 @@ def test_decision_harness_uses_only_the_selected_provider(
         preferences, "selected_decision_model_provider", lambda _ctx: "clef-local"
     )
 
-    def build(provider):
+    def build(provider: str):
         calls.append(provider)
         return sentinel
 
@@ -258,23 +253,35 @@ async def test_load_persistent_context_memories_uses_memory_tool_namespace() -> 
     """Verifica o comportamento de load persistent context memories uses memory tool namespace."""
 
     class Store:
-        async def asearch(self, namespace, *, limit):
+        async def aget(self, namespace: tuple[str, ...], key: str) -> Item | None:
+            raise AssertionError("o carregamento não lê itens por chave")
+
+        async def aput(
+            self, namespace: tuple[str, ...], key: str, value: JsonObject
+        ) -> NoReturn:
+            raise AssertionError("o carregamento não grava")
+
+        async def adelete(self, namespace: tuple[str, ...], key: str) -> NoReturn:
+            raise AssertionError("o carregamento não apaga")
+
+        async def asearch(
+            self,
+            namespace: tuple[str, ...],
+            *,
+            query: str | None = None,
+            limit: int = 10,
+            include_expired: bool = False,
+        ) -> list[SearchItem]:
             """Executa a operação asearch."""
+            assert not include_expired
             assert namespace == ("user", "workspace_ws-1", "memories")
             assert limit == 5
-            return [
-                type(
-                    "Item",
-                    (),
-                    {
-                        "key": "rule",
-                        "value": {
-                            "content": "Use testes determinísticos",
-                            "metadata": {"domain": "project"},
-                        },
-                    },
-                )()
-            ]
+            now = datetime.now(UTC)
+            value: JsonObject = {
+                "content": "Use testes determinísticos",
+                "metadata": {"domain": "project"},
+            }
+            return [SearchItem(value, "rule", namespace, now, now)]
 
     context = ToolContext(user_id="local", workspace_id="ws-1", store=Store())
     records = await _load_persistent_context_memories(context)
@@ -282,15 +289,6 @@ async def test_load_persistent_context_memories_uses_memory_tool_namespace() -> 
     assert [record.id for record in records] == ["rule"]
     assert records[0].content == "Use testes determinísticos"
     assert records[0].metadata == {"domain": "project"}
-
-
-def _tool_call_chunk(*, index: int, id: str, name: str, args: str) -> VMessageChunk:  # noqa: A002
-    """Executa a operação  tool call chunk."""
-    return VMessageChunk(
-        tool_call_chunks=[
-            ToolCallChunk(index=index, id=id, name=name, args_fragment=args)
-        ]
-    )
 
 
 @pytest.mark.asyncio
@@ -368,8 +366,14 @@ async def test_decision_snapshot_survives_preference_change_without_duplicate_ev
     ],
 )
 async def test_disabled_decision_surface_reaches_executor_without_model_call(
-    session_store, ctx, tmp_path, monkeypatch, tool_name, disabled, provenance
-):
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tool_name: str,
+    disabled: str,
+    provenance,
+) -> None:
     from pydantic import create_model
 
     from backend.evaluation.recording import cassette_from_run
@@ -419,7 +423,7 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
         {
             "decisionModelsEnabled": True,
             "decisionModelProvider": "clef-local",
-            "decisionModelSurfaces": surfaces,
+            "decisionModelSurfaces": {**surfaces},
         },
         workspace_id=ctx.workspace_id,
     )
@@ -450,7 +454,7 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
     registry.register(spec)
     TOOL_REGISTRY.register(spec)
 
-    def unexpected(_ctx):
+    def unexpected(_ctx) -> NoReturn:
         raise AssertionError("disabled surface must not construct a Decision Model")
 
     monkeypatch.setattr(
@@ -459,10 +463,10 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
     try:
         result = await run_conversation(
             session_store=session_store,
-            chat_client=_ScriptedChatClient(
+            chat_client=ScriptedChatClient(
                 [
                     [
-                        _tool_call_chunk(
+                        tool_call_chunk(
                             index=0,
                             id="surface-call",
                             name=tool_name,
@@ -555,7 +559,10 @@ async def test_disabled_decision_surface_reaches_executor_without_model_call(
 
 @pytest.mark.asyncio
 async def test_snapshot_revocation_survives_aba_and_independent_connection(
-    session_store: SessionStore, ctx: ToolContext, tmp_path, monkeypatch
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.engine.hitl import _decision_snapshot_matches_runtime
     from backend.persistence.native.agent_run import AgentRun
@@ -567,7 +574,7 @@ async def test_snapshot_revocation_survives_aba_and_independent_connection(
         monkeypatch.setattr(
             "backend.workspace.runtime_settings.runtime_settings", second
         )
-        prefs: dict[str, object] = {
+        prefs: JsonObject = {
             "decisionModelsEnabled": True,
             "decisionModelProvider": "clef-local",
             "decisionModelSurfaces": {"hitl": True},
@@ -611,7 +618,10 @@ async def test_snapshot_revocation_survives_aba_and_independent_connection(
 
 @pytest.mark.asyncio
 async def test_preapproval_grant_is_consumed_once_and_audited_before_execution(
-    session_store: SessionStore, ctx: ToolContext, tmp_path, monkeypatch
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.persistence.native.agent_run import AgentRun
     from backend.services import smart_approval
@@ -688,9 +698,9 @@ async def test_preapproval_grant_is_consumed_once_and_audited_before_execution(
 async def test_preapproval_never_overrides_revocation_or_human_decision(
     session_store: SessionStore,
     ctx: ToolContext,
-    tmp_path,
-    monkeypatch,
-    extra: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra: JsonObject,
     decision: str | None,
 ) -> None:
     from backend.engine.hitl import _risk_assessment_key
@@ -731,7 +741,10 @@ async def test_preapproval_never_overrides_revocation_or_human_decision(
 
 @pytest.mark.asyncio
 async def test_preapproval_fails_closed_when_run_is_not_in_the_same_workspace(
-    session_store: SessionStore, ctx: ToolContext, tmp_path, monkeypatch
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.persistence.native.agent_run import AgentRun
     from backend.services import smart_approval
@@ -779,7 +792,7 @@ async def test_decision_model_audit_persists_redacted_agent_run_and_ledger(
         name="file_write",
         args={"path": "private/customer.txt", "token": "do-not-persist"},
     )
-    decision = {
+    decision: JsonObject = {
         "decision": "allow",
         "reason": "risk_below_threshold",
         "provider": "clef-local",
@@ -849,8 +862,11 @@ async def test_decision_model_audit_persists_redacted_agent_run_and_ledger(
 
 class TestParadaNormal:
     async def test_quality_gate_persiste_evidencia_antes_do_status_terminal(
-        self, session_store, ctx, monkeypatch
-    ):
+        self,
+        session_store: SessionStore,
+        ctx: ToolContext,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """A evidência fica durável enquanto o run ainda está em verifying.
 
         Isso evita que uma falha entre o upsert da evidência e a transição
@@ -866,14 +882,16 @@ class TestParadaNormal:
         statuses_seen: list[str] = []
         original_upsert = session_store.upsert_agent_run
 
-        async def record_upsert(run):
+        async def record_upsert(run: AgentRun) -> None:
             """Executa a operação record upsert."""
             statuses_seen.append(run.status)
             await original_upsert(run)
 
         monkeypatch.setattr(session_store, "upsert_agent_run", record_upsert)
 
-        async def fake_verification(*_args, **_kwargs):
+        async def fake_verification(
+            *_args: str | None, **_kwargs: str | None
+        ) -> VerificationResult:
             """Executa a operação fake verification."""
             return VerificationResult(
                 passed=True,
@@ -888,7 +906,7 @@ class TestParadaNormal:
 
         result = await run_conversation(
             session_store=session_store,
-            chat_client=_ScriptedChatClient([[_text_chunk("ok")]]),
+            chat_client=ScriptedChatClient([[_text_chunk("ok")]]),
             tool_registry=ToolRegistry(),
             ctx=ctx,
             thread_id="thread-1",
@@ -903,8 +921,12 @@ class TestParadaNormal:
         assert stored.evidence[-1]["snapshot_sha256"] == "snapshot"
 
     async def test_run_sem_gates_termina_nao_verificado(
-        self, session_store, ctx, monkeypatch, tmp_path
-    ):
+        self,
+        session_store: SessionStore,
+        ctx: ToolContext,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
         """Sem quality gates, o motor real devolve ``not_run`` e o loop grava o
         run como ``degraded``, sem a mensagem de verificação bem-sucedida."""
         from backend.contracts.models import WorkspaceVerificationProfile
@@ -923,7 +945,7 @@ class TestParadaNormal:
 
         result = await run_conversation(
             session_store=session_store,
-            chat_client=_ScriptedChatClient([[_text_chunk("ok")]]),
+            chat_client=ScriptedChatClient([[_text_chunk("ok")]]),
             tool_registry=ToolRegistry(),
             ctx=ctx,
             thread_id="thread-1",
@@ -939,7 +961,9 @@ class TestParadaNormal:
         assert stored.evidence[-1]["outcome"] == "not_run"
         assert stored.evidence[-1]["gates_evaluated"] == 0
 
-    async def test_checkpoint_de_tool_impede_reexecucao_cego(self, session_store, ctx):
+    async def test_checkpoint_de_tool_impede_reexecucao_cego(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de checkpoint de tool impede reexecucao cego."""
         from backend.persistence.native.agent_run import AgentRun
 
@@ -960,7 +984,7 @@ class TestParadaNormal:
                 },
             },
         )
-        client = _ScriptedChatClient([[_text_chunk("não deveria chamar")]])
+        client = ScriptedChatClient([[_text_chunk("não deveria chamar")]])
 
         result = await run_conversation(
             session_store=session_store,
@@ -978,9 +1002,11 @@ class TestParadaNormal:
         assert stored.status == "recovery_required"
         assert stored.error_code == "CHECKPOINT_TOOL_RECONCILIATION_REQUIRED"
 
-    async def test_sem_tool_calls_para_no_primeiro_turno(self, session_store, ctx):
+    async def test_sem_tool_calls_para_no_primeiro_turno(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de sem tool calls para no primeiro turno."""
-        client = _ScriptedChatClient([[_text_chunk("olá!")]])
+        client = ScriptedChatClient([[_text_chunk("olá!")]])
         result = await run_conversation(
             session_store=session_store,
             chat_client=client,
@@ -1005,7 +1031,7 @@ class TestParadaNormal:
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Verifica o comportamento de resposta vazia emite erro diagnosticavel."""
-        client = _ScriptedChatClient([[]])
+        client = ScriptedChatClient([[]])
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -1052,10 +1078,10 @@ class TestParadaNormal:
 
         registry = ToolRegistry()
         _register(registry, "lembrar")
-        turn = [_tool_call_chunk(index=0, id="", name="lembrar", args="{}")]
+        turn = [tool_call_chunk(index=0, id="", name="lembrar", args="{}")]
 
         for _ in range(2):
-            client = _ScriptedChatClient([turn, [_text_chunk("fim")]])
+            client = ScriptedChatClient([turn, [_text_chunk("fim")]])
             result = await run_conversation(
                 session_store=session_store,
                 chat_client=client,
@@ -1078,8 +1104,8 @@ class TestParadaNormal:
 
 class TestMaxIterations:
     async def test_estoura_o_teto_sem_nunca_parar_naturalmente(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de estoura o teto sem nunca parar naturalmente."""
 
         @vtool(extras=ToolExtras())
@@ -1090,8 +1116,8 @@ class TestMaxIterations:
         registry = ToolRegistry()
         _register(registry, "loop_tool")
 
-        turno = [_tool_call_chunk(index=0, id="call_1", name="loop_tool", args="{}")]
-        client = _ScriptedChatClient([turno, turno, turno])
+        turno = [tool_call_chunk(index=0, id="call_1", name="loop_tool", args="{}")]
+        client = ScriptedChatClient([turno, turno, turno])
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -1116,8 +1142,8 @@ class TestMaxIterations:
 
 class TestGuardrailDeRepeticao:
     async def test_chamadas_identicas_disparam_aviso_diferentes_nao(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de chamadas identicas disparam aviso diferentes nao."""
 
         @vtool(extras=ToolExtras())
@@ -1133,9 +1159,9 @@ class TestGuardrailDeRepeticao:
 
         # Caminho feliz: 3 chamadas seguidas com args idênticos disparam o aviso.
         repeated_turn = [
-            _tool_call_chunk(index=0, id="call_1", name="buscar", args='{"query":"x"}')
+            tool_call_chunk(index=0, id="call_1", name="buscar", args='{"query":"x"}')
         ]
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [repeated_turn, repeated_turn, repeated_turn, [_text_chunk("fim")]]
         )
         events: list[EngineEvent] = []
@@ -1162,20 +1188,20 @@ class TestGuardrailDeRepeticao:
 
         # Borda: mesma tool, args diferentes a cada chamada — nunca dispara.
         await session_store.create_session("thread-2", user_id="alice")
-        client2 = _ScriptedChatClient(
+        client2 = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="c1", name="buscar", args='{"query":"a"}'
                     )
                 ],
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="c2", name="buscar", args='{"query":"b"}'
                     )
                 ],
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="c3", name="buscar", args='{"query":"c"}'
                     )
                 ],
@@ -1214,7 +1240,7 @@ class TestGuardrailDeRepeticao:
         _register(registry, "buscar")
         chamadas = [
             [
-                _tool_call_chunk(
+                tool_call_chunk(
                     index=0,
                     id=f"call_{i}",
                     name="buscar",
@@ -1223,7 +1249,7 @@ class TestGuardrailDeRepeticao:
             ]
             for i in range(6)
         ]
-        client = _ScriptedChatClient(chamadas)
+        client = ScriptedChatClient(chamadas)
         events: list[EngineEvent] = []
 
         await session_store.create_session(
@@ -1262,7 +1288,9 @@ class TestGuardrailDeRepeticao:
 
 
 class TestToolCallsSequenciais:
-    async def test_chama_tool_depois_para_no_turno_seguinte(self, session_store, ctx):
+    async def test_chama_tool_depois_para_no_turno_seguinte(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de chama tool depois para no turno seguinte."""
 
         @vtool(extras=ToolExtras())
@@ -1277,10 +1305,10 @@ class TestToolCallsSequenciais:
         registry = ToolRegistry()
         _register(registry, "somar")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="somar", args='{"a":1,"b":2}'
                     )
                 ],
@@ -1311,8 +1339,8 @@ class TestToolCallsSequenciais:
 
 class TestToolCallsParalelos:
     async def test_duas_tools_nao_destrutivas_executam_e_retornam(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de duas tools nao destrutivas executam e retornam."""
 
         @vtool(extras=ToolExtras(destructive=False))
@@ -1329,11 +1357,11 @@ class TestToolCallsParalelos:
         _register(registry, "ler_a")
         _register(registry, "ler_b")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(index=0, id="call_1", name="ler_a", args="{}"),
-                    _tool_call_chunk(index=1, id="call_2", name="ler_b", args="{}"),
+                    tool_call_chunk(index=0, id="call_1", name="ler_a", args="{}"),
+                    tool_call_chunk(index=1, id="call_2", name="ler_b", args="{}"),
                 ],
                 [_text_chunk("terminei")],
             ]
@@ -1356,8 +1384,8 @@ class TestToolCallsParalelos:
 
 class TestHitl:
     async def test_lote_misto_com_uma_tool_sensivel_pausa_sem_executar_nenhuma(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de lote misto com uma tool sensivel pausa sem executar nenhuma."""
 
         @vtool(extras=ToolExtras(destructive=False))
@@ -1374,20 +1402,22 @@ class TestHitl:
         _register(registry, "ler_arquivo")
         _register(registry, "escrever_arquivo")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="ler_arquivo", args="{}"
                     ),
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=1, id="call_2", name="escrever_arquivo", args="{}"
                     ),
                 ]
             ]
         )
 
-        def should_require_approval(nome, _ctx, _args, _history):
+        def should_require_approval(
+            nome: str, _ctx: ToolContext, _args, _history
+        ) -> bool:
             """Executa a operação should require approval."""
             return nome == "escrever_arquivo"
 
@@ -1408,7 +1438,9 @@ class TestHitl:
         assert [m.role.value for m in historico] == ["assistant"]
         assert len(historico[0].tool_calls) == 2
 
-    async def test_sem_should_require_approval_nunca_pausa(self, session_store, ctx):
+    async def test_sem_should_require_approval_nunca_pausa(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de sem should require approval nunca pausa."""
 
         @vtool(extras=ToolExtras(destructive=True))
@@ -1419,9 +1451,9 @@ class TestHitl:
         registry = ToolRegistry()
         _register(registry, "deletar")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
-                [_tool_call_chunk(index=0, id="call_1", name="deletar", args="{}")],
+                [tool_call_chunk(index=0, id="call_1", name="deletar", args="{}")],
                 [_text_chunk("feito")],
             ]
         )
@@ -1440,9 +1472,11 @@ class TestHitl:
 
 
 class TestEmissaoDeEventos:
-    async def test_token_e_message_break_emitidos_na_ordem(self, session_store, ctx):
+    async def test_token_e_message_break_emitidos_na_ordem(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de token e message break emitidos na ordem."""
-        client = _ScriptedChatClient([[_text_chunk("oi"), _text_chunk(" tudo bem")]])
+        client = ScriptedChatClient([[_text_chunk("oi"), _text_chunk(" tudo bem")]])
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -1465,7 +1499,9 @@ class TestEmissaoDeEventos:
             MessageBreak(),
         ]
 
-    async def test_tool_result_emitido_apos_execucao(self, session_store, ctx):
+    async def test_tool_result_emitido_apos_execucao(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de tool result emitido apos execucao."""
 
         @vtool(extras=ToolExtras())
@@ -1480,10 +1516,10 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "adicionar")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="adicionar", args='{"a":1,"b":2}'
                     )
                 ],
@@ -1512,8 +1548,8 @@ class TestEmissaoDeEventos:
         ]
 
     async def test_hitl_requested_emitido_com_argumentos_da_tool(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de hitl requested emitido com argumentos da tool."""
 
         @vtool(extras=ToolExtras(destructive=True))
@@ -1524,8 +1560,8 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "escrever")
 
-        client = _ScriptedChatClient(
-            [[_tool_call_chunk(index=0, id="call_1", name="escrever", args="{}")]]
+        client = ScriptedChatClient(
+            [[tool_call_chunk(index=0, id="call_1", name="escrever", args="{}")]]
         )
         events: list[EngineEvent] = []
 
@@ -1553,7 +1589,10 @@ class TestEmissaoDeEventos:
         assert hitl_eventos[0].interrupt_id  # gerado, não vazio
 
     async def test_write_terminal_preserva_entrada_bruta_ao_aprovar(
-        self, session_store, ctx, monkeypatch
+        self,
+        session_store: SessionStore,
+        ctx: ToolContext,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Verifica o comportamento de write terminal preserva entrada bruta ao aprovar."""
         import backend.tools.terminal_sessions
@@ -1561,10 +1600,10 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "write_terminal")
         segredo = "sk-test ghp_secret AKIAEXAMPLE"
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call-terminal",
                         name="write_terminal",
@@ -1599,7 +1638,7 @@ class TestEmissaoDeEventos:
         assert segredo not in json.dumps([message.to_dict() for message in history])
         assert pending["args"]["input_preview"] == "<redacted>"
 
-        chamadas: list[dict[str, object]] = []
+        chamadas: list[JsonObject] = []
 
         async def fake_execute(
             tool_call: ToolCall,
@@ -1638,8 +1677,8 @@ class TestEmissaoDeEventos:
         ]
 
     async def test_tool_call_started_e_activity_emitidos_antes_e_depois(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de tool call started e activity emitidos antes e depois."""
 
         @vtool(extras=ToolExtras(category="general", icon="wrench"))
@@ -1654,10 +1693,10 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "somar3")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="somar3", args='{"a":1,"b":2}'
                     )
                 ],
@@ -1702,8 +1741,8 @@ class TestEmissaoDeEventos:
         assert not [e for e in events if isinstance(e, WorkbenchInvalidate)]
 
     async def test_tool_com_invalidates_emite_workbench_invalidate(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de tool com invalidates emite workbench invalidate."""
 
         @vtool(extras=ToolExtras(invalidates=["files", "git"]))
@@ -1714,9 +1753,9 @@ class TestEmissaoDeEventos:
         registry = ToolRegistry()
         _register(registry, "escrever2")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
-                [_tool_call_chunk(index=0, id="call_1", name="escrever2", args="{}")],
+                [tool_call_chunk(index=0, id="call_1", name="escrever2", args="{}")],
                 [_text_chunk("pronto")],
             ]
         )
@@ -1744,8 +1783,8 @@ class TestEmissaoDeEventos:
 
 class TestArgsPreview:
     async def test_campo_semantico_vira_preview_no_inicio_e_no_fim(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de campo semantico vira preview no inicio e no fim."""
 
         @vtool(extras=ToolExtras())
@@ -1759,10 +1798,10 @@ class TestArgsPreview:
         registry = ToolRegistry()
         _register(registry, "ler_arquivo")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="ler_arquivo",
@@ -1793,7 +1832,9 @@ class TestArgsPreview:
         assert activities[0].args_preview == "backend/auth.py"
         assert activities[1].args_preview == "backend/auth.py"
 
-    async def test_preview_trunca_em_80_chars(self, session_store, ctx):
+    async def test_preview_trunca_em_80_chars(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de preview trunca em 80 chars."""
 
         @vtool(extras=ToolExtras())
@@ -1808,10 +1849,10 @@ class TestArgsPreview:
         _register(registry, "buscar")
 
         termo_longo = "x" * 120
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="buscar",
@@ -1841,7 +1882,9 @@ class TestArgsPreview:
         assert all(len(a.args_preview) == 80 for a in activities)
         assert activities[0].args_preview == "x" * 80
 
-    async def test_sem_campo_semantico_usa_fallback_k_igual_v(self, session_store, ctx):
+    async def test_sem_campo_semantico_usa_fallback_k_igual_v(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de sem campo semantico usa fallback k igual v."""
 
         @vtool(extras=ToolExtras())
@@ -1856,10 +1899,10 @@ class TestArgsPreview:
         registry = ToolRegistry()
         _register(registry, "somar4")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="somar4", args='{"a":1,"b":2}'
                     )
                 ],
@@ -1888,21 +1931,25 @@ class TestArgsPreview:
 
 class TestTodosUpdated:
     async def test_plan_mode_persists_a_proposal_bound_to_run(
-        self, session_store, ctx, tmp_path, monkeypatch
+        self,
+        session_store: SessionStore,
+        ctx: ToolContext,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         database = tmp_path / "plan-dag.db"
 
-        async def get_db():
+        async def get_db() -> Connection:
             return await aiosqlite.connect(database)
 
         monkeypatch.setattr("backend.scheduling.background_tasks._get_db", get_db)
         ctx.permission_mode = "plan"
         registry = ToolRegistry()
         _register(registry, "write_todos")
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_plan",
                         name="write_todos",
@@ -1951,16 +1998,16 @@ class TestTodosUpdated:
         await db.close()
 
     async def test_write_todos_emite_todos_updated_com_lista_completa(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de write todos emite todos updated com lista completa."""
         registry = ToolRegistry()
         _register(registry, "write_todos")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="write_todos",
@@ -2001,8 +2048,8 @@ class TestTodosUpdated:
         ]
 
     async def test_tool_diferente_de_write_todos_nunca_emite_todos_updated(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de tool diferente de write todos nunca emite todos updated."""
 
         @vtool(extras=ToolExtras())
@@ -2013,9 +2060,9 @@ class TestTodosUpdated:
         registry = ToolRegistry()
         _register(registry, "outra_tool")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
-                [_tool_call_chunk(index=0, id="call_1", name="outra_tool", args="{}")],
+                [tool_call_chunk(index=0, id="call_1", name="outra_tool", args="{}")],
                 [_text_chunk("pronto")],
             ]
         )
@@ -2038,18 +2085,18 @@ class TestTodosUpdated:
         assert not [e for e in events if isinstance(e, TodosUpdated)]
 
     async def test_write_todos_com_args_invalidos_nao_emite_todos_updated(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Borda: status fora da taxonomia é rejeitado na validação de args
         (Error: argumentos inválidos) antes mesmo do handler rodar — o loop
         não deve emitir TodosUpdated a partir de um resultado de erro."""
         registry = ToolRegistry()
         _register(registry, "write_todos")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_1",
                         name="write_todos",
@@ -2084,7 +2131,10 @@ class TestTodosUpdated:
 
 @pytest.mark.asyncio
 async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
-    session_store, ctx, tmp_path, monkeypatch
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """O resultado da validação volta ao modelo antes de editar e concluir."""
     import shutil
@@ -2125,7 +2175,9 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
     ctx.workspace_id = workspace.id
     ctx.permission_mode = "bypass"
 
-    async def run_engine(_executable, arguments, project_dir, _timeout):
+    async def run_engine(
+        _executable: str, arguments: list[str], project_dir: Path, _timeout: int
+    ) -> tuple[int, str, bool]:
         if arguments == ["--headless", "--version"]:
             return 0, "Godot Engine v4.6.3.stable.official", False
         if "--editor" in arguments:
@@ -2172,15 +2224,20 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
         calls = 0
 
         async def astream(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> AsyncIterator[VMessageChunk]:
             call = self.calls
             self.calls += 1
             tool_results = [
                 message for message in messages if message.role is MessageRole.TOOL
             ]
             if call == 0:
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=0,
                     id="validate-before",
                     name="validate_godot_project",
@@ -2195,7 +2252,7 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
                 assert '"status": "error"' in validation.text()
                 assert "scripts/player.gd" in validation.text()
                 assert "scenes/bullet.tscn" in validation.text()
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=0,
                     id="repair-player",
                     name="file_edit",
@@ -2207,7 +2264,7 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
                         }
                     ),
                 )
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=1,
                     id="restore-bullet",
                     name="file_write",
@@ -2223,7 +2280,7 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
                 ]
                 assert len(edits) == 2
                 assert all("[OK]" in message.text() for message in edits)
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=0,
                     id="validate-after",
                     name="validate_godot_project",
@@ -2241,8 +2298,13 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
                 )
 
         async def agenerate(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> VMessage:
             raise AssertionError("run_conversation deve usar astream")
 
     result = await run_conversation(
@@ -2267,8 +2329,8 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
 
 class TestLoopCapGuardrail:
     async def test_estoura_teto_de_tool_calls_encerra_turno_sem_esgotar_max_iterations(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de estoura teto de tool calls encerra turno sem esgotar max iterations."""
 
         @vtool(extras=ToolExtras())
@@ -2286,10 +2348,10 @@ class TestLoopCapGuardrail:
         # não confunde com o guardrail de repetição), mas o teto de volume
         # do turno é 2: a 3ª chamada já deveria encerrar o loop.
         turnos = [
-            [_tool_call_chunk(index=0, id=f"c{i}", name="contar", args=f'{{"n":{i}}}')]
+            [tool_call_chunk(index=0, id=f"c{i}", name="contar", args=f'{{"n":{i}}}')]
             for i in range(5)
         ]
-        client = _ScriptedChatClient(turnos)
+        client = ScriptedChatClient(turnos)
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -2315,7 +2377,9 @@ class TestLoopCapGuardrail:
         sinais = [e for e in events if isinstance(e, ErrorSignal)]
         assert any(e.code == "LOOP_CAP_EXCEEDED" for e in sinais)
 
-    async def test_dentro_do_teto_nunca_dispara_o_guardrail(self, session_store, ctx):
+    async def test_dentro_do_teto_nunca_dispara_o_guardrail(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de dentro do teto nunca dispara o guardrail."""
 
         @vtool(extras=ToolExtras())
@@ -2330,10 +2394,10 @@ class TestLoopCapGuardrail:
         _register(registry, "contar2")
 
         turnos = [
-            [_tool_call_chunk(index=0, id=f"c{i}", name="contar2", args=f'{{"n":{i}}}')]
+            [tool_call_chunk(index=0, id=f"c{i}", name="contar2", args=f'{{"n":{i}}}')]
             for i in range(2)
         ] + [[_text_chunk("fim")]]
-        client = _ScriptedChatClient(turnos)
+        client = ScriptedChatClient(turnos)
         events: list[EngineEvent] = []
 
         async def on_event(event: EngineEvent) -> None:
@@ -2385,10 +2449,10 @@ class TestResumeConversation:
 
         registry = ToolRegistry()
         _register(registry, "browser_resume_failure")
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="call_browser",
                         name="browser_resume_failure",
@@ -2425,8 +2489,8 @@ class TestResumeConversation:
         usage.assert_awaited_once_with(ctx.user_id, "browser_resume_failure", "error")
 
     async def test_aprovar_executa_a_tool_sinalizada_e_libera_a_pendencia(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de aprovar executa a tool sinalizada e libera a pendencia."""
 
         @vtool(extras=ToolExtras(destructive=True))
@@ -2437,10 +2501,10 @@ class TestResumeConversation:
         registry = ToolRegistry()
         _register(registry, "escrever_arquivo2")
 
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="call_1", name="escrever_arquivo2", args="{}"
                     )
                 ]
@@ -2506,8 +2570,11 @@ class TestResumeConversation:
         assert {event.tool_call_id for event in tool_events} == {"call_1"}
 
     async def test_aprovar_classifica_erro_mcp_localizado_e_registra_uso(
-        self, session_store, ctx, monkeypatch
-    ):
+        self,
+        session_store: SessionStore,
+        ctx: ToolContext,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Verifica o comportamento de aprovar classifica erro mcp localizado e registra uso."""
         chamadas: list[tuple[str, str, str]] = []
 
@@ -2524,8 +2591,8 @@ class TestResumeConversation:
 
         registry = ToolRegistry()
         _register(registry, "falhar_mcp")
-        client = _ScriptedChatClient(
-            [[_tool_call_chunk(index=0, id="call_mcp", name="falhar_mcp", args="{}")]]
+        client = ScriptedChatClient(
+            [[tool_call_chunk(index=0, id="call_mcp", name="falhar_mcp", args="{}")]]
         )
         gate = ApprovalGate(session_store)
         await run_conversation(
@@ -2560,8 +2627,8 @@ class TestResumeConversation:
         assert chamadas == [(ctx.user_id, "falhar_mcp", "error")]
 
     async def test_rejeitar_nao_executa_a_tool_e_persiste_mensagem_de_erro(
-        self, session_store, ctx
-    ):
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de rejeitar nao executa a tool e persiste mensagem de erro."""
 
         @vtool(extras=ToolExtras(destructive=True))
@@ -2572,8 +2639,8 @@ class TestResumeConversation:
         registry = ToolRegistry()
         _register(registry, "deletar_tudo")
 
-        client = _ScriptedChatClient(
-            [[_tool_call_chunk(index=0, id="call_1", name="deletar_tudo", args="{}")]]
+        client = ScriptedChatClient(
+            [[tool_call_chunk(index=0, id="call_1", name="deletar_tudo", args="{}")]]
         )
         gate = ApprovalGate(session_store)
         await run_conversation(
@@ -2602,7 +2669,9 @@ class TestResumeConversation:
         assert historico[-1].is_error is True
         assert "rejeitou" in historico[-1].text().lower()
 
-    async def test_sem_pendencia_nao_faz_nada_e_devolve_false(self, session_store, ctx):
+    async def test_sem_pendencia_nao_faz_nada_e_devolve_false(
+        self, session_store: SessionStore, ctx: ToolContext
+    ) -> None:
         """Verifica o comportamento de sem pendencia nao faz nada e devolve false."""
         resumiu = await resume_conversation(
             session_store=session_store,
@@ -2635,18 +2704,18 @@ class TestResumeConversation:
         from backend.persistence.telemetry import telemetry
         from backend.services.media_quota import media_quota
 
-        chamadas: list[dict[str, object]] = []
-        eventos_quota: list[tuple[str, dict[str, object]]] = []
+        chamadas: list[JsonObject] = []
+        eventos_quota: list[tuple[str, JsonObject]] = []
 
         async def fake_summary(_user_id: str) -> dict[str, int]:
             """Executa a operação fake summary."""
             return {"remaining": 100, "used": 0, "limit": 100}
 
-        def record_quota(event: str, **fields: object) -> None:
+        def record_quota(event: str, **fields: JsonValue) -> None:
             """Executa a operação record quota."""
             eventos_quota.append((event, fields))
 
-        async def fake_media_handler(**kwargs: object) -> str:
+        async def fake_media_handler(**kwargs: JsonValue) -> str:
             """Executa a operação fake media handler."""
             chamadas.append(kwargs)
             return "mídia gerada"
@@ -2657,10 +2726,10 @@ class TestResumeConversation:
         assert spec is not None
         registry = ToolRegistry()
         registry.register(replace(spec, handler=fake_media_handler))
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0, id="media-call", name=tool_name, args=json.dumps(args)
                     )
                 ]
@@ -2750,13 +2819,13 @@ class TestResumeConversation:
         """Após restart, a pendência continua segura e não reidrata o payload."""
         from backend.services.media_quota import media_quota
 
-        chamadas: list[dict[str, object]] = []
+        chamadas: list[JsonObject] = []
 
         async def fake_summary(_user_id: str) -> dict[str, int]:
             """Executa a operação fake summary."""
             return {"remaining": 100, "used": 0, "limit": 100}
 
-        async def fake_media_handler(**kwargs: object) -> str:
+        async def fake_media_handler(**kwargs: JsonValue) -> str:
             """Executa a operação fake media handler."""
             chamadas.append(kwargs)
             return "mídia gerada"
@@ -2767,10 +2836,10 @@ class TestResumeConversation:
         registry = ToolRegistry()
         registry.register(replace(spec, handler=fake_media_handler))
         gate = ApprovalGate(session_store)
-        client = _ScriptedChatClient(
+        client = ScriptedChatClient(
             [
                 [
-                    _tool_call_chunk(
+                    tool_call_chunk(
                         index=0,
                         id="media-restart",
                         name=tool_name,
@@ -2817,7 +2886,7 @@ class TestResumeConversation:
             )
         )
 
-        client = _ScriptedChatClient([[_text_chunk("olá")]])
+        client = ScriptedChatClient([[_text_chunk("olá")]])
         registry = ToolRegistry()
 
         assert "untrusted_content" not in ctx._extra
@@ -2837,8 +2906,8 @@ class TestResumeConversation:
 
 @pytest.mark.asyncio
 async def test_decision_snapshot_requires_durable_evidence(
-    session_store, ctx, monkeypatch
-):
+    session_store: SessionStore, ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from unittest.mock import AsyncMock
 
     from backend.persistence.native.agent_run import AgentRun
@@ -2858,8 +2927,12 @@ async def test_decision_snapshot_requires_durable_evidence(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["evidence", "ledger", "missing_evidence"])
 async def test_preapproval_audit_failure_does_not_authorize_or_reuse_grant(
-    session_store, ctx, tmp_path, monkeypatch, failure
-):
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
     from unittest.mock import AsyncMock
 
     from backend.persistence.native.agent_run import AgentRun
@@ -2951,14 +3024,10 @@ async def test_plan_sandbox_write_does_not_authorize_push_and_human_approval_sur
             content=[ContentBlock(kind="text", text="write then push")],
         ),
     )
-    client = _ScriptedChatClient(
+    client = ScriptedChatClient(
         [
-            [
-                _tool_call_chunk(
-                    index=0, id="write-exempt", name="file_write", args="{}"
-                )
-            ],
-            [_tool_call_chunk(index=0, id="push-approved", name="git_push", args="{}")],
+            [tool_call_chunk(index=0, id="write-exempt", name="file_write", args="{}")],
+            [tool_call_chunk(index=0, id="push-approved", name="git_push", args="{}")],
         ]
     )
     gate = ApprovalGate(session_store)
@@ -2998,9 +3067,9 @@ async def test_plan_sandbox_write_does_not_authorize_push_and_human_approval_sur
     )
     continued = await run_conversation(
         session_store=session_store,
-        chat_client=_ScriptedChatClient(
+        chat_client=ScriptedChatClient(
             [
-                [_tool_call_chunk(index=0, id="push-next", name="git_push", args="{}")],
+                [tool_call_chunk(index=0, id="push-next", name="git_push", args="{}")],
                 [_text_chunk("done")],
             ]
         ),
@@ -3084,7 +3153,10 @@ async def test_plan_approval_reload_discards_stale_or_untrusted_proof(
 
 @pytest.mark.asyncio
 async def test_plan_proposal_approval_and_stages_complete_through_harness(
-    session_store, ctx, tmp_path, monkeypatch
+    session_store: SessionStore,
+    ctx: ToolContext,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Percorre proposta do harness, aprovação HTTP e execução persistida das etapas."""
     from backend.api.handlers import dag as dag_api
@@ -3104,17 +3176,17 @@ async def test_plan_proposal_approval_and_stages_complete_through_harness(
         )
     )
 
-    async def get_db():
+    async def get_db() -> Connection:
         return await aiosqlite.connect(database)
 
     monkeypatch.setattr("backend.scheduling.background_tasks._get_db", get_db)
     ctx.permission_mode = "plan"
     registry = ToolRegistry()
     _register(registry, "write_todos")
-    client = _ScriptedChatClient(
+    client = ScriptedChatClient(
         [
             [
-                _tool_call_chunk(
+                tool_call_chunk(
                     index=0,
                     id="call_plan_integration",
                     name="write_todos",
@@ -3148,10 +3220,10 @@ async def test_plan_proposal_approval_and_stages_complete_through_harness(
         config=LoopConfig(run_id=run_id),
     )
 
-    async def get_sessions():
+    async def get_sessions() -> SessionStore:
         return session_store
 
-    async def assert_thread(*_args, **_kwargs):
+    async def assert_thread(*_args, **_kwargs: bool) -> None:
         return None
 
     monkeypatch.setattr(dag_api, "_assert_owns_thread", assert_thread)
@@ -3161,9 +3233,9 @@ async def test_plan_proposal_approval_and_stages_complete_through_harness(
         "backend.services.agent_factory.get_session_store", get_sessions
     )
 
-    scheduled: list[dict[str, Any]] = []
+    scheduled: list[_ScheduledTask] = []
 
-    async def create_task(**kwargs):
+    async def create_task(**kwargs: Unpack[_ScheduledTask]) -> SimpleNamespace:
         scheduled.append(kwargs)
         return SimpleNamespace(id=f"task-{len(scheduled)}")
 
@@ -3201,8 +3273,10 @@ async def test_plan_proposal_approval_and_stages_complete_through_harness(
 
     final = await store.get_plan(plan["plan_id"])
     assert final is not None
-    assert final["execution"]["status"] == "passed"
-    assert [stage["status"] for stage in final["execution"]["stages"]] == [
+    execution_view = final["execution"]
+    assert execution_view is not None
+    assert execution_view["status"] == "passed"
+    assert [stage["status"] for stage in execution_view.get("stages", [])] == [
         "passed",
         "passed",
     ]
@@ -3254,14 +3328,14 @@ def test_drop_terminal_notices_merges_consecutive_users() -> None:
 
 
 @pytest.mark.asyncio
-async def test_memories_stay_frozen_per_thread(monkeypatch) -> None:
+async def test_memories_stay_frozen_per_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.engine import conversation_loop as cl
     from backend.tools.context import ToolContext
 
     cl._frozen_memories.clear()
     reads = iter([["primeira"], ["segunda"]])
 
-    async def _ler(ctx):
+    async def _ler(ctx: VectoraContext) -> list[str]:
         return next(reads)
 
     monkeypatch.setattr(cl, "_read_persistent_context_memories", _ler)
@@ -3275,7 +3349,7 @@ async def test_memories_stay_frozen_per_thread(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_conversation_enforces_user_subagent_ban_before_and_during_dispatch(
-    session_store, ctx
+    session_store: SessionStore, ctx: ToolContext
 ) -> None:
     """A restrição do usuário remove a tool e também bloqueia chamada forçada."""
     import backend.tools.subagent_delegate  # registra a tool nativa
@@ -3302,13 +3376,18 @@ async def test_conversation_enforces_user_subagent_ban_before_and_during_dispatc
         offered_tool_names: set[str] = set()
 
         async def astream(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> AsyncIterator[VMessageChunk]:
             self.calls += 1
             self.offered_tool_names = {tool.name for tool in tools or []}
             assert "delegate_to_subagent" not in self.offered_tool_names
             if self.calls == 1:
-                yield _tool_call_chunk(
+                yield tool_call_chunk(
                     index=0,
                     id="forbidden-delegation",
                     name="delegate_to_subagent",
@@ -3329,8 +3408,13 @@ async def test_conversation_enforces_user_subagent_ban_before_and_during_dispatc
             yield _text_chunk("Vou continuar e concluir a tarefa diretamente.")
 
         async def agenerate(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> VMessage:
             raise AssertionError("run_conversation deve usar astream")
 
     client = RestrictedChatClient()

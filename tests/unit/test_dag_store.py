@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 
 import aiosqlite
 import pytest
@@ -26,7 +27,7 @@ def test_validate_rejects_cycle_and_unknown_dependency() -> None:
 
 
 @pytest.mark.asyncio
-async def test_approval_requires_a_non_empty_human_actor(tmp_path) -> None:
+async def test_approval_requires_a_non_empty_human_actor(tmp_path: Path) -> None:
     db = await aiosqlite.connect(tmp_path / "dag-approval.db")
     store = DAGStore(db)
     await store.setup()
@@ -42,8 +43,8 @@ async def test_approval_requires_a_non_empty_human_actor(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_upsert_draft_refreshes_only_unapproved_plan_and_reads_execution(
-    tmp_path,
-):
+    tmp_path: Path,
+) -> None:
     db = await aiosqlite.connect(tmp_path / "dag-draft-view.db")
     store = DAGStore(db)
     await store.setup()
@@ -83,13 +84,17 @@ async def test_upsert_draft_refreshes_only_unapproved_plan_and_reads_execution(
     view = await store.get_plan(plan_id)
     assert view is not None
     assert view["status"] == "approved"
-    assert view["execution"]["stages"][0]["status"] == "passed"
-    assert view["execution"]["stages"][0]["output"] == {"summary": "ok"}
+    execution_view = view["execution"]
+    assert execution_view is not None
+    assert execution_view.get("stages", [])[0]["status"] == "passed"
+    assert execution_view.get("stages", [])[0]["output"] == {"summary": "ok"}
     await db.close()
 
 
 @pytest.mark.asyncio
-async def test_dag_is_idempotent_and_blocks_uncertain_expired_claim(tmp_path) -> None:
+async def test_dag_is_idempotent_and_blocks_uncertain_expired_claim(
+    tmp_path: Path,
+) -> None:
     db = await aiosqlite.connect(tmp_path / "dag.db")
     db.row_factory = aiosqlite.Row
     store = DAGStore(db)
@@ -182,7 +187,7 @@ async def test_dag_is_idempotent_and_blocks_uncertain_expired_claim(tmp_path) ->
 
 @pytest.mark.asyncio
 async def test_dag_heartbeat_extends_lease_and_expiry_fails_closed(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     db = await aiosqlite.connect(tmp_path / "dag-heartbeat.db")
     db.row_factory = aiosqlite.Row
@@ -220,7 +225,7 @@ async def test_dag_heartbeat_extends_lease_and_expiry_fails_closed(
 
 
 @pytest.mark.asyncio
-async def test_dag_nao_finaliza_claim_expirado_sem_recovery(tmp_path) -> None:
+async def test_dag_nao_finaliza_claim_expirado_sem_recovery(tmp_path: Path) -> None:
     """A conclusão não pode vencer a lease sem passar pelo recovery."""
     db = await aiosqlite.connect(tmp_path / "dag-expiry.db")
     db.row_factory = aiosqlite.Row
@@ -260,7 +265,9 @@ async def test_dag_nao_finaliza_claim_expirado_sem_recovery(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_dag_watchdog_renews_claim_until_executor_finishes(tmp_path) -> None:
+async def test_dag_watchdog_renews_claim_until_executor_finishes(
+    tmp_path: Path,
+) -> None:
     db = await aiosqlite.connect(tmp_path / "dag-watchdog.db")
     db.row_factory = aiosqlite.Row
     store = DAGStore(db)
@@ -301,7 +308,7 @@ async def test_dag_watchdog_renews_claim_until_executor_finishes(tmp_path) -> No
 
 
 @pytest.mark.asyncio
-async def test_dag_failed_stage_finishes_execution_once(tmp_path) -> None:
+async def test_dag_failed_stage_finishes_execution_once(tmp_path: Path) -> None:
     db = await aiosqlite.connect(tmp_path / "dag-failure.db")
     db.row_factory = aiosqlite.Row
     store = DAGStore(db)
@@ -339,7 +346,9 @@ async def test_dag_failed_stage_finishes_execution_once(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_dag_failure_blocks_pending_stages_and_is_terminal(tmp_path) -> None:
+async def test_dag_failure_blocks_pending_stages_and_is_terminal(
+    tmp_path: Path,
+) -> None:
     """A failed execution must not leave dependent work claimable forever."""
     db = await aiosqlite.connect(tmp_path / "dag-failure-dependent.db")
     db.row_factory = aiosqlite.Row
@@ -386,7 +395,7 @@ async def test_dag_failure_blocks_pending_stages_and_is_terminal(tmp_path) -> No
 
 @pytest.mark.asyncio
 async def test_dag_failure_is_not_erased_when_sibling_finishes_after_it(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     """A successful sibling cannot turn a partially failed DAG into success."""
     db = await aiosqlite.connect(tmp_path / "dag-failure-sibling.db")
@@ -436,7 +445,7 @@ async def test_dag_failure_is_not_erased_when_sibling_finishes_after_it(
 
 @pytest.mark.asyncio
 async def test_dag_binds_execution_to_plan_run_and_rejects_reused_key_for_other_run(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     """Reject a plan-step execution reused by a different run."""
     db = await aiosqlite.connect(tmp_path / "dag-run-binding.db")
@@ -458,7 +467,9 @@ async def test_dag_binds_execution_to_plan_run_and_rejects_reused_key_for_other_
 
 
 @pytest.mark.asyncio
-async def test_dag_rejects_mutated_approved_plan_before_creating_execution(tmp_path):
+async def test_dag_rejects_mutated_approved_plan_before_creating_execution(
+    tmp_path: Path,
+) -> None:
     """A plan aprovado não pode ser alterado entre aprovação e execução."""
     db = await aiosqlite.connect(tmp_path / "dag-integrity.db")
     store = DAGStore(db)
@@ -485,7 +496,7 @@ async def test_dag_rejects_mutated_approved_plan_before_creating_execution(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_dag_persiste_estagios_canonicos_e_nao_o_json_cru(tmp_path) -> None:
+async def test_dag_persiste_estagios_canonicos_e_nao_o_json_cru(tmp_path: Path) -> None:
     """Valores armazenados que coincidem com o estágio canônico (ids numéricos)
     viram texto canônico nas linhas de execução; o plano adulterado de verdade
     continua sendo rejeitado."""
@@ -524,7 +535,7 @@ async def test_dag_persiste_estagios_canonicos_e_nao_o_json_cru(tmp_path) -> Non
 
 @pytest.mark.asyncio
 async def test_dag_cancel_blocks_new_stages_and_waits_for_active_claim(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     """Cancellation is reported terminal only after active work settles."""
     db = await aiosqlite.connect(tmp_path / "dag-cancel.db")
@@ -569,7 +580,7 @@ async def test_dag_cancel_blocks_new_stages_and_waits_for_active_claim(
 
 @pytest.mark.asyncio
 async def test_dag_cancel_releases_a_claimed_stage_that_has_not_started(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     db = await aiosqlite.connect(tmp_path / "dag-cancel-pending.db")
     store = DAGStore(db)
@@ -589,6 +600,8 @@ async def test_dag_cancel_releases_a_claimed_stage_that_has_not_started(
     )
     plan = await store.get_plan(plan_id)
     assert plan is not None
-    assert plan["execution"]["status"] == "cancelled"
-    assert plan["execution"]["stages"][0]["status"] == "cancelled"
+    execution_view = plan["execution"]
+    assert execution_view is not None
+    assert execution_view["status"] == "cancelled"
+    assert execution_view.get("stages", [])[0]["status"] == "cancelled"
     await db.close()

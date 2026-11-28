@@ -5,11 +5,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 
 import httpx
 
 from backend.settings import settings
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
+    from backend.vtypes.contracts import JsonObject, JsonValue
+    from backend.vtypes.services import CuratedModel, ModelCatalogCache, ModelEntry
 
 logger = logging.getLogger(__name__)
 # A agregação é barata porque cada fonte tem cache próprio: o resultado que
@@ -19,8 +25,10 @@ logger = logging.getLogger(__name__)
 _CATALOG_CACHE_TTL_S = 15.0
 _SOURCE_OK_TTL_S = 600.0
 _SOURCE_FAILURE_TTL_S = 15.0
-_source_cache: dict[tuple[Any, ...], tuple[float, dict[str, Any] | None]] = {}
-_catalog_cache: dict[str, Any] = {"updated": 0.0, "entries": []}
+type _SourceKey = tuple[str, tuple[tuple[str, str], ...], int]
+
+_source_cache: dict[_SourceKey, tuple[float, JsonObject | None]] = {}
+_catalog_cache: ModelCatalogCache = {"updated": 0.0, "entries": []}
 _catalog_lock = asyncio.Lock()
 
 MODEL_CAPABILITIES = (
@@ -41,7 +49,7 @@ MODEL_CAPABILITIES = (
 
 # Providers sem API de catálogo ou cujos endpoints não declaram a capacidade.
 # `catalogued` separa evidência curada de capability retornada pelo provider.
-CURATED_MODELS: tuple[dict[str, Any], ...] = (
+CURATED_MODELS: tuple[CuratedModel, ...] = (
     {
         "provider": "openai",
         "id": "text-embedding-3-small",
@@ -104,6 +112,19 @@ CURATED_MODELS: tuple[dict[str, Any], ...] = (
 )
 
 
+def _items(value: JsonValue) -> list[JsonValue]:
+    return value if isinstance(value, list) else []
+
+
+def _object(value: JsonValue) -> JsonObject:
+    return value if isinstance(value, dict) else {}
+
+
+def _objects(value: JsonValue) -> list[JsonObject]:
+    """Itens de uma lista do provider que são objetos."""
+    return [item for item in _items(value) if isinstance(item, dict)]
+
+
 def _entry(
     provider: str,
     model_id: str,
@@ -113,7 +134,7 @@ def _entry(
     source: str = "provider_api",
     confidence: str = "confirmed",
     available: bool = True,
-) -> dict[str, Any]:
+) -> ModelEntry:
     caps = list(dict.fromkeys(capabilities or []))
     return {
         "id": f"{provider}:{model_id}",
@@ -177,7 +198,7 @@ def _guess_capabilities(provider: str, model_id: str) -> list[str]:
     return caps
 
 
-def _with_curated(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _with_curated(entries: list[ModelEntry]) -> list[ModelEntry]:
     by_id = {entry["id"]: entry for entry in entries}
     direct_configured = {
         "openai": bool(settings.openai_api_key),
@@ -186,12 +207,12 @@ def _with_curated(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "voyage": bool(settings.voyage_api_key),
     }
     for item in CURATED_MODELS:
-        provider = str(item["provider"])
+        provider = item["provider"]
         key = f"{provider}:{item['id']}"
         if key not in by_id and direct_configured.get(provider):
             entry = _entry(
                 provider,
-                str(item["id"]),
+                item["id"],
                 capabilities=list(item["capabilities"]),
                 source="curated",
             )
@@ -205,7 +226,7 @@ async def _get_json(
     *,
     headers: dict[str, str] | None = None,
     params: dict[str, str] | None = None,
-) -> dict[str, Any] | None:
+) -> JsonObject | None:
     key = (
         url,
         tuple(sorted((params or {}).items())),
@@ -241,8 +262,8 @@ async def _get_json(
     return result
 
 
-async def _direct_provider_catalogs(client: httpx.AsyncClient) -> list[dict[str, Any]]:
-    tasks: list[Any] = []
+async def _direct_provider_catalogs(client: httpx.AsyncClient) -> list[ModelEntry]:
+    tasks: list[tuple[str, Coroutine[None, None, JsonObject | None]]] = []
     if settings.openai_api_key:
         tasks.append(
             (
@@ -295,16 +316,14 @@ async def _direct_provider_catalogs(client: httpx.AsyncClient) -> list[dict[str,
             )
         )
     results = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
-    entries: list[dict[str, Any]] = []
+    entries: list[ModelEntry] = []
     for (provider, _), result in zip(tasks, results, strict=True):
         if isinstance(result, BaseException) or not isinstance(result, dict):
             continue
         raw_models = result.get("data", result.get("models", result.get("models", [])))
         if provider == "google-genai":
             raw_models = result.get("models", [])
-        for model in raw_models if isinstance(raw_models, list) else []:
-            if not isinstance(model, dict):
-                continue
+        for model in _objects(raw_models):
             model_id = str(
                 model.get("id") or model.get("name") or model.get("name", "")
             )
@@ -312,8 +331,8 @@ async def _direct_provider_catalogs(client: httpx.AsyncClient) -> list[dict[str,
                 model_id = model_id.removeprefix("models/")
             if not model_id:
                 continue
-            endpoint_values = (
-                model.get("endpoints") or model.get("supportedGenerationMethods") or []
+            endpoint_values = _items(
+                model.get("endpoints") or model.get("supportedGenerationMethods")
             )
             endpoint_text = " ".join(str(value).lower() for value in endpoint_values)
             caps = _guess_capabilities(provider, model_id)
@@ -328,8 +347,8 @@ async def _direct_provider_catalogs(client: httpx.AsyncClient) -> list[dict[str,
             if "rerank" in endpoint_text:
                 caps = list(dict.fromkeys([*caps, "reranking"]))
             if provider == "cohere":
-                features = model.get("features") or []
-                endpoints = model.get("endpoints") or []
+                features = _items(model.get("features"))
+                endpoints = _items(model.get("endpoints"))
                 feature_text = " ".join(
                     str(value).lower() for value in [*features, *endpoints]
                 )
@@ -341,10 +360,8 @@ async def _direct_provider_catalogs(client: httpx.AsyncClient) -> list[dict[str,
                 ):
                     if marker in feature_text and capability not in caps:
                         caps.append(capability)
-            modalities = (
-                model.get("input_modalities")
-                or model.get("supported_input_modalities")
-                or []
+            modalities = _items(
+                model.get("input_modalities") or model.get("supported_input_modalities")
             )
             if any("image" in str(value).lower() for value in modalities):
                 caps = list(dict.fromkeys([*caps, "vision"]))
@@ -370,8 +387,8 @@ async def _direct_provider_catalogs(client: httpx.AsyncClient) -> list[dict[str,
     return entries
 
 
-async def _router_catalogs(client: httpx.AsyncClient) -> list[dict[str, Any]]:
-    entries: list[dict[str, Any]] = []
+async def _router_catalogs(client: httpx.AsyncClient) -> list[ModelEntry]:
+    entries: list[ModelEntry] = []
     if settings.openrouter_api_key:
         headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
         seen_router_models: set[str] = set()
@@ -385,13 +402,13 @@ async def _router_catalogs(client: httpx.AsyncClient) -> list[dict[str, Any]]:
         ):
             is_embedding_catalog = catalog_url.endswith("/embeddings/models")
             payload = await _get_json(client, catalog_url, headers=headers)
-            for model in (payload or {}).get("data", []):
-                if not isinstance(model, dict) or not model.get("id"):
+            for model in _objects((payload or {}).get("data")):
+                if not model.get("id"):
                     continue
-                architecture = model.get("architecture") or {}
+                architecture = _object(model.get("architecture"))
                 output_modalities = [
                     str(value).lower()
-                    for value in architecture.get("output_modalities", [])
+                    for value in _items(architecture.get("output_modalities"))
                 ]
                 model_id = str(model["id"])
                 if model_id in seen_router_models:
@@ -402,7 +419,7 @@ async def _router_catalogs(client: httpx.AsyncClient) -> list[dict[str, Any]]:
                     caps = list(dict.fromkeys([*caps, "embedding"]))
                 if any(
                     mark in str(value).lower()
-                    for value in model.get("supported_parameters", [])
+                    for value in _items(model.get("supported_parameters"))
                     for mark in ("rerank",)
                 ):
                     caps = list(dict.fromkeys([*caps, "reranking"]))
@@ -418,17 +435,17 @@ async def _router_catalogs(client: httpx.AsyncClient) -> list[dict[str, Any]]:
                     caps = list(dict.fromkeys([*caps, "video_generation"]))
                 if any(
                     "image" in str(value).lower()
-                    for value in architecture.get("input_modalities", [])
+                    for value in _items(architecture.get("input_modalities"))
                 ):
                     caps = list(dict.fromkeys([*caps, "vision"]))
                 if any(
                     "video" in str(value).lower()
-                    for value in architecture.get("input_modalities", [])
+                    for value in _items(architecture.get("input_modalities"))
                 ):
                     caps = list(dict.fromkeys([*caps, "video_understanding"]))
                 if any(
                     "audio" in str(value).lower()
-                    for value in architecture.get("input_modalities", [])
+                    for value in _items(architecture.get("input_modalities"))
                 ):
                     caps = list(dict.fromkeys([*caps, "realtime_audio"]))
                 entry = _entry(
@@ -452,8 +469,8 @@ async def _router_catalogs(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     ollama_payload = await _get_json(
         client, f"{ollama_url}/api/tags", headers=ollama_headers
     )
-    for model in (ollama_payload or {}).get("models", []):
-        if isinstance(model, dict) and model.get("name"):
+    for model in _objects((ollama_payload or {}).get("models")):
+        if model.get("name"):
             model_id = str(model["name"])
             entries.append(
                 _entry(
@@ -476,8 +493,8 @@ async def _router_catalogs(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     llamacpp_payload = await _get_json(
         client, f"{llamacpp_url}/models", headers=llamacpp_headers
     )
-    for model in (llamacpp_payload or {}).get("data", []):
-        if isinstance(model, dict) and model.get("id"):
+    for model in _objects((llamacpp_payload or {}).get("data")):
+        if model.get("id"):
             model_id = str(model["id"])
             entries.append(
                 _entry(
@@ -512,11 +529,11 @@ async def _router_catalogs(client: httpx.AsyncClient) -> list[dict[str, Any]]:
             f"{settings.nine_router_base_url.rstrip('/')}/models",
             headers={"Authorization": f"Bearer {settings.nine_router_api_key}"},
         )
-        for model in (payload or {}).get("data", []):
-            if isinstance(model, dict) and model.get("id"):
+        for model in _objects((payload or {}).get("data")):
+            if model.get("id"):
                 model_id = str(model["id"])
-                modalities = (model.get("architecture") or {}).get(
-                    "input_modalities", []
+                modalities = _items(
+                    _object(model.get("architecture")).get("input_modalities")
                 )
                 caps = _guess_capabilities("nine_router", model_id)
                 if any("image" in str(value).lower() for value in modalities):
@@ -533,16 +550,16 @@ async def _router_catalogs(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     return entries
 
 
-async def list_model_catalog() -> list[dict[str, Any]]:
+async def list_model_catalog() -> list[ModelEntry]:
     """Agrega catálogos disponíveis sem deixar falha de um provider bloquear os outros."""
     now = time.monotonic()
-    if now - float(_catalog_cache["updated"]) < _CATALOG_CACHE_TTL_S:
+    if now - _catalog_cache["updated"] < _CATALOG_CACHE_TTL_S:
         return list(_catalog_cache["entries"])
     async with _catalog_lock:
         now = time.monotonic()
-        if now - float(_catalog_cache["updated"]) < _CATALOG_CACHE_TTL_S:
+        if now - _catalog_cache["updated"] < _CATALOG_CACHE_TTL_S:
             return list(_catalog_cache["entries"])
-        entries: list[dict[str, Any]] = []
+        entries: list[ModelEntry] = []
         timeout = httpx.Timeout(8.0, connect=3.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             direct, routed = await asyncio.gather(
@@ -555,7 +572,7 @@ async def list_model_catalog() -> list[dict[str, Any]]:
         if isinstance(routed, list):
             entries.extend(routed)
         entries = _with_curated(entries)
-        deduplicated: dict[str, dict[str, Any]] = {}
+        deduplicated: dict[str, ModelEntry] = {}
         for entry in entries:
             previous = deduplicated.get(entry["id"])
             if previous:
@@ -582,7 +599,8 @@ async def list_model_catalog() -> list[dict[str, Any]]:
             else:
                 deduplicated[entry["id"]] = entry
         entries = list(deduplicated.values())
-        _catalog_cache.update(updated=time.monotonic(), entries=entries)
+        _catalog_cache["updated"] = time.monotonic()
+        _catalog_cache["entries"] = entries
         return list(entries)
 
 

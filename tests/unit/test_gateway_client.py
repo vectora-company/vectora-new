@@ -1,15 +1,21 @@
 """GatewayClient (backend/services/gateway/__init__.py)"""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
+from asyncio import Queue
 from pathlib import Path
+from types import TracebackType
 from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
+from aiohttp import ClientTimeout, WSMsgType
 
 from backend.services.gateway import GatewayMessage, GatewayRequestItem
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 if TYPE_CHECKING:
     from backend.services.gateway import GatewayClient
@@ -394,7 +400,7 @@ class _AsyncCtx:
     """Async context manager mínimo — envolve um valor síncrono, mesmo
     padrão de `aiohttp.ClientSession()`/`session.ws_connect()`."""
 
-    def __init__(self, value):
+    def __init__(self, value) -> None:
         self._value = value
 
     async def __aenter__(self):
@@ -405,7 +411,7 @@ class _AsyncCtx:
 
 
 class TestGatewayClientConnectOnce:
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
@@ -430,8 +436,8 @@ class TestGatewayClientConnectOnce:
             with patch.object(client, "_handle_messages", new=AsyncMock()):
                 await client._connect_once("tok123", "meu-secret-de-conector")
 
-        call_args: tuple[object, ...]
-        call_kwargs: dict[str, object]
+        call_args: tuple[str, ...]
+        call_kwargs: JsonObject
         call_args, call_kwargs = session.ws_connect.call_args
         assert call_args[0] == "wss://gateway.vectora.chat/ws/tok123"
         assert call_kwargs["headers"] == {
@@ -508,9 +514,9 @@ class TestGatewayClientConnectOnce:
         session = MagicMock()
         session.ws_connect = MagicMock(return_value=_AsyncCtx(ws))
 
-        calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+        calls: list[tuple[tuple[str, ...], dict[str, JsonValue]]] = []
 
-        def session_factory(*args: object, **kwargs: object) -> _AsyncCtx:
+        def session_factory(*args: str, **kwargs: JsonValue) -> _AsyncCtx:
             calls.append((args, kwargs))
             value = session if len(calls) == 1 else MagicMock()
             return _AsyncCtx(value)
@@ -541,7 +547,7 @@ class TestGatewayClientConnectOnce:
         client = self._client()
 
         class _FakeMsg:
-            def __init__(self, tp, data=None) -> None:
+            def __init__(self, tp: WSMsgType, data: JsonObject | None = None) -> None:
                 self.type = tp
                 self._data = data
 
@@ -594,14 +600,14 @@ class TestGatewayClientConnectOnce:
         ws_owner_session.ws_connect = MagicMock(return_value=_AsyncCtx(ws))
         local_session_marker = MagicMock()
 
-        created: list[object] = []
+        created: list[MagicMock] = []
 
-        def session_factory(*_args, **_kwargs):
+        def session_factory(*_args, **_kwargs: ClientTimeout) -> _AsyncCtx:
             value = ws_owner_session if len(created) == 0 else local_session_marker
             created.append(value)
             return _AsyncCtx(value)
 
-        sessions_seen: list[object] = []
+        sessions_seen: list[MagicMock] = []
 
         async def fake_forward(_ws, session_arg, req) -> None:
             sessions_seen.append(session_arg)
@@ -618,14 +624,14 @@ class TestGatewayClientConnectOnce:
 
 
 class TestGatewayClientDispatch:
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
             gateway_url="wss://gateway.vectora.chat",
         )
 
-    def _queue(self):
+    def _queue(self) -> Queue:
         from backend.services.gateway import _MAX_CONCURRENT_FORWARDS
 
         return asyncio.Queue(maxsize=_MAX_CONCURRENT_FORWARDS)
@@ -752,7 +758,7 @@ class TestGatewayClientForward:
 
         assert client._local_url == "http://localhost:8080"
 
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
@@ -883,7 +889,7 @@ class TestGatewayClientForward:
 
 
 class TestGatewayClientForwardWorker:
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
@@ -983,7 +989,7 @@ class TestGatewayClientForwardWorker:
 
 
 class TestGatewayClientConcurrency:
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
@@ -1094,21 +1100,26 @@ class TestGatewayClientConcurrency:
             status = 200
             headers: dict[str, str] = {}
 
-            async def __aenter__(self) -> "_FakeResp":
+            async def __aenter__(self) -> _FakeResp:
                 nonlocal in_flight, max_in_flight
                 in_flight += 1
                 max_in_flight = max(max_in_flight, in_flight)
                 await release.wait()
                 return self
 
-            async def __aexit__(self, *exc_info: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 nonlocal in_flight
                 in_flight -= 1
 
             async def read(self) -> bytes:
                 return b""
 
-        def response_factory(**_kwargs: object) -> _FakeResp:
+        def response_factory[**P](*_args: P.args, **_kwargs: P.kwargs) -> _FakeResp:
             return _FakeResp()
 
         session = MagicMock()

@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,7 +16,7 @@ from backend.sandbox.policy import SandboxPolicy
 
 
 @pytest.fixture(autouse=True)
-def _force_linux_platform(monkeypatch):
+def _force_linux_platform(monkeypatch: pytest.MonkeyPatch) -> None:
     # Testes abaixo exercitam o caminho bwrap nativo (Linux) — forçar a
     # plataforma torna isso determinístico independente do SO onde os
     # testes rodam de verdade (esta máquina de dev é Windows). Monkeypatcha
@@ -40,7 +41,9 @@ def _fake_proc(returncode: int | None = None) -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_disabled_policy_raises_without_spawning(tmp_path, monkeypatch):
+async def test_disabled_policy_raises_without_spawning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     spawn_mock = AsyncMock()
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
     manager = wj.WorkspaceJailManager()
@@ -52,7 +55,9 @@ async def test_disabled_policy_raises_without_spawning(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_reuses_same_worker_for_same_workspace(tmp_path, monkeypatch):
+async def test_reuses_same_worker_for_same_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -67,8 +72,12 @@ async def test_reuses_same_worker_for_same_workspace(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_missing_bwrap_raises_clear_error(tmp_path, monkeypatch):
-    async def _raise_not_found(*_args, **_kwargs):
+async def test_missing_bwrap_raises_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _raise_not_found(
+        *_args: str, **_kwargs: int | tuple[int] | None
+    ) -> NoReturn:
         raise FileNotFoundError("bwrap")
 
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", _raise_not_found)
@@ -79,7 +88,9 @@ async def test_missing_bwrap_raises_clear_error(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_request_writes_json_line_and_parses_response(tmp_path, monkeypatch):
+async def test_request_writes_json_line_and_parses_response(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     response = json.dumps({"id": 1, "stdout": "ok\n", "stderr": "", "exit_code": 0})
     proc.stdout.readline = AsyncMock(return_value=(response + "\n").encode("utf-8"))
@@ -102,7 +113,9 @@ async def test_request_writes_json_line_and_parses_response(tmp_path, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_request_raises_when_worker_closes_stdout(tmp_path, monkeypatch):
+async def test_request_raises_when_worker_closes_stdout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     proc.stdout.readline = AsyncMock(return_value=b"")
     monkeypatch.setattr(
@@ -118,7 +131,9 @@ async def test_request_raises_when_worker_closes_stdout(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_close_idle_terminates_stale_workers_and_respawns(tmp_path, monkeypatch):
+async def test_close_idle_terminates_stale_workers_and_respawns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -136,7 +151,9 @@ async def test_close_idle_terminates_stale_workers_and_respawns(tmp_path, monkey
 
 
 @pytest.mark.asyncio
-async def test_close_idle_keeps_recently_used_workers(tmp_path, monkeypatch):
+async def test_close_idle_keeps_recently_used_workers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -152,7 +169,9 @@ async def test_close_idle_keeps_recently_used_workers(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_spawn_aplica_seccomp_fd_quando_filtro_disponivel(tmp_path, monkeypatch):
+async def test_spawn_aplica_seccomp_fd_quando_filtro_disponivel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -171,8 +190,8 @@ async def test_spawn_aplica_seccomp_fd_quando_filtro_disponivel(tmp_path, monkey
 
 @pytest.mark.asyncio
 async def test_spawn_degrada_sem_seccomp_quando_libseccomp_ausente(
-    tmp_path, monkeypatch
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = _fake_proc()
     spawn_mock = AsyncMock(return_value=proc)
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -189,7 +208,9 @@ async def test_spawn_degrada_sem_seccomp_quando_libseccomp_ausente(
 
 
 @pytest.mark.asyncio
-async def test_is_alive_reflects_returncode(tmp_path, monkeypatch):
+async def test_is_alive_reflects_returncode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     dead_proc = _fake_proc(returncode=1)
     spawn_mock = AsyncMock(return_value=dead_proc)
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -203,13 +224,13 @@ async def test_is_alive_reflects_returncode(tmp_path, monkeypatch):
     assert spawn_mock.await_count == 2
 
 
-def test_windows_path_to_wsl_traduz_drive_e_barras():
+def test_windows_path_to_wsl_traduz_drive_e_barras() -> None:
     assert wj._windows_path_to_wsl(r"C:\Users\dev\meu projeto") == (
         "/mnt/c/Users/dev/meu projeto"
     )
 
 
-def test_windows_path_to_wsl_raiz_do_drive_sem_barra_sobrando():
+def test_windows_path_to_wsl_raiz_do_drive_sem_barra_sobrando() -> None:
     assert wj._windows_path_to_wsl("D:\\") == "/mnt/d"
 
 
@@ -218,11 +239,13 @@ class TestWsl2Spawn:
     worker é roteado inteiro por dentro de uma distro WSL2 via `wsl.exe`."""
 
     @pytest.fixture(autouse=True)
-    def _win32(self, monkeypatch):
+    def _win32(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(wj, "_is_windows", lambda: True)
 
     @pytest.mark.asyncio
-    async def test_roteia_via_wsl_exe_e_traduz_o_workspace_dir(self, monkeypatch):
+    async def test_roteia_via_wsl_exe_e_traduz_o_workspace_dir(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         proc = _fake_proc()
         spawn_mock = AsyncMock(return_value=proc)
         monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", spawn_mock)
@@ -247,7 +270,9 @@ class TestWsl2Spawn:
         assert wj.sys.executable not in argv
 
     @pytest.mark.asyncio
-    async def test_sem_wsl2_faz_fallback_pro_sandbox_soft(self, monkeypatch):
+    async def test_sem_wsl2_faz_fallback_pro_sandbox_soft(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Sem WSL2 elegível: não bloqueia — degrada pro sandbox soft nativo
         do Windows (worker em subprocess puro, env limpo, cwd no workspace).
         Com `lockdown`, o modo soft só propaga o perfil de rlimits: não há
@@ -327,7 +352,7 @@ class TestWsl2Spawn:
 
 
 @pytest.mark.asyncio
-async def test_request_normal_responde_sem_ser_afetado_por_timeout():
+async def test_request_normal_responde_sem_ser_afetado_por_timeout() -> None:
     """Caminho feliz: worker responde dentro do orçamento — nada é morto."""
     proc = _fake_proc()
     proc.stdout.readline = AsyncMock(return_value=b'{"ok": true}\n')
@@ -341,21 +366,21 @@ async def test_request_normal_responde_sem_ser_afetado_por_timeout():
 
 @pytest.mark.asyncio
 async def test_worker_travado_e_morto_no_timeout_e_respawna_depois(
-    tmp_path, monkeypatch
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Erro/borda: worker que trava sem morrer deixaria o workspace inteiro
     inacessível (é singleton). O timeout precisa matar o processo — depois
     do timeout o protocolo de linhas está dessincronizado, então reaproveitar
     o mesmo worker faria a resposta atrasada virar resposta da requisição
     seguinte."""
 
-    async def _nunca_responde():
+    async def _nunca_responde() -> None:
         await asyncio.sleep(3600)
 
     travado = _fake_proc()
     travado.stdout.readline = _nunca_responde
 
-    def _matar():
+    def _matar() -> None:
         travado.returncode = -9
 
     travado.kill = MagicMock(side_effect=_matar)

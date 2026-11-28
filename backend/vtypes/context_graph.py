@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Literal, NotRequired, TypedDict
 
+from backend.vtypes.contracts import JsonObject, JsonValue
+
 GraphFileType = Literal["code", "document", "paper", "image", "rationale", "concept"]
 GraphConfidence = Literal["EXTRACTED", "INFERRED", "AMBIGUOUS"]
 GraphRelation = Literal[
@@ -61,3 +63,50 @@ class GraphDocument(TypedDict, total=False):
     hyperedges: list[GraphHyperedge]
     input_tokens: int
     output_tokens: int
+
+
+class SymbolCandidateRecord(TypedDict):
+    """Definição de código que corresponde exatamente a uma busca."""
+
+    id: str
+    label: str
+    source_file: str
+    source_location: str
+    community: JsonValue
+
+
+class SymbolResolution(TypedDict):
+    """Resultado da busca exata de um identificador no grafo."""
+
+    status: Literal["resolved", "ambiguous", "not_found"]
+    query: str
+    candidates: list[SymbolCandidateRecord]
+    total: int
+    truncated: bool
+
+
+class SemanticFragment(TypedDict):
+    """Fragmento extraído pelo modelo a partir de um conjunto de arquivos."""
+
+    nodes: list[JsonValue]
+    edges: list[JsonValue]
+    hyperedges: list[JsonValue]
+    input_tokens: int
+    output_tokens: int
+    finish_reason: NotRequired[Literal["stop", "length", "error"]]
+
+
+class ExtractionResult(TypedDict):
+    """Nós e arestas extraídos deterministicamente de um ou mais arquivos."""
+
+    nodes: list[JsonObject]
+    edges: list[JsonObject]
+    hyperedges: NotRequired[list[JsonValue]]
+    raw_calls: NotRequired[list[JsonObject]]
+    error: NotRequired[str]
+    skipped: NotRequired[str]
+    input_tokens: NotRequired[int]
+    output_tokens: NotRequired[int]
+    bash_sources: NotRequired[list[JsonObject]]
+    swift_extensions: NotRequired[list[JsonObject]]
+    swift_type_table: NotRequired[JsonObject]

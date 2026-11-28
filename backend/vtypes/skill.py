@@ -17,6 +17,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.services.extension_trust import TrustRecord
+from backend.vtypes.contracts import JsonValue
 
 
 class Skill(BaseModel):
@@ -63,7 +64,7 @@ class SkillCatalogEntry(BaseModel):
 
     @field_validator("tags", mode="before")
     @classmethod
-    def _normalize_tags(cls, value: object) -> object:
+    def _normalize_tags(cls, value: JsonValue) -> JsonValue:
         if not isinstance(value, str):
             return value
         if not value:

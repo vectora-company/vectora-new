@@ -17,6 +17,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from typing import Literal
 
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage
 
 MB = 1024 * 1024
@@ -250,9 +251,9 @@ def split_data_url(data_url: str) -> tuple[str, str]:
 
 def media_routing_evidence(
     messages: Iterable[VMessage], capability: MediaCapability, model_id: str
-) -> list[dict[str, object]]:
+) -> list[JsonObject]:
     """Registro auditável de como cada anexo foi enviado ao provider."""
-    entries: list[dict[str, object]] = []
+    entries: list[JsonObject] = []
     for message in messages:
         for block in message.content:
             if block.kind != "media":

@@ -6,6 +6,11 @@ mecanismo real, só declara um contrato comum por cima.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject, JsonValue
+
 
 class EnvAdapter:
     """Envolve ``backend/services/env_keys.py`` — persiste em ``.env`` +
@@ -16,7 +21,7 @@ class EnvAdapter:
     def __init__(self, env_var: str) -> None:
         self.env_var = env_var
 
-    def get(self, key: str) -> object:
+    def get(self, key: str) -> JsonValue:
         import os
 
         # Fonte canônica em runtime: os.environ (que apply_llm_env_key seta
@@ -25,7 +30,7 @@ class EnvAdapter:
         # GET /admin/api-keys mocka exatamente os.environ.
         return os.environ.get(self.env_var, "") or None
 
-    def set(self, key: str, value: object) -> None:
+    def set(self, key: str, value: JsonValue) -> None:
         from backend.services.env_keys import apply_llm_env_key, default_env_file
 
         apply_llm_env_key(default_env_file(), self.env_var, str(value or ""))
@@ -41,12 +46,12 @@ class RuntimeSettingsAdapter:
     def __init__(self, settings_key: str | None = None) -> None:
         self.settings_key = settings_key
 
-    def get(self, key: str) -> object:
+    def get(self, key: str) -> JsonValue:
         from backend.workspace.runtime_settings import runtime_settings
 
         return runtime_settings.get(self.settings_key or key)
 
-    def set(self, key: str, value: object) -> None:
+    def set(self, key: str, value: JsonValue) -> None:
         from backend.workspace.runtime_settings import runtime_settings
 
         runtime_settings.set(self.settings_key or key, value)
@@ -63,12 +68,12 @@ class ConfigTomlAdapter:
         self.section = section
         self.toml_key = toml_key
 
-    def get(self, key: str) -> object:
+    def get(self, key: str) -> JsonValue:
         from backend.settings import settings
 
         return getattr(settings, self.toml_key or key, None)
 
-    def set(self, key: str, value: object) -> None:
+    def set(self, key: str, value: JsonValue) -> None:
         from backend.services.license import write_config_section
         from backend.settings import settings
 
@@ -91,16 +96,16 @@ class RegisteredModelsTableAdapter:
     def __init__(self, table: str) -> None:
         self.table = table
 
-    async def list_items(self) -> list[dict[str, str]]:
+    async def list_items(self) -> list[JsonObject]:
         from backend.api.handlers.provider_routing import _list_registered
 
         rows = await _list_registered(self.table)
         return [{"id": r.id, "tag": r.tag, "created_at": r.created_at} for r in rows]
 
-    async def add(self, item: dict[str, str]) -> dict[str, str]:
+    async def add(self, item: JsonObject) -> JsonObject:
         from backend.api.handlers.provider_routing import _register
 
-        registered = await _register(self.table, item["tag"])
+        registered = await _register(self.table, str(item["tag"]))
         return {
             "id": registered.id,
             "tag": registered.tag,
@@ -127,13 +132,13 @@ class UserRowAdapter:
     def __init__(self, env_key: str) -> None:
         self.env_key = env_key
 
-    async def get(self, user_id: str) -> object:
+    async def get(self, user_id: str) -> str | None:
         from backend.rbac import auth as auth_svc
 
         overrides = await auth_svc.get_env_overrides(user_id)
         return overrides.get(self.env_key)
 
-    async def set(self, user_id: str, value: object) -> None:
+    async def set(self, user_id: str, value: JsonValue) -> None:
         from backend.rbac import auth as auth_svc
 
         await auth_svc.set_env_override(user_id, self.env_key, str(value or ""))
@@ -151,7 +156,7 @@ class UserProfileAdapter:
     schema). Delega para ``rbac.auth``.
     """
 
-    async def list_items(self, user_id: str) -> list[dict[str, object]]:
+    async def list_items(self, user_id: str) -> list[JsonObject]:
         from backend.rbac import auth as auth_svc
 
         user = await auth_svc.get_user_by_id(user_id)
@@ -167,7 +172,7 @@ class UserProfileAdapter:
             }
         ]
 
-    async def add(self, item: dict[str, object]) -> dict[str, object] | None:
+    async def add(self, item: JsonObject) -> JsonObject | None:
         from backend.rbac import auth as auth_svc
 
         user_id = str(item["user_id"])
@@ -175,7 +180,7 @@ class UserProfileAdapter:
         await auth_svc.update_profile(user_id, name=name)
         return await self._read_one(user_id)
 
-    async def _read_one(self, user_id: str) -> dict[str, object] | None:
+    async def _read_one(self, user_id: str) -> JsonObject | None:
         items = await self.list_items(user_id)
         return items[0] if items else None
 
@@ -195,7 +200,7 @@ class MemoryAdapter:
     quebrar — a listagem completa requer o contexto do agente.
     """
 
-    async def list_items(self, user_id: str) -> list[dict[str, object]]:
+    async def list_items(self, user_id: str) -> list[JsonObject]:
         try:
             import backend.tools.memory as mem
             from backend.tools.context import ToolContext
@@ -215,13 +220,13 @@ class MemoryAdapter:
         return [
             {
                 "key": item.key,
-                "content": item.value.get("content", ""),
+                "content": str(item.value.get("content", "")),
                 "updated_at": item.value.get("updated_at"),
             }
             for item in items
         ]
 
-    async def add(self, item: dict[str, object]) -> dict[str, object] | None:
+    async def add(self, item: JsonObject) -> JsonObject | None:
         import backend.tools.memory as mem
 
         user_id = str(item["user_id"])
@@ -246,7 +251,7 @@ class MemoryAdapter:
         from backend.tools.memory import _memory_namespace
 
         ns = _memory_namespace(ctx)
-        value = {
+        value: JsonObject = {
             "key": key,
             "content": content,
             "metadata": {},

@@ -8,6 +8,7 @@ a mesma lógica `_impl` que os handlers HTTP já expõem, sem duplicar.
 from __future__ import annotations
 
 import json
+from typing import NoReturn
 from unittest.mock import AsyncMock
 
 import pytest
@@ -36,8 +37,8 @@ def _ctx(user_id: str = "local") -> ToolContext:
 
 @pytest.mark.asyncio
 async def test_install_mcp_from_registry_installs_connector_without_env_vars(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import mcp_marketplace
 
     connector = mcp_marketplace.MCPConnector(
@@ -68,8 +69,8 @@ async def test_install_mcp_from_registry_installs_connector_without_env_vars(
 
 @pytest.mark.asyncio
 async def test_install_mcp_from_registry_missing_env_vars_does_not_install(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import mcp_marketplace
 
     connector = mcp_marketplace.MCPConnector(
@@ -96,7 +97,9 @@ async def test_install_mcp_from_registry_missing_env_vars_does_not_install(
 
 
 @pytest.mark.asyncio
-async def test_install_mcp_from_registry_unknown_connector_returns_error(monkeypatch):
+async def test_install_mcp_from_registry_unknown_connector_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import mcp_marketplace
 
     monkeypatch.setattr(mcp_marketplace, "list_registry", AsyncMock(return_value=[]))
@@ -114,7 +117,9 @@ async def test_install_mcp_from_registry_unknown_connector_returns_error(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_install_skill_from_catalog_installs_skill(monkeypatch):
+async def test_install_skill_from_catalog_installs_skill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import registry_client
     from backend.workspace import skills as skills_mod
 
@@ -147,7 +152,9 @@ async def test_install_skill_from_catalog_installs_skill(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_install_skill_from_catalog_unknown_skill_returns_error(monkeypatch):
+async def test_install_skill_from_catalog_unknown_skill_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import registry_client
 
     monkeypatch.setattr(registry_client, "fetch_catalog", AsyncMock(return_value=[]))
@@ -165,7 +172,9 @@ async def test_install_skill_from_catalog_unknown_skill_returns_error(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_install_memory_bucket_installs_collection(monkeypatch):
+async def test_install_memory_bucket_installs_collection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import memory_buckets
 
     monkeypatch.setattr(
@@ -181,8 +190,8 @@ async def test_install_memory_bucket_installs_collection(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_install_memory_bucket_error_returns_status_error_not_raised(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import memory_buckets
 
     async def _boom(bucket_id: str) -> str:
@@ -202,7 +211,7 @@ async def test_install_memory_bucket_error_returns_status_error_not_raised(
 
 
 @pytest.mark.asyncio
-async def test_uninstall_mcp_removes_connector(monkeypatch):
+async def test_uninstall_mcp_removes_connector(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.api.handlers import mcp_marketplace
 
     monkeypatch.setattr(
@@ -217,7 +226,9 @@ async def test_uninstall_mcp_removes_connector(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_uninstall_mcp_not_installed_returns_not_found(monkeypatch):
+async def test_uninstall_mcp_not_installed_returns_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import mcp_marketplace
 
     monkeypatch.setattr(
@@ -237,7 +248,9 @@ async def test_uninstall_mcp_not_installed_returns_not_found(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_delete_skill_removes_installed_skill(monkeypatch):
+async def test_delete_skill_removes_installed_skill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace import skills as skills_mod
 
     monkeypatch.setattr(skills_mod, "remove_skill", lambda user_id, skill_id: True)
@@ -248,7 +261,9 @@ async def test_delete_skill_removes_installed_skill(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_delete_skill_unknown_skill_returns_error(monkeypatch):
+async def test_delete_skill_unknown_skill_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace import skills as skills_mod
 
     monkeypatch.setattr(skills_mod, "remove_skill", lambda user_id, skill_id: False)
@@ -264,7 +279,9 @@ async def test_delete_skill_unknown_skill_returns_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_verify_skill_revalidates_and_returns_status(monkeypatch):
+async def test_verify_skill_revalidates_and_returns_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace import skills as skills_mod
 
     monkeypatch.setattr(
@@ -279,10 +296,12 @@ async def test_verify_skill_revalidates_and_returns_status(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_verify_skill_propagates_internal_error_as_typed_error(monkeypatch):
+async def test_verify_skill_propagates_internal_error_as_typed_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.workspace import skills as skills_mod
 
-    def _boom(user_id, skill_id):
+    def _boom(user_id: str, skill_id: str) -> NoReturn:
         raise FileNotFoundError("SKILL.md ausente")
 
     monkeypatch.setattr(skills_mod, "verify_skill", _boom)
@@ -298,7 +317,9 @@ async def test_verify_skill_propagates_internal_error_as_typed_error(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_publish_memory_bucket_tool_publishes_with_token(monkeypatch):
+async def test_publish_memory_bucket_tool_publishes_with_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import license as license_service
     from backend.services import memory_buckets
 
@@ -336,8 +357,8 @@ async def test_publish_memory_bucket_tool_publishes_with_token(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_publish_memory_bucket_tool_no_token_returns_error_without_publishing(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import license as license_service
     from backend.services import memory_buckets
 
@@ -364,7 +385,9 @@ async def test_publish_memory_bucket_tool_no_token_returns_error_without_publish
 
 
 @pytest.mark.asyncio
-async def test_save_mcp_env_var_persists_override(monkeypatch):
+async def test_save_mcp_env_var_persists_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.rbac import auth as auth_svc
 
     set_spy = AsyncMock()
@@ -388,10 +411,12 @@ async def test_save_mcp_env_var_persists_override(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_save_mcp_env_var_internal_error_returns_typed_error(monkeypatch):
+async def test_save_mcp_env_var_internal_error_returns_typed_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.rbac import auth as auth_svc
 
-    async def _boom(user_id, key, value):
+    async def _boom(user_id: str, key: str, value: str) -> NoReturn:
         raise RuntimeError("banco indisponível")
 
     monkeypatch.setattr(auth_svc, "set_env_override", _boom)

@@ -9,7 +9,14 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, TypedDict, cast
+from typing import TYPE_CHECKING, Protocol, TypedDict, cast
+
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+if TYPE_CHECKING:
+    from typing import IO
+
+    from backend.vtypes.contracts import JsonValue
 
 
 class DiffHunk(TypedDict):
@@ -19,10 +26,13 @@ class DiffHunk(TypedDict):
     lines: list[str]
 
 
+type GitOption = str | int | bool | bytes | IO[bytes]
+
+
 class GitCommands(Protocol):
     """Subset of GitPython commands required by the turn-file tracker."""
 
-    def status(self, *args: str, **kwargs: object) -> str | bytes:
+    def status(self, *args: str, **kwargs: GitOption) -> str | bytes:
         """Return a porcelain working-tree status."""
         ...
 
@@ -30,15 +40,17 @@ class GitCommands(Protocol):
         """Read a file from a Git revision."""
         ...
 
-    def diff(self, *args: str, **kwargs: object) -> str | bytes:
+    def diff(self, *args: str, **kwargs: GitOption) -> str | bytes:
         """Return a revision diff or a list of changed paths."""
         ...
 
-    def cat_file(self, *args: str, **kwargs: object) -> str | bytes:
+    def cat_file(self, *args: str, **kwargs: GitOption) -> str | bytes:
         """Check whether an object exists in a revision."""
         ...
 
-    def execute(self, command: list[str], **kwargs: object) -> object:
+    def execute(
+        self, command: list[str], **kwargs: GitOption
+    ) -> str | bytes | tuple[int, str | bytes, str]:
         """Execute a Git command with optional stdin."""
         ...
 
@@ -407,7 +419,7 @@ def _workspace_path(repository: RepositorySnapshot, repo_path: str) -> str | Non
 
 
 def _explicit_tool_paths(
-    snapshot: TurnWorkspaceSnapshot, tool_name: str, arguments: Mapping[str, object]
+    snapshot: TurnWorkspaceSnapshot, tool_name: str, arguments: Mapping[str, JsonValue]
 ) -> set[str]:
     """Resolve explicit file arguments from first-party file mutation tools."""
     path_arguments: tuple[str, ...]
@@ -440,7 +452,7 @@ def _explicit_tool_paths(
 def capture_tool_state(
     run_id: str,
     tool_name: str = "",
-    arguments: Mapping[str, object] | None = None,
+    arguments: Mapping[str, JsonValue] | None = None,
 ) -> ToolFileState:
     """Snapshot files before a tool, including its explicit file targets."""
     snapshot = _active.get(run_id)
@@ -760,15 +772,21 @@ def latest(
     return latest_run, "finalized", changes
 
 
-def encode(changes: list[TurnFileChange]) -> list[dict[str, object]]:
+def encode(changes: list[TurnFileChange]) -> list[JsonObject]:
     """Serialize turn-file dataclasses for SSE and persistence boundaries."""
-    return [
-        {
-            "path": change.path,
-            "status": change.status,
-            "additions": change.additions,
-            "deletions": change.deletions,
-            "hunks": change.hunks,
-        }
-        for change in changes
-    ]
+    encoded: list[JsonObject] = []
+    for change in changes:
+        hunks: list[JsonValue] = [
+            {"header": hunk["header"], "lines": [*hunk["lines"]]}
+            for hunk in change.hunks
+        ]
+        encoded.append(
+            {
+                "path": change.path,
+                "status": change.status,
+                "additions": change.additions,
+                "deletions": change.deletions,
+                "hunks": hunks,
+            }
+        )
+    return encoded

@@ -17,7 +17,12 @@ uma URL específica reutiliza a sessão autenticada do Browser Workbench.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Browser, Playwright
+
+    from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +30,18 @@ _DUCKDUCKGO_API_URL = "https://api.duckduckgo.com/"
 _HTTP_TIMEOUT_S = 10.0
 _NAV_TIMEOUT_MS = 10_000
 
-_browser: Any = None
-_playwright: Any = None
+_browser: Browser | None = None
+_playwright: Playwright | None = None
 
 
-def _get_browser() -> Any:
+def _get_browser() -> Browser:
     global _browser, _playwright
     if _browser is None:
         from playwright.sync_api import sync_playwright
 
         from backend.browser.cdp import electron_cdp_endpoint, electron_cdp_headers
 
-        started_playwright: Any = None
+        started_playwright: Playwright | None = None
         try:
             endpoint = electron_cdp_endpoint()
             started_playwright = sync_playwright().start()
@@ -78,7 +83,7 @@ def close_search_fallback_browser() -> None:
         _playwright = None
 
 
-def search_fallback(query: str, max_results: int = 5) -> list[dict[str, str]]:
+def search_fallback(query: str, max_results: int = 5) -> list[JsonObject]:
     """Busca `query` na API Instant Answer do DuckDuckGo (sem chave).
 
     Levanta em caso de falha de rede — o caller decide o fallback textual,
@@ -94,7 +99,7 @@ def search_fallback(query: str, max_results: int = 5) -> list[dict[str, str]]:
     response.raise_for_status()
     data = response.json()
 
-    results: list[dict[str, str]] = []
+    results: list[JsonObject] = []
     if data.get("AbstractText"):
         results.append(
             {

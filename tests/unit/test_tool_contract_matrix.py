@@ -17,6 +17,7 @@ from backend.nodes import tools as node_tools
 from backend.services.agent_factory import get_native_agent
 from backend.tools.context import ToolContext
 from backend.tools.registry import TOOL_REGISTRY, ToolSpec
+from tests.json_values import as_object
 
 WORKBENCH_GROUPS = {
     "browser": node_tools.BROWSER_TOOLS,
@@ -82,7 +83,7 @@ def test_workbench_tool_has_async_handler_and_valid_openai_schema(
     assert schema["type"] == "function"
     function = schema["function"]
     assert function["name"] == spec.name
-    assert "ctx" not in function["parameters"].get("properties", {})
+    assert "ctx" not in as_object(function["parameters"].get("properties", {}))
     # Falha aqui detecta schemas que o provider não consegue serializar antes
     # de qualquer chamada de rede ou de UI.
     json.dumps(schema)
@@ -134,5 +135,7 @@ def test_optional_tool_context_is_internal_to_github_tools() -> None:
         spec = TOOL_REGISTRY.get(name)
         assert spec is not None
         assert spec.needs_ctx is True
-        properties = spec.openai_schema()["function"]["parameters"]["properties"]
+        properties = as_object(
+            spec.openai_schema()["function"]["parameters"]["properties"]
+        )
         assert "ctx" not in properties

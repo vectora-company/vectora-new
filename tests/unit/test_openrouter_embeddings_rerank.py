@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
 from backend.llm.openrouter.embeddings import OpenRouterEmbeddings
@@ -27,8 +28,8 @@ def _client(handler) -> OpenRouterClient:
 
 class TestEmbeddings:
     @pytest.mark.asyncio
-    async def test_devolve_um_vetor_por_documento_na_ordem(self):
-        def handler(_req):
+    async def test_devolve_um_vetor_por_documento_na_ordem(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -48,12 +49,12 @@ class TestEmbeddings:
         assert vetores == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
     @pytest.mark.asyncio
-    async def test_resposta_fora_de_ordem_e_reordenada_pelo_index(self):
+    async def test_resposta_fora_de_ordem_e_reordenada_pelo_index(self) -> None:
         """Erro/borda: a API não garante a ordem de `data`. Confiar na ordem
         de chegada associa o vetor ao chunk errado — corrupção silenciosa do
         índice, que só aparece como busca ruim muito depois."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -68,11 +69,11 @@ class TestEmbeddings:
         assert await emb.aembed_documents(["primeiro", "segundo"]) == [[1.0], [9.0]]
 
     @pytest.mark.asyncio
-    async def test_data_vazio_vira_erro_tipado_e_nao_lista_vazia(self):
+    async def test_data_vazio_vira_erro_tipado_e_nao_lista_vazia(self) -> None:
         """Erro/borda: devolver `[]` gravaria vetores nulos no índice do RAG.
         Melhor falhar a ingestão do que corromper a busca em silêncio."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"data": []})
 
         emb = OpenRouterEmbeddings(model="m", client=_client(handler))
@@ -80,8 +81,8 @@ class TestEmbeddings:
             await emb.aembed_documents(["algo"])
 
     @pytest.mark.asyncio
-    async def test_item_sem_embedding_tambem_falha(self):
-        def handler(_req):
+    async def test_item_sem_embedding_tambem_falha(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"data": [{"index": 0}]})
 
         emb = OpenRouterEmbeddings(model="m", client=_client(handler))
@@ -89,7 +90,7 @@ class TestEmbeddings:
             await emb.aembed_documents(["algo"])
 
     @pytest.mark.asyncio
-    async def test_input_type_diferencia_query_de_documento(self):
+    async def test_input_type_diferencia_query_de_documento(self) -> None:
         """Parâmetro que o `OpenAIEmbeddings` com base_url trocado não expõe —
         modelos assimétricos precisam saber se é consulta ou documento."""
         capturados: list[dict] = []
@@ -137,7 +138,7 @@ class TestRerank:
         return handler
 
     @pytest.mark.asyncio
-    async def test_ordem_segue_o_relevance_score(self):
+    async def test_ordem_segue_o_relevance_score(self) -> None:
         rr = OpenRouterRerank(
             model="cohere/rerank-v3.5", client=_client(self._handler_ok()), top_n=3
         )
@@ -150,14 +151,14 @@ class TestRerank:
         ]
 
     @pytest.mark.asyncio
-    async def test_score_vai_no_metadata_pra_ui_poder_mostrar(self):
+    async def test_score_vai_no_metadata_pra_ui_poder_mostrar(self) -> None:
         rr = OpenRouterRerank(model="m", client=_client(self._handler_ok()), top_n=3)
         saida = await rr.acompress_documents(self._DOCS, "q")
 
         assert saida[0].metadata["relevance_score"] == pytest.approx(0.98)
 
     @pytest.mark.asyncio
-    async def test_top_n_maior_que_os_documentos_nao_estoura(self):
+    async def test_top_n_maior_que_os_documentos_nao_estoura(self) -> None:
         """Erro/borda: pedir mais do que existe é comum quando o `top_k` é
         fixo e o bucket tem poucos documentos."""
         rr = OpenRouterRerank(model="m", client=_client(self._handler_ok()), top_n=50)
@@ -166,11 +167,11 @@ class TestRerank:
         assert len(saida) == 3
 
     @pytest.mark.asyncio
-    async def test_results_vazio_degrada_pra_ordem_original(self):
+    async def test_results_vazio_degrada_pra_ordem_original(self) -> None:
         """Erro/borda: zerar os resultados é pior que não reordenar — o
         usuário perderia respostas que a busca já tinha encontrado."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"results": []})
 
         rr = OpenRouterRerank(model="m", client=_client(handler), top_n=3)
@@ -179,11 +180,11 @@ class TestRerank:
         assert [d.page_content for d in saida] == [d.page_content for d in self._DOCS]
 
     @pytest.mark.asyncio
-    async def test_index_fora_do_intervalo_e_ignorado(self):
+    async def test_index_fora_do_intervalo_e_ignorado(self) -> None:
         """Erro/borda: `index` além da lista enviada estouraria IndexError e
         derrubaria a busca inteira."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -200,7 +201,7 @@ class TestRerank:
         assert [d.page_content for d in saida] == ["irrelevante"]
 
     @pytest.mark.asyncio
-    async def test_lista_vazia_de_documentos_nem_chama_a_api(self):
+    async def test_lista_vazia_de_documentos_nem_chama_a_api(self) -> None:
         chamou = False
 
         def handler(_req):
@@ -214,7 +215,7 @@ class TestRerank:
 
 
 class TestRerankerTypeAceitaOpenRouter:
-    def test_literal_inclui_openrouter(self):
+    def test_literal_inclui_openrouter(self) -> None:
         """`f38f7b85` fechou o Literal em cohere/voyage/none com a justificativa
         errada de que o OpenRouter não teria API de rerank."""
         from backend.settings import Settings
@@ -222,7 +223,7 @@ class TestRerankerTypeAceitaOpenRouter:
         s = Settings(reranker_type="openrouter")  # type: ignore[arg-type]
         assert s.reranker_type == "openrouter"
 
-    def test_valor_fora_do_literal_continua_rejeitado(self):
+    def test_valor_fora_do_literal_continua_rejeitado(self) -> None:
         """Erro/borda: abrir o Literal não pode virar campo livre — um typo
         desligaria o rerank em silêncio."""
         import pydantic

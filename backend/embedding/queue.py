@@ -10,12 +10,17 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Any, Self
+from types import SimpleNamespace
+from typing import Self
 from uuid import uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, Text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.embedding_queue import EmbeddingFailure, IngestionJob
+from backend.vtypes.storage import HealthResult
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +144,7 @@ class EmbeddingQueue:
         self,
         text: str,
         collection: str = "articles",
-        metadata: dict[str, Any] | None = None,
+        metadata: JsonObject | None = None,
         job_id: str | None = None,
     ) -> str:
         """Adiciona um texto à fila de embedding para processamento posterior.
@@ -229,7 +234,7 @@ class EmbeddingQueue:
                 raise ValueError("Job pertence a outro workspace")
             await session.commit()
 
-    async def list_ingestion_jobs(self, workspace_id: str) -> list[dict[str, Any]]:
+    async def list_ingestion_jobs(self, workspace_id: str) -> list[IngestionJob]:
         """Lista somente os metadados dos jobs do workspace solicitado."""
         from sqlalchemy import select
 
@@ -243,12 +248,16 @@ class EmbeddingQueue:
             )
             return [
                 {
-                    "job_id": row.job_id,
-                    "workspace_id": row.workspace_id,
-                    "path": row.path,
-                    "total_chunks": row.total_chunks,
-                    "enqueue_done": row.enqueue_done,
-                    "enqueue_error": row.enqueue_error,
+                    "job_id": str(row.job_id),
+                    "workspace_id": str(row.workspace_id),
+                    "path": str(row.path),
+                    "total_chunks": None
+                    if row.total_chunks is None
+                    else int(str(row.total_chunks)),
+                    "enqueue_done": bool(row.enqueue_done),
+                    "enqueue_error": None
+                    if row.enqueue_error is None
+                    else str(row.enqueue_error),
                 }
                 for row in result.scalars()
             ]
@@ -673,7 +682,7 @@ class EmbeddingQueue:
         except Exception:
             logger.exception("embedding_queue_reconcile_failed")
 
-    async def list_failures(self, limit: int = 20) -> list[dict[str, Any]]:
+    async def list_failures(self, limit: int = 20) -> list[EmbeddingFailure]:
         """Resume os itens failed/DLQ para o painel do administrador."""
         records = await self.get_failed(limit)
         return [
@@ -1056,7 +1065,7 @@ class PostgresQueueDB:
                 await session.commit()
             return imported
 
-    async def health(self) -> dict[str, object]:
+    async def health(self) -> HealthResult:
         """Verifica se a conexão Postgres está acessível."""
         try:
             from backend.storage.factory import get_pg_pool
@@ -1070,9 +1079,9 @@ class PostgresQueueDB:
 
     async def enqueue(
         self,
-        text: str | dict[str, Any],
+        text: str | JsonObject,
         collection: str = "articles",
-        metadata: dict[str, Any] | None = None,
+        metadata: JsonObject | None = None,
         job_id: str | None = None,
     ) -> str:
         """Enfileira um documento e conserva o formato usado pelo worker."""
@@ -1091,7 +1100,7 @@ class PostgresQueueDB:
                 "job_id": job_id,
             }
         )
-        queue_id = task.get("queue_id") or str(uuid.uuid4())
+        queue_id = str(task.get("queue_id") or uuid.uuid4())
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
             await conn.execute(
@@ -1174,7 +1183,7 @@ class PostgresQueueDB:
             )
         return len(rows)
 
-    async def list_failures(self, limit: int = 20) -> list[dict[str, Any]]:
+    async def list_failures(self, limit: int = 20) -> list[EmbeddingFailure]:
         """Resume os itens failed/DLQ para o painel do administrador."""
         if limit < 1:
             raise ValueError("O limite de falhas deve ser positivo")
@@ -1191,7 +1200,7 @@ class PostgresQueueDB:
                 """,
                 limit,
             )
-        failures: list[dict[str, Any]] = []
+        failures: list[EmbeddingFailure] = []
         for row in rows:
             task = row["task_json"]
             if isinstance(task, str):
@@ -1249,7 +1258,7 @@ class PostgresQueueDB:
             )
         return len(rows)
 
-    async def dequeue(self, limit: int = 1) -> list[dict[str, Any]]:
+    async def dequeue(self, limit: int = 1) -> list[JsonObject]:
         """Retira até ``limit`` tarefas pending com SKIP LOCKED (sem bloqueio).
 
         Marca as tarefas retiradas como ``processing``.
@@ -1330,18 +1339,16 @@ class PostgresQueueDB:
     # Compatibilidade com a interface do BackgroundEmbeddingWorker (F8)
     # ------------------------------------------------------------------
 
-    async def get_pending(self, limit: int = 10) -> list[Any]:
+    async def get_pending(self, limit: int = 10) -> list[SimpleNamespace]:
         """Retorna até ``limit`` tarefas via SKIP LOCKED, marcando como 'processing'.
 
         Retorna objetos ``SimpleNamespace`` com os mesmos atributos de
         ``EmbeddingQueueRecord`` para compatibilidade com o worker existente.
         """
-        import types
-
         tasks = await self.dequeue(limit)
         result = []
         for t in tasks:
-            ns = types.SimpleNamespace(
+            ns = SimpleNamespace(
                 queue_id=t.get("queue_id", ""),
                 text=t.get("text", ""),
                 collection=t.get("collection", ""),

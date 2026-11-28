@@ -36,6 +36,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from backend.vtypes.contracts import JsonObject, JsonValue
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -92,15 +94,15 @@ class _SpanCtx:
     status: str = "ok"
     in_tokens: int | None = None
     out_tokens: int | None = None
-    _metadata: dict[str, Any] = field(default_factory=dict, repr=False)
+    _metadata: JsonObject = field(default_factory=dict, repr=False)
 
-    def set(self, **kwargs: Any) -> None:
+    def set(self, **kwargs: JsonValue) -> None:
         """Adiciona campos extras ao span: routing, model, n_docs, etc."""
         for k, v in kwargs.items():
             if k == "in_tokens":
-                self.in_tokens = int(v) if v is not None else None
+                self.in_tokens = int(v) if isinstance(v, int | float | str) else None
             elif k == "out_tokens":
-                self.out_tokens = int(v) if v is not None else None
+                self.out_tokens = int(v) if isinstance(v, int | float | str) else None
             elif k == "status":
                 self.status = str(v)
             else:
@@ -246,7 +248,7 @@ class VectoraTracer:
         node: str,
         event: str,
         elapsed_s: float,
-        metadata: dict[str, Any] | None = None,
+        metadata: JsonObject | None = None,
         session_id: int | None = None,
         status: str = "ok",
     ) -> None:

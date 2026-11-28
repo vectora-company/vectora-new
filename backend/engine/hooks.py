@@ -44,8 +44,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from backend.vtypes.contracts import JsonObject, as_int
+
 if TYPE_CHECKING:
     from backend.tools.context import ToolContext
+    from backend.workspace.workspace import Workspace
     from backend.workspace.workspace_config import HookRule
 
 logger = logging.getLogger(__name__)
@@ -80,7 +83,7 @@ class HookOutcome:
     reason: str
     duration_ms: int
 
-    def evidence(self) -> dict[str, Any]:
+    def evidence(self) -> JsonObject:
         """Entrada de evidência do run."""
         return {"type": "hook_run", **asdict(self)}
 
@@ -129,7 +132,7 @@ def build_payload(
     *,
     ctx: ToolContext,
     tool_name: str,
-    tool_args: dict[str, Any],
+    tool_args: JsonObject,
     result: str | None,
     redact: Callable[[str], str],
 ) -> str:
@@ -142,7 +145,7 @@ def build_payload(
     from backend.persistence.native.agent_run import redact_sensitive_data
 
     tool_args = redact_sensitive_data(tool_args)
-    payload: dict[str, Any] = {
+    payload: JsonObject = {
         "version": PAYLOAD_VERSION,
         "event": rule.event,
         "hook_id": rule.id,
@@ -226,7 +229,7 @@ async def _run_command(
             raise
         if "error" in response:
             raise RuntimeError(str(response["error"]))
-        return int(response.get("exit_code", 0)), str(response.get("stdout", ""))
+        return as_int(response.get("exit_code", 0)), str(response.get("stdout", ""))
 
     process = await asyncio.create_subprocess_exec(
         *rule.command,
@@ -291,7 +294,7 @@ async def run_hook(
     *,
     ctx: ToolContext,
     tool_name: str,
-    tool_args: dict[str, Any],
+    tool_args: JsonObject,
     result: str | None,
     root: Path,
     approved: bool,
@@ -334,7 +337,7 @@ async def run_hook(
     )
 
 
-def _workspace_for(ctx: ToolContext) -> Any | None:
+def _workspace_for(ctx: ToolContext) -> Workspace | None:
     from backend.workspace.workspace import workspace_registry
 
     workspace_id = getattr(ctx, "workspace_id", "") or ""
@@ -350,7 +353,7 @@ async def run_hooks(
     *,
     ctx: ToolContext,
     tool_name: str,
-    tool_args: dict[str, Any],
+    tool_args: JsonObject,
     result: str | None = None,
     redact: Callable[[str], str],
 ) -> list[HookOutcome]:

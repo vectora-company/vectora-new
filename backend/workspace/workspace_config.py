@@ -29,6 +29,8 @@ from pydantic import (
     field_validator,
 )
 
+from backend.vtypes.sandbox import TomlValue
+
 logger = logging.getLogger(__name__)
 
 WORKSPACE_CONFIG_FILENAME = "vectora.toml"
@@ -149,7 +151,7 @@ class HooksSection(BaseModel):
 
     @field_validator("rules", mode="before")
     @classmethod
-    def _keep_valid_rules(cls, value: object) -> object:
+    def _keep_valid_rules(cls, value: TomlValue) -> list[HookRule]:
         if not isinstance(value, list):
             return []
         valid: list[HookRule] = []
@@ -198,7 +200,7 @@ class WorkspaceConfig(BaseModel):
     computer_use: ComputerUseSection = ComputerUseSection()
 
 
-def _resolve_env_placeholders(value: object) -> object:
+def _resolve_env_placeholders(value: TomlValue) -> TomlValue:
     """Substitui placeholders ``${VAR}`` por ``os.environ``, recursivamente."""
     if isinstance(value, str):
         return _ENV_VAR_RE.sub(lambda m: os.environ.get(m.group(1), m.group(0)), value)

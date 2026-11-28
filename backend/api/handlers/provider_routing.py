@@ -62,9 +62,10 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
-from typing import Annotated, Any, Literal, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, Literal, ParamSpec, TypedDict, TypeVar
 from urllib.parse import quote, urlparse
 
+import aiosqlite
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError
@@ -72,7 +73,26 @@ from pydantic import BaseModel, Field, ValidationError
 from backend.api.handlers.admin import require_admin
 from backend.services.subprocess_logging import pipe_to_logger
 from backend.settings import CapabilityState, settings
+from backend.vtypes.api import ModelCapabilities
+from backend.vtypes.contracts import JsonObject, JsonValue
+from backend.vtypes.desktop import LlamacppStartResult, LlamacppStatus
+from backend.vtypes.dmr import (
+    DmrCancellation,
+    DmrHttpStatus,
+    DmrJobDetail,
+    DmrJobList,
+    DmrJobOutcome,
+    DmrJobSummary,
+    DmrModelList,
+    DmrOperationResult,
+    DmrStartResult,
+    DmrStatus,
+    DockerHostInfo,
+)
 from backend.vtypes.providers import ProviderModel
+
+if TYPE_CHECKING:
+    from backend.services.docker_model_runner import DmrJob
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +102,7 @@ router = APIRouter(prefix="/provider-routing", tags=["provider-routing"])
 @router.get("/model-capabilities")
 async def get_model_capabilities(
     provider: str | None = None, capability: str | None = None, refresh: bool = False
-) -> dict[str, Any]:
+) -> ModelCapabilities:
     """Descobre modelos e capacidades anunciados pelos providers configurados."""
     from backend.services.model_catalog import (
         MODEL_CAPABILITIES,
@@ -204,7 +224,7 @@ def _runtime_transition(  # noqa: UP047
     return guarded
 
 
-async def _get_http_client() -> AsyncIterator[Any]:
+async def _get_http_client() -> AsyncIterator[httpx.AsyncClient]:
     """Dependency do client HTTP usado pelas chamadas de descoberta/catálogo.
 
     Injeção via FastAPI (`Depends`) em vez de `httpx.AsyncClient()` direto —
@@ -215,8 +235,6 @@ async def _get_http_client() -> AsyncIterator[Any]:
     patch pode não estar mais em vigor quando o handler roda, dependendo de
     timing do event loop; reproduzido só em CI Linux, nunca localmente).
     """
-    import httpx
-
     async with httpx.AsyncClient(timeout=10) as client:
         yield client
 
@@ -254,7 +272,7 @@ class OllamaModelInfo(BaseModel):
 
 
 def _validate_redirect_host(
-    response: Any, *, allowed: frozenset[str], suffixes: tuple[str, ...] = ()
+    response: httpx.Response, *, allowed: frozenset[str], suffixes: tuple[str, ...] = ()
 ) -> None:
     """Impede que um redirect transforme uma fonte oficial em proxy arbitrário."""
     host = getattr(getattr(response, "url", None), "host", None)
@@ -574,7 +592,7 @@ def _confirmation_evidence_sha256(
     return serialized, evidence
 
 
-async def _get_db() -> Any:
+async def _get_db() -> aiosqlite.Connection:
     """Reusa a conexão SQLite do handler de threads (mesmo arquivo
     ~/.vectora/checkpoints.db) em vez de abrir outra."""
     from backend.api.handlers.threads import _get_db as _threads_db
@@ -585,7 +603,7 @@ async def _get_db() -> Any:
 # `table` nunca vem de input externo — só os 2 literais definidos abaixo
 # (ollama_registered_models / openrouter_registered_models) — f-string é
 # segura aqui, sem risco de SQL injection via request.
-async def _ensure_registry_table(db: Any, table: str) -> None:
+async def _ensure_registry_table(db: aiosqlite.Connection, table: str) -> None:
     """Executa a operação  ensure registry table."""
     await db.execute(f"""
         CREATE TABLE IF NOT EXISTS {table} (
@@ -597,7 +615,7 @@ async def _ensure_registry_table(db: Any, table: str) -> None:
     await db.commit()
 
 
-async def _ensure_llamacpp_confirmation_table(db: Any) -> None:
+async def _ensure_llamacpp_confirmation_table(db: aiosqlite.Connection) -> None:
     """Executa a operação  ensure llamacpp confirmation table."""
     await db.execute(
         """
@@ -615,7 +633,7 @@ async def _ensure_llamacpp_confirmation_table(db: Any) -> None:
     await db.commit()
 
 
-async def _clear_llamacpp_confirmations(db: Any) -> None:
+async def _clear_llamacpp_confirmations(db: aiosqlite.Connection) -> None:
     """Executa a operação  clear llamacpp confirmations."""
     await _ensure_llamacpp_confirmation_table(db)
     await db.execute("DELETE FROM llamacpp_model_confirmations")
@@ -1910,7 +1928,7 @@ async def confirm_llamacpp_model(
         raise HTTPException(status_code=409, detail="manifesto de runtime inválido")
     if not any(
         isinstance(item, dict) and item.get("id") == body.runtime_id
-        for item in manifest.get("runtimes", [])
+        for item in _items(manifest, "runtimes")
     ):
         raise HTTPException(status_code=409, detail="runtime não está instalado")
     model_sha256 = await asyncio.to_thread(_sha256_file, model_path)
@@ -1966,12 +1984,12 @@ async def list_llamacpp_model_confirmations() -> list[LlamaCppModelConfirmation]
     try:
         manifest = await _read_json_file_async(_llamacpp_manifest_path())
         if not isinstance(manifest, dict):
-            manifest = {"runtimes": []}
+            manifest = _empty_manifest("runtimes")
     except (FileNotFoundError, json.JSONDecodeError):
-        manifest = {"runtimes": []}
+        manifest = _empty_manifest("runtimes")
     runtime_ids = {
         item.get("id")
-        for item in manifest.get("runtimes", [])
+        for item in _items(manifest, "runtimes")
         if isinstance(item, dict)
     }
     valid: list[LlamaCppModelConfirmation] = []
@@ -2120,15 +2138,54 @@ async def set_llamacpp_mode(
 
 @router.get("/llamacpp/sidecar/status")
 @router.get("/llama-cpp/sidecar/status", include_in_schema=False)
-async def get_llamacpp_sidecar_status() -> dict[str, int | bool | str | None]:
+async def get_llamacpp_sidecar_status() -> LlamacppStatus:
     """Expõe apenas o estado do processo gerenciado pelo Vectora."""
     from backend.services.llamacpp_sidecar import llamacpp_status
 
     return llamacpp_status()
 
 
+async def _read_dmr_managed_models() -> list[str]:
+    """Referências que o Vectora registrou no manifesto do Model Runner."""
+    try:
+        manifest = await _read_json_file_async(_dmr_manifest_path())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+    models = _items(manifest, "models") if isinstance(manifest, dict) else []
+    if isinstance(models, dict):
+        return [str(reference) for reference in models]
+    if not isinstance(models, list):
+        return []
+    return [
+        str(item["reference"])
+        for item in models
+        if isinstance(item, dict) and isinstance(item.get("reference"), str)
+    ]
+
+
+def _dmr_job_summary(job: DmrJob) -> DmrJobSummary:
+    return {
+        "id": job.id,
+        "operation": job.operation,
+        "reference": job.reference,
+        "context_size": job.context_size,
+        "progress": job.progress,
+        "phase": job.phase,
+        "status": job.status,
+    }
+
+
+def _dmr_job_outcome(job: DmrJob) -> DmrJobOutcome:
+    # A saída do Docker é limitada para não crescer sem controle na resposta.
+    return {**_dmr_job_summary(job), "output": job.output[-2000:], "error": job.error}
+
+
+def _dmr_job_detail(job: DmrJob) -> DmrJobDetail:
+    return {**_dmr_job_outcome(job), "metadata": job.metadata}
+
+
 @router.get("/dmr/status", dependencies=[DesktopBridge])
-async def get_dmr_status() -> dict[str, object]:
+async def get_dmr_status() -> DmrStatus:
     """Detecta Docker Model Runner e o contrato HTTP disponível no host local."""
     from backend.services.docker_model_runner import (
         DEFAULT_DMR_BASE_URL,
@@ -2138,30 +2195,16 @@ async def get_dmr_status() -> dict[str, object]:
     )
 
     cli_available, cli_detail = await docker_model_available()
+    host_info: DockerHostInfo
     try:
         host_info = await docker_host_info()
     except (OSError, RuntimeError, ValueError):
         host_info = {}
     base_url = settings.dmr_base_url or DEFAULT_DMR_BASE_URL
     probe = await probe_dmr(base_url)
-    try:
-        manifest = await _read_json_file_async(_dmr_manifest_path())
-    except (FileNotFoundError, json.JSONDecodeError):
-        manifest = {}
-    raw_models = manifest.get("models", []) if isinstance(manifest, dict) else []
-    if isinstance(raw_models, dict):
-        managed_models = [
-            str(reference) for reference in raw_models if isinstance(reference, str)
-        ]
-    elif isinstance(raw_models, list):
-        managed_models = [
-            str(item["reference"])
-            for item in raw_models
-            if isinstance(item, dict) and isinstance(item.get("reference"), str)
-        ]
-    else:
-        managed_models = []
+    managed_models = await _read_dmr_managed_models()
     cli_detail_lower = (cli_detail or "").lower()
+    state: Literal["ready", "plugin_unavailable", "docker_unavailable", "stopped"]
     if probe.reachable:
         state = "ready"
     elif not cli_available:
@@ -2172,13 +2215,7 @@ async def get_dmr_status() -> dict[str, object]:
         )
     else:
         state = "stopped"
-    runtimes = host_info.get("runtimes")
-    gpu_backends = host_info.get("gpu_backends")
-    backend = (
-        str(gpu_backends[0])
-        if isinstance(gpu_backends, list) and gpu_backends
-        else None
-    )
+    gpu_backends = host_info.get("gpu_backends") or []
     return {
         "configured": bool(settings.dmr_base_url),
         "base_url": base_url,
@@ -2188,27 +2225,27 @@ async def get_dmr_status() -> dict[str, object]:
         "architecture": str(
             host_info.get("architecture") or platform.machine()
         ).lower(),
-        "backend": backend,
+        "backend": gpu_backends[0] if gpu_backends else None,
         "capabilities": {
             "cpus": host_info.get("cpus"),
             "memory_bytes": host_info.get("memory_bytes"),
-            "runtimes": runtimes if isinstance(runtimes, list) else [],
-            "gpu_backends": gpu_backends if isinstance(gpu_backends, list) else [],
-            "warnings": host_info.get("warnings", []),
+            "runtimes": host_info.get("runtimes") or [],
+            "gpu_backends": gpu_backends,
+            "warnings": host_info.get("warnings") or [],
         },
         "cli_available": cli_available,
         "cli_detail": cli_detail,
-        "reachable": probe.reachable if probe else False,
-        "contract": probe.contract if probe else settings.dmr_contract,
-        "models": list(probe.models) if probe else [],
+        "reachable": probe.reachable,
+        "contract": probe.contract,
+        "models": list(probe.models),
         "managed_models": managed_models,
-        "detail": probe.detail if probe else "endpoint ainda não configurado",
-        "status_code": probe.status_code if probe else None,
+        "detail": probe.detail,
+        "status_code": probe.status_code,
     }
 
 
 @router.get("/dmr/http-status")
-async def get_dmr_http_status(_: ProviderAdmin) -> dict[str, object]:
+async def get_dmr_http_status(_: ProviderAdmin) -> DmrHttpStatus:
     """Sonda somente o endpoint HTTP do DMR, sem executar comandos Docker.
 
     A UI Electron usa este contrato junto da detecção feita pela bridge nativa;
@@ -2219,21 +2256,7 @@ async def get_dmr_http_status(_: ProviderAdmin) -> dict[str, object]:
 
     base_url = settings.dmr_base_url or DEFAULT_DMR_BASE_URL
     probe = await probe_dmr(base_url)
-    try:
-        manifest = await _read_json_file_async(_dmr_manifest_path())
-    except (FileNotFoundError, json.JSONDecodeError):
-        manifest = {}
-    raw_models = manifest.get("models", []) if isinstance(manifest, dict) else []
-    if isinstance(raw_models, dict):
-        managed_models = [str(reference) for reference in raw_models]
-    elif isinstance(raw_models, list):
-        managed_models = [
-            str(item["reference"])
-            for item in raw_models
-            if isinstance(item, dict) and isinstance(item.get("reference"), str)
-        ]
-    else:
-        managed_models = []
+    managed_models = await _read_dmr_managed_models()
     return {
         "configured": bool(settings.dmr_base_url),
         "base_url": base_url,
@@ -2248,7 +2271,7 @@ async def get_dmr_http_status(_: ProviderAdmin) -> dict[str, object]:
 
 
 @router.post("/dmr/config")
-async def set_dmr_config(body: DmrConfigRequest, _: ProviderAdmin) -> dict[str, object]:
+async def set_dmr_config(body: DmrConfigRequest, _: ProviderAdmin) -> DmrHttpStatus:
     """Persiste apenas endpoint/modelo; operações Docker exigem a bridge."""
     from backend.services.docker_model_runner import normalize_base_url
 
@@ -2278,7 +2301,7 @@ async def set_dmr_config(body: DmrConfigRequest, _: ProviderAdmin) -> dict[str, 
 
 
 @router.post("/dmr/test", dependencies=[Depends(_require_provider_admin)])
-async def test_dmr_connection(body: DmrConfigRequest) -> dict[str, object]:
+async def test_dmr_connection(body: DmrConfigRequest) -> DmrHttpStatus:
     """Testa um endpoint HTTP sem exigir Docker CLI ou Electron."""
     from backend.services.docker_model_runner import normalize_base_url, probe_dmr
 
@@ -2301,7 +2324,7 @@ async def test_dmr_connection(body: DmrConfigRequest) -> dict[str, object]:
 
 
 @router.get("/dmr/models")
-async def list_dmr_models(_: ProviderAdmin) -> dict[str, object]:
+async def list_dmr_models(_: ProviderAdmin) -> DmrModelList:
     """Lista modelos anunciados pelo endpoint HTTP do DMR."""
     status = await get_dmr_http_status(None)
     return {
@@ -2312,9 +2335,7 @@ async def list_dmr_models(_: ProviderAdmin) -> dict[str, object]:
 
 
 @router.post("/dmr/models/jobs", dependencies=[DesktopBridge])
-async def create_dmr_model_job(
-    body: DmrJobRequest, _: ProviderAdmin
-) -> dict[str, object]:
+async def create_dmr_model_job(body: DmrJobRequest, _: ProviderAdmin) -> DmrJobSummary:
     """Agenda pull/run e devolve um identificador para progresso e cancelamento."""
     from backend.services.docker_model_runner import create_model_job
 
@@ -2322,19 +2343,11 @@ async def create_dmr_model_job(
         job = await create_model_job(body.reference, body.operation, body.context_size)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {
-        "id": job.id,
-        "operation": job.operation,
-        "reference": job.reference,
-        "context_size": job.context_size,
-        "progress": job.progress,
-        "phase": job.phase,
-        "status": job.status,
-    }
+    return _dmr_job_summary(job)
 
 
 @router.get("/dmr/models/jobs/{job_id}", dependencies=[DesktopBridge])
-async def get_dmr_model_job(job_id: str, _: ProviderAdmin) -> dict[str, object]:
+async def get_dmr_model_job(job_id: str, _: ProviderAdmin) -> DmrJobDetail:
     """Consulta o estado de um job sem expor saída ilimitada do Docker."""
     from backend.services.docker_model_runner import get_model_job, restore_model_jobs
 
@@ -2348,10 +2361,10 @@ async def get_dmr_model_job(job_id: str, _: ProviderAdmin) -> dict[str, object]:
         try:
             manifest = await _read_json_file_async(_dmr_manifest_path())
         except (FileNotFoundError, json.JSONDecodeError):
-            manifest = {"models": []}
+            manifest = _empty_manifest("models")
         if not isinstance(manifest, dict):
-            manifest = {"models": []}
-        models = [item for item in manifest.get("models", []) if isinstance(item, dict)]
+            manifest = _empty_manifest("models")
+        models = [item for item in _items(manifest, "models") if isinstance(item, dict)]
         entry = {
             "reference": job.reference,
             "source": "docker-model-runner",
@@ -2363,48 +2376,21 @@ async def get_dmr_model_job(job_id: str, _: ProviderAdmin) -> dict[str, object]:
         }
         models = [item for item in models if item.get("reference") != job.reference]
         models.append(entry)
-        await _write_json_atomic(_dmr_manifest_path(), {"models": models})
-    return {
-        "id": job.id,
-        "operation": job.operation,
-        "reference": job.reference,
-        "context_size": job.context_size,
-        "progress": job.progress,
-        "phase": job.phase,
-        "status": job.status,
-        "output": job.output[-2000:],
-        "error": job.error,
-        "metadata": job.metadata,
-    }
+        await _write_json_atomic(_dmr_manifest_path(), {"models": [*models]})
+    return _dmr_job_detail(job)
 
 
 @router.get("/dmr/models/jobs", dependencies=[DesktopBridge])
-async def list_dmr_model_jobs(_: ProviderAdmin) -> dict[str, object]:
+async def list_dmr_model_jobs(_: ProviderAdmin) -> DmrJobList:
     """Lista operações persistidas para que a interface recupere interrupções."""
     from backend.services.docker_model_runner import list_model_jobs
 
     jobs = await list_model_jobs()
-    return {
-        "jobs": [
-            {
-                "id": job.id,
-                "operation": job.operation,
-                "reference": job.reference,
-                "context_size": job.context_size,
-                "progress": job.progress,
-                "phase": job.phase,
-                "status": job.status,
-                "output": job.output[-2000:],
-                "error": job.error,
-                "metadata": job.metadata,
-            }
-            for job in jobs
-        ]
-    }
+    return {"jobs": [_dmr_job_detail(job) for job in jobs]}
 
 
 @router.post("/dmr/models/jobs/{job_id}/retry", dependencies=[DesktopBridge])
-async def retry_dmr_model_job(job_id: str, _: ProviderAdmin) -> dict[str, object]:
+async def retry_dmr_model_job(job_id: str, _: ProviderAdmin) -> DmrJobOutcome:
     """Retoma explicitamente um job que foi interrompido por reinício."""
     from backend.services.docker_model_runner import retry_model_job
 
@@ -2413,21 +2399,11 @@ async def retry_dmr_model_job(job_id: str, _: ProviderAdmin) -> dict[str, object
     job = await retry_model_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job não encontrado")
-    return {
-        "id": job.id,
-        "operation": job.operation,
-        "reference": job.reference,
-        "context_size": job.context_size,
-        "progress": job.progress,
-        "phase": job.phase,
-        "status": job.status,
-        "output": job.output[-2000:],
-        "error": job.error,
-    }
+    return _dmr_job_outcome(job)
 
 
 @router.delete("/dmr/models/jobs/{job_id}", dependencies=[DesktopBridge])
-async def cancel_dmr_model_job(job_id: str, _: ProviderAdmin) -> dict[str, object]:
+async def cancel_dmr_model_job(job_id: str, _: ProviderAdmin) -> DmrCancellation:
     """Cancela um job e encerra o processo Docker associado, quando ativo."""
     from backend.services.docker_model_runner import cancel_model_job
 
@@ -2439,7 +2415,7 @@ async def cancel_dmr_model_job(job_id: str, _: ProviderAdmin) -> dict[str, objec
     return {"id": job.id, "status": job.status, "error": job.error}
 
 
-async def _prepare_dmr_model(body: DmrModelRequest) -> dict[str, object]:
+async def _prepare_dmr_model(body: DmrModelRequest) -> DmrOperationResult:
     """Prepara um modelo pelo plugin local, sem executar shell arbitrário."""
     from backend.services.docker_model_runner import (
         prepare_model,
@@ -2476,13 +2452,13 @@ async def stop_ollama_runtime(_: ProviderAdmin) -> OllamaRuntimeStatus:
 @router.post("/dmr/models/prepare", dependencies=[DesktopBridge])
 async def prepare_dmr_model(
     body: DmrModelRequest, _: ProviderAdmin
-) -> dict[str, object]:
+) -> DmrOperationResult:
     """Executa a operação prepare dmr model."""
     return await _prepare_dmr_model(body)
 
 
 @router.post("/dmr/models/start", dependencies=[DesktopBridge])
-async def start_dmr_model(body: DmrModelRequest, _: ProviderAdmin) -> dict[str, object]:
+async def start_dmr_model(body: DmrModelRequest, _: ProviderAdmin) -> DmrStartResult:
     """Prepara, pré-carrega e valida o modelo antes de registrá-lo."""
     await _prepare_dmr_model(body)
     from backend.services.docker_model_runner import (
@@ -2502,12 +2478,9 @@ async def start_dmr_model(body: DmrModelRequest, _: ProviderAdmin) -> dict[str, 
         with suppress(Exception):
             await stop_model(reference)
         raise HTTPException(status_code=503, detail="DMR não está pronto")
-    models = status.get("models")
-    model_name = reference
-    if isinstance(models, list) and models:
-        model_name = str(models[0])
-    contract = str(status.get("contract") or "")
-    if not await probe_dmr_inference(str(status["base_url"]), contract, model_name):
+    model_name = status["models"][0] if status["models"] else reference
+    contract = status["contract"] or ""
+    if not await probe_dmr_inference(status["base_url"], contract, model_name):
         with suppress(Exception):
             await stop_model(reference)
         raise HTTPException(
@@ -2515,7 +2488,7 @@ async def start_dmr_model(body: DmrModelRequest, _: ProviderAdmin) -> dict[str, 
             detail="DMR respondeu ao catálogo, mas não concluiu uma inferência",
         )
     if not settings.dmr_base_url:
-        base_url = str(status["base_url"])
+        base_url = status["base_url"]
         object.__setattr__(settings, "dmr_base_url", base_url)
         _set_env_key(_env_file(), "DMR_BASE_URL", base_url)
         os.environ["DMR_BASE_URL"] = base_url
@@ -2526,15 +2499,15 @@ async def start_dmr_model(body: DmrModelRequest, _: ProviderAdmin) -> dict[str, 
         os.environ["DMR_CONTRACT"] = contract
         status = await get_dmr_status()
     return {
+        **status,
         "status": "ready",
         "reference": reference,
         "output": output[-2000:],
-        **status,
     }
 
 
 @router.post("/dmr/models/stop", dependencies=[DesktopBridge])
-async def stop_dmr_model(body: DmrModelRequest, _: ProviderAdmin) -> dict[str, object]:
+async def stop_dmr_model(body: DmrModelRequest, _: ProviderAdmin) -> DmrOperationResult:
     """Pede parada ao Docker sem remover o modelo armazenado."""
     from backend.services.docker_model_runner import (
         stop_model,
@@ -2552,7 +2525,7 @@ async def stop_dmr_model(body: DmrModelRequest, _: ProviderAdmin) -> dict[str, o
 @router.delete("/dmr/models/{reference:path}", dependencies=[DesktopBridge])
 async def remove_dmr_model(
     reference: str, _: ProviderAdmin, confirm: bool = False
-) -> dict[str, object]:
+) -> JsonObject:
     """Remove o modelo somente quando a UI envia confirmação explícita."""
     if not confirm:
         raise HTTPException(status_code=400, detail="confirmação explícita necessária")
@@ -2581,7 +2554,7 @@ async def remove_dmr_model(
             {
                 "models": [
                     item
-                    for item in manifest["models"]
+                    for item in _items(manifest, "models")
                     if not (isinstance(item, dict) and item.get("reference") == value)
                 ]
             },
@@ -2596,7 +2569,7 @@ async def remove_dmr_model(
 async def start_llamacpp_sidecar(
     body: LlamaCppSidecarRequest,
     _: ProviderAdmin,
-) -> dict[str, int | bool | str | None]:
+) -> LlamacppStatus:
     """Inicia llama-server local sem assumir ownership de servidores externos."""
     from backend.services.llamacpp_sidecar import start_llamacpp
 
@@ -2649,7 +2622,7 @@ async def start_llamacpp_sidecar(
 async def start_installed_huggingface_model(
     body: HuggingFaceStartRequest,
     _: ProviderAdmin,
-) -> dict[str, int | bool | str | None]:
+) -> LlamacppStartResult:
     """Inicia um modelo instalado usando o runtime llama.cpp ativo.
 
     O manifesto é a única fonte de caminhos: não aceitamos um executável ou
@@ -2679,7 +2652,7 @@ async def start_installed_huggingface_model(
     model_entry = next(
         (
             item
-            for item in manifest["files"]
+            for item in _items(manifest, "files")
             if isinstance(item, dict)
             and item.get("role") == "model"
             and (body.filename is None or item.get("filename") == body.filename)
@@ -2690,7 +2663,7 @@ async def start_installed_huggingface_model(
         model_entry.get("filename"), str
     ):
         raise HTTPException(status_code=404, detail="peso principal não encontrado")
-    model_path = (model_root / model_entry["filename"]).resolve()
+    model_path = (model_root / str(model_entry["filename"])).resolve()
     if model_root not in model_path.parents or not await asyncio.to_thread(
         model_path.is_file
     ):
@@ -2708,7 +2681,7 @@ async def start_installed_huggingface_model(
             status_code=409, detail="runtime llama.cpp não instalado"
         ) from exc
     runtimes = (
-        runtime_manifest.get("runtimes", [])
+        _items(runtime_manifest, "runtimes")
         if isinstance(runtime_manifest, dict)
         else []
     )
@@ -2738,14 +2711,14 @@ async def start_installed_huggingface_model(
     mmproj_entry = next(
         (
             item
-            for item in manifest["files"]
+            for item in _items(manifest, "files")
             if isinstance(item, dict) and item.get("role") == "mmproj"
         ),
         None,
     )
     mmproj_path: Path | None = None
     if isinstance(mmproj_entry, dict) and isinstance(mmproj_entry.get("filename"), str):
-        candidate = (model_root / mmproj_entry["filename"]).resolve()
+        candidate = (model_root / str(mmproj_entry["filename"])).resolve()
         if model_root not in candidate.parents or not await asyncio.to_thread(
             candidate.is_file
         ):
@@ -2869,7 +2842,7 @@ async def start_installed_huggingface_model(
     manifest["confirmed"] = {
         "tag": confirmation.tag,
         "runtime_id": confirmation.runtime_id,
-        "parameters": confirmation.parameters,
+        "parameters": {**confirmation.parameters},
         "evidence_sha256": confirmation.evidence_sha256,
         "confirmed_at": confirmation.confirmed_at,
     }
@@ -2986,7 +2959,7 @@ async def restore_managed_llamacpp() -> bool:
 )
 async def stop_llamacpp_sidecar(
     _: ProviderAdmin,
-) -> dict[str, int | bool | str | None]:
+) -> LlamacppStatus:
     """Encerra somente o processo iniciado pela rota de start."""
     from backend.services.llamacpp_sidecar import stop_llamacpp
 
@@ -2997,7 +2970,7 @@ async def stop_llamacpp_sidecar(
 @router.post("/llamacpp/runtime/start", dependencies=[DesktopBridge])
 async def start_confirmed_llamacpp_runtime(
     _: ProviderAdmin,
-) -> dict[str, int | bool | str | None]:
+) -> LlamacppStatus:
     """Restart the most recently confirmed, locally installed GGUF model."""
     if not await restore_managed_llamacpp():
         raise HTTPException(
@@ -3100,22 +3073,36 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _runtime_manifest(runtimes: list[JsonObject]) -> JsonObject:
+    return {"runtimes": [*runtimes]}
+
+
+def _empty_manifest(key: str) -> JsonObject:
+    return {key: []}
+
+
+def _items(manifest: JsonObject, key: str) -> list[JsonValue]:
+    """Lista guardada em um manifesto; outro formato conta como vazia."""
+    value = manifest.get(key)
+    return value if isinstance(value, list) else []
+
+
 def _download_source_metadata_path(path: Path) -> Path:
     """Retorna o sidecar de procedência associado a um arquivo baixado."""
     return path.with_name(f"{path.name}.source.json")
 
 
-def _read_json_file(path: Path) -> object:
+def _read_json_file(path: Path) -> JsonValue:
     """Lê JSON em uma thread para não bloquear o event loop."""
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-async def _read_json_file_async(path: Path) -> object:
+async def _read_json_file_async(path: Path) -> JsonValue:
     """Executa a operação  read json file async."""
     return await asyncio.to_thread(_read_json_file, path)
 
 
-async def _write_json_atomic(path: Path, payload: object) -> None:
+async def _write_json_atomic(path: Path, payload: JsonValue) -> None:
     """Persiste um manifesto sem deixar arquivos parcialmente escritos."""
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     serialized = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
@@ -3198,7 +3185,7 @@ async def _huggingface_file_metadata(
 
 
 @router.get("/huggingface/models/{repo_id:path}")
-async def get_huggingface_model_metadata(repo_id: str) -> dict[str, object]:
+async def get_huggingface_model_metadata(repo_id: str) -> JsonObject:
     """Retorna metadados do repositório sem encaminhar pesos ao backend."""
     import httpx
 
@@ -3220,7 +3207,7 @@ async def get_huggingface_model_metadata(repo_id: str) -> dict[str, object]:
             status_code=502, detail="Hugging Face indisponível"
         ) from exc
     siblings = data.get("siblings", [])
-    files = [
+    files: list[JsonValue] = [
         {
             "rfilename": item.get("rfilename", ""),
             "size": item.get("size"),
@@ -3271,7 +3258,7 @@ async def download_huggingface_model(
     body: HuggingFaceDownloadRequest,
     request: Request,
     _: ProviderAdmin,
-) -> dict[str, object]:
+) -> JsonObject:
     """Baixa um arquivo diretamente da Hugging Face para o armazenamento local."""
     import httpx
 
@@ -3321,7 +3308,7 @@ async def download_huggingface_model(
                 "total": None,
                 "status": "starting",
             }
-            metadata: dict[str, object] | None = None
+            metadata: JsonObject | None = None
             if await asyncio.to_thread(partial_metadata.is_file):
                 try:
                     candidate_metadata = await _read_json_file_async(partial_metadata)
@@ -3511,7 +3498,7 @@ async def get_huggingface_download_progress(
 async def install_huggingface_model(
     body: HuggingFaceInstallRequest,
     _: ProviderAdmin,
-) -> dict[str, object]:
+) -> JsonObject:
     """Confirma um conjunto de pesos já baixado e cria seu manifesto local.
 
     O wizard baixa cada arquivo com ``/huggingface/download`` e só então
@@ -3540,7 +3527,7 @@ async def install_huggingface_model(
         raise HTTPException(status_code=400, detail="alias inválido")
     root = (settings.vectora_home / "models" / "huggingface" / repo_id).resolve()
     selected = [filename, *([mmproj] if mmproj else [])]
-    files: list[dict[str, object]] = []
+    files: list[JsonObject] = []
     for selected_name in selected:
         path = (root / selected_name).resolve()
         if root not in path.parents or not await asyncio.to_thread(path.is_file):
@@ -3583,7 +3570,7 @@ async def install_huggingface_model(
                 "role": "mmproj" if selected_name == mmproj else "model",
             }
         )
-    manifest = {
+    manifest: JsonObject = {
         "repo_id": repo_id,
         "publisher": repo_id.split("/", 1)[0],
         "revision": revision,
@@ -3593,8 +3580,8 @@ async def install_huggingface_model(
         "quantization": body.quantization,
         "context_length": body.context_length,
         "compatibility": body.compatibility or "não verificada",
-        "parameters": body.parameters,
-        "files": files,
+        "parameters": {**body.parameters},
+        "files": [*files],
         "created_at": datetime.now(UTC).isoformat(),
         "source": f"https://huggingface.co/{repo_id}/tree/{revision}",
     }
@@ -3660,12 +3647,12 @@ async def install_huggingface_model(
 
 
 @router.get("/huggingface/installed")
-async def list_installed_huggingface_models() -> dict[str, list[dict[str, object]]]:
+async def list_installed_huggingface_models() -> dict[str, list[JsonObject]]:
     """Lista somente manifestos locais completos, sem expor credenciais."""
     root = (settings.vectora_home / "models" / "huggingface").resolve()
     if not await asyncio.to_thread(root.is_dir):
         return {"models": []}
-    models: list[dict[str, object]] = []
+    models: list[JsonObject] = []
     manifest_paths = await asyncio.to_thread(
         lambda: list(root.rglob("model-manifest.json"))
     )
@@ -3717,7 +3704,7 @@ async def cancel_huggingface_download(
 
 @router.get("/llamacpp/releases")
 @router.get("/llama-cpp/releases", include_in_schema=False)
-async def list_llamacpp_releases() -> dict[str, list[dict[str, object]]]:
+async def list_llamacpp_releases() -> dict[str, list[JsonObject]]:
     """Lista releases oficiais, sem carregar artefatos no backend."""
     import httpx
 
@@ -3737,7 +3724,7 @@ async def list_llamacpp_releases() -> dict[str, list[dict[str, object]]]:
         raise HTTPException(status_code=502, detail="GitHub indisponível") from exc
     import platform
 
-    def asset_payload(asset: dict[str, object]) -> dict[str, object]:
+    def asset_payload(asset: JsonObject) -> JsonObject:
         """Executa a operação asset payload."""
         name = str(asset.get("name", ""))
         lowered = name.lower()
@@ -3816,7 +3803,7 @@ def _llamacpp_asset_recommended(name: str, system: str, machine: str) -> bool:
 async def install_llamacpp_runtime(
     body: LlamaCppInstallRequest,
     _: ProviderAdmin,
-) -> dict[str, object]:
+) -> JsonObject:
     """Baixa um artefato de release oficial para o armazenamento do usuário."""
     from urllib.parse import urlparse
 
@@ -3906,12 +3893,12 @@ async def install_llamacpp_runtime(
         try:
             existing_manifest = await _read_json_file_async(_llamacpp_manifest_path())
         except (FileNotFoundError, json.JSONDecodeError):
-            existing_manifest = {"runtimes": []}
+            existing_manifest = _empty_manifest("runtimes")
         existing = (
             next(
                 (
                     item
-                    for item in existing_manifest.get("runtimes", [])
+                    for item in _items(existing_manifest, "runtimes")
                     if isinstance(item, dict) and item.get("id") == runtime_id
                 ),
                 None,
@@ -3949,10 +3936,10 @@ async def install_llamacpp_runtime(
     try:
         manifest = await _read_json_file_async(manifest_path)
         if not isinstance(manifest, dict):
-            manifest = {"runtimes": []}
+            manifest = _empty_manifest("runtimes")
     except (FileNotFoundError, json.JSONDecodeError):
-        manifest = {"runtimes": []}
-    runtimes = [item for item in manifest.get("runtimes", []) if isinstance(item, dict)]
+        manifest = _empty_manifest("runtimes")
+    runtimes = [item for item in _items(manifest, "runtimes") if isinstance(item, dict)]
     runtimes = [item for item in runtimes if item.get("id") != runtime_id]
     runtimes.append(
         {
@@ -3960,13 +3947,13 @@ async def install_llamacpp_runtime(
             "asset": filename,
             "source": body.asset_url,
             "sha256": actual,
-            "files": files,
+            "files": [*files],
             "directory": str(version_root),
             "version": runtime_version,
             "installed_at": datetime.now(UTC).isoformat(),
         }
     )
-    await _write_json_atomic(manifest_path, {"runtimes": runtimes})
+    await _write_json_atomic(manifest_path, {"runtimes": [*runtimes]})
     active_path = destination_root / "active-runtime"
     try:
         active_runtime = (
@@ -3981,7 +3968,7 @@ async def install_llamacpp_runtime(
     return {
         "status": "installed" if files else "downloaded",
         "path": str(version_root),
-        "files": files,
+        "files": [*files],
         "sha256": actual,
         "active_runtime": runtime_id if activated else active_runtime,
         "activated": activated,
@@ -3990,7 +3977,7 @@ async def install_llamacpp_runtime(
 
 @router.get("/llamacpp/runtime/status")
 @router.get("/llama-cpp/runtime/status", include_in_schema=False)
-async def llamacpp_runtime_status() -> dict[str, object]:
+async def llamacpp_runtime_status() -> JsonObject:
     """Informa runtimes locais sem inspecionar ou remover pesos.
 
     ``state`` torna explícita a diferença entre uma instalação gerenciada,
@@ -4002,7 +3989,7 @@ async def llamacpp_runtime_status() -> dict[str, object]:
     root = _llamacpp_runtime_root()
     sidecar = llamacpp_status()
     if not await asyncio.to_thread(root.is_dir):
-        executable = await asyncio.to_thread(shutil.which, "llama-server")
+        executable = await asyncio.to_thread(lambda: shutil.which("llama-server"))
         external_reachable = False
         if settings.llamacpp_base_url:
             try:
@@ -4039,7 +4026,7 @@ async def llamacpp_runtime_status() -> dict[str, object]:
             "external": external,
             "stale_state": bool(sidecar.get("stale_state")),
             "reachable": external_reachable,
-            "install_progress": dict(_llamacpp_install_progress),
+            "install_progress": {**_llamacpp_install_progress},
         }
 
     def _list_files() -> list[str]:
@@ -4047,11 +4034,11 @@ async def llamacpp_runtime_status() -> dict[str, object]:
         return [str(path) for path in root.rglob("*") if path.is_file()]
 
     files = await asyncio.to_thread(_list_files)
-    external_executable = await asyncio.to_thread(shutil.which, "llama-server")
+    external_executable = await asyncio.to_thread(lambda: shutil.which("llama-server"))
     manifest_path = _llamacpp_manifest_path()
     try:
         payload = await _read_json_file_async(manifest_path)
-        runtimes = payload.get("runtimes", []) if isinstance(payload, dict) else []
+        runtimes = _items(payload, "runtimes") if isinstance(payload, dict) else []
     except (FileNotFoundError, json.JSONDecodeError):
         runtimes = []
     active_path = root / "active-runtime"
@@ -4083,15 +4070,15 @@ async def llamacpp_runtime_status() -> dict[str, object]:
     return {
         "installed": bool(files or external_executable),
         "path": str(root) if files else external_executable,
-        "files": files,
-        "runtimes": runtimes,
+        "files": [*files],
+        "runtimes": [*runtimes],
         "active_runtime": active,
         "free_bytes": disk_usage.free,
         "state": state,
         "managed": not external,
         "external": external,
         "stale_state": bool(sidecar.get("stale_state")),
-        "install_progress": dict(_llamacpp_install_progress),
+        "install_progress": {**_llamacpp_install_progress},
         "reachable": bool(sidecar.get("running")),
     }
 
@@ -4112,7 +4099,7 @@ async def cancel_llamacpp_install(_: ProviderAdmin) -> dict[str, bool]:
 async def update_llamacpp_runtime(
     body: LlamaCppInstallRequest,
     _: ProviderAdmin,
-) -> dict[str, object]:
+) -> JsonObject:
     """Instala uma nova versão sem remover modelos ou versões registradas."""
     from backend.services.llamacpp_sidecar import llamacpp_status
 
@@ -4132,7 +4119,7 @@ async def update_llamacpp_runtime(
 async def rollback_llamacpp_runtime(
     body: LlamaCppRollbackRequest,
     _: ProviderAdmin,
-) -> dict[str, object]:
+) -> JsonObject:
     """Ativa uma versão já instalada sem apagar a versão atual."""
     from backend.services.llamacpp_sidecar import llamacpp_status
 
@@ -4154,10 +4141,10 @@ async def rollback_llamacpp_runtime(
     try:
         manifest = await _read_json_file_async(manifest_path)
         if not isinstance(manifest, dict):
-            manifest = {"runtimes": []}
+            manifest = _empty_manifest("runtimes")
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=404, detail="manifesto não encontrado") from exc
-    runtimes = manifest.get("runtimes", [])
+    runtimes = _items(manifest, "runtimes")
     if not any(
         isinstance(item, dict) and item.get("id") == body.runtime_id
         for item in runtimes
@@ -4206,10 +4193,10 @@ async def remove_llamacpp_runtime_version(
     try:
         manifest = await _read_json_file_async(manifest_path)
         if not isinstance(manifest, dict):
-            manifest = {"runtimes": []}
+            manifest = _empty_manifest("runtimes")
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=404, detail="manifesto não encontrado") from exc
-    runtimes = manifest.get("runtimes", [])
+    runtimes = _items(manifest, "runtimes")
     if not any(
         isinstance(item, dict) and item.get("id") == runtime_id for item in runtimes
     ):
@@ -4236,7 +4223,7 @@ async def remove_llamacpp_runtime_version(
 async def cleanup_llamacpp_runtime_versions(
     body: LlamaCppRetentionRequest,
     _: ProviderAdmin,
-) -> dict[str, object]:
+) -> JsonObject:
     """Apaga somente versões inativas além da retenção solicitada."""
     from backend.services.llamacpp_sidecar import llamacpp_status
 
@@ -4257,7 +4244,7 @@ async def cleanup_llamacpp_runtime_versions(
     if await asyncio.to_thread(active_path.is_file):
         active = await asyncio.to_thread(active_path.read_text, "utf-8")
         active = active.strip()
-    runtimes = [item for item in manifest.get("runtimes", []) if isinstance(item, dict)]
+    runtimes = [item for item in _items(manifest, "runtimes") if isinstance(item, dict)]
     inactive = [item for item in runtimes if item.get("id") != active]
     inactive.sort(key=lambda item: str(item.get("installed_at", "")), reverse=True)
     retained = inactive[: body.keep]
@@ -4277,8 +4264,8 @@ async def cleanup_llamacpp_runtime_versions(
             removed.append(runtime_id)
     await _write_json_atomic(
         manifest_path,
-        {
-            "runtimes": (
+        _runtime_manifest(
+            (
                 [active_item]
                 if (
                     active_item := next(
@@ -4288,11 +4275,11 @@ async def cleanup_llamacpp_runtime_versions(
                 else []
             )
             + retained
-        },
+        ),
     )
     return {
         "ok": True,
-        "removed": removed,
+        "removed": [*removed],
         "retained": [item.get("id") for item in retained],
     }
 
@@ -4304,7 +4291,7 @@ async def cleanup_llamacpp_runtime_versions(
 async def check_llamacpp_runtime(
     body: LlamaCppRuntimeRequest,
     _: ProviderAdmin,
-) -> dict[str, object]:
+) -> JsonObject:
     """Testa ``--version`` apenas em um runtime gerenciado pelo Vectora."""
     requested = Path(body.path).expanduser().resolve()
     runtime_root = _llamacpp_runtime_root()
@@ -4504,19 +4491,29 @@ async def clear_openrouter_key(_: ProviderAdmin) -> OpenRouterStatus:
 
 
 # `fetched_at` usa `-inf`, não `0.0`, como sentinela de "nunca buscado":
+class _OpenRouterCache(TypedDict):
+    fetched_at: float
+    models: list[OpenRouterModelInfo]
+
+
+class _NineRouterCache(TypedDict):
+    fetched_at: float
+    models: list[tuple[str, set[str] | None]]
+
+
 # `time.monotonic()` não conta a partir de zero, reflete o uptime da
 # máquina — numa VM efêmera de CI recém-bootada, `now` pode ser menor que
 # `_OPENROUTER_CATALOG_TTL_S`, e `0.0` faria `now - fetched_at > TTL` dar
 # falso (cache "resetado" pareceria recém-buscado, pulando o fetch e
 # devolvendo lista vazia direto). `-inf` garante `now - fetched_at == +inf`
 # sempre, não importa o uptime da máquina.
-_catalog_cache: dict[str, Any] = {"fetched_at": float("-inf"), "models": []}
+_catalog_cache: _OpenRouterCache = {"fetched_at": float("-inf"), "models": []}
 
 #: Catálogo mínimo usado quando a rede falha e o cache ainda está vazio.
 #: Sem ele o seletor de modelo aparece sem nenhuma opção, o que o usuário lê
 #: como falta de suporte a OpenRouter em vez de falta de internet. São ids
 #: estáveis de modelos populares — a lista real vem da API assim que dá.
-OPENROUTER_FALLBACK_MODELS: list[dict[str, Any]] = [
+OPENROUTER_FALLBACK_MODELS: list[dict[str, str]] = [
     {"id": "anthropic/claude-sonnet-4.5", "name": "Claude Sonnet 4.5"},
     {"id": "anthropic/claude-opus-4.1", "name": "Claude Opus 4.1"},
     {"id": "openai/gpt-4o", "name": "GPT-4o"},
@@ -4538,7 +4535,7 @@ def _filtrar(models: list[OpenRouterModelInfo], q: str) -> list[OpenRouterModelI
     return [m for m in models if needle in m.id.lower() or needle in m.name.lower()]
 
 
-async def _ensure_openrouter_catalog_cached(client: Any) -> None:
+async def _ensure_openrouter_catalog_cached(client: httpx.AsyncClient) -> None:
     """Popula `_catalog_cache` se expirado — extraído de
     `discover_openrouter_models` pra ser reaproveitado por
     `openrouter_model_supports_image`, que precisa do catálogo fora do
@@ -4571,7 +4568,7 @@ async def _ensure_openrouter_catalog_cached(client: Any) -> None:
 
 @router.get("/openrouter/models")
 async def discover_openrouter_models(
-    client: Annotated[Any, Depends(_get_http_client)], q: str = ""
+    client: Annotated[httpx.AsyncClient, Depends(_get_http_client)], q: str = ""
 ) -> OpenRouterCatalogResponse:
     """Catálogo público de modelos da OpenRouter (não exige key). Cacheado em
     memória por _OPENROUTER_CATALOG_TTL_S — a lista muda pouco e evita bater
@@ -4755,7 +4752,7 @@ async def clear_nine_router_config(_: ProviderAdmin) -> NineRouterStatus:
 
 @router.get("/nine-router/models")
 async def discover_nine_router_models(
-    client: Annotated[Any, Depends(_get_http_client)],
+    client: Annotated[httpx.AsyncClient, Depends(_get_http_client)],
 ) -> NineRouterCatalogResponse:
     """Descoberta via GET {base_url}/models (endpoint OpenAI-compatible
     padrão) — mesmo princípio anti-digitação-livre já usado pro Ollama.
@@ -4802,7 +4799,10 @@ async def discover_nine_router_models(
     return NineRouterCatalogResponse(reachable=True, models=models)
 
 
-_nine_router_catalog_cache: dict[str, Any] = {"fetched_at": float("-inf"), "models": []}
+_nine_router_catalog_cache: _NineRouterCache = {
+    "fetched_at": float("-inf"),
+    "models": [],
+}
 _CATALOG_FAILURE_BACKOFF_S = 30.0
 
 
@@ -4979,7 +4979,7 @@ class UpdateSystemOneConfigRequest(BaseModel):
 
 
 @router.get("/decision-models/catalog")
-async def get_decision_models_catalog() -> dict[str, object]:
+async def get_decision_models_catalog() -> JsonObject:
     """Modelos de decisão conhecidos e os providers que cada um aceita."""
     from backend.llm.systemone.catalog import live_decision_catalog
 

@@ -16,6 +16,7 @@ com razão em vez de falhar falso.
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -26,7 +27,9 @@ pytestmark = pytest.mark.asyncio
     shutil.which("npx") is None,
     reason="npx indisponível — servidor MCP 3rd-party real requer Node.",
 )
-async def test_filesystem_mcp_3rd_party_lista_tools_reais(tmp_path, monkeypatch):
+async def test_filesystem_mcp_3rd_party_lista_tools_reais(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from backend.workspace import plugins
 
     # Store funcional isolado (mesmo caminho que o marketplace usa para gravar).

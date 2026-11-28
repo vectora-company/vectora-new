@@ -9,6 +9,7 @@ Garante que:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -392,7 +393,7 @@ def test_container_matches_spec_inspect_falha_recria(
 
 
 @pytest.fixture
-def _reset_singletons(_no_nats_sidecar):
+def _reset_singletons(_no_nats_sidecar: None) -> Iterator[None]:
     """Executa a operação reset singletons."""
     from backend.persistence.kv import reset_kv, reset_reachable_cache
     from backend.scheduling.mq import reset_mq
@@ -408,7 +409,7 @@ def _reset_singletons(_no_nats_sidecar):
 
 @pytest.mark.asyncio
 async def test_get_kv_cai_para_memoria_com_redis_inacessivel(
-    monkeypatch: pytest.MonkeyPatch, _reset_singletons
+    monkeypatch: pytest.MonkeyPatch, _reset_singletons: None
 ) -> None:
     """Verifica o comportamento de get kv cai para memoria com redis inacessivel."""
     from backend.persistence.kv import MemoryKV, get_kv
@@ -421,7 +422,7 @@ async def test_get_kv_cai_para_memoria_com_redis_inacessivel(
 
 @pytest.mark.asyncio
 async def test_get_mq_cai_para_memoria_com_redis_inacessivel(
-    monkeypatch: pytest.MonkeyPatch, _reset_singletons
+    monkeypatch: pytest.MonkeyPatch, _reset_singletons: None
 ) -> None:
     """Verifica o comportamento de get mq cai para memoria com redis inacessivel."""
     from backend.scheduling.mq import MemoryMQ, get_mq
@@ -431,7 +432,7 @@ async def test_get_mq_cai_para_memoria_com_redis_inacessivel(
     assert isinstance(await get_mq(), MemoryMQ)
 
 
-def test_redis_reachable_cacheia_resultado(_reset_singletons) -> None:
+def test_redis_reachable_cacheia_resultado(_reset_singletons: None) -> None:
     """Verifica o comportamento de redis reachable cacheia resultado."""
     from backend.persistence import kv
 

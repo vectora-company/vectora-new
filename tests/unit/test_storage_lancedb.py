@@ -11,13 +11,16 @@ Isolado em step separado do workflow via marcador `real_lancedb`.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from pathlib import Path
+
 import pytest
 
 pytestmark = pytest.mark.real_lancedb
 
 
 @pytest.fixture(autouse=True)
-def reset_storage_singletons():
+def reset_storage_singletons() -> Iterator[None]:
     import backend.storage.factory as _fac
 
     _fac._reset_singletons()
@@ -29,14 +32,14 @@ class TestLanceDBConnection:
     """Cache de conexão LanceDB."""
 
     @pytest.mark.asyncio
-    async def test_connection_returns_db(self, tmp_path):
+    async def test_connection_returns_db(self, tmp_path: Path) -> None:
         from backend.storage.lancedb.connection import get_lancedb
 
         db = await get_lancedb(str(tmp_path))
         assert db is not None
 
     @pytest.mark.asyncio
-    async def test_connection_singleton(self, tmp_path):
+    async def test_connection_singleton(self, tmp_path: Path) -> None:
         from backend.storage.lancedb.connection import get_lancedb
 
         db1 = await get_lancedb(str(tmp_path))
@@ -44,7 +47,9 @@ class TestLanceDBConnection:
         assert db1 is db2
 
     @pytest.mark.asyncio
-    async def test_close_all_fecha_conexoes_de_verdade_e_esvazia_cache(self, tmp_path):
+    async def test_close_all_fecha_conexoes_de_verdade_e_esvazia_cache(
+        self, tmp_path: Path
+    ) -> None:
         """`close_all()` chama `AsyncConnection.close()` de verdade, não só
         limpa o dict Python — confirmado pelo fato de que uma conexão
         fechada rejeita operações subsequentes."""
@@ -61,7 +66,9 @@ class TestLanceDBConnection:
             await db.table_names()
 
     @pytest.mark.asyncio
-    async def test_close_all_com_conexao_ja_fechada_nao_propaga(self, tmp_path):
+    async def test_close_all_com_conexao_ja_fechada_nao_propaga(
+        self, tmp_path: Path
+    ) -> None:
         """Borda: se uma conexão já foi fechada por outro caminho, `close()`
         chamado de novo não pode derrubar o shutdown das outras."""
         from backend.storage.lancedb.connection import LanceDBConnectionCache
@@ -79,7 +86,7 @@ class TestGetVectorStore:
     """get_vector_store abre AsyncTable existente ou retorna None."""
 
     @pytest.mark.asyncio
-    async def test_returns_none_for_nonexistent(self, tmp_path):
+    async def test_returns_none_for_nonexistent(self, tmp_path: Path) -> None:
         """Tabela inexistente retorna None — comportamento documentado."""
         from backend.storage.factory import get_vector_store
 
@@ -87,7 +94,7 @@ class TestGetVectorStore:
         assert tbl is None
 
     @pytest.mark.asyncio
-    async def test_returns_table_when_exists(self, tmp_path):
+    async def test_returns_table_when_exists(self, tmp_path: Path) -> None:
         """Tabela existente é retornada como AsyncTable."""
         import lancedb
         import pyarrow as pa
@@ -105,7 +112,7 @@ class TestGetVectorStore:
         assert tbl is not None
 
     @pytest.mark.asyncio
-    async def test_get_lancedb_connection_caches(self, tmp_path):
+    async def test_get_lancedb_connection_caches(self, tmp_path: Path) -> None:
         """Duas chamadas com mesmo path retornam mesma conexão LanceDB."""
         from backend.storage.lancedb.connection import get_lancedb
 
@@ -114,7 +121,9 @@ class TestGetVectorStore:
         assert db1 is db2
 
     @pytest.mark.asyncio
-    async def test_tabela_existente_agenda_otimizacao_periodica_uma_vez(self, tmp_path):
+    async def test_tabela_existente_agenda_otimizacao_periodica_uma_vez(
+        self, tmp_path: Path
+    ) -> None:
         """`optimize_table`/`schedule_optimize` existiam mas nunca eram
         chamados em lugar nenhum do app — nenhuma tabela LanceDB recebia
         compactação periódica. O primeiro `get_vector_store` bem-sucedido
@@ -141,7 +150,9 @@ class TestGetVectorStore:
         assert _fac._optimize_tasks[cache_key] is task
 
     @pytest.mark.asyncio
-    async def test_tabela_inexistente_nao_agenda_otimizacao(self, tmp_path):
+    async def test_tabela_inexistente_nao_agenda_otimizacao(
+        self, tmp_path: Path
+    ) -> None:
         """Erro/borda: `table is None` (coleção ainda não criada) não deve
         tentar agendar otimização de uma tabela que não existe."""
         import backend.storage.factory as _fac

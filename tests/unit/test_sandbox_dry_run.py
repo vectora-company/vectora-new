@@ -3,13 +3,15 @@ instalado (CI-friendly)."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.sandbox.dry_run import DENIED_SYSCALLS, build_bwrap_command
 from backend.sandbox.policy import SandboxPolicy
 
 
-def test_command_contains_workspace_bind_and_trailing_command():
+def test_command_contains_workspace_bind_and_trailing_command() -> None:
     policy = SandboxPolicy(enabled=True)
 
     argv = build_bwrap_command(policy, "/home/user/project", ["ls", "-la"])
@@ -21,7 +23,7 @@ def test_command_contains_workspace_bind_and_trailing_command():
     assert argv[-3:] == ["--", "ls", "-la"]
 
 
-def test_rw_and_ro_paths_are_mounted():
+def test_rw_and_ro_paths_are_mounted() -> None:
     policy = SandboxPolicy(enabled=True, rw_paths=("/data",), ro_paths=("/opt/tools",))
 
     argv = build_bwrap_command(policy, "/ws", ["true"])
@@ -36,7 +38,7 @@ def test_rw_and_ro_paths_are_mounted():
     ]
 
 
-def test_mask_de_arquivo_literal_vira_ro_bind_dev_null(tmp_path):
+def test_mask_de_arquivo_literal_vira_ro_bind_dev_null(tmp_path: Path) -> None:
     # Arquivo (existente ou não) mascarado: --ro-bind /dev/null <path> —
     # esconde conteúdo sem impedir o path de existir, não --tmpfs (que
     # mascararia um diretório inteiro, não um arquivo específico).
@@ -50,7 +52,7 @@ def test_mask_de_arquivo_literal_vira_ro_bind_dev_null(tmp_path):
     assert argv[idx - 2 : idx] == ["--ro-bind", "/dev/null"]
 
 
-def test_mask_de_diretorio_via_glob_vira_tmpfs(tmp_path):
+def test_mask_de_diretorio_via_glob_vira_tmpfs(tmp_path: Path) -> None:
     (tmp_path / "secrets").mkdir()
     (tmp_path / "secrets" / "key.pem").write_text("x", encoding="utf-8")
     policy = SandboxPolicy(enabled=True, mask=("secrets",))
@@ -62,7 +64,7 @@ def test_mask_de_diretorio_via_glob_vira_tmpfs(tmp_path):
     assert argv[idx - 1] == "--tmpfs"
 
 
-def test_mask_glob_expande_contra_arquivos_reais(tmp_path):
+def test_mask_glob_expande_contra_arquivos_reais(tmp_path: Path) -> None:
     (tmp_path / "a.pem").write_text("x", encoding="utf-8")
     nested = tmp_path / "sub"
     nested.mkdir()
@@ -75,7 +77,7 @@ def test_mask_glob_expande_contra_arquivos_reais(tmp_path):
     assert str(nested / "b.pem") in argv
 
 
-def test_mask_glob_sem_match_nao_quebra(tmp_path):
+def test_mask_glob_sem_match_nao_quebra(tmp_path: Path) -> None:
     # Erro/borda: padrão glob sem nenhum arquivo correspondente é ignorado,
     # nunca fatal.
     policy = SandboxPolicy(enabled=True, mask=("**/*.pem",))
@@ -85,7 +87,7 @@ def test_mask_glob_sem_match_nao_quebra(tmp_path):
     assert "--" in argv  # comando montou normalmente até o fim
 
 
-def test_vectora_toml_sempre_mascarado_mesmo_sem_declarar(tmp_path):
+def test_vectora_toml_sempre_mascarado_mesmo_sem_declarar(tmp_path: Path) -> None:
     # 4.5 — o worker nunca vê sua própria política, mesmo se o usuário não
     # incluir vectora.toml em [sandbox].mask explicitamente.
     policy = SandboxPolicy(enabled=True, mask=())
@@ -97,7 +99,7 @@ def test_vectora_toml_sempre_mascarado_mesmo_sem_declarar(tmp_path):
     assert argv[idx - 2 : idx] == ["--ro-bind", "/dev/null"]
 
 
-def test_worker_home_dedicado_sempre_presente():
+def test_worker_home_dedicado_sempre_presente() -> None:
     from backend.sandbox.dry_run import WORKER_HOME
 
     argv = build_bwrap_command(SandboxPolicy(enabled=True), "/ws", ["true"])
@@ -108,7 +110,7 @@ def test_worker_home_dedicado_sempre_presente():
     assert ["HOME", WORKER_HOME] in pairs
 
 
-def test_lockdown_seta_env_var_de_rlimits():
+def test_lockdown_seta_env_var_de_rlimits() -> None:
     locked = build_bwrap_command(
         SandboxPolicy(enabled=True, lockdown=True), "/ws", ["true"]
     )
@@ -122,7 +124,7 @@ def test_lockdown_seta_env_var_de_rlimits():
     assert unlocked[unlocked_idx + 1] == "0"
 
 
-def test_lockdown_adds_unshare_net():
+def test_lockdown_adds_unshare_net() -> None:
     locked = build_bwrap_command(
         SandboxPolicy(enabled=True, lockdown=True), "/ws", ["true"]
     )
@@ -134,7 +136,7 @@ def test_lockdown_adds_unshare_net():
     assert "--unshare-net" not in unlocked
 
 
-def test_allow_tcp_ports_propagado_como_env_var_json():
+def test_allow_tcp_ports_propagado_como_env_var_json() -> None:
     argv = build_bwrap_command(
         SandboxPolicy(enabled=True, allow_tcp_ports=(443, 8080)), "/ws", ["true"]
     )
@@ -143,7 +145,7 @@ def test_allow_tcp_ports_propagado_como_env_var_json():
     assert argv[idx + 1] == "[443, 8080]"
 
 
-def test_allow_tcp_ports_vazio_ainda_seta_a_env_var(tmp_path):
+def test_allow_tcp_ports_vazio_ainda_seta_a_env_var(tmp_path: Path) -> None:
     # Erro/borda: sem allow_tcp_ports configurado, a env var ainda existe
     # (lista vazia) — o worker sempre sabe ler `VECTORA_SANDBOX_ALLOW_TCP_PORTS`,
     # nunca precisa tratar a ausência da chave como um caso à parte.
@@ -153,7 +155,7 @@ def test_allow_tcp_ports_vazio_ainda_seta_a_env_var(tmp_path):
     assert argv[idx + 1] == "[]"
 
 
-def test_no_mounts_when_policy_has_none_configured():
+def test_no_mounts_when_policy_has_none_configured() -> None:
     # Erro/borda: rw_paths/ro_paths/mask todos vazios não deve quebrar a
     # montagem — só o essencial (workspace + sistema + home dedicado do
     # worker + auto-mask do vectora.toml) fica no comando.
@@ -167,7 +169,7 @@ def test_no_mounts_when_policy_has_none_configured():
     assert argv.count("--bind") == 1
 
 
-def test_empty_command_still_produces_valid_argv_with_trailing_separator():
+def test_empty_command_still_produces_valid_argv_with_trailing_separator() -> None:
     # Erro/borda: comando vazio não deve quebrar a montagem — o "--" fica
     # sozinho no final, sem nenhum argumento de comando depois dele.
     argv = build_bwrap_command(SandboxPolicy(enabled=True), "/ws", [])
@@ -175,7 +177,7 @@ def test_empty_command_still_produces_valid_argv_with_trailing_separator():
     assert argv[-1] == "--"
 
 
-def test_multiple_rw_and_ro_paths_preserve_order():
+def test_multiple_rw_and_ro_paths_preserve_order() -> None:
     policy = SandboxPolicy(
         enabled=True,
         rw_paths=("/a", "/b", "/c"),
@@ -190,7 +192,7 @@ def test_multiple_rw_and_ro_paths_preserve_order():
     assert ro_binds.index("/x") < ro_binds.index("/y")
 
 
-def test_paths_with_spaces_and_unicode_pass_through_unchanged():
+def test_paths_with_spaces_and_unicode_pass_through_unchanged() -> None:
     policy = SandboxPolicy(enabled=True, rw_paths=("/home/usuário/meu projeto",))
 
     argv = build_bwrap_command(policy, "/ws", ["true"])
@@ -198,7 +200,7 @@ def test_paths_with_spaces_and_unicode_pass_through_unchanged():
     assert "/home/usuário/meu projeto" in argv
 
 
-def test_command_arguments_with_spaces_and_quotes_pass_through_unchanged():
+def test_command_arguments_with_spaces_and_quotes_pass_through_unchanged() -> None:
     argv = build_bwrap_command(
         SandboxPolicy(enabled=True), "/ws", ["echo", "hello world", '"quoted"']
     )
@@ -206,7 +208,7 @@ def test_command_arguments_with_spaces_and_quotes_pass_through_unchanged():
     assert argv[-3:] == ["echo", "hello world", '"quoted"']
 
 
-def test_docker_and_ssh_only_fields_are_ignored_by_bwrap_command():
+def test_docker_and_ssh_only_fields_are_ignored_by_bwrap_command() -> None:
     # docker_image/remote_host/ssh_key_id não fazem sentido pro backend
     # local — não devem vazar pro argv do bwrap.
     policy = SandboxPolicy(
@@ -223,18 +225,18 @@ def test_docker_and_ssh_only_fields_are_ignored_by_bwrap_command():
     assert "key-1" not in argv
 
 
-def test_denied_syscalls_list_contains_expected_dangerous_calls():
+def test_denied_syscalls_list_contains_expected_dangerous_calls() -> None:
     for name in ("ptrace", "bpf", "mount", "unshare", "reboot"):
         assert name in DENIED_SYSCALLS
 
 
-def test_denied_syscalls_is_immutable_tuple():
+def test_denied_syscalls_is_immutable_tuple() -> None:
     assert isinstance(DENIED_SYSCALLS, tuple)
     with pytest.raises(TypeError):
         DENIED_SYSCALLS[0] = "ptrace"  # ty: ignore[invalid-assignment]
 
 
-def test_workspace_dir_appears_exactly_once_as_bind_source():
+def test_workspace_dir_appears_exactly_once_as_bind_source() -> None:
     argv = build_bwrap_command(SandboxPolicy(enabled=True), "/ws/project", ["true"])
 
     bind_idx = argv.index("--bind")
@@ -248,7 +250,7 @@ def test_workspace_dir_appears_exactly_once_as_bind_source():
 # ── limites de recursos no comando ──────────────────────────────────────────
 
 
-def test_limites_viajam_ao_jail_por_variaveis():
+def test_limites_viajam_ao_jail_por_variaveis() -> None:
     argv = build_bwrap_command(
         SandboxPolicy(enabled=True, max_file_mb=100, memory_limit_mb=2048),
         "/ws",
@@ -262,13 +264,15 @@ def test_limites_viajam_ao_jail_por_variaveis():
     assert ambiente["VECTORA_SANDBOX_MEMORY_MB"] == "2048"
 
 
-def test_sem_limite_de_memoria_a_variavel_nao_existe():
+def test_sem_limite_de_memoria_a_variavel_nao_existe() -> None:
     argv = build_bwrap_command(SandboxPolicy(enabled=True), "/ws", ["true"])
 
     assert "VECTORA_SANDBOX_MEMORY_MB" not in argv
 
 
-def test_tmpfs_do_jail_tem_teto_quando_o_bwrap_suporta(monkeypatch):
+def test_tmpfs_do_jail_tem_teto_quando_o_bwrap_suporta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.sandbox import dry_run
 
     monkeypatch.setattr(dry_run, "bwrap_supports_size", lambda: True)
@@ -283,7 +287,9 @@ def test_tmpfs_do_jail_tem_teto_quando_o_bwrap_suporta(monkeypatch):
         assert argv[i - 3 : i - 1] == ["--size", tamanho]
 
 
-def test_bwrap_antigo_sem_size_nao_impede_o_jail(monkeypatch):
+def test_bwrap_antigo_sem_size_nao_impede_o_jail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.sandbox import dry_run
 
     monkeypatch.setattr(dry_run, "bwrap_supports_size", lambda: False)

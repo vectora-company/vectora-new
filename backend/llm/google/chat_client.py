@@ -29,7 +29,7 @@ from backend.llm.google.client import GoogleGenAIClient, GoogleGenAIResponseErro
 from backend.llm.google.prompt_cache import apply_cached_content, invalidate
 from backend.llm.media_parts import prepare_content, split_data_url
 from backend.llm.reasoning import gemini_thinking_config, reasoning_effort
-from backend.vtypes.contracts import UsageSnapshot
+from backend.vtypes.contracts import JsonObject, JsonValue, UsageSnapshot
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -52,7 +52,7 @@ _HARM_CATEGORIES = (
 )
 
 
-def _safety_settings_permissivos() -> list[dict]:
+def _safety_settings_permissivos() -> list[JsonValue]:
     """Threshold mais permissivo em toda categoria — o Vectora não filtra
     conteúdo, o que o modelo aceita gerar é decisão do modelo."""
     return [
@@ -61,7 +61,9 @@ def _safety_settings_permissivos() -> list[dict]:
     ]
 
 
-def _inline_refs(schema: Any, defs: dict[str, Any], seen: frozenset[str]) -> Any:
+def _inline_refs(
+    schema: JsonValue, defs: JsonObject, seen: frozenset[str]
+) -> JsonValue:
     """Resolve `$ref: "#/$defs/Nome"` substituindo pela definição real —
     o Gemini não suporta `$ref`/`$defs` (schema de function-calling é um
     subconjunto de OpenAPI 3.0), então só removê-los apagaria o campo
@@ -86,7 +88,7 @@ def _inline_refs(schema: Any, defs: dict[str, Any], seen: frozenset[str]) -> Any
     return schema
 
 
-def _strip_gemini_unsupported_keys(schema: Any) -> Any:
+def _strip_gemini_unsupported_keys(schema: JsonValue) -> JsonValue:
     """Remove chaves de JSON Schema que a API do Gemini rejeita com 400
     ("Cannot find field") — sem `additionalProperties`. Recursa em
     `properties`/`items`/`anyOf`/`oneOf`/`allOf` porque o Pydantic v2 injeta
@@ -104,16 +106,16 @@ def _strip_gemini_unsupported_keys(schema: Any) -> Any:
     return schema
 
 
-def _to_google_tool(spec: ToolSpec) -> dict:
+def _to_google_tool(spec: ToolSpec) -> JsonObject:
     """`functionDeclarations` do Gemini — sem wrapper `type:"function"`,
     schema direto em `parameters`."""
     convertida = spec.openai_schema()["function"]
-    parametros: dict[str, Any] = convertida.get("parameters") or {
+    parametros: JsonObject = convertida.get("parameters") or {
         "type": "object",
         "properties": {},
     }
     defs_brutos = parametros.get("$defs")
-    defs: dict[str, Any] = defs_brutos if isinstance(defs_brutos, dict) else {}
+    defs: JsonObject = defs_brutos if isinstance(defs_brutos, dict) else {}
     sem_refs = _inline_refs(parametros, defs, frozenset())
     return {
         "name": convertida.get("name", ""),
@@ -122,7 +124,7 @@ def _to_google_tool(spec: ToolSpec) -> dict:
     }
 
 
-def _google_image_part(data_uri: str) -> dict:
+def _google_image_part(data_uri: str) -> JsonObject:
     """`data:` URI (formato que `ContentBlock.image_url` sempre carrega,
     montado em ``api/handlers/chat.py``) vira `inlineData` base64; qualquer
     outra string vira `fileData` — o Gemini aceita os dois formatos de part."""
@@ -132,10 +134,10 @@ def _google_image_part(data_uri: str) -> dict:
     return {"fileData": {"fileUri": data_uri}}
 
 
-def _to_google_user_parts(content: list[ContentBlock]) -> list[dict]:
+def _to_google_user_parts(content: list[ContentBlock]) -> list[JsonValue]:
     """Traduz o content multimodal de uma mensagem `user` — bloco `image_url`
     nunca é descartado só porque `msg.text()` só concatena texto."""
-    partes: list[dict] = []
+    partes: list[JsonValue] = []
     for bloco in prepare_content(content, "google_genai"):
         if bloco.kind == "text" and bloco.text:
             partes.append({"text": bloco.text})
@@ -147,8 +149,8 @@ def _to_google_user_parts(content: list[ContentBlock]) -> list[dict]:
     return partes or [{"text": ""}]
 
 
-def _assistant_parts(msg: VMessage) -> list[dict]:
-    partes: list[dict] = []
+def _assistant_parts(msg: VMessage) -> list[JsonValue]:
+    partes: list[JsonValue] = []
     texto = msg.text()
     if texto:
         partes.append({"text": texto})
@@ -276,13 +278,13 @@ class GoogleChatClient:
         max_tokens: int | None,
     ) -> dict:
         system, contents = _to_google_contents(messages)
-        corpo: dict[str, Any] = {
-            "contents": contents,
+        corpo: JsonObject = {
+            "contents": [*contents],
             "safetySettings": _safety_settings_permissivos(),
         }
         if system:
             corpo["systemInstruction"] = system
-        generation_config: dict[str, Any] = {}
+        generation_config: JsonObject = {}
         if temperature is not None:
             generation_config["temperature"] = temperature
         if max_tokens is not None:

@@ -22,8 +22,13 @@ from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import numpy as np
     from numpy.typing import NDArray
+
+    from backend.vtypes.contracts import JsonObject, JsonValue
+    from backend.vtypes.services import ToolImage
 
 logger = logging.getLogger(__name__)
 
@@ -347,10 +352,10 @@ async def transcribe_local(ctx: ToolContext, path: str, language: str = "") -> s
 def _ctx_image_result(
     ctx: ToolContext,
     images: list[tuple[str, bytes]],
-    extra: dict[str, object],
+    extra: JsonObject,
     list_key: str,
     item_key: str,
-    values: list[object],
+    values: Sequence[JsonValue],
 ) -> str:
     """Salva as imagens como assets da sessão e monta o JSON do resultado.
 
@@ -364,8 +369,8 @@ def _ctx_image_result(
         save_tool_image,
     )
 
-    entries: list[dict[str, object]] = []
-    refs: list[dict[str, object]] = []
+    entries: list[JsonObject] = []
+    refs: list[ToolImage] = []
     for (name, data), value in zip(images, values, strict=True):
         saved = save_tool_image(ctx, data, name=name)
         if saved is None:

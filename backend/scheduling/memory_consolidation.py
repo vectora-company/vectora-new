@@ -29,9 +29,12 @@ import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.settings import settings
+
+if TYPE_CHECKING:
+    from backend.vtypes.message import VMessage
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +98,12 @@ async def _fetch_recent_threads(
         from backend.api.handlers.threads import _get_db
 
         db = await _get_db()
-        rows = await db.execute_fetchall(
-            "SELECT thread_id FROM vectora_sessions WHERE user_id = ? "
-            "ORDER BY updated_at DESC LIMIT ?",
-            (user_id, _MAX_THREADS),
+        rows = list(
+            await db.execute_fetchall(
+                "SELECT thread_id FROM vectora_sessions WHERE user_id = ? "
+                "ORDER BY updated_at DESC LIMIT ?",
+                (user_id, _MAX_THREADS),
+            )
         )
         if not rows:
             return []
@@ -125,7 +130,7 @@ async def _fetch_recent_threads(
         return []
 
 
-async def _invoke_llm(prompt: str) -> Any:
+async def _invoke_llm(prompt: str) -> VMessage:
     """Invoca o LLM padrão com o prompt de consolidação — retorna VMessage nativo."""
     from backend.services.utils import load_native_llm
     from backend.vtypes.message import MessageRole, text_message

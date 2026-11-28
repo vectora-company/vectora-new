@@ -9,6 +9,7 @@ import shlex
 import socket
 import ssl
 import sys
+from asyncio import StreamReader, StreamWriter
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,7 @@ from backend.sandbox.policy import (
     resolve_policy,
     trusted_policy_path,
 )
+from backend.services.egress_policy import EgressPolicy
 from tests.unit.test_sandbox_hardening import _bwrap_works, _exec
 
 real_bwrap = pytest.mark.skipif(
@@ -72,7 +74,7 @@ def _process_memory_contains(pid: int, needle: bytes) -> bool:
 
 
 @pytest.fixture(autouse=True)
-def _sem_deteccao_do_ambiente(monkeypatch):
+def _sem_deteccao_do_ambiente(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.sandbox import policy as policy_module
 
     monkeypatch.setattr(policy_module, "_native_sandbox_available_sync", lambda: False)
@@ -87,11 +89,11 @@ def _setenv(argv: list[str]) -> dict[str, str]:
 # ── política de rede ────────────────────────────────────────────────────────
 
 
-def test_o_padrao_e_rede_filtrada():
+def test_o_padrao_e_rede_filtrada() -> None:
     assert SandboxPolicy(enabled=True).network == "filtered"
 
 
-def test_lockdown_sempre_corta_a_rede():
+def test_lockdown_sempre_corta_a_rede() -> None:
     assert effective_network(SandboxPolicy(enabled=True, lockdown=True)) == "off"
     assert (
         effective_network(SandboxPolicy(enabled=True, lockdown=True, network="open"))
@@ -99,23 +101,23 @@ def test_lockdown_sempre_corta_a_rede():
     )
 
 
-def test_destinos_permitidos_somam_registries_e_extras_sem_repetir():
+def test_destinos_permitidos_somam_registries_e_extras_sem_repetir() -> None:
     policy = SandboxPolicy(enabled=True, allow_hosts=("api.exemplo.com", "pypi.org"))
 
     hosts = effective_allow_hosts(policy)
 
     assert set(REGISTRY_HOSTS) <= set(hosts)
-    assert "api.exemplo.com" in hosts
+    assert {"api.exemplo.com"} <= set(hosts)
     assert hosts.count("pypi.org") == 1
 
 
-def test_sem_registries_so_os_destinos_declarados():
+def test_sem_registries_so_os_destinos_declarados() -> None:
     policy = SandboxPolicy(enabled=True, registry_hosts=False, allow_hosts=("a.com",))
 
     assert effective_allow_hosts(policy) == ("a.com",)
 
 
-def test_parse_le_rede_e_destinos(tmp_path):
+def test_parse_le_rede_e_destinos(tmp_path: Path) -> None:
     arquivo = tmp_path / "p.toml"
     arquivo.write_text(
         '[sandbox]\nnetwork = "open"\nallow_hosts = ["a.com"]\nregistry_hosts = false\n'
@@ -130,7 +132,7 @@ def test_parse_le_rede_e_destinos(tmp_path):
     )
 
 
-def test_modo_de_rede_desconhecido_falha_fechado(tmp_path):
+def test_modo_de_rede_desconhecido_falha_fechado(tmp_path: Path) -> None:
     arquivo = tmp_path / "p.toml"
     arquivo.write_text('[sandbox]\nnetwork = "tudo"\n')
 
@@ -139,7 +141,7 @@ def test_modo_de_rede_desconhecido_falha_fechado(tmp_path):
     assert policy.lockdown is True
 
 
-def test_repositorio_nao_abre_a_rede(tmp_path):
+def test_repositorio_nao_abre_a_rede(tmp_path: Path) -> None:
     (tmp_path / "vectora.toml").write_text('[sandbox]\nnetwork = "open"\n')
 
     policy = resolve_policy(tmp_path)
@@ -148,13 +150,13 @@ def test_repositorio_nao_abre_a_rede(tmp_path):
     assert "network" in policy.ignored_repo_keys
 
 
-def test_repositorio_pode_cortar_a_rede(tmp_path):
+def test_repositorio_pode_cortar_a_rede(tmp_path: Path) -> None:
     (tmp_path / "vectora.toml").write_text('[sandbox]\nnetwork = "off"\n')
 
     assert resolve_policy(tmp_path).network == "off"
 
 
-def test_repositorio_nao_amplia_destinos(tmp_path):
+def test_repositorio_nao_amplia_destinos(tmp_path: Path) -> None:
     trusted_policy_path(tmp_path).write_text('[sandbox]\nallow_hosts = ["a.com"]\n')
     (tmp_path / "vectora.toml").write_text(
         '[sandbox]\nallow_hosts = ["a.com", "evil.com"]\nregistry_hosts = true\n'
@@ -166,7 +168,9 @@ def test_repositorio_nao_amplia_destinos(tmp_path):
     assert "allow_hosts" in policy.ignored_repo_keys
 
 
-def test_politica_recusa_binding_com_variavel_de_ambiente_reservada(tmp_path):
+def test_politica_recusa_binding_com_variavel_de_ambiente_reservada(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "policy.toml"
     path.write_text(
         '[sandbox]\ncredential_bindings = [{name = "PATH", '
@@ -176,7 +180,7 @@ def test_politica_recusa_binding_com_variavel_de_ambiente_reservada(tmp_path):
     assert parse_policy(path).lockdown is True
 
 
-def test_repositorio_pode_tirar_os_registries(tmp_path):
+def test_repositorio_pode_tirar_os_registries(tmp_path: Path) -> None:
     trusted_policy_path(tmp_path).write_text("[sandbox]\nregistry_hosts = true\n")
     (tmp_path / "vectora.toml").write_text("[sandbox]\nregistry_hosts = false\n")
 
@@ -186,7 +190,7 @@ def test_repositorio_pode_tirar_os_registries(tmp_path):
 # ── comando do bwrap ────────────────────────────────────────────────────────
 
 
-def test_rede_aberta_herda_a_do_host():
+def test_rede_aberta_herda_a_do_host() -> None:
     argv = build_bwrap_command(
         SandboxPolicy(enabled=True, network="open"), "/ws", ["true"]
     )
@@ -195,7 +199,7 @@ def test_rede_aberta_herda_a_do_host():
     assert "HTTPS_PROXY" not in _setenv(argv)
 
 
-def test_sem_rede_corta_e_nao_liga_ponte():
+def test_sem_rede_corta_e_nao_liga_ponte() -> None:
     argv = build_bwrap_command(
         SandboxPolicy(enabled=True, network="off"), "/ws", ["true"]
     )
@@ -204,14 +208,16 @@ def test_sem_rede_corta_e_nao_liga_ponte():
     assert "backend.sandbox.egress_bridge" not in argv
 
 
-def test_filtrada_sem_proxy_nunca_abre_por_omissao():
+def test_filtrada_sem_proxy_nunca_abre_por_omissao() -> None:
     argv = build_bwrap_command(SandboxPolicy(enabled=True), "/ws", ["true"])
 
     assert "--unshare-net" in argv
     assert "backend.sandbox.egress_bridge" not in argv
 
 
-def test_filtrada_com_proxy_monta_o_socket_aponta_o_ambiente_e_liga_a_ponte(tmp_path):
+def test_filtrada_com_proxy_monta_o_socket_aponta_o_ambiente_e_liga_a_ponte(
+    tmp_path: Path,
+) -> None:
     argv = build_bwrap_command(
         SandboxPolicy(enabled=True), "/ws", ["echo", "oi"], egress_dir=str(tmp_path)
     )
@@ -245,7 +251,9 @@ async def _pedir(directory: str, request: bytes) -> bytes:
 
 
 @pytest.mark.asyncio
-async def test_connect_para_destino_fora_da_allowlist_e_bloqueado_e_registrado():
+async def test_connect_para_destino_fora_da_allowlist_e_bloqueado_e_registrado() -> (
+    None
+):
     proxy = EgressProxy(SandboxPolicy(enabled=True))
     directory = await proxy.start()
     try:
@@ -270,7 +278,9 @@ async def test_connect_para_destino_fora_da_allowlist_e_bloqueado_e_registrado()
 @pytest.mark.parametrize(
     "destino", ["127.0.0.1:443", "169.254.169.254:80", "10.0.0.5:443", "[::1]:443"]
 )
-async def test_connect_para_ip_privado_ou_de_metadados_e_bloqueado(destino):
+async def test_connect_para_ip_privado_ou_de_metadados_e_bloqueado(
+    destino: str,
+) -> None:
     proxy = EgressProxy(SandboxPolicy(enabled=True, allow_hosts=("*",)))
     # Mesmo com o destino na allowlist, o IP privado é recusado.
     proxy._egress.allowed_hosts = []
@@ -287,7 +297,7 @@ async def test_connect_para_ip_privado_ou_de_metadados_e_bloqueado(destino):
 
 
 @pytest.mark.asyncio
-async def test_porta_fora_de_80_e_443_e_bloqueada():
+async def test_porta_fora_de_80_e_443_e_bloqueada() -> None:
     proxy = EgressProxy(SandboxPolicy(enabled=True))
     directory = await proxy.start()
     try:
@@ -309,7 +319,7 @@ async def test_porta_fora_de_80_e_443_e_bloqueada():
         b"lixo\r\n\r\n",
     ],
 )
-async def test_so_aceita_connect_bem_formado(requisicao):
+async def test_so_aceita_connect_bem_formado(requisicao: bytes) -> None:
     proxy = EgressProxy(SandboxPolicy(enabled=True))
     directory = await proxy.start()
     try:
@@ -322,8 +332,10 @@ async def test_so_aceita_connect_bem_formado(requisicao):
 
 
 @pytest.mark.asyncio
-async def test_destino_permitido_abre_o_tunel_ate_o_ip_validado(monkeypatch):
-    async def eco(reader, writer):
+async def test_destino_permitido_abre_o_tunel_ate_o_ip_validado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def eco(reader: StreamReader, writer: StreamWriter) -> None:
         writer.write(b"eco:" + await reader.read(100))
         await writer.drain()
         writer.close()
@@ -331,7 +343,9 @@ async def test_destino_permitido_abre_o_tunel_ate_o_ip_validado(monkeypatch):
     servidor = await asyncio.start_server(eco, "127.0.0.1", 0)
     porta = servidor.sockets[0].getsockname()[1]
 
-    async def liberado(url, policy=None):
+    async def liberado(
+        url: str, policy: EgressPolicy | None = None
+    ) -> tuple[bool, str, str]:
         # O proxy conecta ao IP que a validação devolveu, não ao nome.
         return True, "", "127.0.0.1"
 
@@ -359,13 +373,15 @@ async def test_destino_permitido_abre_o_tunel_ate_o_ip_validado(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_credencial_so_e_injetada_no_host_vinculado(monkeypatch, tmp_path):
+async def test_credencial_so_e_injetada_no_host_vinculado(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from backend.sandbox.tls_interception import WorkspaceTLSAuthority
 
     authority = WorkspaceTLSAuthority(tmp_path)
     upstream_seen: asyncio.Future[bytes] = asyncio.get_running_loop().create_future()
 
-    async def upstream(reader, writer):
+    async def upstream(reader: StreamReader, writer: StreamWriter) -> None:
         request = await reader.readuntil(b"\r\n\r\n")
         upstream_seen.set_result(request)
         writer.write(
@@ -380,7 +396,9 @@ async def test_credencial_so_e_injetada_no_host_vinculado(monkeypatch, tmp_path)
     )
     port = upstream_server.sockets[0].getsockname()[1]
 
-    async def allow_local(url, policy=None):
+    async def allow_local(
+        url: str, policy: EgressPolicy | None = None
+    ) -> tuple[bool, str, str]:
         return True, "", "127.0.0.1"
 
     original_open_connection = asyncio.open_connection
@@ -391,7 +409,7 @@ async def test_credencial_so_e_injetada_no_host_vinculado(monkeypatch, tmp_path)
         return await original_open_connection(host, port, *args, **kwargs)
 
     class Secrets:
-        async def get(self, user_id, key):
+        async def get(self, user_id: str, key: str) -> str:
             assert (user_id, key) == ("owner", "sandbox:ws:API_TOKEN")
             return "top-secret-value"
 
@@ -450,14 +468,14 @@ async def test_credencial_so_e_injetada_no_host_vinculado(monkeypatch, tmp_path)
 
 @pytest.mark.asyncio
 async def test_host_sem_binding_permanece_tunel_tls_sem_credencial(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from backend.sandbox.tls_interception import WorkspaceTLSAuthority
 
     authority = WorkspaceTLSAuthority(tmp_path)
     upstream_seen = asyncio.get_running_loop().create_future()
 
-    async def upstream(reader, writer):
+    async def upstream(reader: StreamReader, writer: StreamWriter) -> None:
         upstream_seen.set_result(await reader.readuntil(b"\r\n\r\n"))
         writer.write(
             b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
@@ -476,7 +494,9 @@ async def test_host_sem_binding_permanece_tunel_tls_sem_credencial(
             port = upstream_port
         return await original_open_connection(host, port, *args, **kwargs)
 
-    async def allow_local(url, policy=None):
+    async def allow_local(
+        url: str, policy: EgressPolicy | None = None
+    ) -> tuple[bool, str, str]:
         return True, "", "127.0.0.1"
 
     monkeypatch.setattr(asyncio, "open_connection", connect_upstream)
@@ -524,8 +544,8 @@ async def test_host_sem_binding_permanece_tunel_tls_sem_credencial(
 @real_bwrap
 @pytest.mark.asyncio
 async def test_jail_real_usa_placeholder_e_proxy_injeta_segredo_no_destino(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from backend.sandbox.tls_interception import WorkspaceTLSAuthority
     from backend.vtypes import Workspace
     from backend.workspace import workspace as ws_mod
@@ -546,7 +566,7 @@ async def test_jail_real_usa_placeholder_e_proxy_injeta_segredo_no_destino(
     authority = WorkspaceTLSAuthority(tmp_path)
     forwarded = asyncio.get_running_loop().create_future()
 
-    async def upstream(reader, writer):
+    async def upstream(reader, writer) -> None:
         forwarded.set_result(await reader.readuntil(b"\r\n\r\n"))
         writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
         await writer.drain()
@@ -570,7 +590,7 @@ async def test_jail_real_usa_placeholder_e_proxy_injeta_segredo_no_destino(
         return True, "", "127.0.0.1"
 
     class Secrets:
-        async def get(self, user_id, key):
+        async def get(self, user_id, key) -> str:
             assert (user_id, key) == (
                 "owner",
                 "sandbox:ws-credential:API_TOKEN",
@@ -623,7 +643,7 @@ async def test_jail_real_usa_placeholder_e_proxy_injeta_segredo_no_destino(
 
 
 @pytest.mark.asyncio
-async def test_decisoes_chegam_ao_callback_de_auditoria():
+async def test_decisoes_chegam_ao_callback_de_auditoria() -> None:
     vistas = []
     proxy = EgressProxy(SandboxPolicy(enabled=True), on_decision=vistas.append)
     directory = await proxy.start()
@@ -636,7 +656,7 @@ async def test_decisoes_chegam_ao_callback_de_auditoria():
 
 
 @pytest.mark.asyncio
-async def test_pasta_do_socket_e_privada_e_some_ao_parar():
+async def test_pasta_do_socket_e_privada_e_some_ao_parar() -> None:
     proxy = EgressProxy(SandboxPolicy(enabled=True))
     directory = await proxy.start()
 
@@ -647,7 +667,7 @@ async def test_pasta_do_socket_e_privada_e_some_ao_parar():
 
 
 @pytest.mark.asyncio
-async def test_registry_reusa_o_proxy_e_recria_quando_a_rede_muda():
+async def test_registry_reusa_o_proxy_e_recria_quando_a_rede_muda() -> None:
     registry = EgressRegistry()
     politica = SandboxPolicy(enabled=True)
     try:
@@ -665,7 +685,7 @@ async def test_registry_reusa_o_proxy_e_recria_quando_a_rede_muda():
 
 
 @pytest.mark.asyncio
-async def test_egress_dir_for_so_para_jail_local_com_rede_filtrada():
+async def test_egress_dir_for_so_para_jail_local_com_rede_filtrada() -> None:
     try:
         assert await egress_dir_for("ws-a", SandboxPolicy(enabled=False)) is None
         assert (
@@ -685,7 +705,7 @@ async def test_egress_dir_for_so_para_jail_local_com_rede_filtrada():
         await egress_proxy.egress_registry.close_all()
 
 
-def test_authority_de_connect():
+def test_authority_de_connect() -> None:
     assert _split_authority("pypi.org:443") == ("pypi.org", 443)
     assert _split_authority("[::1]:8443") == ("::1", 8443)
     assert _split_authority("sem-porta") == (None, None)
@@ -697,8 +717,8 @@ def test_authority_de_connect():
 
 
 @pytest.mark.asyncio
-async def test_ponte_liga_o_loopback_ao_socket_unix(tmp_path):
-    async def eco(reader, writer):
+async def test_ponte_liga_o_loopback_ao_socket_unix(tmp_path: Path) -> None:
+    async def eco(reader: StreamReader, writer: StreamWriter) -> None:
         writer.write(b"unix:" + await reader.read(100))
         await writer.drain()
         writer.close()
@@ -741,8 +761,10 @@ _TUNEL = (
 
 @real_bwrap
 @pytest.mark.asyncio
-async def test_jail_real_so_alcanca_a_rede_pelo_proxy(tmp_path, monkeypatch):
-    async def eco(reader, writer):
+async def test_jail_real_so_alcanca_a_rede_pelo_proxy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def eco(reader, writer) -> None:
         writer.write(b"eco:" + await reader.read(100))
         await writer.drain()
         writer.close()

@@ -5,6 +5,9 @@ from __future__ import annotations
 import pytest
 
 from backend.llm.google import prompt_cache as pc
+from backend.vtypes import VMessage
+from backend.vtypes.contracts import JsonObject
+from tests.json_values import dig
 
 
 class _Client:
@@ -48,13 +51,13 @@ async def test_large_prefix_becomes_cached_content_and_is_reused() -> None:
     assert body1["cachedContent"] == body2["cachedContent"] == "cachedContents/1"
     assert "systemInstruction" not in body1
     assert "tools" not in body1
-    assert body1["contents"][0]["parts"][0]["text"] == "oi"
+    assert dig(body1, "contents", 0, "parts", 0, "text") == "oi"
 
 
 @pytest.mark.asyncio
 async def test_small_prefix_does_not_use_cache() -> None:
     client = _Client()
-    payload = {
+    payload: JsonObject = {
         "systemInstruction": {"parts": [{"text": "curto"}]},
         "contents": [],
     }
@@ -90,7 +93,7 @@ async def test_expired_cache_is_recreated() -> None:
 
 
 @pytest.mark.asyncio
-async def test_disabled_in_settings(monkeypatch) -> None:
+async def test_disabled_in_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.settings import settings
 
     monkeypatch.setattr(settings, "prompt_cache_enabled", False)
@@ -128,7 +131,7 @@ class _GeminiFake:
         yield {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
 
 
-def _large_messages():
+def _large_messages() -> list[VMessage]:
     from backend.vtypes.message import MessageRole, text_message
 
     return [

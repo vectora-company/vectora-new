@@ -17,6 +17,7 @@ import time
 from dataclasses import dataclass
 
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
+from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ async def start_video_generation(
     callback_url: str | None = None,
 ) -> VideoJob:
     """Dispara a geração e devolve o job — não espera pelo vídeo."""
-    payload: dict[str, object] = {"model": model, "prompt": prompt}
+    payload: JsonObject = {"model": model, "prompt": prompt}
     if callback_url:
         payload["callback_url"] = callback_url
 

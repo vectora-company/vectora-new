@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
+from backend.engine.stream_events import EngineEvent
+from backend.llm.fallback_chat_client import FallbackChatClient
 from backend.llm.media_parts import (
     downgrade_to_text,
     media_routing_evidence,
     prepare_content,
 )
 from backend.services.media_hydration import hydrate_media_blocks
+from backend.tools.registry import ToolSpec
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage, VMessageChunk
+from tests.json_values import dig
 
 PDF = b"%PDF-1.7\nconteudo"
 PDF_URL = "data:application/pdf;base64," + base64.b64encode(PDF).decode()
@@ -97,14 +103,14 @@ class TestProviderPayloads:
         from backend.llm.anthropic.chat_client import _to_anthropic_messages
 
         _system, messages = _to_anthropic_messages([_user(_pdf_block())])
-        document = messages[0]["content"][1]
-        assert document["type"] == "document"
-        assert document["source"] == {
+        document = dig(messages[0], "content", 1)
+        assert dig(document, "type") == "document"
+        assert dig(document, "source") == {
             "type": "base64",
             "media_type": "application/pdf",
             "data": base64.b64encode(PDF).decode(),
         }
-        assert document["title"] == "r.pdf"
+        assert dig(document, "title") == "r.pdf"
 
     def test_gemini_inline_data(self) -> None:
         from backend.llm.google.chat_client import _to_google_user_parts
@@ -147,9 +153,9 @@ class TestHydration:
         latest = _user(_pdf_block(data_url=None))
         reads: list[str] = []
 
-        def reader(asset_id: str, **_kwargs: object) -> tuple[object, bytes]:
+        def reader(asset_id: str, **_kwargs: str) -> tuple[None, bytes]:
             reads.append(asset_id)
-            return object(), PDF
+            return None, PDF
 
         sent = hydrate_media_blocks(
             [old, latest],
@@ -172,7 +178,7 @@ class TestHydration:
             attachment_size_bytes=3,
         )
 
-        def reader(*_args: object, **_kwargs: object) -> None:
+        def reader[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
             raise AssertionError("não deveria ler")
 
         [message] = hydrate_media_blocks(
@@ -182,16 +188,28 @@ class TestHydration:
 
 
 class _Script:
-    def __init__(self, *steps: object) -> None:
+    def __init__(self, *steps: str | Exception) -> None:
         self.steps = list(steps)
         self.received: list[list[VMessage]] = []
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         raise NotImplementedError
 
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         self.received.append(list(messages))
         step = self.steps.pop(0)
         if isinstance(step, BaseException):
@@ -199,7 +217,7 @@ class _Script:
         yield VMessageChunk(delta_text=str(step))
 
 
-async def _collect(client, messages):
+async def _collect(client: FallbackChatClient, messages):
     return [chunk async for chunk in client.astream(messages)]
 
 
@@ -210,7 +228,7 @@ async def test_recusa_do_arquivo_repete_com_texto_no_mesmo_modelo(
 
     script = _Script(RuntimeError("400: document type not supported"), "ok")
 
-    async def candidates(*_args: object, **_kwargs: object) -> list[str]:
+    async def candidates[**P](*_args: P.args, **_kwargs: P.kwargs) -> list[str]:
         return ["anthropic:claude"]
 
     monkeypatch.setattr("backend.llm.fallback_chat_client._candidates", candidates)
@@ -233,7 +251,7 @@ async def test_erro_sem_relacao_com_anexo_nao_repete(
 
     script = _Script(ValueError("chave inválida"))
 
-    async def candidates(*_args: object, **_kwargs: object) -> list[str]:
+    async def candidates[**P](*_args: P.args, **_kwargs: P.kwargs) -> list[str]:
         return ["anthropic:claude"]
 
     monkeypatch.setattr("backend.llm.fallback_chat_client._candidates", candidates)
@@ -272,18 +290,23 @@ async def test_loop_registra_e_emite_o_envio_dos_anexos(
         class _Client:
             last_model_id = "anthropic:claude"
 
-            async def agenerate(self, messages, **_kwargs):
+            async def agenerate(self, messages: list[VMessage], **_kwargs) -> VMessage:
                 raise NotImplementedError
 
             async def astream(
-                self, messages, *, tools=None, temperature=None, max_tokens=None
-            ):
+                self,
+                messages: list[VMessage],
+                *,
+                tools: list[ToolSpec] | None = None,
+                temperature: float | None = None,
+                max_tokens: int | None = None,
+            ) -> AsyncIterator[VMessageChunk]:
                 received.append(list(messages))
                 yield VMessageChunk(delta_text="resumo")
 
-        events: list[object] = []
+        events: list[EngineEvent] = []
 
-        async def on_event(event: object) -> None:
+        async def on_event(event: EngineEvent) -> None:
             events.append(event)
 
         await run_conversation(

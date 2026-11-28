@@ -12,7 +12,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from backend.vtypes.contracts import JsonObject
+
+if TYPE_CHECKING:
+    from lancedb.db import AsyncConnection
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +25,7 @@ _COLLECTION = "context_graph_nodes"
 _EMBED_BATCH = 64
 
 
-async def _get_db() -> Any:
+async def _get_db() -> AsyncConnection:
     """Retorna conexão LanceDB (reutiliza o settings.lancedb_dir do Vectora)."""
     import lancedb  # type: ignore[import-not-found]
 
@@ -47,13 +52,13 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
     return all_vectors
 
 
-def _node_text(node: dict) -> str:
+def _node_text(node: JsonObject) -> str:
     """Texto canônico para embedar um nó do grafo."""
     label = node.get("label", node.get("id", ""))
     file_type = node.get("file_type", "")
     source_file = node.get("source_file", "")
     docstring = str(node.get("docstring", ""))[:200]
-    parts = [label]
+    parts = [str(label)]
     if file_type:
         parts.append(f"— {file_type}")
     if source_file:

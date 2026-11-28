@@ -18,9 +18,23 @@ from backend.services.text import text_service
 from backend.settings import settings
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.documents import Document
+from backend.vtypes.rerank import RerankCandidate
+from backend.vtypes.services import RagSettings
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from backend.llm.cohere.rerank import VectoraCohereRerank
+    from backend.llm.openrouter.rerank import OpenRouterRerank
+    from backend.llm.voyage.rerank import VectoraVoyageRerank
+    from backend.storage.vectorstore.base import VectorStoreBackend
+    from backend.vtypes.rerank import RagHit
+
+    type Reranker = (
+        SystemOneRerank | VectoraCohereRerank | VectoraVoyageRerank | OpenRouterRerank
+    )
     from backend.llm.systemone.harness import SystemOneHarness
 
 try:
@@ -44,7 +58,9 @@ def _is_quota_error(err: str) -> bool:
     )
 
 
-def _build_cohere_reranker(model_override: str | None = None) -> Any:
+def _build_cohere_reranker(
+    model_override: str | None = None,
+) -> VectoraCohereRerank | None:
     """``VectoraCohereRerank`` (nativo) se a key Cohere estiver configurada."""
     try:
         from backend.llm.cohere.client import CohereClient
@@ -63,7 +79,9 @@ def _build_cohere_reranker(model_override: str | None = None) -> Any:
         return None
 
 
-def _build_voyage_reranker(model_override: str | None = None) -> Any:
+def _build_voyage_reranker(
+    model_override: str | None = None,
+) -> VectoraVoyageRerank | None:
     """``VectoraVoyageRerank`` (nativo) se a key Voyage estiver configurada."""
     try:
         from backend.llm.voyage.client import VoyageClient
@@ -82,7 +100,9 @@ def _build_voyage_reranker(model_override: str | None = None) -> Any:
         return None
 
 
-def _build_openrouter_reranker(model_override: str | None = None) -> Any:
+def _build_openrouter_reranker(
+    model_override: str | None = None,
+) -> OpenRouterRerank | None:
     """``OpenRouterRerank`` se a key e o modelo estão configurados, senão None.
 
     O modelo vem de ``configured_gateway_model`` (escolha da UI ganha do env),
@@ -106,7 +126,9 @@ def _build_openrouter_reranker(model_override: str | None = None) -> Any:
         return None
 
 
-def _build_llamacpp_reranker(model_override: str | None = None) -> Any:
+def _build_llamacpp_reranker(
+    model_override: str | None = None,
+) -> OpenRouterRerank | None:
     """Consome o endpoint Jina-compatible /v1/rerank do llama-server."""
     try:
         from backend.llm.openrouter.client import OpenRouterClient
@@ -134,6 +156,13 @@ def _build_llamacpp_reranker(model_override: str | None = None) -> Any:
         return None
 
 
+class _RagCandidate(RerankCandidate):
+    """Candidato do RAG: o documento viaja junto do que o reranking lê."""
+
+    original_index: int
+    doc: Document
+
+
 class SystemOneRerank:
     """Reranker opcional baseado em Decision Models via `SystemOneHarness`.
 
@@ -155,7 +184,7 @@ class SystemOneRerank:
         self.last_status = "not_called"
 
     async def acompress_documents(
-        self, documents: Sequence[Document], query: str, callbacks: object | None = None
+        self, documents: Sequence[Document], query: str, callbacks: None = None
     ) -> list[Document]:
         """Executa a operação acompress documents."""
         docs = list(documents)
@@ -164,7 +193,7 @@ class SystemOneRerank:
             return []
         self.last_status = "applied"
         limit = min(self.top_n, len(docs))
-        candidates = [
+        candidates: list[_RagCandidate] = [
             {
                 "id": str(
                     doc.metadata.get("id")
@@ -203,7 +232,7 @@ class SystemOneRerank:
             return docs[:limit]
 
     def compress_documents(
-        self, documents: Sequence[Document], query: str, callbacks: object | None = None
+        self, documents: Sequence[Document], query: str, callbacks: None = None
     ) -> list[Document]:
         """Executa a operação compress documents."""
         try:
@@ -213,12 +242,11 @@ class SystemOneRerank:
         import concurrent.futures
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return cast(
-                "list[Document]",
-                pool.submit(
-                    asyncio.run, self.acompress_documents(documents, query, callbacks)
-                ).result(),
-            )
+            return pool.submit(
+                lambda: asyncio.run(
+                    self.acompress_documents(documents, query, callbacks)
+                )
+            ).result()
 
 
 def _build_systemone_reranker(
@@ -238,14 +266,14 @@ def _build_systemone_reranker(
         return None
 
 
-def _rag_runtime() -> dict[str, Any]:
+def _rag_runtime() -> RagSettings:
     """Settings de RAG configurados em runtime (aba de memória)."""
     from backend.workspace.runtime_settings import runtime_settings
 
     return runtime_settings.rag_settings
 
 
-def _build_reranker(workspace_id: str = "default") -> Any:
+def _build_reranker(workspace_id: str = "default") -> Reranker | None:
     """Constrói somente o provider de rerank efetivamente selecionado.
 
     Honra os settings de runtime: ``reranker_enabled`` (off → None, sem rerank) e
@@ -284,7 +312,7 @@ def _build_reranker(workspace_id: str = "default") -> Any:
     )
 )
 async def embedding(
-    text: str, collection: str = "articles", metadata: dict[str, Any] | None = None
+    text: str, collection: str = "articles", metadata: JsonObject | None = None
 ) -> str:
     """Enfileira documento para embedding assíncrono (fire-and-forget).
 
@@ -394,8 +422,8 @@ def _resolve_search_collections(workspace_id: str | None) -> list[str]:
 
 
 async def _search_one_collection(
-    backend: Any, collection: str, query_vector: Any, limit: int
-) -> list[dict[str, Any]]:
+    backend: VectorStoreBackend, collection: str, query_vector: list[float], limit: int
+) -> list[RagHit]:
     """Busca vetorial numa única coleção via `VectorStoreBackend` — LanceDB
     (lite) ou Qdrant (complete), conforme `storage_mode`. Coleção
     ausente/timeout devolve lista vazia (backend nunca lança) — chamador
@@ -414,8 +442,8 @@ async def _search_one_collection(
 
 
 async def _search_one_collection_text(
-    backend: Any, collection: str, query: str, limit: int
-) -> list[dict[str, Any]]:
+    backend: VectorStoreBackend, collection: str, query: str, limit: int
+) -> list[RagHit]:
     """Busca lexical (BM25-like) numa única coleção — mesmo shape de
     `_search_one_collection`, pra `_reciprocal_rank_fusion` tratar as duas
     listas de forma uniforme."""
@@ -433,19 +461,19 @@ async def _search_one_collection_text(
 
 
 def _attach_retrieval_provenance(
-    results: list[dict[str, Any]],
+    results: list[RagHit],
     *,
     backend_name: str,
     retrieval_method: str,
-) -> list[dict[str, Any]]:
+) -> list[RagHit]:
     """Anexa proveniência mínima e estável a cada resultado de retrieval."""
-    enriched: list[dict[str, Any]] = []
+    enriched: list[RagHit] = []
     for rank, result in enumerate(results, start=1):
-        item = dict(result)
+        item = result.copy()
         item["provenance"] = {
             "source": "rag",
             "backend": backend_name,
-            "collection": str(result.get("collection", "")),
+            "collection": result["collection"],
             "method": retrieval_method,
             "rank": rank,
             "score": result.get("score"),
@@ -454,14 +482,31 @@ def _attach_retrieval_provenance(
     return enriched
 
 
+def _reranked_hit(doc: Document) -> RagHit:
+    """Resultado reconstruído a partir de um documento reordenado."""
+    score = doc.metadata.get("_retrieval_score")
+    return {
+        "id": str(doc.metadata.get("_retrieval_id", "")),
+        "content": doc.page_content,
+        "metadata": {
+            key: value
+            for key, value in doc.metadata.items()
+            if not key.startswith("_retrieval_")
+        },
+        "collection": str(doc.metadata.get("_retrieval_collection", "")),
+        "score": score if isinstance(score, int | float) else 0.0,
+        "relevance_score": doc.metadata.get("relevance_score"),
+    }
+
+
 _RRF_K = 60
 
 
 def _reciprocal_rank_fusion(
-    vector_results: list[dict[str, Any]],
-    text_results: list[dict[str, Any]],
+    vector_results: list[RagHit],
+    text_results: list[RagHit],
     limit: int,
-) -> list[dict[str, Any]]:
+) -> list[RagHit]:
     """Reciprocal Rank Fusion — funde busca vetorial (distância, menor
     melhor) com busca textual (relevância, maior melhor) sem precisar
     normalizar as duas escalas incompatíveis: só a ORDEM de cada lista de
@@ -471,7 +516,7 @@ def _reciprocal_rank_fusion(
     Ambas as listas já devem vir ordenadas da melhor pra pior posição
     (rank 1 = melhor)."""
     scores: dict[str, float] = {}
-    docs: dict[str, dict[str, Any]] = {}
+    docs: dict[str, RagHit] = {}
 
     for rank, r in enumerate(vector_results, start=1):
         key = f"{r['collection']}::{r['id']}"
@@ -484,9 +529,9 @@ def _reciprocal_rank_fusion(
         docs.setdefault(key, r)
 
     ordered = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
-    fused: list[dict[str, Any]] = []
+    fused: list[RagHit] = []
     for key, score in ordered[:limit]:
-        doc = dict(docs[key])
+        doc = docs[key].copy()
         doc["score"] = score
         fused.append(doc)
     return fused
@@ -635,21 +680,7 @@ async def vector_search(
                     reranked_docs = await asyncio.to_thread(
                         reranker.compress_documents, docs_to_rerank, query
                     )
-                results = [
-                    {
-                        "id": doc.metadata.get("_retrieval_id", ""),
-                        "content": doc.page_content,
-                        "metadata": {
-                            key: value
-                            for key, value in doc.metadata.items()
-                            if not key.startswith("_retrieval_")
-                        },
-                        "collection": doc.metadata.get("_retrieval_collection", ""),
-                        "score": doc.metadata.get("_retrieval_score"),
-                        "relevance_score": doc.metadata.get("relevance_score"),
-                    }
-                    for doc in reranked_docs
-                ]
+                results = [_reranked_hit(doc) for doc in reranked_docs]
                 reranker_status = str(getattr(reranker, "last_status", "applied"))
                 if reranker_status == "applied":
                     reranker_name = reranker_attempted
@@ -692,7 +723,7 @@ async def vector_search(
 
             async with _tr.span("vector_search_tool", "search") as _s:
                 _s.set(
-                    collections=collections,
+                    collections=[*collections],
                     n_results=len(results),
                     query_len=len(query),
                 )
@@ -732,7 +763,7 @@ async def vector_search(
         return json.dumps({"status": "failed", "error": err or "Vector search failed"})
 
 
-_DOC_EXTRACTORS: dict[str, Any] = {}
+_DOC_EXTRACTORS: dict[str, Callable[[Path], str]] = {}
 
 
 def _extract_text_for_ingest(file_path: Path) -> str:
@@ -838,7 +869,7 @@ async def ingest_docs(
     if ingest_types:
         from backend.context_graph.detect import classify_file
 
-        filtered: list[Any] = []
+        filtered: list[Path] = []
         for fp in files_to_ingest:
             ftype = classify_file(fp)
             if ftype is not None and str(ftype) in ingest_types:
@@ -878,7 +909,7 @@ async def ingest_docs(
 
         for chunk_text in chunks:
             # workspace_id injetado no metadata para isolamento por projeto
-            chunk_metadata: dict[str, Any] = {
+            chunk_metadata: JsonObject = {
                 "source": str(file_path),
                 "source_dir": directory_path,
                 "ingested_at": datetime.now(UTC).isoformat(),
@@ -1049,7 +1080,7 @@ async def manage_retriever(
     # action == "delete" — 'source' já validado no início da função.
     needle = (source or "").lower()
 
-    def _meta_matches(m: dict[str, Any]) -> bool:
+    def _meta_matches(m: JsonObject) -> bool:
         """Executa a operação  meta matches."""
         return (
             needle in str(m.get("source", "")).lower()

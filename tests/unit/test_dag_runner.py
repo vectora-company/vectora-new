@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 
 from backend.persistence.native.agent_run import AgentRun
 from backend.scheduling import dag_runner
 from backend.scheduling.dag import DAGStage, DAGStore
+from backend.vtypes.contracts import JsonObject
 
 
 @pytest.mark.asyncio
 async def test_dag_dispatches_only_dependency_ready_stage_then_advances(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "dag-runner.db"
     db = await aiosqlite.connect(db_path)
@@ -33,15 +36,15 @@ async def test_dag_dispatches_only_dependency_ready_stage_then_advances(
     )
     await db.close()
 
-    async def connect_db():
+    async def connect_db() -> Connection:
         return await aiosqlite.connect(db_path)
 
-    async def create_task(**kwargs):
+    async def create_task(**kwargs: dict[str, str] | str) -> SimpleNamespace:
         scheduled.append(kwargs)
         return SimpleNamespace(id="task")
 
     class Sessions:
-        async def get_agent_run(self, run_id: str):
+        async def get_agent_run(self, run_id: str) -> AgentRun:
             assert run_id == "origin-run"
             return AgentRun(
                 run_id=run_id,
@@ -75,7 +78,7 @@ async def test_dag_dispatches_only_dependency_ready_stage_then_advances(
 
 @pytest.mark.asyncio
 async def test_cancel_stops_a_claimed_stage_before_its_worker_starts(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "dag-runner-cancel.db"
     db = await aiosqlite.connect(db_path)
@@ -93,11 +96,11 @@ async def test_cancel_stops_a_claimed_stage_before_its_worker_starts(
     await store.cancel_execution(execution.execution_id, requested_by="owner")
     await db.close()
 
-    async def connect_db():
+    async def connect_db() -> Connection:
         return await aiosqlite.connect(db_path)
 
     monkeypatch.setattr("backend.scheduling.background_tasks._get_db", connect_db)
-    config = {
+    config: JsonObject = {
         "dag_execution_id": execution.execution_id,
         "dag_stage_id": claim[0],
         "dag_claim_token": claim[1],
@@ -109,6 +112,8 @@ async def test_cancel_stops_a_claimed_stage_before_its_worker_starts(
     await store.setup()
     plan = await store.get_plan(plan_id)
     assert plan is not None
-    assert plan["execution"]["status"] == "cancelled"
-    assert plan["execution"]["stages"][0]["status"] == "cancelled"
+    execution_view = plan["execution"]
+    assert execution_view is not None
+    assert execution_view["status"] == "cancelled"
+    assert execution_view.get("stages", [])[0]["status"] == "cancelled"
     await db.close()

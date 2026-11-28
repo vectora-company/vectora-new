@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from argparse import Namespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -6,7 +9,7 @@ from backend.cli.storage import _run_storage_async
 from backend.main import _build_parser
 
 
-def _args(*extra: str):
+def _args(*extra: str) -> Namespace:
     return _build_parser().parse_args(["storage", "migrate-embedding-queue", *extra])
 
 

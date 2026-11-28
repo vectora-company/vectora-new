@@ -11,6 +11,7 @@ import json
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.cohere.chat_client import CohereChatClient
 from backend.llm.cohere.client import CohereClient, CohereResponseError
@@ -46,8 +47,8 @@ def _resposta_ok(texto: str = "Olá", **extra) -> dict:
 
 
 class TestAgenerate:
-    async def test_prompt_simples_devolve_conteudo(self):
-        def handler(_req):
+    async def test_prompt_simples_devolve_conteudo(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json=_resposta_ok("Olá do Cohere"))
 
         resultado = await _client(handler).agenerate(
@@ -57,8 +58,8 @@ class TestAgenerate:
         assert resultado.text() == "Olá do Cohere"
         assert resultado.role == MessageRole.ASSISTANT
 
-    async def test_resposta_sem_message_vira_erro_tipado(self):
-        def handler(_req):
+    async def test_resposta_sem_message_vira_erro_tipado(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"id": "chat_1"})
 
         with pytest.raises(CohereResponseError, match="message"):
@@ -66,7 +67,7 @@ class TestAgenerate:
 
 
 class TestConversaoDeMensagens:
-    async def test_roles_traduzidos_e_tool_message_vira_bloco_document(self):
+    async def test_roles_traduzidos_e_tool_message_vira_bloco_document(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -95,7 +96,7 @@ class TestConversaoDeMensagens:
             {"type": "document", "document": {"data": {"result": "resultado"}}}
         ]
 
-    async def test_assistant_com_tool_calls_serializa_arguments_como_json(self):
+    async def test_assistant_com_tool_calls_serializa_arguments_como_json(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -122,7 +123,7 @@ class TestConversaoDeMensagens:
             }
         ]
 
-    async def test_bloco_de_imagem_nao_e_descartado(self):
+    async def test_bloco_de_imagem_nao_e_descartado(self) -> None:
         """Regressão: `_to_cohere_content` precisa preservar blocos
         `image_url` — concatenar só texto os descartaria silenciosamente."""
         capturado: dict = {}
@@ -148,7 +149,7 @@ class TestConversaoDeMensagens:
             "image_url": {"url": "data:image/png;base64,abc"},
         } in partes
 
-    async def test_mensagem_de_role_desconhecido_falha(self):
+    async def test_mensagem_de_role_desconhecido_falha(self) -> None:
         def handler(_req):
             return httpx.Response(200, json=_resposta_ok())
 
@@ -160,7 +161,7 @@ class TestConversaoDeMensagens:
 
 
 class TestToolCalling:
-    async def test_tool_spec_vira_schema_openai_no_payload(self):
+    async def test_tool_spec_vira_schema_openai_no_payload(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -188,8 +189,8 @@ class TestToolCalling:
         assert tool["type"] == "function"
         assert tool["function"]["name"] == "buscar"
 
-    async def test_tool_call_nao_streaming_volta_montada(self):
-        def handler(_req):
+    async def test_tool_call_nao_streaming_volta_montada(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -219,8 +220,8 @@ class TestToolCalling:
         ]
         assert resultado.finish_reason == "tool_calls"
 
-    async def test_arguments_invalido_nao_derruba_a_resposta(self):
-        def handler(_req):
+    async def test_arguments_invalido_nao_derruba_a_resposta(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -250,7 +251,7 @@ class TestToolCalling:
 
 
 class TestStreaming:
-    async def test_chunks_de_texto_saem_na_ordem(self):
+    async def test_chunks_de_texto_saem_na_ordem(self) -> None:
         corpo = (
             b'data: {"type":"message-start","delta":{"message":{"role":"assistant"}}}\n\n'
             b'data: {"type":"content-delta","index":0,"delta":'
@@ -260,7 +261,7 @@ class TestStreaming:
             b'data: {"type":"message-end","delta":{"finish_reason":"COMPLETE"}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -275,8 +276,8 @@ class TestStreaming:
 
         assert texto == "Oi mundo"
 
-    async def test_stream_sem_nenhum_chunk_util_nao_trava(self):
-        def handler(_req):
+    async def test_stream_sem_nenhum_chunk_util_nao_trava(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 content=b'data: {"type":"message-end","delta":{}}\n\n',
@@ -293,7 +294,7 @@ class TestStreaming:
 
 
 class TestStreamingToolCallsEUsage:
-    async def test_tool_call_fragmentada_por_index_sai_completa(self):
+    async def test_tool_call_fragmentada_por_index_sai_completa(self) -> None:
         corpo = (
             b'data: {"type":"message-start","delta":{"message":{"role":"assistant"}}}\n\n'
             b'data: {"type":"tool-call-start","index":0,"delta":{"message":'
@@ -306,7 +307,7 @@ class TestStreamingToolCallsEUsage:
             b'data: {"type":"message-end","delta":{"finish_reason":"TOOL_CALL"}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -325,7 +326,7 @@ class TestStreamingToolCallsEUsage:
         assert fragments == '{"path":"a.py"}'
         assert names == {"file_read"}
 
-    async def test_usage_do_message_end_vira_usage_metadata(self):
+    async def test_usage_do_message_end_vira_usage_metadata(self) -> None:
         corpo = (
             b'data: {"type":"content-delta","index":0,"delta":'
             b'{"message":{"content":{"text":"oi"}}}}\n\n'
@@ -333,7 +334,7 @@ class TestStreamingToolCallsEUsage:
             b'"usage":{"tokens":{"input_tokens":10,"output_tokens":3}}}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )

@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 
 from backend.llm.base import Embeddings
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
+from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,9 @@ class OpenRouterEmbeddings(Embeddings):
         self.total_cost = 0.0
 
     async def _embed(self, textos: list[str], input_type: str) -> list[list[float]]:
-        payload: dict[str, Any] = {
+        payload: JsonObject = {
             "model": self.model,
-            "input": textos,
+            "input": [*textos],
             "input_type": input_type,
         }
         if self.dimensions:

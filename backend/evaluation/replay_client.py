@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from backend.evaluation.cassette import Cassette, CassetteInteraction
 from backend.llm.base import ChatClient
@@ -21,6 +21,7 @@ from backend.vtypes.message import (
 
 if TYPE_CHECKING:
     from backend.tools.registry import ToolSpec
+    from backend.vtypes.contracts import JsonObject
 
 
 class ReplayChatClient(ChatClient):
@@ -37,14 +38,14 @@ class ReplayChatClient(ChatClient):
         self._interaction_cursor = 0
 
     @staticmethod
-    def _message_key(message: VMessage | dict[str, Any]) -> str:
+    def _message_key(message: VMessage | JsonObject) -> str:
         """Canonicaliza apenas o conteúdo observável usado pelo replay.
 
         IDs de mensagens e campos de transporte variam entre clientes; papel,
         texto, chamadas e argumentos formam a entrada determinística da cassete.
         """
         if isinstance(message, VMessage):
-            value: dict[str, Any] = {
+            value: JsonObject = {
                 "role": message.role.value,
                 "content": message.text(),
                 "tool_calls": [
@@ -62,6 +63,7 @@ class ReplayChatClient(ChatClient):
                     for block in content
                     if isinstance(block, dict)
                 )
+            calls = message.get("tool_calls")
             value = {
                 "role": str(message.get("role", "user")),
                 "content": str(content),
@@ -70,7 +72,7 @@ class ReplayChatClient(ChatClient):
                         "name": str(call.get("name", "")),
                         "args": call.get("args", {}),
                     }
-                    for call in message.get("tool_calls", [])
+                    for call in (calls if isinstance(calls, list) else [])
                     if isinstance(call, dict)
                 ],
                 "tool_call_id": message.get("tool_call_id"),

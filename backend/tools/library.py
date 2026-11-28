@@ -10,18 +10,19 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from backend.services.env import get_env
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
 
 def _valid_skill_entries(
-    entries: list[object], *, require_source: bool = True
-) -> list[Mapping[str, object]]:
+    entries: Sequence[JsonValue], *, require_source: bool = True
+) -> list[JsonObject]:
     """Remove malformed catalog records before field access.
 
     Listing only needs an identifier, while installation must have a usable
@@ -31,7 +32,7 @@ def _valid_skill_entries(
     return [
         entry
         for entry in entries
-        if isinstance(entry, Mapping)
+        if isinstance(entry, dict)
         and isinstance(entry.get("id"), str)
         and bool(entry.get("id"))
         and (

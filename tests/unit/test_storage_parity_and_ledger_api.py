@@ -19,7 +19,7 @@ from backend.storage.vectorstore.lancedb_backend import LanceDBBackend
 
 @pytest.mark.asyncio
 @pytest.mark.real_lancedb
-async def test_lancedb_upsert_idempotence():
+async def test_lancedb_upsert_idempotence() -> None:
     """Testa que LanceDBBackend.upsert com mesmo ID atualiza em vez de duplicar."""
     with tempfile.TemporaryDirectory() as td:
         backend = LanceDBBackend(td)
@@ -54,7 +54,7 @@ async def test_lancedb_upsert_idempotence():
 
 @pytest.mark.asyncio
 @pytest.mark.real_lancedb
-async def test_lancedb_delete_exact_count():
+async def test_lancedb_delete_exact_count() -> None:
     """Testa que LanceDBBackend.delete retorna a contagem exata de deletados."""
     with tempfile.TemporaryDirectory() as td:
         backend = LanceDBBackend(td)
@@ -83,8 +83,8 @@ async def test_lancedb_health() -> None:
         backend = LanceDBBackend(td)
         h = await backend.health()
         assert h.ok is True
-        assert h["ok"] is True
-        assert "tables" in h
+        assert h.ok is True
+        assert h.tables is not None
 
 
 @pytest.mark.asyncio
@@ -227,7 +227,7 @@ async def test_thread_events_sse_stream_and_read(
 
 
 @pytest.mark.asyncio
-async def test_thread_not_found_uniform_404(monkeypatch: pytest.MonkeyPatch):
+async def test_thread_not_found_uniform_404(monkeypatch: pytest.MonkeyPatch) -> None:
     """Testa que threads inexistentes retornam 404 padronizado para o frontend."""
     from unittest.mock import AsyncMock, MagicMock
 

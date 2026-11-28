@@ -8,7 +8,12 @@ chegada.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import httpx
+
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 BASE_URL = "https://api.voyageai.com/v1"
 
@@ -36,7 +41,7 @@ class VoyageResponseError(VoyageError):
     ausente. Separada dos erros de status: aqui o problema é o que voltou."""
 
 
-def _extrair_mensagem(corpo: Any, fallback: str) -> str:
+def _extrair_mensagem(corpo: JsonValue, fallback: str) -> str:
     if isinstance(corpo, dict):
         detail = corpo.get("detail")
         if isinstance(detail, str) and detail:
@@ -52,7 +57,7 @@ class VoyageClient:
         api_key: str,
         *,
         base_url: str = BASE_URL,
-        http_client: Any = None,
+        http_client: httpx.AsyncClient | None = None,
         timeout_s: float = _DEFAULT_TIMEOUT_S,
     ) -> None:
         if not (api_key or "").strip():
@@ -66,7 +71,7 @@ class VoyageClient:
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"}
 
-    async def _ensure_client(self) -> Any:
+    async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
             import httpx
 
@@ -80,7 +85,7 @@ class VoyageClient:
             with contextlib.suppress(Exception):
                 await self._client.aclose()
 
-    def _raise_for_status(self, status: int, corpo: Any) -> None:
+    def _raise_for_status(self, status: int, corpo: JsonValue) -> None:
         if status < 400:
             return
         msg = _extrair_mensagem(corpo, f"Voyage respondeu {status}")
@@ -122,8 +127,8 @@ class VoyageClient:
         if not texts:
             return []
 
-        payload: dict[str, Any] = {
-            "input": texts,
+        payload: JsonObject = {
+            "input": [*texts],
             "model": model,
             "truncation": truncation,
             "output_dtype": output_dtype,
@@ -165,14 +170,14 @@ class VoyageClient:
         model: str,
         top_k: int | None = None,
         truncation: bool = True,
-    ) -> list[dict[str, Any]]:
+    ) -> list[JsonObject]:
         """``POST /rerank`` — devolve ``data[]`` cru (index/relevance_score)."""
         if not documents:
             return []
 
-        payload: dict[str, Any] = {
+        payload: JsonObject = {
             "query": query,
-            "documents": documents,
+            "documents": [*documents],
             "model": model,
             "truncation": truncation,
         }
@@ -184,4 +189,4 @@ class VoyageClient:
         if not isinstance(dados, list):
             msg = "Voyage devolveu `data` ausente/inválido em /rerank"
             raise VoyageResponseError(msg)
-        return dados
+        return [item for item in dados if isinstance(item, dict)]

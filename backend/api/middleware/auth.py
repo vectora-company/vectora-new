@@ -12,10 +12,13 @@ Rotas EXCLUÍDAS da autenticação obrigatória:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+
+if TYPE_CHECKING:
+    from backend.rbac.auth import User
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +133,7 @@ def _is_public_route(path: str, method: str = "GET") -> bool:
 
 async def _extract_service_token_user(
     token: str, request: Request | None = None
-) -> Any:
+) -> User | None:
     """Autentica via token de serviço (`vst_...`, `backend.rbac.
     token_auth`) — credencial de máquina, alternativa ao JWT de login
     humano. Devolve um `User` sintético (`id="service:<token_id>"`,
@@ -158,7 +161,7 @@ async def _extract_service_token_user(
     )
 
 
-async def _extract_user(request: Request) -> Any:
+async def _extract_user(request: Request) -> User | None:
     """Tenta extrair e validar o usuário do token JWT — ou de um token de
     serviço (`vst_` prefix, `backend.rbac.token_auth`), quando presente.
 
@@ -183,12 +186,12 @@ async def _extract_user(request: Request) -> Any:
     if token and token.startswith("vst_"):
         return await _extract_service_token_user(token, request)
 
-    user: Any = None
+    user: User | None = None
     if token:
         try:
             payload = decode_access_token(token)
-            user_id: str = payload.get("sub", "")
-            if user_id:
+            user_id = payload.get("sub", "")
+            if isinstance(user_id, str) and user_id:
                 # Expõe o `exp` (epoch seconds) do access token via
                 # request.state para que /auth/me possa devolvê-lo ao
                 # frontend — o cookie é httpOnly (JS não enxerga o JWT
@@ -206,7 +209,7 @@ async def _extract_user(request: Request) -> Any:
     return user
 
 
-def _get_virtual_local_user() -> Any:
+def _get_virtual_local_user() -> User:
     """Retorna um objeto User virtual representando o usuário local gratuito."""
     from datetime import UTC, datetime
 

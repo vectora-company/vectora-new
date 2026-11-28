@@ -9,12 +9,15 @@ Cada caminho feliz tem o par de erro/borda no mesmo teste.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Coroutine
-from typing import Any
+from collections.abc import Awaitable, Callable, Coroutine
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, NoReturn
 from uuid import uuid4
 
 import pytest
 
+from backend.llm.openrouter import OpenRouterClient
 from backend.services.media_quota import media_quota
 from backend.settings import provider_supports
 from backend.tools import media
@@ -44,10 +47,12 @@ async def test_byok_nao_reserva_quota_nem_altera_uso(
     called = False
     summary_called = False
 
-    async def _reserve(**_kwargs: object) -> object:
+    async def _reserve[**P](
+        *_args: P.args, **_kwargs: P.kwargs
+    ) -> SimpleNamespace | None:
         nonlocal called
         called = True
-        return object()
+        return SimpleNamespace()
 
     async def _summary(_user_id: str) -> dict[str, int | str]:
         nonlocal summary_called
@@ -72,7 +77,9 @@ async def test_credencial_ausente_nao_recebe_isencao(
     ctx = _quota_ctx("openai:gpt-5")
     called = False
 
-    async def _reserve(**_kwargs: object) -> object:
+    async def _reserve[**P](
+        *_args: P.args, **_kwargs: P.kwargs
+    ) -> SimpleNamespace | None:
         nonlocal called
         called = True
         return None
@@ -119,18 +126,18 @@ async def _summary_zero() -> dict[str, int | str]:
 )
 async def test_quota_esgotada_devolve_resumo_sem_chamar_provider(
     operation: str,
-    call: Callable[[], Coroutine[Any, Any, str]],
+    call: Callable[[], Awaitable[str]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """O bloqueio de quota informa saldo e renovação sem enviar o payload."""
 
-    async def reject_reservation(**_kwargs: object) -> None:
+    async def reject_reservation[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
         return None
 
     async def quota_summary(_user_id: str) -> dict[str, int | str]:
         return {"remaining": 0, "limit": 10, "period": "2026-09", "used": 10}
 
-    async def provider_called(*_args: object, **_kwargs: object) -> bytes:
+    async def provider_called[**P](*_args: P.args, **_kwargs: P.kwargs) -> bytes:
         raise AssertionError(f"provider chamado para {operation}")
 
     monkeypatch.setattr(media_quota, "reserve", reject_reservation)
@@ -154,7 +161,7 @@ async def test_quota_esgotada_devolve_resumo_sem_chamar_provider(
 # ---------------------------------------------------------------------------
 
 
-def test_provider_supports_resolve_capacidade_por_provider_fixo():
+def test_provider_supports_resolve_capacidade_por_provider_fixo() -> None:
     # Happy: providers que fazem imagem/voz de verdade.
     assert provider_supports("openai", "image") is True
     assert provider_supports("google-genai", "tts") is True
@@ -167,7 +174,9 @@ def test_provider_supports_resolve_capacidade_por_provider_fixo():
     assert provider_supports("provider-que-nao-existe", "image") is False
 
 
-def test_provider_supports_gateway_depende_do_modelo_configurado(monkeypatch):
+def test_provider_supports_gateway_depende_do_modelo_configurado(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.settings import settings
 
     # Erro/borda primeiro: sem modelo configurado a capacidade não existe.
@@ -192,10 +201,12 @@ def test_provider_supports_gateway_depende_do_modelo_configurado(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-async def test_generate_image_provider_sem_suporte_avisa_e_nao_chama_sdk(monkeypatch):
+async def test_generate_image_provider_sem_suporte_avisa_e_nao_chama_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     chamou = {"sdk": False}
 
-    def _nunca(*_a, **_k):
+    def _nunca(*_a, **_k) -> NoReturn:
         chamou["sdk"] = True
         raise AssertionError("SDK não deveria ser chamado")
 
@@ -212,7 +223,9 @@ async def test_generate_image_provider_sem_suporte_avisa_e_nao_chama_sdk(monkeyp
     assert chamou["sdk"] is False
 
 
-async def test_generate_image_happy_path_persiste_arquivo(monkeypatch, tmp_path):
+async def test_generate_image_happy_path_persiste_arquivo(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(media, "_media_dir", lambda _s: tmp_path / "media")
     monkeypatch.setattr(media, "_generate_image_bytes", lambda *_a: b"\x89PNG-fake")
 
@@ -231,7 +244,7 @@ async def test_generate_image_happy_path_persiste_arquivo(monkeypatch, tmp_path)
     assert out["url"] == f"/artifacts/t-media/media/{Path(out['path']).name}"
 
 
-def test_generate_image_render_hint_bate_com_chave_reconhecida_pelo_frontend():
+def test_generate_image_render_hint_bate_com_chave_reconhecida_pelo_frontend() -> None:
     """`render_hint="image"` (valor antigo) não bate com nenhuma chave do
     `RENDERERS` do frontend (`tool-call-renderer.tsx`) — só `"image_preview"`
     e `"browser_screenshot"` disparam `ImagePreview`. Com o valor errado, a
@@ -246,8 +259,8 @@ def test_generate_image_render_hint_bate_com_chave_reconhecida_pelo_frontend():
 
 
 async def test_generate_image_prompt_vazio_e_sdk_quebrado_viram_erro_tipado(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(media, "_media_dir", lambda _s: tmp_path / "media")
 
     # Erro/borda 1: prompt vazio nunca chega no SDK.
@@ -258,7 +271,7 @@ async def test_generate_image_prompt_vazio_e_sdk_quebrado_viram_erro_tipado(
 
     # Erro/borda 2: SDK explodindo vira string de erro, não exceção
     # propagada (falha de tool não derruba o grafo).
-    def _explode(*_a):
+    def _explode(*_a: str | None) -> NoReturn:
         raise RuntimeError("cota estourada")
 
     monkeypatch.setattr(media, "_generate_image_bytes", _explode)
@@ -282,8 +295,8 @@ async def test_generate_image_prompt_vazio_e_sdk_quebrado_viram_erro_tipado(
 
 
 async def test_text_to_speech_sem_suporte_avisa_com_suporte_persiste(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(media, "_media_dir", lambda _s: tmp_path / "media")
 
     # Erro/borda: Anthropic não sintetiza voz.
@@ -300,8 +313,8 @@ async def test_text_to_speech_sem_suporte_avisa_com_suporte_persiste(
 
 
 async def test_text_to_speech_texto_vazio_e_audio_vazio_sao_rejeitados(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(media, "_media_dir", lambda _s: tmp_path / "media")
 
     vazio = json.loads(await media.text_to_speech(ctx=_ctx("openai:gpt-5"), text="  "))
@@ -319,7 +332,9 @@ async def test_text_to_speech_texto_vazio_e_audio_vazio_sao_rejeitados(
 # ---------------------------------------------------------------------------
 
 
-def test_provider_vem_do_config_da_sessao_nao_do_global(monkeypatch):
+def test_provider_vem_do_config_da_sessao_nao_do_global(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A sessão pode ter trocado de modelo em runtime — vale o que está no
     ctx daquela conversa, não a preferência global."""
 
@@ -340,7 +355,9 @@ def test_provider_vem_do_config_da_sessao_nao_do_global(monkeypatch):
 
 
 @pytest.mark.parametrize("capability", ["image", "tts"])
-async def test_nenhuma_tool_de_midia_troca_de_provider_sozinha(capability, monkeypatch):
+async def test_nenhuma_tool_de_midia_troca_de_provider_sozinha(
+    capability: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Mesmo com outro provider perfeitamente capaz configurado, a tool
     recusa em vez de desviar para ele."""
     from backend.settings import settings
@@ -367,7 +384,7 @@ async def test_nenhuma_tool_de_midia_troca_de_provider_sozinha(capability, monke
 # ---------------------------------------------------------------------------
 
 
-def test_escolha_da_ui_vence_a_env_var(monkeypatch):
+def test_escolha_da_ui_vence_a_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sem essa precedência, quem configurou por env nunca conseguiria trocar
     de modelo pela interface: a env sempre ganharia e a UI pareceria não
     salvar."""
@@ -410,7 +427,9 @@ def test_escolha_da_ui_vence_a_env_var(monkeypatch):
     assert provider_supports("ollama", "image") is False
 
 
-def test_runtime_settings_indisponivel_cai_na_env_sem_estourar(monkeypatch):
+def test_runtime_settings_indisponivel_cai_na_env_sem_estourar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: uma checagem de capacidade não pode explodir só porque o
     runtime_settings ainda não subiu (boot muito cedo, teste isolado)."""
     import backend.settings as settings_mod
@@ -420,14 +439,14 @@ def test_runtime_settings_indisponivel_cai_na_env_sem_estourar(monkeypatch):
 
     class _Boom:
         @property
-        def media_settings(self):
+        def media_settings(self) -> NoReturn:
             raise RuntimeError("runtime_settings não inicializado")
 
     monkeypatch.setattr("backend.workspace.runtime_settings.runtime_settings", _Boom())
     assert settings_mod.configured_gateway_model("openrouter", "tts") == "voz-da-env"
 
 
-def test_reranker_type_recusa_provider_sem_api_de_rerank():
+def test_reranker_type_recusa_provider_sem_api_de_rerank() -> None:
     """Só entra provider com endpoint de rerank de verdade.
 
     O OpenRouter tem: ``POST /api/v1/rerank`` (`model`, `query`, `documents`,
@@ -455,12 +474,14 @@ class TestOpenRouterLigadoNasTools:
     chamam o cliente nativo em vez de levantar `NotImplementedError`."""
 
     @staticmethod
-    def _sem_key(monkeypatch) -> None:
+    def _sem_key(monkeypatch: pytest.MonkeyPatch) -> None:
         from backend.settings import settings as _s
 
         monkeypatch.setattr(_s, "openrouter_api_key", "", raising=False)
 
-    def test_imagem_via_openrouter_chama_o_cliente_nativo(self, monkeypatch):
+    def test_imagem_via_openrouter_chama_o_cliente_nativo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import settings as _s
         from backend.tools import media
 
@@ -470,7 +491,9 @@ class TestOpenRouterLigadoNasTools:
             lambda _p, _c: "openai/gpt-image-1",
         )
 
-        async def _fake(_client, *, model, prompt, **_kw):
+        async def _fake(
+            _client: OpenRouterClient, *, model: str, prompt: str, **_kw
+        ) -> bytes:
             assert model == "openai/gpt-image-1"
             assert prompt == "um gato"
             return b"\x89PNG-fake"
@@ -479,7 +502,9 @@ class TestOpenRouterLigadoNasTools:
 
         assert media._generate_image_bytes("openrouter", "um gato") == b"\x89PNG-fake"
 
-    def test_tts_via_openrouter_chama_o_cliente_nativo(self, monkeypatch):
+    def test_tts_via_openrouter_chama_o_cliente_nativo(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import settings as _s
         from backend.tools import media
 
@@ -489,7 +514,9 @@ class TestOpenRouterLigadoNasTools:
             lambda _p, _c: "openai/gpt-4o-mini-tts",
         )
 
-        async def _fake(_client, *, model, text, voice, **_kw):
+        async def _fake(
+            _client: OpenRouterClient, *, model: str, text: str, voice: str, **_kw
+        ) -> bytes:
             assert voice == "alloy"
             return b"audio-cru"
 
@@ -501,7 +528,9 @@ class TestOpenRouterLigadoNasTools:
             media._synthesize_speech_bytes("openrouter", "oi", "alloy") == b"audio-cru"
         )
 
-    def test_provider_ainda_sem_cliente_segue_levantando(self, monkeypatch):
+    def test_provider_ainda_sem_cliente_segue_levantando(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: o Ollama continua sem cliente de imagem. Ligar o
         OpenRouter não pode ter transformado o erro claro num silêncio."""
         from backend.tools import media

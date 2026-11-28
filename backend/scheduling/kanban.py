@@ -27,9 +27,12 @@ import logging
 import uuid
 import weakref
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, NoReturn
 
 import aiosqlite
+
+from backend.vtypes.contracts import JsonObject, JsonValue
+from backend.vtypes.sql import SqlRow, SqlValue, optional_text
 
 if TYPE_CHECKING:
     from aiosqlite import Connection as SQLiteConnection
@@ -136,13 +139,7 @@ async def _ensure_version_column(db: SQLiteConnection) -> None:
     try:
         async with db.execute("PRAGMA table_info(vectora_background_tasks)") as cur:
             rows = await cur.fetchall()
-            # O banco de tarefas normalmente usa ``dict`` como row_factory,
-            # enquanto vários testes e conexões diretas usam ``aiosqlite.Row``.
-            # Ambos representam o nome da coluna na posição ``1``/``name``;
-            # acessar apenas por índice quebra o scheduler em produção.
-            columns = {
-                str(row["name"] if isinstance(row, dict) else row[1]) for row in rows
-            }
+            columns = {str(row["name"]) for row in rows}
         if columns and "version" not in columns:
             await db.execute(
                 "ALTER TABLE vectora_background_tasks "
@@ -271,7 +268,7 @@ async def _record_task_event(
         logger.debug("kanban: falha ao gravar evento de timeline", exc_info=True)
 
 
-async def get_task_status(task_id: str) -> dict[str, Any]:
+async def get_task_status(task_id: str) -> SqlRow:
     """Executa a operação get task status."""
     db = await _get_db()
     await _ensure_version_column(db)
@@ -284,7 +281,7 @@ async def get_task_status(task_id: str) -> dict[str, Any]:
     if row is None:
         msg = f"task {task_id!r} não existe"
         raise ValueError(msg)
-    st = dict(row)
+    st: SqlRow = dict(row)
     if "version" not in st or st["version"] is None:
         st["version"] = 1
     return st
@@ -341,7 +338,7 @@ async def set_status(
         row = await cur.fetchone()
     from_status = row["status"] if row else None
     next_run_at: str | None = None
-    interval_config_raw: object | None = None
+    interval_config_raw: SqlValue = None
     is_interval_completion = (
         authorized_run_id is not None
         and status in ("ready", "done")
@@ -355,9 +352,9 @@ async def set_status(
 
         interval_config_raw = row["trigger_config"]
 
-        def _next_interval_run(raw: object) -> str | None:
+        def _next_interval_run(raw: SqlValue) -> str | None:
             """Executa a operação  next interval run."""
-            config_value: object = raw
+            config_value: JsonValue | bytes = raw
             if isinstance(raw, str):
                 try:
                     config_value = json.loads(raw)
@@ -585,8 +582,8 @@ async def complete_run_and_set_status(
     if interval_completion:
         from backend.scheduling.background_tasks import _next_run
 
-        raw_config: object = task_row["trigger_config"]
-        config: object = raw_config
+        raw_config: SqlValue = task_row["trigger_config"]
+        config: JsonValue | bytes = raw_config
         if isinstance(raw_config, str):
             try:
                 config = json.loads(raw_config)
@@ -668,7 +665,7 @@ async def manual_transition(
             row = await cur.fetchone()
         if row is None or row["session_id"] != authorized_session_id:
             raise ValueError("task não pertence à sessão atual")
-    atual = estado["status"]
+    atual = str(estado["status"])
     if expected_status is not None and atual != expected_status:
         raise ValueError(
             f"concorrência detectada: status atual {atual!r} difere do esperado {expected_status!r}"
@@ -685,8 +682,8 @@ async def manual_transition(
         raise ValueError(msg)
 
     cas_expected_status = expected_status or atual
-    cas_expected_updated_at = estado.get("updated_at")
-    cas_expected_version = expected_version or estado.get("version")
+    cas_expected_updated_at = optional_text(estado.get("updated_at"))
+    cas_expected_version = expected_version or optional_text(estado.get("version"))
 
     if atual == "blocked" and target_status == "ready":
         await unblock_task(
@@ -1129,7 +1126,7 @@ async def unblock_task(
     await _record_task_event(task_id, from_status, "ready")
 
 
-async def get_dependencies(task_id: str) -> list[dict[str, Any]]:
+async def get_dependencies(task_id: str) -> list[SqlRow]:
     """Pais diretos de `task_id` (não transitivos) com status atual —
     fonte real do contador N/M e da lista `blocked_by` no card do Kanban,
     substituindo o campo que hoje o frontend declara mas o backend nunca
@@ -1219,7 +1216,7 @@ async def get_comment_counts_batch(task_ids: list[str]) -> dict[str, int]:
 
 async def get_dependencies_batch(
     task_ids: list[str],
-) -> dict[str, list[dict[str, Any]]]:
+) -> dict[str, list[SqlRow]]:
     """Mesma lista de `get_dependencies` (pais diretos), em lote."""
     if not task_ids:
         return {}
@@ -1234,7 +1231,7 @@ async def get_dependencies_batch(
     )
     async with db.execute(query, (json.dumps(task_ids),)) as cur:
         rows = await cur.fetchall()
-    out: dict[str, list[dict[str, Any]]] = {tid: [] for tid in task_ids}
+    out: dict[str, list[SqlRow]] = {tid: [] for tid in task_ids}
     for r in rows:
         out[r["task_id"]].append(
             {"id": r["id"], "name": r["name"], "status": r["status"]}
@@ -1397,7 +1394,7 @@ async def approve_review(task_id: str, user_id: str) -> None:
         await recompute_ready()
 
 
-async def add_comment(task_id: str, user_id: str, body: str) -> dict[str, Any]:
+async def add_comment(task_id: str, user_id: str, body: str) -> SqlRow:
     """Grava um comentário no card. Corpo vazio/whitespace é recusado —
     não existe comentário sem conteúdo no board."""
     corpo = body.strip()
@@ -1425,7 +1422,7 @@ async def add_comment(task_id: str, user_id: str, body: str) -> dict[str, Any]:
     return dict(row)
 
 
-async def list_comments(task_id: str) -> list[dict[str, Any]]:
+async def list_comments(task_id: str) -> list[SqlRow]:
     """Comentários do card em ordem cronológica."""
     db = await _get_db()
     await _ensure_version_column(db)
@@ -1438,7 +1435,7 @@ async def list_comments(task_id: str) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-async def list_events(task_id: str) -> list[dict[str, Any]]:
+async def list_events(task_id: str) -> list[SqlRow]:
     """Timeline de transições de status do card, em ordem cronológica —
     gravada por `_record_task_event` a cada `set_status`/`block_task`/
     `unblock_task`."""
@@ -1454,7 +1451,7 @@ async def list_events(task_id: str) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-async def get_card_version_snapshot(task_id: str) -> dict[str, Any]:
+async def get_card_version_snapshot(task_id: str) -> SqlRow:
     """Lê um snapshot curto do card fora de qualquer inferência e calcula `card_version`."""
     db = await _get_db()
     await _ensure_version_column(db)
@@ -1467,7 +1464,7 @@ async def get_card_version_snapshot(task_id: str) -> dict[str, Any]:
         row = await cur.fetchone()
     if row is None:
         raise ValueError(f"task {task_id!r} não existe")
-    snapshot = dict(row)
+    snapshot: SqlRow = dict(row)
     version_token = (
         f"{snapshot.get('status')}|{snapshot.get('version')}|"
         f"{snapshot.get('claim_lock')}|{snapshot.get('block_count')}"
@@ -1527,7 +1524,7 @@ async def propose_transition_with_systemone(
     workspace_id: str = "default",
     evidence_summary: str = "",
     authorized_session_id: str | None = None,
-) -> dict[str, Any]:
+) -> JsonObject:
     """Gera uma proposta consultiva de transição vinculada à versão atual do card.
 
     Nunca mantém transação aberta durante a inferência e restringe as opções a
@@ -1575,9 +1572,9 @@ async def propose_transition_with_systemone(
         "decision_id": res.decision_id,
         "current_status": current_status,
         "recommended_status": recommended,
-        "allowed_targets": allowed_targets,
+        "allowed_targets": [*allowed_targets],
         "card_version": card_version,
-        "claim_lock": snapshot.get("claim_lock"),
+        "claim_lock": optional_text(snapshot.get("claim_lock")),
         "is_usable": res.is_usable_recommendation
         and recommended != "no_recommendation",
         "requires_hitl": res.policy_result.requires_hitl,
@@ -1590,7 +1587,7 @@ async def propose_transition_with_systemone(
 
 
 async def apply_verified_transition_proposal(
-    proposal: dict[str, Any],
+    proposal: JsonObject,
     *,
     authorized_session_id: str | None = None,
     authorized_run_id: str | None = None,
@@ -1618,14 +1615,14 @@ async def apply_verified_transition_proposal(
         unresolved = [d["id"] for d in deps if d["status"] != "done"]
         if unresolved:
             raise ValueError(
-                f"dependências pendentes impedem transição para 'ready': {', '.join(unresolved)}"
+                f"dependências pendentes impedem transição para 'ready': {', '.join(str(d) for d in unresolved)}"
             )
 
     await manual_transition(
         task_id,
         target,
         expected_status=str(current_snapshot["status"]),
-        expected_version=current_snapshot.get("version"),
+        expected_version=optional_text(current_snapshot.get("version")),
         authorized_session_id=authorized_session_id,
         authorized_run_id=authorized_run_id,
     )

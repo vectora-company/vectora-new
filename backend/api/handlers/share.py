@@ -18,7 +18,7 @@ import re
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -30,6 +30,10 @@ from backend.api.schemas import (
     SharedThread,
     ThreadShare,
 )
+from backend.vtypes.contracts import JsonObject
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 logger = logging.getLogger(__name__)
 _SECRET_TEXT = re.compile(
@@ -58,13 +62,13 @@ router = APIRouter(prefix="/threads", tags=["share"])
 # ---------------------------------------------------------------------------
 
 
-async def _get_db() -> Any:
+async def _get_db() -> aiosqlite.Connection:
     from backend.api.handlers.threads import _get_db as _threads_db
 
     return await _threads_db()
 
 
-async def _ensure_share_table(db: Any) -> None:
+async def _ensure_share_table(db: aiosqlite.Connection) -> None:
     await db.execute("""
         CREATE TABLE IF NOT EXISTS shared_threads (
             token       TEXT PRIMARY KEY,
@@ -92,7 +96,7 @@ async def _write_share_audit(
     from backend.rbac.auth import get_db_for_audit, write_audit_required
 
     audit_db = await get_db_for_audit()
-    metadata = {
+    metadata: JsonObject = {
         key: value
         for key, value in (("thread_id", thread_id), ("token", token))
         if value

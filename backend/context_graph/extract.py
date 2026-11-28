@@ -11,7 +11,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from defusedxml.common import DefusedXmlException
 from tree_sitter import Language
@@ -20,6 +20,9 @@ from .cache import load_cached, save_cached
 from .ids import make_id
 from .manifest_ingest import extract_package_manifest, is_package_manifest_path
 from .mcp_ingest import extract_mcp_config, is_mcp_config_path
+
+if TYPE_CHECKING:
+    from tree_sitter import Node
 
 _RECURSION_LIMIT = 10_000
 
@@ -129,12 +132,16 @@ _LANGUAGE_BUILTIN_GLOBALS: frozenset[str] = frozenset(
 )
 
 
+from backend.vtypes.context_graph import ExtractionResult
+from backend.vtypes.contracts import JsonObject
+
+
 def _raise_recursion_limit() -> None:
     if sys.getrecursionlimit() < _RECURSION_LIMIT:
         sys.setrecursionlimit(_RECURSION_LIMIT)
 
 
-def _safe_extract(extractor: Callable, path: Path) -> dict:
+def _safe_extract(extractor: Extractor, path: Path) -> ExtractionResult:
     try:
         return extractor(path)
     except RecursionError:
@@ -155,6 +162,12 @@ def _safe_extract(extractor: Callable, path: Path) -> dict:
             flush=True,
         )
         return {"nodes": [], "edges": [], "error": f"{type(e).__name__}: {e}"}
+
+
+def _text(item: JsonObject, key: str) -> str:
+    """Valor textual de um campo; vazio quando ausente ou de outro tipo."""
+    value = item.get(key)
+    return value if isinstance(value, str) else ""
 
 
 def _make_id(*parts: str) -> str:
@@ -530,7 +543,7 @@ def _load_workspace_packages(start_dir: Path) -> dict[str, Path]:
 
 def _package_entry_candidates(package_dir: Path, subpath: str) -> list[Path]:
     manifest = package_dir / "package.json"
-    manifest_data: dict[str, Any] = {}
+    manifest_data: JsonObject = {}
     with contextlib.suppress(Exception):
         manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
 
@@ -2908,20 +2921,20 @@ def _extract_generic(path: Path, config: LanguageConfig) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    function_bodies: list[tuple[str, object]] = []
+    function_bodies: list[tuple[str, Node]] = []
     pending_listen_edges: list[tuple[str, str, int]] = []
     # tree-sitter-swift parses both `class Foo` and `extension Foo` as
     # `class_declaration`. Same-file pairs collapse via seen_ids, but cross-file
     # extensions don't (file stem is part of the id), so they're collected here
     # for a corpus-level merge after every file has been parsed.
-    swift_extensions: list[dict] = []
+    swift_extensions: list[JsonObject] = []
     # call expressions in property/field initializers (e.g.
     # `let vm = VM()`) live outside function bodies, so the call-walk never
     # reaches them. Collect (owner_nid, call_node) here and walk them too.
-    initializer_nodes: list[tuple[str, object]] = []
+    initializer_nodes: list[tuple[str, Node]] = []
     # per-file map of local name -> declared type (properties + params),
     # threaded out as `swift_type_table` so member calls (`vm.update()`) can be
     # resolved to the receiver's real definition in _resolve_swift_member_calls.
@@ -4268,9 +4281,9 @@ def _extract_generic(path: Path, config: LanguageConfig) -> dict:
     label_to_nid: dict[str, str] = {}  # case-sensitive (Ruby, C#, Java, Kotlin, etc.)
     label_to_nid_ci: dict[str, str] = {}  # case-insensitive (PHP functions/classes)
     for n in nodes:
-        raw = n["label"]
+        raw = str(n["label"])
         normalised = raw.strip("()").lstrip(".")
-        label_to_nid[normalised] = n["id"]
+        label_to_nid[normalised] = str(n["id"])
         label_to_nid_ci[normalised.lower()] = n["id"]
 
     seen_call_pairs: set[tuple[str, str]] = set()
@@ -4841,7 +4854,7 @@ def _extract_python_rationale(path: Path, result: dict) -> None:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
-def extract_python(path: Path) -> dict:
+def extract_python(path: Path) -> ExtractionResult:
     """Extract classes, functions, and imports from a .py file via tree-sitter AST."""
     result = _extract_generic(path, _PYTHON_CONFIG)
     if "error" not in result:
@@ -4849,7 +4862,7 @@ def extract_python(path: Path) -> dict:
     return result
 
 
-def extract_js(path: Path) -> dict:
+def extract_js(path: Path) -> ExtractionResult:
     """Extract classes, functions, arrow functions, and imports from a .js/.ts/.tsx file."""
     if path.suffix == ".tsx":
         config = _TSX_CONFIG
@@ -4860,7 +4873,7 @@ def extract_js(path: Path) -> dict:
     return _extract_generic(path, config)
 
 
-def extract_svelte(path: Path) -> dict:
+def extract_svelte(path: Path) -> ExtractionResult:
     """Extract imports from .svelte files: script-block via JS AST + template regex fallback.
 
     Tree-sitter only sees the <script> block. Svelte template syntax like
@@ -5022,7 +5035,7 @@ def extract_svelte(path: Path) -> dict:
     return result
 
 
-def extract_astro(path: Path) -> dict:
+def extract_astro(path: Path) -> ExtractionResult:
     """Extract imports from .astro files: frontmatter (TS) + template regex fallback.
 
     Astro files start with a ``---\\n...\\n---`` frontmatter block of TypeScript
@@ -5185,7 +5198,7 @@ def extract_astro(path: Path) -> dict:
     return result
 
 
-def extract_java(path: Path) -> dict:
+def extract_java(path: Path) -> ExtractionResult:
     """Extract classes, interfaces, methods, constructors, and imports from a .java file."""
     return _extract_generic(path, _JAVA_CONFIG)
 
@@ -5219,8 +5232,8 @@ def _extract_spock_fallback(path: Path, ts_result: dict) -> dict:
     file_node = next(
         (n for n in ts_result.get("nodes", []) if n.get("label") == path.name), None
     )
-    nodes: list[dict] = [file_node] if file_node else []
-    edges: list[dict] = [
+    nodes: list[JsonObject] = [file_node] if file_node else []
+    edges: list[JsonObject] = [
         e for e in ts_result.get("edges", []) if e.get("context") == "import"
     ]
     seen_ids: set[str] = {n["id"] for n in nodes}
@@ -5305,7 +5318,7 @@ def _extract_spock_fallback(path: Path, ts_result: dict) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def extract_groovy(path: Path) -> dict:
+def extract_groovy(path: Path) -> ExtractionResult:
     """Extract classes, methods, constructors, and imports from a .groovy/.gradle file.
 
     Falls back to a regex-based Spock extractor when tree-sitter-groovy cannot parse
@@ -5317,27 +5330,27 @@ def extract_groovy(path: Path) -> dict:
     return result
 
 
-def extract_c(path: Path) -> dict:
+def extract_c(path: Path) -> ExtractionResult:
     """Extract functions and includes from a .c/.h file."""
     return _extract_generic(path, _C_CONFIG)
 
 
-def extract_cpp(path: Path) -> dict:
+def extract_cpp(path: Path) -> ExtractionResult:
     """Extract functions, classes, and includes from a .cpp/.cc/.cxx/.hpp file."""
     return _extract_generic(path, _CPP_CONFIG)
 
 
-def extract_ruby(path: Path) -> dict:
+def extract_ruby(path: Path) -> ExtractionResult:
     """Extract classes, methods, singleton methods, and calls from a .rb file."""
     return _extract_generic(path, _RUBY_CONFIG)
 
 
-def extract_csharp(path: Path) -> dict:
+def extract_csharp(path: Path) -> ExtractionResult:
     """Extract classes, interfaces, methods, namespaces, and usings from a .cs file."""
     return _extract_generic(path, _CSHARP_CONFIG)
 
 
-def extract_apex(path: Path) -> dict:
+def extract_apex(path: Path) -> ExtractionResult:
     """Extract classes, interfaces, enums, methods, and Salesforce constructs from
     Apex .cls and .trigger files using regex (no tree-sitter grammar on PyPI)."""
     import re as _re
@@ -5351,8 +5364,8 @@ def extract_apex(path: Path) -> dict:
     stem = _file_stem(path)
     file_nid = _make_id(str_path)
 
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
 
     def add_node(nid: str, label: str, line: int) -> None:
@@ -5588,29 +5601,29 @@ def extract_apex(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def extract_kotlin(path: Path) -> dict:
+def extract_kotlin(path: Path) -> ExtractionResult:
     """Extract classes, objects, functions, and imports from a .kt/.kts file."""
     return _extract_generic(path, _KOTLIN_CONFIG)
 
 
-def extract_scala(path: Path) -> dict:
+def extract_scala(path: Path) -> ExtractionResult:
     """Extract classes, objects, functions, and imports from a .scala file."""
     return _extract_generic(path, _SCALA_CONFIG)
 
 
-def extract_php(path: Path) -> dict:
+def extract_php(path: Path) -> ExtractionResult:
     """Extract classes, functions, methods, namespace uses, and calls from a .php file."""
     return _extract_generic(path, _PHP_CONFIG)
 
 
-def extract_blade(path: Path) -> dict:
+def extract_blade(path: Path) -> ExtractionResult:
     """Extract @include, <livewire:> components, and wire:click bindings from Blade templates."""
     import re
 
     try:
         src = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return {"error": f"cannot read {path}"}
+        return {"nodes": [], "edges": [], "error": f"cannot read {path}"}
 
     file_nid = _make_id(str(path))
     nodes = [
@@ -5706,12 +5719,12 @@ def extract_blade(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def extract_dart(path: Path) -> dict:
+def extract_dart(path: Path) -> ExtractionResult:
     """Extract classes, mixins, functions, imports, generic calls, and annotations from a .dart file using regex."""
     try:
         src = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return {"error": f"cannot read {path}"}
+        return {"nodes": [], "edges": [], "error": f"cannot read {path}"}
 
     # Remove inline and multi-line comments while leaving string literals untouched to prevent stripping URLs/paths inside strings
     comment_string_pattern = re.compile(
@@ -6472,7 +6485,7 @@ def _sv_first_identifier(node, source: bytes) -> str | None:
     return None
 
 
-def _sv_child(node, type_name: str) -> object | None:
+def _sv_child(node: Node | None, type_name: str) -> Node | None:
     if node is None:
         return None
     for child in node.children:
@@ -6598,8 +6611,8 @@ def _augment_systemverilog_semantics(
     stem: str,
     str_path: str,
     file_nid: str,
-    nodes: list[dict],
-    edges: list[dict],
+    nodes: list[JsonObject],
+    edges: list[JsonObject],
     seen_ids: set[str],
 ) -> None:
     label_to_nid = {node["label"]: node["id"] for node in nodes}
@@ -6758,7 +6771,7 @@ def _augment_systemverilog_semantics(
                     )
 
 
-def extract_verilog(path: Path) -> dict:
+def extract_verilog(path: Path) -> ExtractionResult:
     """Extract modules, functions, tasks, package imports, instantiations, and
     SystemVerilog class semantics (inherits/implements edges, field/parameter/
     return-type references) from .v/.sv files."""
@@ -6779,8 +6792,8 @@ def extract_verilog(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
 
     def add_node(nid: str, label: str, line: int) -> None:
@@ -6914,7 +6927,7 @@ def extract_verilog(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def extract_sql(path: Path, content: str | bytes | None = None) -> dict:
+def extract_sql(path: Path, content: str | bytes | None = None) -> ExtractionResult:
     """Extract tables, views, functions, and relationships from .sql files via tree-sitter."""
     try:
         import tree_sitter_sql as tssql
@@ -6944,7 +6957,7 @@ def extract_sql(path: Path, content: str | bytes | None = None) -> dict:
     stem = _file_stem(path)
     str_path = str(path)
     file_nid = _make_id(str_path)
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -6953,7 +6966,7 @@ def extract_sql(path: Path, content: str | bytes | None = None) -> dict:
             "source_location": None,
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = {file_nid}
     table_nids: dict[str, str] = {}  # name → nid for reference resolution
 
@@ -7246,12 +7259,12 @@ def extract_sql(path: Path, content: str | bytes | None = None) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def extract_lua(path: Path) -> dict:
+def extract_lua(path: Path) -> ExtractionResult:
     """Extract functions, methods, require() imports, and calls from a .lua file."""
     return _extract_generic(path, _LUA_CONFIG)
 
 
-def extract_swift(path: Path) -> dict:
+def extract_swift(path: Path) -> ExtractionResult:
     """Extract classes, structs, protocols, functions, imports, and calls from a .swift file."""
     return _extract_generic(path, _SWIFT_CONFIG)
 
@@ -7259,7 +7272,7 @@ def extract_swift(path: Path) -> dict:
 # ── Julia extractor (custom walk) ────────────────────────────────────────────
 
 
-def extract_julia(path: Path) -> dict:
+def extract_julia(path: Path) -> ExtractionResult:
     """Extract modules, structs, functions, imports, and calls from a .jl file."""
     try:
         import tree_sitter_julia as tsjulia
@@ -7278,10 +7291,10 @@ def extract_julia(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    function_bodies: list[tuple[str, object]] = []
+    function_bodies: list[tuple[str, Node]] = []
 
     def add_node(nid: str, label: str, line: int) -> None:
         if nid not in seen_ids:
@@ -7590,7 +7603,7 @@ def _cpp_preprocess(path: Path) -> bytes:
     return path.read_bytes()
 
 
-def extract_fortran(path: Path) -> dict:
+def extract_fortran(path: Path) -> ExtractionResult:
     """Extract programs, modules, subroutines, functions, use statements, and calls from Fortran files.
 
     Capital-F extensions (.F, .F90, etc.) are run through the C preprocessor before
@@ -7617,10 +7630,10 @@ def extract_fortran(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    scope_bodies: list[tuple[str, object]] = []
+    scope_bodies: list[tuple[str, Node]] = []
 
     def add_node(nid: str, label: str, line: int) -> None:
         if nid not in seen_ids:
@@ -7904,7 +7917,7 @@ def extract_fortran(path: Path) -> dict:
 # ── Go extractor (custom walk) ────────────────────────────────────────────────
 
 
-def extract_go(path: Path) -> dict:
+def extract_go(path: Path) -> ExtractionResult:
     """Extract functions, methods, type declarations, and imports from a .go file."""
     try:
         import tree_sitter_go as tsgo
@@ -7926,10 +7939,10 @@ def extract_go(path: Path) -> dict:
     # multiple files in a package share one canonical type node.
     pkg_scope = path.parent.name or stem
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    function_bodies: list[tuple[str, object]] = []
+    function_bodies: list[tuple[str, Node]] = []
     go_imported_pkgs: set[str] = set()  # local names of imported packages
 
     def add_node(nid: str, label: str, line: int) -> None:
@@ -8217,12 +8230,12 @@ def extract_go(path: Path) -> dict:
 
     label_to_nid: dict[str, str] = {}
     for n in nodes:
-        raw = n["label"]
+        raw = str(n["label"])
         normalised = raw.strip("()").lstrip(".")
-        label_to_nid[normalised] = n["id"]
+        label_to_nid[normalised] = str(n["id"])
 
     seen_call_pairs: set[tuple[str, str]] = set()
-    raw_calls: list[dict] = []
+    raw_calls: list[JsonObject] = []
 
     def walk_calls(node, caller_nid: str) -> None:
         if node.type in ("function_declaration", "method_declaration"):
@@ -8341,7 +8354,7 @@ _RUST_TRAIT_METHOD_BLOCKLIST: frozenset[str] = frozenset(
 )
 
 
-def extract_rust(path: Path) -> dict:
+def extract_rust(path: Path) -> ExtractionResult:
     """Extract functions, structs, enums, traits, impl methods, and use declarations from a .rs file."""
     try:
         import tree_sitter_rust as tsrust
@@ -8360,10 +8373,10 @@ def extract_rust(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    function_bodies: list[tuple[str, object]] = []
+    function_bodies: list[tuple[str, Node]] = []
 
     def add_node(nid: str, label: str, line: int) -> None:
         if nid not in seen_ids:
@@ -8599,12 +8612,12 @@ def extract_rust(path: Path) -> dict:
 
     label_to_nid: dict[str, str] = {}
     for n in nodes:
-        raw = n["label"]
+        raw = str(n["label"])
         normalised = raw.strip("()").lstrip(".")
-        label_to_nid[normalised] = n["id"]
+        label_to_nid[normalised] = str(n["id"])
 
     seen_call_pairs: set[tuple[str, str]] = set()
-    raw_calls: list[dict] = []
+    raw_calls: list[JsonObject] = []
 
     def walk_calls(node, caller_nid: str) -> None:
         if node.type == "function_item":
@@ -8683,7 +8696,7 @@ def extract_rust(path: Path) -> dict:
 # ── Zig ───────────────────────────────────────────────────────────────────────
 
 
-def extract_zig(path: Path) -> dict:
+def extract_zig(path: Path) -> ExtractionResult:
     """Extract functions, structs, enums, unions, and imports from a .zig file."""
     try:
         import tree_sitter_zig as tszig
@@ -8702,10 +8715,10 @@ def extract_zig(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    function_bodies: list[tuple[str, Any]] = []
+    function_bodies: list[tuple[str, Node]] = []
 
     def add_node(nid: str, label: str, line: int) -> None:
         if nid not in seen_ids:
@@ -8845,7 +8858,7 @@ def extract_zig(path: Path) -> dict:
     walk(root)
 
     seen_call_pairs: set[tuple[str, str]] = set()
-    raw_calls: list[dict] = []
+    raw_calls: list[JsonObject] = []
 
     def walk_calls(node, caller_nid: str) -> None:
         if node.type == "function_declaration":
@@ -8904,7 +8917,7 @@ def extract_zig(path: Path) -> dict:
 # ── PowerShell ────────────────────────────────────────────────────────────────
 
 
-def extract_powershell(path: Path) -> dict:
+def extract_powershell(path: Path) -> ExtractionResult:
     """Extract functions, classes, methods, and using statements from a .ps1 file."""
     try:
         import tree_sitter_powershell as tsps
@@ -8927,10 +8940,10 @@ def extract_powershell(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    function_bodies: list[tuple[str, Any]] = []
+    function_bodies: list[tuple[str, Node]] = []
 
     def add_node(nid: str, label: str, line: int) -> None:
         if nid not in seen_ids:
@@ -9262,9 +9275,11 @@ def extract_powershell(path: Path) -> dict:
 
     walk(root)
 
-    label_to_nid = {n["label"].strip("()").lstrip(".").lower(): n["id"] for n in nodes}
+    label_to_nid = {
+        str(n["label"]).strip("()").lstrip(".").lower(): str(n["id"]) for n in nodes
+    }
     seen_call_pairs: set[tuple[str, str]] = set()
-    raw_calls: list[dict] = []
+    raw_calls: list[JsonObject] = []
 
     def walk_calls(node, caller_nid: str) -> None:
         if node.type in ("function_statement", "class_statement"):
@@ -9348,7 +9363,7 @@ def _psd1_module_name(raw: str) -> str:
     return name.strip()
 
 
-def extract_powershell_manifest(path: Path) -> dict:
+def extract_powershell_manifest(path: Path) -> ExtractionResult:
     """Extract module dependency edges from a PowerShell .psd1 manifest file.
 
     .psd1 files are PowerShell data hashtables, not scripts. tree-sitter-powershell
@@ -9381,8 +9396,8 @@ def extract_powershell_manifest(path: Path) -> dict:
         return {"nodes": [], "edges": [], "error": str(e)}
 
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
 
     def add_node(nid: str, label: str, line: int) -> None:
@@ -9535,9 +9550,9 @@ def _source_key(source_file: str, root: Path) -> str:
 
 
 def _disambiguate_colliding_node_ids(
-    nodes: list[dict],
-    edges: list[dict],
-    raw_calls: list[dict],
+    nodes: list[JsonObject],
+    edges: list[JsonObject],
+    raw_calls: list[JsonObject],
     root: Path,
 ) -> None:
     """Rewrite only colliding node IDs, using source path as the disambiguator.
@@ -9548,7 +9563,7 @@ def _disambiguate_colliding_node_ids(
     so they must collapse to one shared node — disambiguating them by path would
     scatter a single module across N file-qualified duplicates.
     """
-    by_id: dict[str, list[dict]] = {}
+    by_id: dict[str, list[JsonObject]] = {}
     for node in nodes:
         if node.get("type") == "module":
             continue
@@ -9627,10 +9642,10 @@ def _is_type_like_definition(node: dict) -> bool:
     return node.get("file_type") == "code"
 
 
-def _rewire_unique_stub_nodes(nodes: list[dict], edges: list[dict]) -> None:
+def _rewire_unique_stub_nodes(nodes: list[JsonObject], edges: list[JsonObject]) -> None:
     """Map unresolved no-source stubs to a unique real definition with the same label."""
-    real_by_label: dict[str, list[dict]] = {}
-    stubs: list[dict] = []
+    real_by_label: dict[str, list[JsonObject]] = {}
+    stubs: list[JsonObject] = []
 
     for node in nodes:
         key = _node_label_key(node)
@@ -9746,8 +9761,8 @@ class _SymbolResolutionFacts:
 
 def _apply_symbol_resolution_facts(
     paths: list[Path],
-    nodes: list[dict],
-    edges: list[dict],
+    nodes: list[JsonObject],
+    edges: list[JsonObject],
     root: Path,
     facts: _SymbolResolutionFacts,
 ) -> None:
@@ -10146,8 +10161,8 @@ def _js_default_export_name(node, source: bytes) -> str | None:
 
 def _js_top_level_function_bodies(
     path: Path, root_node, source: bytes
-) -> list[tuple[str, object]]:
-    bodies: list[tuple[str, object]] = []
+) -> list[tuple[str, Node]]:
+    bodies: list[tuple[str, Node]] = []
     stem = _file_stem(path)
     for node in root_node.children:
         if node.type == "function_declaration":
@@ -10416,7 +10431,7 @@ def _collect_js_symbol_resolution_facts(
     if not js_paths:
         return
 
-    trees: dict[Path, tuple[bytes, object]] = {}
+    trees: dict[Path, tuple[bytes, Node]] = {}
 
     for path in js_paths:
         resolved_path = path.resolve()
@@ -10686,8 +10701,8 @@ def _resolve_python_module_path(
 
 def _python_top_level_function_bodies(
     path: Path, root_node, source: bytes
-) -> list[tuple[str, object]]:
-    bodies: list[tuple[str, object]] = []
+) -> list[tuple[str, Node]]:
+    bodies: list[tuple[str, Node]] = []
     stem = _file_stem(path)
     for node in root_node.children:
         if node.type != "function_definition":
@@ -10717,7 +10732,7 @@ def _collect_python_symbol_resolution_facts(
     if not py_paths:
         return
 
-    trees: dict[Path, tuple[bytes, object]] = {}
+    trees: dict[Path, tuple[bytes, Node]] = {}
     for path in py_paths:
         parsed = _parse_python_tree(path)
         if parsed is None:
@@ -10795,8 +10810,8 @@ def _collect_python_symbol_resolution_facts(
 
 def _augment_symbol_resolution_edges(
     paths: list[Path],
-    nodes: list[dict],
-    edges: list[dict],
+    nodes: list[JsonObject],
+    edges: list[JsonObject],
     root: Path,
 ) -> None:
     facts = _SymbolResolutionFacts()
@@ -10807,8 +10822,8 @@ def _augment_symbol_resolution_edges(
 
 def _augment_js_reexport_edges(
     paths: list[Path],
-    nodes: list[dict],
-    edges: list[dict],
+    nodes: list[JsonObject],
+    edges: list[JsonObject],
     root: Path,
 ) -> None:
     """Compatibility wrapper for the JS/TS symbol-resolution post-pass."""
@@ -10818,9 +10833,9 @@ def _augment_js_reexport_edges(
 
 
 def _resolve_cross_file_imports(
-    per_file: list[dict],
+    per_file: list[ExtractionResult],
     paths: list[Path],
-) -> list[dict]:
+) -> list[JsonObject]:
     """
     Two-pass import resolution: turn file-level imports into class-level edges.
 
@@ -10853,13 +10868,13 @@ def _resolve_cross_file_imports(
     bare_to_qualified: dict[str, str] = {}
     for file_result in per_file:
         for node in file_result.get("nodes", []):
-            src = node.get("source_file", "")
+            src = _text(node, "source_file")
             if not src:
                 continue
             src_path = Path(src)
             fq_stem = _file_stem(src_path)
-            label = node.get("label", "")
-            nid = node.get("id", "")
+            label = _text(node, "label")
+            nid = _text(node, "id")
             # Index class-level entities only. Function/method labels end in "()"
             # so are excluded by the `endswith(")")` filter; file nodes end in ".py";
             # private/internal labels start with "_"; rationale nodes carry
@@ -10876,7 +10891,7 @@ def _resolve_cross_file_imports(
                     bare_to_qualified[src_path.stem] = fq_stem
 
     # Pass 2: for each file, find `from .X import A, B, C` and resolve
-    new_edges: list[dict] = []
+    new_edges: list[JsonObject] = []
     stem_to_path: dict[str, Path] = {_file_stem(p): p for p in paths}
 
     for file_result, path in zip(per_file, paths, strict=False):
@@ -10887,10 +10902,10 @@ def _resolve_cross_file_imports(
         # Excludes rationale nodes whose labels happen not to end in ")" or ".py"
         # but which must never be treated as importing entities.
         local_classes = [
-            n["id"]
+            str(n["id"])
             for n in file_result.get("nodes", [])
             if n.get("source_file") == str_path
-            and not n["label"].endswith((")", ".py"))
+            and not str(n["label"]).endswith((")", ".py"))
             and n["id"] != _make_id(stem)  # exclude file-level node
             and n.get("file_type") != "rationale"
         ]
@@ -10988,9 +11003,9 @@ def _resolve_cross_file_imports(
 
 
 def _merge_swift_extensions(
-    per_file: list[dict],
-    all_nodes: list[dict],
-    all_edges: list[dict],
+    per_file: list[ExtractionResult],
+    all_nodes: list[JsonObject],
+    all_edges: list[JsonObject],
 ) -> None:
     """Collapse cross-file Swift `extension Foo` nodes into the canonical `Foo`.
 
@@ -11006,8 +11021,8 @@ def _merge_swift_extensions(
     extension_labels: dict[str, str] = {}
     for result in per_file:
         for ext in result.get("swift_extensions", []) or []:
-            extension_nids.add(ext["nid"])
-            extension_labels[ext["nid"]] = ext["label"]
+            extension_nids.add(str(ext["nid"]))
+            extension_labels[str(ext["nid"])] = str(ext["label"])
 
     if not extension_nids:
         return
@@ -11016,10 +11031,10 @@ def _merge_swift_extensions(
     for n in all_nodes:
         if n.get("id") in extension_nids:
             continue
-        label = n.get("label")
+        label = _text(n, "label")
         if not label:
             continue
-        label_to_canonical.setdefault(label, []).append(n["id"])
+        label_to_canonical.setdefault(label, []).append(str(n["id"]))
 
     remap: dict[str, str] = {}
     for ext_nid in extension_nids:
@@ -11040,7 +11055,7 @@ def _merge_swift_extensions(
     # the type owns the methods, the files own their slice. Self-loops are
     # dropped (e.g. an in-file extension method whose call already pointed at
     # the canonical type).
-    rewritten: list[dict] = []
+    rewritten: list[JsonObject] = []
     seen_keys: set[tuple] = set()
     for e in all_edges:
         src = remap.get(e.get("source"), e.get("source"))
@@ -11064,9 +11079,9 @@ def _merge_swift_extensions(
 
 
 def _resolve_cross_file_java_imports(
-    per_file: list[dict],
+    per_file: list[ExtractionResult],
     paths: list[Path],
-) -> list[dict]:
+) -> list[JsonObject]:
     """Two-pass Java import resolution.
 
     Pass 1: build a global index {ClassName: [node_id, ...]} across all Java nodes.
@@ -11086,9 +11101,9 @@ def _resolve_cross_file_java_imports(
     name_to_ids: dict[str, list[str]] = {}
     for file_result in per_file:
         for node in file_result.get("nodes", []):
-            label = node.get("label", "")
-            nid = node.get("id", "")
-            src = node.get("source_file", "")
+            label = _text(node, "label")
+            nid = _text(node, "id")
+            src = _text(node, "source_file")
             if not label or not nid or not src:
                 continue
             if label.endswith((")", ".java")):
@@ -11098,7 +11113,7 @@ def _resolve_cross_file_java_imports(
             name_to_ids.setdefault(label, []).append(nid)
 
     # Pass 2: resolve imports to real node IDs
-    new_edges: list[dict] = []
+    new_edges: list[JsonObject] = []
     seen_pairs: set[tuple[str, str]] = set()
     for path in paths:
         file_nid = _make_id(str(path))
@@ -11151,10 +11166,10 @@ def _resolve_cross_file_java_imports(
 
 
 def _resolve_java_type_references(
-    per_file: list[dict],
+    per_file: list[ExtractionResult],
     paths: list[Path],
-    all_nodes: list[dict],
-    all_edges: list[dict],
+    all_nodes: list[JsonObject],
+    all_edges: list[JsonObject],
 ) -> None:
     """Re-point dangling Java ``implements``/``inherits`` edges to the real
     definition, using the referencing file's ``import`` statements (+ package)
@@ -11186,9 +11201,9 @@ def _resolve_java_type_references(
     imports_by_file: dict[str, dict[str, str]] = {}
     for path, result in zip(paths, per_file, strict=False):
         srcs = {
-            n.get("source_file")
+            _text(n, "source_file")
             for n in result.get("nodes", [])
-            if n.get("source_file")
+            if _text(n, "source_file")
         }
         if not srcs:
             continue
@@ -11236,9 +11251,9 @@ def _resolve_java_type_references(
     # FQN (package.Class) -> definition node id, for type-like defs with a source.
     fqn_to_id: dict[str, str] = {}
     for node in all_nodes:
-        label = node.get("label", "")
-        src = node.get("source_file", "")
-        nid = node.get("id", "")
+        label = _text(node, "label")
+        src = _text(node, "source_file")
+        nid = _text(node, "id")
         if not (label and src and nid) or src not in pkg_by_file:
             continue
         if not label[:1].isupper() or label.endswith((")", ".java")):
@@ -11252,7 +11267,7 @@ def _resolve_java_type_references(
         for node in all_nodes
         if node.get("id")
         and not node.get("source_file")
-        and node.get("label", "")[:1].isupper()
+        and _text(node, "label")[:1].isupper()
     }
     if not stub_label:
         return
@@ -11298,9 +11313,9 @@ def _resolve_java_type_references(
 
 
 def _resolve_swift_member_calls(
-    per_file: list[dict],
-    all_nodes: list[dict],
-    all_edges: list[dict],
+    per_file: list[ExtractionResult],
+    all_nodes: list[JsonObject],
+    all_edges: list[JsonObject],
 ) -> None:
     """Resolve cross-file Swift member calls (``recv.method()``) to the real
     definition of the receiver's type.
@@ -11356,7 +11371,7 @@ def _resolve_swift_member_calls(
         if tnode is not None:
             method_index[(src, _key(tnode.get("label", "")))] = tgt
 
-    all_raw_calls: list[dict] = []
+    all_raw_calls: list[JsonObject] = []
     for result in per_file:
         all_raw_calls.extend(result.get("raw_calls", []))
 
@@ -11364,7 +11379,7 @@ def _resolve_swift_member_calls(
     for rc in all_raw_calls:
         if not rc.get("is_member_call"):
             continue
-        receiver = rc.get("receiver")
+        receiver = _text(rc, "receiver")
         callee = rc.get("callee")
         if not receiver or not callee:
             continue
@@ -11407,7 +11422,7 @@ def _resolve_swift_member_calls(
         )
 
 
-def extract_objc(path: Path) -> dict:
+def extract_objc(path: Path) -> ExtractionResult:
     """Extract interfaces, implementations, protocols, methods, and imports from .m/.mm/.h files."""
     try:
         import tree_sitter_objc as tsobjc
@@ -11426,10 +11441,10 @@ def extract_objc(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    method_bodies: list[tuple[str, Any]] = []
+    method_bodies: list[tuple[str, Node]] = []
 
     def add_node(nid: str, label: str, line: int) -> None:
         if nid not in seen_ids:
@@ -11660,7 +11675,7 @@ def extract_objc(path: Path) -> dict:
                                             sel.append(_read(s))
                         method_name = "".join(sel)
                         for candidate in all_method_nids:
-                            if candidate.endswith(
+                            if str(candidate).endswith(
                                 _make_id("", method_name).lstrip("_")
                             ):
                                 pair = (caller_nid, candidate)
@@ -11683,7 +11698,7 @@ def extract_objc(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges, "input_tokens": 0, "output_tokens": 0}
 
 
-def extract_elixir(path: Path) -> dict:
+def extract_elixir(path: Path) -> ExtractionResult:
     """Extract modules, functions, imports, and calls from a .ex/.exs file."""
     try:
         import tree_sitter_elixir as tselixir
@@ -11702,10 +11717,10 @@ def extract_elixir(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    function_bodies: list[tuple[str, Any]] = []
+    function_bodies: list[tuple[str, Node]] = []
 
     def add_node(nid: str, label: str, line: int) -> None:
         if nid not in seen_ids:
@@ -11837,11 +11852,11 @@ def extract_elixir(path: Path) -> dict:
 
     label_to_nid: dict[str, str] = {}
     for n in nodes:
-        normalised = n["label"].strip("()").lstrip(".")
-        label_to_nid[normalised] = n["id"]
+        normalised = str(n["label"]).strip("()").lstrip(".")
+        label_to_nid[normalised] = str(n["id"])
 
     seen_call_pairs: set[tuple[str, str]] = set()
-    raw_calls: list[dict] = []
+    raw_calls: list[JsonObject] = []
     _SKIP_KEYWORDS = frozenset(
         {
             "def",
@@ -11994,7 +12009,7 @@ def _resolve_markdown_link(raw: str, source_dir: Path) -> Path | None:
     return Path(os.path.normpath(str(candidate)))
 
 
-def extract_markdown(path: Path) -> dict:
+def extract_markdown(path: Path) -> ExtractionResult:
     """Extract structural nodes and edges from a Markdown file.
 
     Produces nodes for:
@@ -12027,8 +12042,8 @@ def extract_markdown(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
 
     def add_node(nid: str, label: str, line: int, file_type: str = "document") -> None:
@@ -12450,8 +12465,8 @@ def _extract_pascal_regex(path: Path) -> dict:
 
     str_path = str(path)
     stem = _file_stem(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
     seen_call_pairs: set[tuple[str, str]] = set()
 
@@ -12572,9 +12587,9 @@ def _extract_pascal_regex(path: Path) -> dict:
 
     # Intra-file call edges
     all_procs: dict[str, str] = {
-        n["label"].removesuffix("()").lower(): n["id"]
+        str(n["label"]).removesuffix("()").lower(): str(n["id"])
         for n in nodes
-        if n["id"] != file_nid and n["label"].endswith("()")
+        if n["id"] != file_nid and str(n["label"]).endswith("()")
     }
     for caller_nid, caller_line, body_text in impl_records:
         for cm in _PAS_CALL_RE.finditer(body_text):
@@ -12594,7 +12609,7 @@ def _extract_pascal_regex(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges, "input_tokens": 0, "output_tokens": 0}
 
 
-def extract_pascal(path: Path) -> dict:
+def extract_pascal(path: Path) -> ExtractionResult:
     """Extract units, classes, procedures, uses-imports, and calls from Pascal/Delphi files.
 
     Produces nodes for:
@@ -12632,10 +12647,10 @@ def extract_pascal(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    proc_bodies: list[tuple[str, Any]] = []
+    proc_bodies: list[tuple[str, Node]] = []
 
     def _read(node) -> str:  # type: ignore[no-untyped-def]
         return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
@@ -12662,7 +12677,7 @@ def extract_pascal(path: Path) -> dict:
         weight: float = 1.0,
         context: str | None = None,
     ) -> None:
-        edge: dict[str, Any] = {
+        edge: JsonObject = {
             "source": src,
             "target": tgt,
             "relation": relation,
@@ -12796,7 +12811,7 @@ def extract_pascal(path: Path) -> dict:
 
     # Second pass: resolve calls inside procedure/function bodies
     all_procs: dict[str, str] = {
-        n["label"].removesuffix("()").lower(): n["id"]
+        str(n["label"]).removesuffix("()").lower(): str(n["id"])
         for n in nodes
         if n["id"] != file_nid
     }
@@ -12849,7 +12864,7 @@ def extract_pascal(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges, "input_tokens": 0, "output_tokens": 0}
 
 
-def extract_lazarus_form(path: Path) -> dict:
+def extract_lazarus_form(path: Path) -> ExtractionResult:
     """Extract component hierarchy from Lazarus .lfm form files.
 
     .lfm is a text-based declarative format for UI component trees, structured as:
@@ -12880,8 +12895,8 @@ def extract_lazarus_form(path: Path) -> dict:
 
     str_path = str(path)
     stem = _file_stem(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
     seen_edge_pairs: set[tuple[str, str, str]] = set()
 
@@ -12909,7 +12924,7 @@ def extract_lazarus_form(path: Path) -> dict:
         if key in seen_edge_pairs:
             return
         seen_edge_pairs.add(key)
-        edge: dict[str, Any] = {
+        edge: JsonObject = {
             "source": src,
             "target": tgt,
             "relation": relation,
@@ -12956,7 +12971,7 @@ def extract_lazarus_form(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges, "input_tokens": 0, "output_tokens": 0}
 
 
-def extract_delphi_form(path: Path) -> dict:
+def extract_delphi_form(path: Path) -> ExtractionResult:
     """Extract component hierarchy from Delphi .dfm form files.
 
     .dfm files come in two formats:
@@ -12994,8 +13009,8 @@ def extract_delphi_form(path: Path) -> dict:
 
     str_path = str(path)
     stem = _file_stem(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
     seen_edge_pairs: set[tuple[str, str, str]] = set()
 
@@ -13023,7 +13038,7 @@ def extract_delphi_form(path: Path) -> dict:
         if key in seen_edge_pairs:
             return
         seen_edge_pairs.add(key)
-        edge: dict[str, Any] = {
+        edge: JsonObject = {
             "source": src,
             "target": tgt,
             "relation": relation,
@@ -13082,7 +13097,7 @@ def _project_xml_is_safe(src: bytes) -> bool:
     return b"<!doctype" not in lowered and b"<!entity" not in lowered
 
 
-def extract_lazarus_package(path: Path) -> dict:
+def extract_lazarus_package(path: Path) -> ExtractionResult:
     """Extract package metadata from Lazarus .lpk package files (XML format).
 
     .lpk is an XML file listing the package name, required dependencies,
@@ -13122,8 +13137,8 @@ def extract_lazarus_package(path: Path) -> dict:
 
     str_path = str(path)
     stem = _file_stem(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
 
     def add_node(nid: str, label: str) -> None:
@@ -13140,7 +13155,7 @@ def extract_lazarus_package(path: Path) -> dict:
             )
 
     def add_edge(src: str, tgt: str, relation: str, context: str | None = None) -> None:
-        edge: dict[str, Any] = {
+        edge: JsonObject = {
             "source": src,
             "target": tgt,
             "relation": relation,
@@ -13207,7 +13222,7 @@ def _check_tree_sitter_version() -> None:
         )
 
 
-def extract_bash(path: Path) -> dict:
+def extract_bash(path: Path) -> ExtractionResult:
     """Extract functions, source imports, and cross-function calls from a .sh file."""
     try:
         import tree_sitter_bash as tsbash
@@ -13226,10 +13241,10 @@ def extract_bash(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    function_bodies: list[tuple[str, Any]] = []
+    function_bodies: list[tuple[str, Node]] = []
     defined_functions: set[str] = set()
 
     from .security import sanitize_metadata  # module-level cached import
@@ -13470,7 +13485,7 @@ def extract_bash(path: Path) -> dict:
 # ── .NET project files (.sln, .slnx, .csproj, .razor) ───────────────────────
 
 
-def extract_sln(path: Path) -> dict:
+def extract_sln(path: Path) -> ExtractionResult:
     """Extract projects and inter-project dependencies from a .sln file."""
     try:
         src = path.read_text(encoding="utf-8", errors="replace")
@@ -13479,7 +13494,7 @@ def extract_sln(path: Path) -> dict:
 
     file_nid = _make_id(str(path))
     str_path = str(path)
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -13488,7 +13503,7 @@ def extract_sln(path: Path) -> dict:
             "source_location": None,
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
     seen_ids.add(file_nid)
 
@@ -13573,7 +13588,7 @@ def extract_sln(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def extract_slnx(path: Path) -> dict:
+def extract_slnx(path: Path) -> ExtractionResult:
     """Extract projects and inter-project dependencies from a .slnx file.
 
     .slnx is the XML-based replacement for the legacy .sln format. Projects
@@ -13605,7 +13620,7 @@ def extract_slnx(path: Path) -> dict:
 
     file_nid = _make_id(str(path))
     str_path = str(path)
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -13614,7 +13629,7 @@ def extract_slnx(path: Path) -> dict:
             "source_location": None,
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
     seen_ids.add(file_nid)
 
@@ -13688,7 +13703,7 @@ def extract_slnx(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def extract_csproj(path: Path) -> dict:
+def extract_csproj(path: Path) -> ExtractionResult:
     """Extract packages, project refs, and target framework from a .csproj/.fsproj/.vbproj."""
     from defusedxml import ElementTree
 
@@ -13713,7 +13728,7 @@ def extract_csproj(path: Path) -> dict:
 
     file_nid = _make_id(str(path))
     str_path = str(path)
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -13722,7 +13737,7 @@ def extract_csproj(path: Path) -> dict:
             "source_location": None,
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
     seen_ids.add(file_nid)
 
@@ -13877,7 +13892,7 @@ def extract_csproj(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def extract_razor(path: Path) -> dict:
+def extract_razor(path: Path) -> ExtractionResult:
     """Extract directives, component refs, and @code methods from .razor/.cshtml."""
     try:
         src = path.read_text(encoding="utf-8", errors="replace")
@@ -13886,7 +13901,7 @@ def extract_razor(path: Path) -> dict:
 
     file_nid = _make_id(str(path))
     str_path = str(path)
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -13895,7 +13910,7 @@ def extract_razor(path: Path) -> dict:
             "source_location": None,
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
     seen_ids.add(file_nid)
 
@@ -14146,7 +14161,7 @@ def _is_config_json(path: Path, obj_node, source: bytes) -> bool:
     return False
 
 
-def extract_json(path: Path) -> dict:
+def extract_json(path: Path) -> ExtractionResult:
     """Extract structure and dependency edges from a *config/manifest* .json file.
 
     Data-shaped JSON (eval fixtures, datasets, GeoJSON, API response dumps) is
@@ -14179,8 +14194,8 @@ def extract_json(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
 
     # Keys whose string values become imports (package.json dep blocks)
@@ -14347,7 +14362,7 @@ def extract_json(path: Path) -> dict:
 # the generic class-body walker doesn't fit well.
 
 
-def extract_dm(path: Path) -> dict:
+def extract_dm(path: Path) -> ExtractionResult:
     """Extract types, procs, includes, and calls from a .dm/.dme file."""
     try:
         import tree_sitter_dm as tsdm
@@ -14365,10 +14380,10 @@ def extract_dm(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
-    function_bodies: list[tuple[str, Any, str | None]] = []
+    function_bodies: list[tuple[str, Node, str | None]] = []
 
     def add_node(nid: str, label: str, line: int) -> None:
         if nid and nid not in seen_ids:
@@ -14533,7 +14548,7 @@ def extract_dm(path: Path) -> dict:
     label_to_nids: dict[str, list[str]] = {}
     path_to_nids: dict[str, list[str]] = {}
     for n in nodes:
-        label = n["label"].strip("()")
+        label = str(n["label"]).strip("()")
         last = label.rsplit("/", 1)[-1] if "/" in label else label
         if last:
             label_to_nids.setdefault(last.lower(), []).append(n["id"])
@@ -14541,7 +14556,7 @@ def extract_dm(path: Path) -> dict:
             path_to_nids.setdefault(label.lower(), []).append(n["id"])
 
     seen_call_pairs: set[tuple[str, str]] = set()
-    raw_calls: list[dict] = []
+    raw_calls: list[JsonObject] = []
 
     def _emit_call(caller_nid: str, callee: str, line: int, is_member: bool) -> None:
         candidates = label_to_nids.get(callee.lower(), [])
@@ -14672,7 +14687,7 @@ def _read_dmi_description(data: bytes) -> str:
     return ""
 
 
-def extract_dmi(path: Path) -> dict:
+def extract_dmi(path: Path) -> ExtractionResult:
     """Extract icon state names from a .dmi (BYOND PNG icon sheet)."""
     try:
         data = path.read_bytes()
@@ -14682,7 +14697,7 @@ def extract_dmi(path: Path) -> dict:
     str_path = str(path)
     stem = _file_stem(path)
     file_nid = _make_id(str(path))
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -14691,7 +14706,7 @@ def extract_dmi(path: Path) -> dict:
             "source_location": "L1",
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
     seen: set[str] = {file_nid}
 
     description = _read_dmi_description(data)
@@ -14792,7 +14807,7 @@ def _dmm_type_path(entry: str) -> str:
     return entry.strip()
 
 
-def extract_dmm(path: Path) -> dict:
+def extract_dmm(path: Path) -> ExtractionResult:
     """Extract type-path references from a .dmm map file's tile dictionary."""
     try:
         if path.stat().st_size > 50 * 1024 * 1024:
@@ -14803,7 +14818,7 @@ def extract_dmm(path: Path) -> dict:
 
     str_path = str(path)
     file_nid = _make_id(str(path))
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -14812,7 +14827,7 @@ def extract_dmm(path: Path) -> dict:
             "source_location": "L1",
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
 
     grid_match = _DMM_GRID_RE.search(text)
     dict_text = text[: grid_match.start()] if grid_match else text
@@ -14881,7 +14896,7 @@ _DMF_ELEM_RE = re.compile(r'^\s*elem\s+"([^"]+)"\s*$')
 _DMF_TYPE_RE = re.compile(r"^\s*type\s*=\s*(\S+)\s*$")
 
 
-def extract_dmf(path: Path) -> dict:
+def extract_dmf(path: Path) -> ExtractionResult:
     """Extract windows and controls from a .dmf interface file."""
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -14891,7 +14906,7 @@ def extract_dmf(path: Path) -> dict:
     str_path = str(path)
     stem = _file_stem(path)
     file_nid = _make_id(str(path))
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -14900,7 +14915,7 @@ def extract_dmf(path: Path) -> dict:
             "source_location": "L1",
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
     seen: set[str] = {file_nid}
 
     current_window_nid: str | None = None
@@ -14971,7 +14986,7 @@ def extract_dmf(path: Path) -> dict:
         if m and current_elem_nid is not None and current_elem_name is not None:
             ctype = m.group(1)
             for n in nodes:
-                if n["id"] == current_elem_nid and " [" not in n["label"]:
+                if n["id"] == current_elem_nid and " [" not in str(n["label"]):
                     n["label"] = f'elem "{current_elem_name}" [{ctype}]'
                     break
 
@@ -15000,7 +15015,7 @@ def _resolve_gdscript_extends_path(raw_path: str, from_file: Path) -> str | None
     return None
 
 
-def extract_gdscript(path: Path) -> dict:
+def extract_gdscript(path: Path) -> ExtractionResult:
     """Extract classes, functions, signals, and calls from a .gd (GDScript,
     Godot engine) file.
 
@@ -15028,8 +15043,8 @@ def extract_gdscript(path: Path) -> dict:
 
     stem = _file_stem(path)
     str_path = str(path)
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = set()
 
     def add_node(nid: str, label: str, line: int) -> None:
@@ -15192,7 +15207,7 @@ _GODOT_NODE_SCRIPT_RE = re.compile(r'^script\s*=\s*ExtResource\("([^"]+)"\)')
 _GODOT_SCENE_MAX_BYTES = 2_000_000
 
 
-def extract_godot_scene(path: Path) -> dict:
+def extract_godot_scene(path: Path) -> ExtractionResult:
     """Extract scene→script edges from a Godot .tscn/.tres file.
 
     `[ext_resource type="Script" path="res://x.gd" id="Y"]` declares a
@@ -15208,7 +15223,7 @@ def extract_godot_scene(path: Path) -> dict:
 
     str_path = str(path)
     file_nid = _make_id(str_path)
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -15217,7 +15232,7 @@ def extract_godot_scene(path: Path) -> dict:
             "source_location": "L1",
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = {file_nid}
     script_ids: dict[str, str] = {}  # ext_resource id -> res:// path
 
@@ -15279,7 +15294,7 @@ def extract_godot_scene(path: Path) -> dict:
 _TF_META_HEADS = frozenset({"count", "each", "self", "path", "terraform"})
 
 
-def extract_terraform(path: Path) -> dict:
+def extract_terraform(path: Path) -> ExtractionResult:
     """Extract Terraform/HCL blocks and the references between them via tree-sitter.
 
     Nodes: resources, data sources, modules, variables, outputs, providers, and
@@ -15316,7 +15331,7 @@ def extract_terraform(path: Path) -> dict:
     file_nid = _make_id(str_path)
     scope = path.parent.name or "tf"
 
-    nodes: list[dict] = [
+    nodes: list[JsonObject] = [
         {
             "id": file_nid,
             "label": path.name,
@@ -15325,7 +15340,7 @@ def extract_terraform(path: Path) -> dict:
             "source_location": None,
         }
     ]
-    edges: list[dict] = []
+    edges: list[JsonObject] = []
     seen_ids: set[str] = {file_nid}
     seen_edges: set[tuple[str, str, str]] = set()
 
@@ -15492,7 +15507,9 @@ def extract_terraform(path: Path) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-_DISPATCH: dict[str, Any] = {
+type Extractor = Callable[[Path], ExtractionResult]
+
+_DISPATCH: dict[str, Extractor] = {
     ".py": extract_python,
     ".js": extract_js,
     ".jsx": extract_js,
@@ -15587,7 +15604,7 @@ _DISPATCH: dict[str, Any] = {
 }
 
 
-def _get_extractor(path: Path) -> Any | None:
+def _get_extractor(path: Path) -> Extractor | None:
     """Return the correct extractor function for a file, or None if unsupported."""
     if path.name.endswith(".blade.php"):
         return extract_blade
@@ -15640,7 +15657,7 @@ def _extract_single_file(args: tuple) -> tuple[int, dict]:
 
 def _extract_parallel(
     uncached_work: list[tuple[int, Path]],
-    per_file: list[dict | None],
+    per_file: list[ExtractionResult | None],
     effective_root: Path,
     max_workers: int | None,
     total_files: int,
@@ -15736,7 +15753,7 @@ def _extract_parallel(
 
 def _extract_sequential(
     uncached_work: list[tuple[int, Path]],
-    per_file: list[dict | None],
+    per_file: list[ExtractionResult | None],
     effective_root: Path,
     total_files: int,
 ) -> None:
@@ -15823,7 +15840,7 @@ def extract(
     total = len(paths)
 
     # Phase 1: separate cached hits from uncached work
-    per_file: list[dict | None] = [None] * total
+    per_file: list[ExtractionResult | None] = [None] * total
     uncached_work: list[tuple[int, Path]] = []
 
     for i, path in enumerate(paths):
@@ -15853,9 +15870,9 @@ def extract(
         if per_file[i] is None:
             per_file[i] = {"nodes": [], "edges": []}
 
-    all_nodes: list[dict] = []
-    all_edges: list[dict] = []
-    all_raw_calls: list[dict] = []
+    all_nodes: list[JsonObject] = []
+    all_edges: list[JsonObject] = []
+    all_raw_calls: list[JsonObject] = []
     for result in per_file:
         if result is None:
             continue
@@ -15922,7 +15939,7 @@ def extract(
             if entry is None:
                 continue
             old_pref, new_pref = entry
-            nid = n.get("id", "")
+            nid = _text(n, "id")
             if nid.startswith(old_pref + "_"):
                 new_nid = new_pref + nid[len(old_pref) :]
                 if new_nid != nid:
@@ -16004,7 +16021,7 @@ def extract(
     for n in all_nodes:
         if n.get("file_type") == "rationale":
             continue
-        raw = n.get("label", "")
+        raw = _text(n, "label")
         normalised = raw.strip("()").lstrip(".")
         if normalised:
             key = normalised.lower()
@@ -16020,9 +16037,13 @@ def extract(
     file_to_module_imports: dict[str, set[str]] = {}
     for e in all_edges:
         if e.get("relation") == "imports":
-            file_to_symbol_imports.setdefault(e["source"], set()).add(e["target"])
+            file_to_symbol_imports.setdefault(str(e["source"]), set()).add(
+                str(e["target"])
+            )
         elif e.get("relation") == "imports_from":
-            file_to_module_imports.setdefault(e["source"], set()).add(e["target"])
+            file_to_module_imports.setdefault(str(e["source"]), set()).add(
+                str(e["target"])
+            )
 
     # Map each node back to its containing file_id so we can ask
     # "did the caller's file import the callee's file?"
@@ -16041,7 +16062,7 @@ def extract(
 
     existing_pairs = {(e["source"], e["target"]) for e in all_edges}
     for rc in all_raw_calls:
-        callee = rc.get("callee", "")
+        callee = _text(rc, "callee")
         if not callee:
             continue
         if callee in _LANGUAGE_BUILTIN_GLOBALS:

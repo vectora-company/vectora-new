@@ -31,53 +31,53 @@ def _simple_graph() -> nx.Graph:
 
 
 class TestObsidianTag:
-    def test_plain_name(self):
+    def test_plain_name(self) -> None:
         from backend.context_graph.export import _obsidian_tag
 
         assert _obsidian_tag("MyTag") == "MyTag"
 
-    def test_spaces_to_underscore(self):
+    def test_spaces_to_underscore(self) -> None:
         from backend.context_graph.export import _obsidian_tag
 
         assert _obsidian_tag("My Tag") == "My_Tag"
 
-    def test_strips_invalid_chars(self):
+    def test_strips_invalid_chars(self) -> None:
         from backend.context_graph.export import _obsidian_tag
 
         result = _obsidian_tag("Auth*System!")
         assert "*" not in result
         assert "!" not in result
 
-    def test_allows_hyphens_and_slashes(self):
+    def test_allows_hyphens_and_slashes(self) -> None:
         from backend.context_graph.export import _obsidian_tag
 
         result = _obsidian_tag("auth/service-tag")
         assert "auth" in result
         assert "-" in result
 
-    def test_empty_string(self):
+    def test_empty_string(self) -> None:
         from backend.context_graph.export import _obsidian_tag
 
         assert _obsidian_tag("") == ""
 
 
 class TestStripDiacritics:
-    def test_removes_accents(self):
+    def test_removes_accents(self) -> None:
         from backend.context_graph.export import _strip_diacritics
 
         assert _strip_diacritics("café") == "cafe"
 
-    def test_plain_ascii_unchanged(self):
+    def test_plain_ascii_unchanged(self) -> None:
         from backend.context_graph.export import _strip_diacritics
 
         assert _strip_diacritics("hello") == "hello"
 
-    def test_none_returns_empty(self):
+    def test_none_returns_empty(self) -> None:
         from backend.context_graph.export import _strip_diacritics
 
         assert _strip_diacritics(None) == ""
 
-    def test_unicode_string(self):
+    def test_unicode_string(self) -> None:
         from backend.context_graph.export import _strip_diacritics
 
         result = _strip_diacritics("über")
@@ -85,42 +85,42 @@ class TestStripDiacritics:
 
 
 class TestYamlStr:
-    def test_plain_text(self):
+    def test_plain_text(self) -> None:
         from backend.context_graph.export import _yaml_str
 
         assert _yaml_str("hello") == "hello"
 
-    def test_escapes_backslash(self):
+    def test_escapes_backslash(self) -> None:
         from backend.context_graph.export import _yaml_str
 
         assert _yaml_str("a\\b") == "a\\\\b"
 
-    def test_escapes_double_quote(self):
+    def test_escapes_double_quote(self) -> None:
         from backend.context_graph.export import _yaml_str
 
         assert _yaml_str('say "hi"') == 'say \\"hi\\"'
 
-    def test_escapes_newline(self):
+    def test_escapes_newline(self) -> None:
         from backend.context_graph.export import _yaml_str
 
         assert _yaml_str("line1\nline2") == "line1\\nline2"
 
-    def test_escapes_carriage_return(self):
+    def test_escapes_carriage_return(self) -> None:
         from backend.context_graph.export import _yaml_str
 
         assert _yaml_str("a\rb") == "a\\rb"
 
-    def test_nul_escaped(self):
+    def test_nul_escaped(self) -> None:
         from backend.context_graph.export import _yaml_str
 
         assert _yaml_str("a\x00b") == "a\\0b"
 
-    def test_line_separator_escaped(self):
+    def test_line_separator_escaped(self) -> None:
         from backend.context_graph.export import _yaml_str
 
         assert _yaml_str("a b") == "a\\Lb"
 
-    def test_control_char_hex_escaped(self):
+    def test_control_char_hex_escaped(self) -> None:
         from backend.context_graph.export import _yaml_str
 
         result = _yaml_str("a\x01b")
@@ -130,14 +130,14 @@ class TestYamlStr:
 class TestBackupIfProtected:
     def test_no_graph_json_no_backup(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import backup_if_protected
 
         monkeypatch.delenv("GRAPH_NO_BACKUP", raising=False)
         result = backup_if_protected(tmp_path)
         assert result is None
 
-    def test_env_var_disables_backup(self, tmp_path: Path):
+    def test_env_var_disables_backup(self, tmp_path: Path) -> None:
         from backend.context_graph.export import backup_if_protected
 
         os.environ["GRAPH_NO_BACKUP"] = "1"
@@ -149,7 +149,7 @@ class TestBackupIfProtected:
 
     def test_non_semantic_non_curated_no_backup(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import backup_if_protected
 
         monkeypatch.delenv("GRAPH_NO_BACKUP", raising=False)
@@ -159,7 +159,7 @@ class TestBackupIfProtected:
 
     def test_semantic_marker_triggers_backup(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import backup_if_protected
 
         monkeypatch.delenv("GRAPH_NO_BACKUP", raising=False)
@@ -171,7 +171,7 @@ class TestBackupIfProtected:
 
     def test_curated_labels_trigger_backup(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import backup_if_protected
 
         monkeypatch.delenv("GRAPH_NO_BACKUP", raising=False)
@@ -185,7 +185,7 @@ class TestBackupIfProtected:
 
     def test_default_labels_no_backup(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import backup_if_protected
 
         monkeypatch.delenv("GRAPH_NO_BACKUP", raising=False)
@@ -199,7 +199,7 @@ class TestBackupIfProtected:
 
     def test_identical_backup_not_duplicated(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import backup_if_protected
 
         monkeypatch.delenv("GRAPH_NO_BACKUP", raising=False)
@@ -211,7 +211,7 @@ class TestBackupIfProtected:
 
 
 class TestPruneDanglingEdges:
-    def test_removes_dangling_edges(self):
+    def test_removes_dangling_edges(self) -> None:
         from backend.context_graph.export import prune_dangling_edges
 
         data = {
@@ -228,7 +228,7 @@ class TestPruneDanglingEdges:
             for e in result["links"]
         )
 
-    def test_no_dangling_no_pruning(self):
+    def test_no_dangling_no_pruning(self) -> None:
         from backend.context_graph.export import prune_dangling_edges
 
         data = {
@@ -239,7 +239,7 @@ class TestPruneDanglingEdges:
         assert count == 0
         assert len(result["links"]) == 1
 
-    def test_empty_graph(self):
+    def test_empty_graph(self) -> None:
         from backend.context_graph.export import prune_dangling_edges
 
         data: dict = {"nodes": [], "links": []}
@@ -248,7 +248,9 @@ class TestPruneDanglingEdges:
 
 
 class TestToJson:
-    def test_creates_json_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_creates_json_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.context_graph.export import to_json
 
         monkeypatch.setenv("GRAPH_NO_BACKUP", "1")
@@ -259,7 +261,7 @@ class TestToJson:
 
     def test_json_has_nodes_and_links(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import to_json
 
         monkeypatch.setenv("GRAPH_NO_BACKUP", "1")
@@ -272,7 +274,7 @@ class TestToJson:
 
     def test_no_overwrite_when_existing_graph_is_larger(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import to_json
 
         monkeypatch.setenv("GRAPH_NO_BACKUP", "1")
@@ -290,7 +292,7 @@ class TestToJson:
 
     def test_overwrite_when_force_true(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import to_json
 
         monkeypatch.setenv("GRAPH_NO_BACKUP", "1")
@@ -303,36 +305,36 @@ class TestToJson:
 
 
 class TestCypherHelpers:
-    def test_cypher_escape_plain(self):
+    def test_cypher_escape_plain(self) -> None:
         from backend.context_graph.export import _cypher_escape
 
         assert _cypher_escape("hello") == "hello"
 
-    def test_cypher_escape_backslash(self):
+    def test_cypher_escape_backslash(self) -> None:
         from backend.context_graph.export import _cypher_escape
 
         result = _cypher_escape("a\\b")
         assert "\\\\" in result
 
-    def test_cypher_escape_single_quote(self):
+    def test_cypher_escape_single_quote(self) -> None:
         from backend.context_graph.export import _cypher_escape
 
         result = _cypher_escape("it's")
         assert "\\'" in result or '"' in result
 
-    def test_cypher_label_plain(self):
+    def test_cypher_label_plain(self) -> None:
         from backend.context_graph.export import _cypher_label
 
         result = _cypher_label("AuthService", "fallback")
         assert "AuthService" in result
 
-    def test_cypher_label_fallback_when_empty(self):
+    def test_cypher_label_fallback_when_empty(self) -> None:
         from backend.context_graph.export import _cypher_label
 
         result = _cypher_label("", "Fallback")
         assert "Fallback" in result
 
-    def test_cypher_label_strips_invalid(self):
+    def test_cypher_label_strips_invalid(self) -> None:
         from backend.context_graph.export import _cypher_label
 
         result = _cypher_label("My Label With Spaces", "X")
@@ -340,7 +342,9 @@ class TestCypherHelpers:
 
 
 class TestToHtml:
-    def test_creates_html_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_creates_html_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.context_graph.export import to_html
 
         monkeypatch.setenv("GRAPH_NO_BACKUP", "1")
@@ -354,7 +358,7 @@ class TestToHtml:
 
     def test_html_contains_node_label(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         from backend.context_graph.export import to_html
 
         monkeypatch.setenv("GRAPH_NO_BACKUP", "1")

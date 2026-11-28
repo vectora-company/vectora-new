@@ -9,9 +9,13 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from backend.settings import settings
+from backend.vtypes.contracts import JsonValue
+
+if TYPE_CHECKING:
+    import asyncpg
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +90,7 @@ class MediaQuota:
 
     async def _postgres_pool(
         self,
-    ) -> Any:  # asyncpg é dependência opcional do modo completo
+    ) -> asyncpg.Pool:
         from backend.storage.factory import get_pg_pool
 
         return await get_pg_pool()
@@ -138,7 +142,7 @@ class MediaQuota:
         return connection
 
     @staticmethod
-    def _record_quota_event(event: str, **fields: object) -> None:
+    def _record_quota_event(event: str, **fields: JsonValue) -> None:
         """Emite somente agregados seguros da quota."""
         try:
             from backend.persistence.telemetry import telemetry

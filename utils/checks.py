@@ -9,6 +9,7 @@ Comandos:
     removed-paths        Detect staged references to files removed or renamed by the commit
     translation-keys     Validate and deterministically sort Vectora translation message keys
     frontend-lint        Run the frontend oxlint only on the files received (staged files)
+    no-any               Rejeita anotações com Any ou object em arquivos Python
 """
 
 from __future__ import annotations
@@ -639,6 +640,40 @@ def environment_main(_: list[str]) -> int:
     return 0
 
 
+# ── no-any: anotações sem Any nem object ───────────────────────────────────
+
+
+def no_any_main(argv: list[str]) -> int:
+    """Lista anotações proibidas nos arquivos recebidos ou em backend/ e tests/."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from no_any import find_violations
+
+    parser = argparse.ArgumentParser(prog="checks.py no-any")
+    parser.add_argument("paths", nargs="*", default=["backend", "tests"])
+    parser.add_argument(
+        "--summary", action="store_true", help="só a contagem por arquivo"
+    )
+    args = parser.parse_args(argv)
+    files: list[Path] = []
+    for raw in args.paths:
+        path = Path(raw)
+        files.extend(sorted(path.rglob("*.py")) if path.is_dir() else [path])
+    found = {path: find_violations(path) for path in files if path.suffix == ".py"}
+    total = sum(len(items) for items in found.values())
+    if args.summary:
+        for path, items in sorted(found.items(), key=lambda entry: -len(entry[1])):
+            if items:
+                print(f"{len(items):5} {path.as_posix()}")
+    else:
+        for items in found.values():
+            for item in items:
+                print(f"{item.path}:{item.line}: {item.annotation}")
+    if total:
+        print(f"{total} anotações com Any ou object", file=sys.stderr)
+        return 1
+    return 0
+
+
 # ── CLI ─────────────────────────────────────────────────────────────────────
 
 
@@ -651,6 +686,7 @@ _COMMANDS: dict[str, tuple[Callable[..., int], bool]] = {
     "frontend-i18n": (frontend_i18n_main, True),
     "frontend-typecheck": (frontend_typecheck_main, True),
     "environment": (environment_main, True),
+    "no-any": (no_any_main, True),
 }
 
 

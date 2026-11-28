@@ -5,6 +5,8 @@ Cobre: resolve_seed, affected_nodes, format_affected.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import networkx as nx
 
 from backend.context_graph.affected import (
@@ -290,7 +292,7 @@ class TestAffectedNodesExtra:
 
 
 class TestLoadGraph:
-    def test_roundtrip_nodes_and_edges(self, tmp_path) -> None:
+    def test_roundtrip_nodes_and_edges(self, tmp_path: Path) -> None:
         import json
 
         data = {
@@ -304,7 +306,7 @@ class TestLoadGraph:
         assert "n1" in g.nodes and "n2" in g.nodes
         assert g.has_edge("n1", "n2")
 
-    def test_returns_directed_graph(self, tmp_path) -> None:
+    def test_returns_directed_graph(self, tmp_path: Path) -> None:
         import json
 
         p = tmp_path / "g.json"

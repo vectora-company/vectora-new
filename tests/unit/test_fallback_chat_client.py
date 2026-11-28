@@ -7,10 +7,13 @@ propaga sem tentar fallback.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import pytest
 
 from backend.llm.fallback_chat_client import FallbackChatClient
 from backend.llm.provider_fallback import QuotaExhaustedError
+from backend.tools.registry import ToolSpec
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -24,18 +27,30 @@ class _FakeChatClient:
     """Client controlável por teste: `agenerate`/`astream` seguem um script
     de resultados/exceções por chamada."""
 
-    def __init__(self, comportamento):
+    def __init__(self, comportamento) -> None:
         self._comportamento = comportamento
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ):
         resultado = self._comportamento
         if isinstance(resultado, BaseException):
             raise resultado
         return resultado
 
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         for item in self._comportamento:
             if isinstance(item, BaseException):
                 raise item
@@ -50,13 +65,17 @@ def _resposta_ok(texto: str = "ok") -> VMessage:
     )
 
 
-async def _async_value(value):
+async def _async_value(value: list[str]) -> list[str]:
     return value
 
 
 def _make_client(
-    monkeypatch, *, fallback_chain, clients_por_modelo, on_model_switch=None
-):
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    fallback_chain: list[str],
+    clients_por_modelo: dict[str, _FakeChatClient],
+    on_model_switch=None,
+) -> FallbackChatClient:
     monkeypatch.setattr(
         "backend.llm.fallback_chat_client.get_fallback_chain",
         lambda _mid: fallback_chain,
@@ -70,11 +89,11 @@ def _make_client(
 
 class TestAgenerate:
     async def test_managed_llamacpp_e_iniciado_antes_de_resolver_candidatos(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         chamado = False
 
-        async def garantir():
+        async def garantir() -> None:
             nonlocal chamado
             chamado = True
 
@@ -91,7 +110,9 @@ class TestAgenerate:
         assert await cliente._candidate_ids([]) == ["llamacpp:qwen"]
         assert chamado is True
 
-    async def test_usa_o_primario_quando_nao_ha_erro(self, monkeypatch):
+    async def test_usa_o_primario_quando_nao_ha_erro(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         cliente = _make_client(
             monkeypatch,
             fallback_chain=[],
@@ -104,10 +125,12 @@ class TestAgenerate:
 
         assert resultado.text() == "do primário"
 
-    async def test_erro_de_quota_troca_para_o_proximo_da_cadeia(self, monkeypatch):
+    async def test_erro_de_quota_troca_para_o_proximo_da_cadeia(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         trocas: list[tuple[str, str]] = []
 
-        async def registrar(de, para):
+        async def registrar(de: str, para: str) -> None:
             trocas.append((de, para))
 
         cliente = _make_client(
@@ -129,8 +152,8 @@ class TestAgenerate:
         assert trocas == [("openai:gpt-4o", "anthropic:claude-sonnet")]
 
     async def test_erro_nao_recuperavel_no_primario_propaga_sem_fallback(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         cliente = _make_client(
             monkeypatch,
             fallback_chain=["anthropic:claude-sonnet"],
@@ -146,8 +169,8 @@ class TestAgenerate:
             await cliente.agenerate([text_message(MessageRole.USER, "oi")])
 
     async def test_todos_os_candidatos_esgotados_vira_quota_exhausted(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         cliente = _make_client(
             monkeypatch,
             fallback_chain=["anthropic:claude-sonnet"],
@@ -182,7 +205,9 @@ class TestAgenerate:
         resultado = await cliente.agenerate([mensagem])
         assert resultado.text() == "ok"
 
-    async def test_ignora_fallback_de_imagem_sem_credencial(self, monkeypatch):
+    async def test_ignora_fallback_de_imagem_sem_credencial(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.settings import CapabilityState
 
         async def _supported(_model: str) -> CapabilityState:
@@ -211,7 +236,9 @@ class TestAgenerate:
 
 
 class TestAstream:
-    async def test_chunks_do_primario_saem_direto(self, monkeypatch):
+    async def test_chunks_do_primario_saem_direto(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         cliente = _make_client(
             monkeypatch,
             fallback_chain=[],
@@ -229,8 +256,8 @@ class TestAstream:
         assert "".join(c.delta_text for c in chunks) == "ab"
 
     async def test_erro_de_quota_antes_do_primeiro_chunk_troca_de_provider(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         cliente = _make_client(
             monkeypatch,
             fallback_chain=["anthropic:claude-sonnet"],
@@ -251,8 +278,8 @@ class TestAstream:
         assert "".join(c.delta_text for c in chunks) == "do fallback"
 
     async def test_erro_depois_de_ja_ter_streamado_chunk_propaga_sem_trocar(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         cliente = _make_client(
             monkeypatch,
             fallback_chain=["anthropic:claude-sonnet"],

@@ -15,7 +15,7 @@ import importlib
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.sandbox.dry_run import (
     CLONE_NAMESPACE_FLAGS,
@@ -25,10 +25,13 @@ from backend.sandbox.dry_run import (
 )
 from backend.sandbox.policy import SandboxPolicy
 
+if TYPE_CHECKING:
+    from types import ModuleType
+
 logger = logging.getLogger(__name__)
 
 
-def _load_seccomp() -> Any | None:
+def _load_seccomp() -> ModuleType | None:
     """Módulo do libseccomp: o pacote `pyseccomp` (o que o projeto instala) ou,
     em sistemas que o trazem pela distro, `seccomp`. `None` se nenhum existe."""
     for name in ("pyseccomp", "seccomp"):

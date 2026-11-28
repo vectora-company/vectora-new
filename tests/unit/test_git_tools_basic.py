@@ -14,13 +14,17 @@ from __future__ import annotations
 import json
 from importlib import import_module
 from pathlib import Path
+from typing import NoReturn
 
 import git
 import pytest
 
+from backend.tools.registry import ToolExtras
+
 # ===========================================================================
 # Fixtures — repos temporários
 # ===========================================================================
+from tests.json_values import as_str
 
 
 @pytest.fixture
@@ -68,7 +72,7 @@ def dirty_repo(tmp_path: Path) -> git.Repo:
 # ===========================================================================
 
 
-def _tool_extras(name: str):
+def _tool_extras(name: str) -> ToolExtras:
     import_module("backend.tools.git")
     from backend.tools.registry import TOOL_REGISTRY
 
@@ -128,26 +132,26 @@ class TestGitStatusImpl:
         from backend.tools.git import _git_status_impl
 
         result = _git_status_impl(repo_with_commit)
-        assert result["status"] == "ok"
-        assert result["clean"] is True
-        assert result["untracked"] == []
-        assert result["modified"] == []
+        assert result.status == "ok"
+        assert result.clean is True
+        assert result.untracked == []
+        assert result.modified == []
 
     def test_dirty_repo_untracked_and_modified(self, dirty_repo: git.Repo) -> None:
         from backend.tools.git import _git_status_impl
 
         result = _git_status_impl(dirty_repo)
-        assert result["status"] == "ok"
-        assert result["clean"] is False
-        assert "new_file.py" in result["untracked"]
-        assert "README.md" in result["modified"]
+        assert result.status == "ok"
+        assert result.clean is False
+        assert "new_file.py" in result.untracked
+        assert "README.md" in result.modified
 
     def test_returns_branch_name(self, repo_with_commit: git.Repo) -> None:
         from backend.tools.git import _git_status_impl
 
         result = _git_status_impl(repo_with_commit)
-        assert isinstance(result["branch"], str)
-        assert len(result["branch"]) > 0
+        assert isinstance(result.branch, str)
+        assert len(result.branch) > 0
 
     def test_staged_file_appears_in_staged(self, dirty_repo: git.Repo) -> None:
         from backend.tools.git import _git_status_impl
@@ -155,7 +159,7 @@ class TestGitStatusImpl:
         # Stageia a modificação do README
         dirty_repo.index.add(["README.md"])
         result = _git_status_impl(dirty_repo)
-        assert "README.md" in result["staged"]
+        assert "README.md" in result.staged
 
     def test_empty_repo_no_crash(self, empty_repo: git.Repo) -> None:
         """Regressão do 500 real: repo sem nenhum commit não tem HEAD
@@ -165,12 +169,14 @@ class TestGitStatusImpl:
         from backend.tools.git import _git_status_impl
 
         result = _git_status_impl(empty_repo)
-        assert result["status"] == "ok"
-        assert result["staged"] == []
+        assert result.status == "ok"
+        assert result.staged == []
         # Untracked/modified continuam funcionando em repo unborn.
-        assert result["modified"] == []
+        assert result.modified == []
 
-    def test_empty_repo_with_staged_file(self, empty_repo: git.Repo, tmp_path):
+    def test_empty_repo_with_staged_file(
+        self, empty_repo: git.Repo, tmp_path: Path
+    ) -> None:
         """Repo sem commits mas com arquivo já no index (git add antes do 1º
         commit): o arquivo deve aparecer em ``staged`` (diff contra a árvore
         vazia), não crashar."""
@@ -180,12 +186,12 @@ class TestGitStatusImpl:
         f.write_text("x = 1\n")
         empty_repo.index.add(["novo.py"])
         result = _git_status_impl(empty_repo)
-        assert result["status"] == "ok"
-        assert "novo.py" in result["staged"]
+        assert result.status == "ok"
+        assert "novo.py" in result.staged
 
     @pytest.mark.asyncio
     async def test_handler_degrada_erro_inesperado_em_vez_de_500(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Defesa em profundidade do endpoint HTTP: se ``_git_status_impl``
         levantar algo além do unborn-HEAD (ex.: gitpython em estado
@@ -198,7 +204,7 @@ class TestGitStatusImpl:
             workspaces, "_open_workspace_repo", lambda workspace_id: object()
         )
 
-        def _boom(repo):
+        def _boom(repo) -> NoReturn:
             raise RuntimeError("estado transitório do gitpython")
 
         monkeypatch.setattr(git_tools, "_git_status_impl", _boom)
@@ -218,19 +224,18 @@ class TestGitLogImpl:
         from backend.tools.git import _git_log_impl
 
         result = _git_log_impl(empty_repo, n=10)
-        assert result["status"] == "ok"
-        assert result["commits"] == []
+        assert result.status == "ok"
+        assert result.commits == []
 
     def test_returns_commit_list(self, repo_with_commit: git.Repo) -> None:
         from backend.tools.git import _git_log_impl
 
         result = _git_log_impl(repo_with_commit, n=10)
-        assert result["status"] == "ok"
-        assert len(result["commits"]) == 1
-        commit = result["commits"][0]
-        assert "hash" in commit
-        assert "message" in commit
-        assert commit["message"] == "Initial commit"
+        assert result.status == "ok"
+        assert len(result.commits) == 1
+        commit = result.commits[0]
+        assert commit.hash
+        assert commit.message == "Initial commit"
 
     def test_respects_n_limit(self, tmp_path: Path) -> None:
         from backend.tools.git import _git_log_impl
@@ -245,7 +250,7 @@ class TestGitLogImpl:
             repo.index.commit(f"Commit {i}")
 
         result = _git_log_impl(repo, n=3)
-        assert len(result["commits"]) == 3
+        assert len(result.commits) == 3
 
 
 # ===========================================================================
@@ -258,15 +263,15 @@ class TestGitDiffImpl:
         from backend.tools.git import _git_diff_impl
 
         result = _git_diff_impl(repo_with_commit)
-        assert result["status"] == "ok"
-        assert result["diff"] == ""
+        assert result.status == "ok"
+        assert result.diff == ""
 
     def test_modified_file_shows_diff(self, dirty_repo: git.Repo) -> None:
         from backend.tools.git import _git_diff_impl
 
         result = _git_diff_impl(dirty_repo)
-        assert result["status"] == "ok"
-        assert "README.md" in result["diff"] or "Modified" in result["diff"]
+        assert result.status == "ok"
+        assert "README.md" in result.diff or "Modified" in result.diff
 
 
 # ===========================================================================
@@ -326,7 +331,7 @@ class TestGitCommitImpl:
         dirty_repo.index.add(["README.md"])
         result = _git_commit_impl(dirty_repo, message="fix: update README")
         assert result["status"] == "ok"
-        assert len(result["hash"]) == 7
+        assert len(as_str(result["hash"])) == 7
         assert result["message"] == "fix: update README"
 
     def test_nothing_staged_returns_error(self, repo_with_commit: git.Repo) -> None:
@@ -335,8 +340,8 @@ class TestGitCommitImpl:
         result = _git_commit_impl(repo_with_commit, message="empty commit")
         assert result["status"] == "error"
         assert (
-            "staged" in result["message"].lower()
-            or "nothing" in result["message"].lower()
+            "staged" in str(result["message"]).lower()
+            or "nothing" in str(result["message"]).lower()
         )
 
     def test_commit_all_flag(self, dirty_repo: git.Repo) -> None:
@@ -423,7 +428,7 @@ class TestGhToolsMetadata:
 
         assert result["status"] == "error"
         assert (
-            "gh" in result["message"].lower()
-            or "not found" in result["message"].lower()
+            "gh" in str(result["message"]).lower()
+            or "not found" in str(result["message"]).lower()
             or result["status"] == "error"
         )

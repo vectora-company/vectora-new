@@ -20,7 +20,7 @@ import uuid
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
@@ -50,6 +50,12 @@ from backend.llm.systemone.types import (
     SystemOneResponse,
     SystemOneUsage,
 )
+from backend.vtypes.contracts import JsonObject
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
+    from backend.vtypes.rerank import RerankCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +90,10 @@ class HarnessDecisionResult(BaseModel):
     used_fallback: bool = False
     from_cache: bool = False
     usage: SystemOneUsage = Field(default_factory=SystemOneUsage)
+
+
+#: Workspace, estado, versões, provider, modelo, parâmetros e perguntas.
+type _CacheKey = tuple[str | int | float | None, ...]
 
 
 @dataclass
@@ -198,7 +208,7 @@ class SystemOneHarness:
         policy_engine: DecisionPolicyEngine | None = None,
         budget_tracker: WorkspaceBudgetTracker | None = None,
         clock: Callable[[], float] = time.monotonic,
-        sleep_fn: Callable[[float], Any] = asyncio.sleep,
+        sleep_fn: Callable[[float], Awaitable[None]] = asyncio.sleep,
         max_provider_concurrency: int = 6,
         interactive_reserved_slots: int = 2,
         max_workspace_concurrency: int = 4,
@@ -237,11 +247,11 @@ class SystemOneHarness:
 
         self._mode_overrides: dict[tuple[str | None, str], PatternOperationMode] = {}
         self._response_cache: OrderedDict[
-            tuple[Any, ...], tuple[float, SystemOneResponse]
+            _CacheKey, tuple[float, SystemOneResponse]
         ] = OrderedDict()
         self._response_cache_max = 512
         self._response_cache_ttl_s = 300.0
-        self._inflight: dict[tuple[Any, ...], asyncio.Future[SystemOneResponse]] = {}
+        self._inflight: dict[_CacheKey, asyncio.Future[SystemOneResponse]] = {}
         self.last_rerank_status = "not_called"
 
     async def is_ready(self) -> bool:
@@ -676,7 +686,7 @@ class SystemOneHarness:
     async def decide_pattern(
         self,
         pattern_id: str,
-        state: dict[str, Any] | str,
+        state: JsonObject | str,
         *,
         workspace_id: str,
         pattern_version: str | None = None,
@@ -957,30 +967,31 @@ class SystemOneHarness:
                 ),
             )
         }
+        evidence: JsonObject = {
+            "task_id": task_id,
+            "current_status": current_status,
+            "allowed_targets": [*allowed_targets],
+            "card_version": card_version,
+            "evidence_summary": evidence_summary[:4000],
+        }
         return await self.decide_pattern(
             "kanban_transition_choice",
-            {
-                "task_id": task_id,
-                "current_status": current_status,
-                "allowed_targets": allowed_targets,
-                "card_version": card_version,
-                "evidence_summary": evidence_summary[:4000],
-            },
+            evidence,
             workspace_id=workspace_id,
             state_version=card_version,
             correlation_id=correlation_id,
             question_overrides=override,
         )
 
-    async def rerank_candidates(
+    async def rerank_candidates[Candidate: RerankCandidate](
         self,
         *,
         workspace_id: str,
         query: str,
-        candidates: list[dict[str, Any]],
+        candidates: list[Candidate],
         top_k: int | None = None,
         correlation_id: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Candidate]:
         """Ordena candidatos já autorizados via Score, preservando o ranking original em falha ou modo shadow."""
         self.last_rerank_status = "not_called"
         if not candidates:
@@ -994,8 +1005,8 @@ class SystemOneHarness:
         score_sem = asyncio.Semaphore(max(1, self._max_queue_size // 2))
 
         async def _score_one(
-            idx: int, item: dict[str, Any]
-        ) -> tuple[float, int, str, dict[str, Any]] | None:
+            idx: int, item: Candidate
+        ) -> tuple[float, int, str, Candidate] | None:
             """Executa a operação  score one."""
             cand_id = str(item.get("id", f"cand_{idx}"))
             snippet = str(item.get("snippet") or item.get("text") or "")[:2000]
@@ -1030,7 +1041,7 @@ class SystemOneHarness:
             # waits. Preserve the source order when the aggregate budget expires.
             self.last_rerank_status = "fallback"
             return list(candidates[:limit])
-        scored: list[tuple[float, int, str, dict[str, Any]]] = []
+        scored: list[tuple[float, int, str, Candidate]] = []
         for entry in results:
             if entry is None:
                 # Em shadow ou em qualquer falha/HITL, preserva integralmente o ranking original
@@ -1050,18 +1061,19 @@ class SystemOneHarness:
         goal: str,
         turn_summary: str,
         gates_passed: bool,
-        gate_results_summary: list[dict[str, Any]] | None = None,
+        gate_results_summary: list[JsonObject] | None = None,
         correlation_id: str | None = None,
     ) -> HarnessDecisionResult:
         """Avalia progresso de objetivo no Goal Mode incluindo evidências verificáveis dos gates."""
+        evidence: JsonObject = {
+            "goal": goal[:4000],
+            "turn_summary": turn_summary[:6000],
+            "gates_passed": gates_passed,
+            "gate_results": [*(gate_results_summary or [])],
+        }
         return await self.decide_pattern(
             "goal_completion_noul",
-            {
-                "goal": goal[:4000],
-                "turn_summary": turn_summary[:6000],
-                "gates_passed": gates_passed,
-                "gate_results": gate_results_summary or [],
-            },
+            evidence,
             workspace_id=workspace_id,
             correlation_id=correlation_id,
         )

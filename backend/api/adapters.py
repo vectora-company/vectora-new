@@ -8,7 +8,10 @@ stream_engine_events`` — a origem real do stream de ``StreamChat``/
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +129,7 @@ def classify_stream_error(exc: BaseException) -> tuple[str, str]:
 
 
 async def _record_turn_checkpoint(
-    workspace_id: str, thread_id: str, event: Any
+    workspace_id: str, thread_id: str, event: JsonObject
 ) -> None:
     """Grava um artefato de checkpoint de rewind após cada turno do orchestrador.
 
@@ -146,7 +149,7 @@ async def _record_turn_checkpoint(
 
         import git as gitpy
 
-        checkpoint_id = event.get("run_id") or str(uuid.uuid4())
+        checkpoint_id = str(event.get("run_id") or uuid.uuid4())
         msg = f"turn:{thread_id}:{checkpoint_id[:8]}"
 
         strategy: str

@@ -20,9 +20,12 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.settings import settings
+
+if TYPE_CHECKING:
+    import argparse
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +124,7 @@ def _prompt_server_url() -> str:
     return raw or default
 
 
-def cmd_signup(args: Any) -> int:
+def cmd_signup(args: argparse.Namespace) -> int:
     """Cria uma nova conta no servidor Vectora configurado."""
     import getpass
 
@@ -172,7 +175,7 @@ def cmd_signup(args: Any) -> int:
     return 0
 
 
-def cmd_login(args: Any) -> int:
+def cmd_login(args: argparse.Namespace) -> int:
     """Autentica com email e senha no servidor Vectora."""
     import getpass
 
@@ -212,7 +215,7 @@ def cmd_login(args: Any) -> int:
     return 0
 
 
-def cmd_logout(args: Any) -> int:
+def cmd_logout(args: argparse.Namespace) -> int:
     """Invalida o refresh token no servidor e limpa a sessão local."""
     import requests
 
@@ -237,7 +240,7 @@ def cmd_logout(args: Any) -> int:
     return 0
 
 
-def cmd_whoami(args: Any) -> int:
+def cmd_whoami(args: argparse.Namespace) -> int:
     """Mostra o usuário autenticado atual."""
     session = _load_session()
     if not session:
@@ -249,7 +252,7 @@ def cmd_whoami(args: Any) -> int:
     return 0
 
 
-def cmd_refresh(args: Any) -> int:
+def cmd_refresh(args: argparse.Namespace) -> int:
     """Força rotação de tokens (útil para debug)."""
     import requests
 

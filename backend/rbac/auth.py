@@ -21,11 +21,22 @@ import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, TypeAdapter
 
 from backend.settings import settings
+
+if TYPE_CHECKING:
+    import aiosqlite
+
+    from backend.vtypes.auth import (
+        DatabaseHealth,
+        InviteInfo,
+        InviteRecord,
+        PostgresRow,
+    )
+    from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +182,7 @@ def create_access_token(user: User) -> str:
     return jwt.encode(payload, _get_secret(), algorithm=_ALGORITHM)
 
 
-def decode_access_token(token: str) -> dict[str, Any]:
+def decode_access_token(token: str) -> JsonObject:
     """Valida e decodifica JWT. Lança JWTError/ExpiredSignatureError em falha."""
     import jwt
 
@@ -197,7 +208,7 @@ def _generate_refresh_token() -> str:
 # Conexão ao banco
 # ---------------------------------------------------------------------------
 
-_db_conn: Any = None
+_db_conn: aiosqlite.Connection | None = None
 
 
 async def close_db() -> None:
@@ -209,7 +220,7 @@ async def close_db() -> None:
         await connection.close()
 
 
-async def _get_db() -> Any:
+async def _get_db() -> aiosqlite.Connection:
     """Retorna conexão aiosqlite compartilhada com os schemas de auth.
 
     Garantia de produto: usuários, sessões/refresh tokens, audit e invites
@@ -230,20 +241,21 @@ async def _get_db() -> Any:
 
     db_path = settings.vectora_home / "checkpoints.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    _db_conn = await aiosqlite.connect(str(db_path))
-    _db_conn.row_factory = aiosqlite.Row
+    connection = await aiosqlite.connect(str(db_path))
+    connection.row_factory = aiosqlite.Row
     # Mesmos PRAGMAs de threads.py::_get_db() e do checkpointer em
     # agent_factory.py (D2) — sem busy_timeout, escritas concorrentes de
     # outra conexão pro mesmo checkpoints.db batem em "database is locked"
     # na hora em vez de esperar.
-    await _db_conn.executescript(
+    await connection.executescript(
         "PRAGMA journal_mode=WAL;PRAGMA busy_timeout=30000;PRAGMA synchronous=NORMAL;"
     )
-    await _ensure_schema(_db_conn)
-    return _db_conn
+    await _ensure_schema(connection)
+    _db_conn = connection
+    return connection
 
 
-async def _ensure_schema(db: Any) -> None:
+async def _ensure_schema(db: aiosqlite.Connection) -> None:
     """Cria tabelas de auth se não existirem."""
     await db.executescript("""
         CREATE TABLE IF NOT EXISTS users (
@@ -328,7 +340,7 @@ async def _ensure_schema(db: Any) -> None:
     await db.commit()
 
 
-async def _backfill_usernames(db: Any) -> None:
+async def _backfill_usernames(db: aiosqlite.Connection) -> None:
     """Preenche ``username`` para rows que ainda não têm.
 
     Deriva do ``name`` (ou do local-part do email), garantindo unicidade dentro
@@ -358,7 +370,7 @@ async def _backfill_usernames(db: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _col(row: Any, key: str) -> str:
+def _col(row: aiosqlite.Row, key: str) -> str:
     """Lê uma coluna textual da row tolerando ausência (rows legadas/parciais)."""
     try:
         return row[key] or ""
@@ -366,7 +378,7 @@ def _col(row: Any, key: str) -> str:
         return ""
 
 
-def _row_to_user(row: Any) -> UserInDB:
+def _row_to_user(row: aiosqlite.Row) -> UserInDB:
     import json
 
     env = {}
@@ -403,7 +415,7 @@ def _row_to_user(row: Any) -> UserInDB:
     )
 
 
-async def _count_users(db: Any) -> int:
+async def _count_users(db: aiosqlite.Connection) -> int:
     async with db.execute("SELECT COUNT(*) FROM users") as cur:
         row = await cur.fetchone()
     return row[0] if row else 0
@@ -449,7 +461,7 @@ async def username_taken(username: str) -> bool:
         return await cur.fetchone() is not None
 
 
-async def _taken_usernames(db: Any) -> set[str]:
+async def _taken_usernames(db: aiosqlite.Connection) -> set[str]:
     async with db.execute("SELECT username FROM users") as cur:
         rows = await cur.fetchall()
     return {r["username"] for r in rows if r["username"]}
@@ -949,7 +961,7 @@ async def set_env_override(
         overrides = _local_env_overrides()
         overrides[key] = value
         _apply_oauth_source(overrides, key, source)
-        runtime_settings.set(_LOCAL_ENV_OVERRIDES_KEY, overrides)
+        runtime_settings.set(_LOCAL_ENV_OVERRIDES_KEY, {**overrides})
         return
 
     import json
@@ -981,7 +993,7 @@ async def delete_env_override(user_id: str, key: str) -> None:
         overrides = _local_env_overrides()
         overrides.pop(key, None)
         overrides.pop(_OAUTH_SOURCE_PREFIX + key, None)
-        runtime_settings.set(_LOCAL_ENV_OVERRIDES_KEY, overrides)
+        runtime_settings.set(_LOCAL_ENV_OVERRIDES_KEY, {**overrides})
         return
 
     import json
@@ -1087,7 +1099,7 @@ async def create_invite(
     return token, expires_at
 
 
-async def validate_invite(token: str) -> dict[str, Any] | None:
+async def validate_invite(token: str) -> InviteInfo | None:
     """Valida um convite. Retorna {email, role, expires_at} se utilizável.
 
     Retorna None se o token for inexistente, já usado ou expirado.
@@ -1102,7 +1114,7 @@ async def validate_invite(token: str) -> dict[str, Any] | None:
         return None
     return {
         "email": row["email"],
-        "role": row["role"],
+        "role": TypeAdapter(Role).validate_python(row["role"]),
         "expires_at": row["expires_at"],
     }
 
@@ -1121,7 +1133,7 @@ async def consume_invite(token: str, user_id: str) -> None:
     )
 
 
-async def list_invites() -> list[dict[str, Any]]:
+async def list_invites() -> list[InviteRecord]:
     """Lista convites pendentes (não usados e não expirados)."""
     db = await _get_db()
     now_str = datetime.now(UTC).isoformat()
@@ -1136,7 +1148,7 @@ async def list_invites() -> list[dict[str, Any]]:
         {
             "token_hash": r["token_hash"],
             "email": r["email"],
-            "role": r["role"],
+            "role": TypeAdapter(Role).validate_python(r["role"]),
             "created_by": r["created_by"],
             "expires_at": r["expires_at"],
             "created_at": r["created_at"],
@@ -1161,7 +1173,7 @@ async def revoke_invite(token_hash: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def _issue_refresh_token(db: Any, user_id: str) -> str:
+async def _issue_refresh_token(db: aiosqlite.Connection, user_id: str) -> str:
     """Gera, persiste e retorna um novo refresh token opaco."""
     token = _generate_refresh_token()
     token_hash = _hash_refresh_token(token)
@@ -1194,7 +1206,7 @@ _REDACTED_METADATA_FIELDS = frozenset(
 )
 
 
-def _redact_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+def _redact_metadata(metadata: JsonObject) -> JsonObject:
     """Substitui por `"[REDACTED]"` qualquer chave de `metadata` cujo nome
     (case-insensitive) bata com `_REDACTED_METADATA_FIELDS` — nunca deixa o
     valor real chegar ao audit log persistido."""
@@ -1205,12 +1217,12 @@ def _redact_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _write_audit(
-    db: Any,
+    db: aiosqlite.Connection,
     user_id: str | None,
     action: str,
     *,
     success: bool = True,
-    metadata: dict[str, Any] | None = None,
+    metadata: JsonObject | None = None,
     target_type: str | None = None,
     target_id: str | None = None,
     ip: str = "",
@@ -1248,12 +1260,12 @@ write_audit = _write_audit
 
 
 async def write_audit_required(
-    db: Any,
+    db: aiosqlite.Connection,
     user_id: str | None,
     action: str,
     *,
     success: bool = True,
-    metadata: dict[str, Any] | None = None,
+    metadata: JsonObject | None = None,
     target_type: str | None = None,
     target_id: str | None = None,
     ip: str = "",
@@ -1272,7 +1284,7 @@ async def write_audit_required(
     )
 
 
-async def get_db_for_audit() -> Any:
+async def get_db_for_audit() -> aiosqlite.Connection:
     """Expõe conexão para handlers externos escreverem audit entries."""
     return await _get_db()
 
@@ -1299,7 +1311,7 @@ class PostgresAuthDB:
     Placeholders asyncpg: ``$1, $2, ...`` (diferente do ``?`` do SQLite).
     """
 
-    async def health(self) -> dict[str, object]:
+    async def health(self) -> DatabaseHealth:
         """Verifica se a conexão Postgres está acessível."""
         try:
             from backend.storage.factory import get_pg_pool
@@ -1354,7 +1366,7 @@ class PostgresAuthDB:
             )
         return uid
 
-    async def get_user_by_email(self, email: str) -> dict[str, object] | None:
+    async def get_user_by_email(self, email: str) -> PostgresRow | None:
         """Retorna o usuário pelo e-mail ou None."""
         from backend.storage.factory import get_pg_pool
 
@@ -1363,7 +1375,7 @@ class PostgresAuthDB:
             row = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email)
         return dict(row) if row else None
 
-    async def get_user_by_id(self, user_id: str) -> dict[str, object] | None:
+    async def get_user_by_id(self, user_id: str) -> PostgresRow | None:
         """Retorna o usuário pelo ID ou None."""
         from backend.storage.factory import get_pg_pool
 

@@ -8,8 +8,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 from anyio import BrokenResourceError
@@ -27,7 +29,7 @@ _DUMMY_SERVER_CRASHES = str(
 
 
 @pytest.fixture(autouse=True)
-async def _reset_global_client(monkeypatch):
+async def _reset_global_client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     """Cada teste começa sem client global cacheado — evita vazamento de
     estado entre testes (o módulo usa um singleton lazy).
 
@@ -55,19 +57,21 @@ async def _reset_global_client(monkeypatch):
 
 
 @pytest.fixture
-def _enable_mcp(monkeypatch):
+def _enable_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mcp_tool_module.settings, "enable_mcp", True)
 
 
 @pytest.fixture
-def _dummy_server_settings(monkeypatch):
+def _dummy_server_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mcp_tool_module.settings, "mcp_command", sys.executable)
     monkeypatch.setattr(mcp_tool_module.settings, "mcp_command_args", [_DUMMY_SERVER])
     monkeypatch.setattr(mcp_tool_module.settings, "mcp_server_url", None)
 
 
 class TestSafeSubprocessEnv:
-    def test_allowlist_nunca_inclui_chave_sensivel(self, monkeypatch):
+    def test_allowlist_nunca_inclui_chave_sensivel(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("VECTORA_ANTHROPIC_API_KEY", "sk-segredo")
         monkeypatch.setenv("PATH", "/usr/bin")
         env = _safe_subprocess_env()
@@ -88,7 +92,7 @@ class TestSafeSubprocessEnv:
 class TestVectoraMCPClientReal:
     """Conecta de verdade num subprocesso stdio (dummy_mcp_server.py)."""
 
-    async def test_conecta_lista_tools_e_chama_tool_com_sucesso(self):
+    async def test_conecta_lista_tools_e_chama_tool_com_sucesso(self) -> None:
         client = VectoraMCPClient()
         try:
             await client.connect(
@@ -113,8 +117,8 @@ class TestVectoraMCPClientReal:
             await client.aclose()
 
     async def test_launcher_de_ambiente_e_configuracao_usam_o_mesmo_proxy(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         captured: list[StdioServerParameters] = []
 
         class FakeSession:
@@ -122,7 +126,7 @@ class TestVectoraMCPClientReal:
                 return None
 
         @asynccontextmanager
-        async def fake_stdio(params):
+        async def fake_stdio(params: StdioServerParameters):
             captured.append(params)
             yield object(), object()
 
@@ -167,8 +171,8 @@ class TestVectoraMCPClientReal:
         ]
 
     async def test_env_do_subprocesso_e_allowlist_nao_variavel_sensivel(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("VECTORA_SEGREDO_DE_TESTE", "nao-deveria-vazar")
         client = VectoraMCPClient()
         try:
@@ -217,7 +221,7 @@ class TestVectoraMCPClientReal:
         finally:
             await client.aclose()
 
-    async def test_servidor_que_cai_no_handshake_nao_quebra_connect(self):
+    async def test_servidor_que_cai_no_handshake_nao_quebra_connect(self) -> None:
         """Um servidor configurado que falha ao iniciar não deve impedir
         outros servidores (aqui, só ele mesmo) — connect() nunca propaga."""
         client = VectoraMCPClient()
@@ -235,7 +239,7 @@ class TestVectoraMCPClientReal:
         finally:
             await client.aclose()
 
-    async def test_tool_desconhecida_levanta_keyerror(self):
+    async def test_tool_desconhecida_levanta_keyerror(self) -> None:
         client = VectoraMCPClient()
         try:
             await client.connect(
@@ -252,7 +256,7 @@ class TestVectoraMCPClientReal:
         finally:
             await client.aclose()
 
-    async def test_transporte_desconhecido_nao_derruba_connect(self):
+    async def test_transporte_desconhecido_nao_derruba_connect(self) -> None:
         """`connect()` captura falha por servidor (inclui transporte
         desconhecido) — nunca propaga, o cliente segue usável sem essa
         conexão específica."""
@@ -274,7 +278,7 @@ class TestVectoraMCPClientAcloseNuncaPropaga:
     `aclose()` precisa absorver esse ruído de encerramento, nunca propagar,
     senão uma chamada que já teve sucesso é reportada como falha."""
 
-    async def test_erro_no_teardown_do_stack_nao_propaga_e_limpa_estado(self):
+    async def test_erro_no_teardown_do_stack_nao_propaga_e_limpa_estado(self) -> None:
         client = VectoraMCPClient()
         try:
             await client.connect(
@@ -294,7 +298,7 @@ class TestVectoraMCPClientAcloseNuncaPropaga:
             # subprocess real do servidor dummy nunca é encerrado.
             real_aclose = client._stack.aclose
 
-            async def _stack_aclose_quebrado() -> None:
+            async def _stack_aclose_quebrado() -> NoReturn:
                 with contextlib.suppress(Exception):
                     await real_aclose()
                 raise ExceptionGroup(
@@ -315,39 +319,46 @@ class TestVectoraMCPClientAcloseNuncaPropaga:
 class TestCallMcpToolIntegration:
     """Fluxo ponta a ponta da tool exposta ao agente."""
 
-    async def test_mcp_desabilitado_retorna_aviso(self, monkeypatch):
+    async def test_mcp_desabilitado_retorna_aviso(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(mcp_tool_module.settings, "enable_mcp", False)
         result = await call_mcp_tool(tool_name="echo", arguments="{}")
         assert "desabilitado" in result.lower()
 
-    async def test_arguments_json_invalido_retorna_erro_tipado(self, _enable_mcp):
+    async def test_arguments_json_invalido_retorna_erro_tipado(
+        self, _enable_mcp: None
+    ) -> None:
         result = await call_mcp_tool(tool_name="echo", arguments="{invalido")
         assert "JSON válido" in result
 
     async def test_nenhum_servidor_configurado_retorna_aviso(
-        self, _enable_mcp, monkeypatch
-    ):
+        self, _enable_mcp: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(mcp_tool_module.settings, "mcp_server_url", None)
         monkeypatch.setattr(mcp_tool_module.settings, "mcp_command", None)
         result = await call_mcp_tool(tool_name="echo", arguments="{}")
         assert "Nenhuma tool MCP disponível" in result
 
     async def test_happy_path_chama_tool_do_servidor_real(
-        self, _enable_mcp, _dummy_server_settings
-    ):
+        self, _enable_mcp: None, _dummy_server_settings: None
+    ) -> None:
         result = await call_mcp_tool(tool_name="echo", arguments='{"text": "mundo"}')
         assert result == "echo: mundo"
 
     async def test_tool_inexistente_lista_disponiveis(
-        self, _enable_mcp, _dummy_server_settings
-    ):
+        self, _enable_mcp: None, _dummy_server_settings: None
+    ) -> None:
         result = await call_mcp_tool(tool_name="nao_existe", arguments="{}")
         assert "não encontrada" in result
         assert "echo" in result
 
     async def test_timeout_retorna_erro_tipado(
-        self, _enable_mcp, _dummy_server_settings, monkeypatch
-    ):
+        self,
+        _enable_mcp: None,
+        _dummy_server_settings: None,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         # `mcp_timeout=1` + tool que dorme 5s (não `mcp_timeout=0`): cancelar
         # bem no meio do handshake dispara uma race real no teardown do
         # stdio_client do SDK oficial no Windows (ProactorEventLoop) — trava

@@ -151,7 +151,9 @@ async def _spawned_backend(tmp_path: Path):
                 await proc.wait()
 
 
-async def test_backend_spawnado_serve_a_spa_real_e_responde_health(_spawned_backend):
+async def test_backend_spawnado_serve_a_spa_real_e_responde_health(
+    _spawned_backend,
+) -> None:
     _proc, port = _spawned_backend
 
     async with httpx.AsyncClient(
@@ -173,7 +175,7 @@ async def test_backend_spawnado_serve_a_spa_real_e_responde_health(_spawned_back
         assert missing.text == index.text
 
 
-async def test_encerrar_o_processo_libera_a_porta_de_verdade(_spawned_backend):
+async def test_encerrar_o_processo_libera_a_porta_de_verdade(_spawned_backend) -> None:
     proc, port = _spawned_backend
 
     proc.terminate()

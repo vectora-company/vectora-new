@@ -12,6 +12,7 @@ import json
 
 import httpx
 import pytest
+from httpx import Request, Response
 from pydantic import BaseModel
 
 from backend.llm.google.chat_client import GoogleChatClient
@@ -60,8 +61,8 @@ def _resposta_ok(texto: str = "Olá", **extra) -> dict:
 
 
 class TestAgenerate:
-    async def test_prompt_simples_devolve_conteudo(self):
-        def handler(_req):
+    async def test_prompt_simples_devolve_conteudo(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json=_resposta_ok("Olá do Gemini"))
 
         resultado = await _client(handler).agenerate(
@@ -71,8 +72,8 @@ class TestAgenerate:
         assert resultado.text() == "Olá do Gemini"
         assert resultado.role == MessageRole.ASSISTANT
 
-    async def test_resposta_sem_candidates_vira_erro_tipado(self):
-        def handler(_req):
+    async def test_resposta_sem_candidates_vira_erro_tipado(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, json={"promptFeedback": {"blockReason": "SAFETY"}}
             )
@@ -82,7 +83,7 @@ class TestAgenerate:
 
 
 class TestConversaoDeMensagens:
-    async def test_system_vira_systeminstruction_e_roles_traduzidos(self):
+    async def test_system_vira_systeminstruction_e_roles_traduzidos(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -100,7 +101,7 @@ class TestConversaoDeMensagens:
         assert capturado["systemInstruction"]["parts"][0]["text"] == "sistema"
         assert [c["role"] for c in capturado["contents"]] == ["user", "model"]
 
-    async def test_tool_message_vira_functionresponse_role_user(self):
+    async def test_tool_message_vira_functionresponse_role_user(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -125,7 +126,7 @@ class TestConversaoDeMensagens:
         assert fr["name"] == "somar"
         assert fr["response"] == {"result": "42"}
 
-    async def test_assistant_com_tool_calls_vira_functioncall_parts(self):
+    async def test_assistant_com_tool_calls_vira_functioncall_parts(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -146,7 +147,7 @@ class TestConversaoDeMensagens:
         assert partes[0] == {"text": "vou somar"}
         assert partes[1] == {"functionCall": {"name": "somar", "args": {"a": 1}}}
 
-    async def test_mensagem_de_role_desconhecido_falha(self):
+    async def test_mensagem_de_role_desconhecido_falha(self) -> None:
         def handler(_req):
             return httpx.Response(200, json=_resposta_ok())
 
@@ -156,7 +157,7 @@ class TestConversaoDeMensagens:
         with pytest.raises(ValueError, match="extraterrestre"):
             await _client(handler).agenerate([estranha])
 
-    async def test_bloco_de_imagem_nao_e_descartado(self):
+    async def test_bloco_de_imagem_nao_e_descartado(self) -> None:
         """Regressão: `_to_google_contents` usava `msg.text()` pra mensagens
         `user`, que só concatena blocos `text` — um anexo de imagem
         desaparecia do payload sem erro nem log."""
@@ -180,7 +181,7 @@ class TestConversaoDeMensagens:
         assert {"text": "olha essa imagem"} in partes
         assert {"inlineData": {"mimeType": "image/png", "data": "abc"}} in partes
 
-    async def test_imagem_com_url_direta_vira_filedata(self):
+    async def test_imagem_com_url_direta_vira_filedata(self) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -201,7 +202,9 @@ class TestConversaoDeMensagens:
 
 
 class TestToolCalling:
-    async def test_tool_spec_vira_functiondeclarations_sem_additionalproperties(self):
+    async def test_tool_spec_vira_functiondeclarations_sem_additionalproperties(
+        self,
+    ) -> None:
         capturado: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -232,7 +235,7 @@ class TestToolCalling:
 
     async def test_tool_com_parametro_de_modelo_aninhado_inline_refs_em_vez_de_defs(
         self,
-    ):
+    ) -> None:
         """Pydantic v2 sempre emite `$defs`/`$ref` pra qualquer parâmetro
         tipado como `BaseModel` aninhado (mesmo usado uma única vez) — e a
         API do Gemini rejeita as duas chaves com 400 ("Cannot find field"),
@@ -270,8 +273,8 @@ class TestToolCalling:
         assert item_schema["properties"]["nome"]["type"] == "string"
         assert item_schema["properties"]["qtd"]["type"] == "integer"
 
-    async def test_function_call_nao_streaming_volta_montada(self):
-        def handler(_req):
+    async def test_function_call_nao_streaming_volta_montada(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -303,13 +306,13 @@ class TestToolCalling:
 
 
 class TestStreaming:
-    async def test_chunks_de_texto_concatenam_na_ordem(self):
+    async def test_chunks_de_texto_concatenam_na_ordem(self) -> None:
         corpo = (
             b'data: {"candidates":[{"content":{"parts":[{"text":"Oi"}]}}]}\n\n'
             b'data: {"candidates":[{"content":{"parts":[{"text":" mundo"}]}}]}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -324,10 +327,12 @@ class TestStreaming:
 
         assert texto == "Oi mundo"
 
-    async def test_chunk_sem_candidates_e_com_promptfeedback_vira_erro_tipado(self):
+    async def test_chunk_sem_candidates_e_com_promptfeedback_vira_erro_tipado(
+        self,
+    ) -> None:
         corpo = b'data: {"promptFeedback":{"blockReason":"SAFETY"}}\n\n'
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -340,8 +345,8 @@ class TestStreaming:
                 )
             ]
 
-    async def test_stream_sem_nenhum_chunk_util_nao_trava(self):
-        def handler(_req):
+    async def test_stream_sem_nenhum_chunk_util_nao_trava(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 content=b"",
@@ -363,13 +368,13 @@ class TestStreamingToolCallsEUsage:
     como total cumulativo — nunca soma entre chunks, só o último valor
     importa."""
 
-    async def test_function_call_sai_completa_num_unico_chunk(self):
+    async def test_function_call_sai_completa_num_unico_chunk(self) -> None:
         corpo = (
             b'data: {"candidates":[{"content":{"parts":[{"functionCall":'
             b'{"name":"file_read","args":{"path":"a.py"}}}]}}]}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -385,7 +390,7 @@ class TestStreamingToolCallsEUsage:
         assert tc.name == "file_read"
         assert json.loads(tc.args_fragment) == {"path": "a.py"}
 
-    async def test_usage_repetido_em_varios_chunks_nao_soma(self):
+    async def test_usage_repetido_em_varios_chunks_nao_soma(self) -> None:
         corpo = (
             b'data: {"candidates":[{"content":{"parts":[{"text":"oi"}]}}],'
             b'"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":1,'
@@ -395,7 +400,7 @@ class TestStreamingToolCallsEUsage:
             b'"totalTokenCount":13}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )

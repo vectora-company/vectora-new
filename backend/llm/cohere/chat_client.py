@@ -29,7 +29,8 @@ from typing import TYPE_CHECKING, Any
 
 from backend.llm.cohere.client import CohereClient, CohereResponseError
 from backend.llm.media_parts import AcceptedMedia, prepare_content, resolve_native_media
-from backend.vtypes.contracts import UsageSnapshot
+from backend.llm.tool_schema import chat_completions_tool
+from backend.vtypes.contracts import JsonObject, JsonValue, UsageSnapshot
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -54,14 +55,14 @@ _ROLE_POR_TIPO = {
 
 def _to_cohere_content(
     content: list[ContentBlock], accepted: AcceptedMedia | None = None
-) -> str | list[dict]:
+) -> str | list[JsonValue]:
     """Bloco `text` vira string simples (caso comum); qualquer bloco
     `image_url` presente força o formato de lista de partes de conteúdo —
     nunca descarta o bloco de imagem só porque concatenar texto perderia."""
     content = prepare_content(content, accepted or {})
     if not any(b.kind in {"image_url", "media"} for b in content):
         return "".join(b.text or "" for b in content if b.kind == "text")
-    partes: list[dict] = []
+    partes: list[JsonValue] = []
     for bloco in content:
         if bloco.kind == "text" and bloco.text:
             partes.append({"type": "text", "text": bloco.text})
@@ -77,7 +78,7 @@ def _to_cohere_content(
     return partes
 
 
-def _assistant_tool_calls(tool_calls: list[ToolCall]) -> list[dict]:
+def _assistant_tool_calls(tool_calls: list[ToolCall]) -> list[JsonValue]:
     return [
         {
             "id": tc.id,
@@ -93,11 +94,11 @@ def _assistant_tool_calls(tool_calls: list[ToolCall]) -> list[dict]:
 
 def _to_cohere_messages(
     messages: list[VMessage], accepted: AcceptedMedia | None = None
-) -> list[dict]:
+) -> list[JsonValue]:
     """Traduz ``VMessage`` pro formato `messages` da Chat API v2. Tool
     result (role TOOL) vira mensagem `tool` com `content` em lista de
     blocos `document` — o v2 não aceita string solta nesse campo."""
-    traduzidas: list[dict] = []
+    traduzidas: list[JsonValue] = []
 
     for msg in messages:
         if msg.role == MessageRole.TOOL:
@@ -121,7 +122,7 @@ def _to_cohere_messages(
             raise ValueError(erro)
 
         if role == "assistant" and msg.tool_calls:
-            entrada: dict[str, Any] = {
+            entrada: JsonObject = {
                 "role": "assistant",
                 "tool_calls": _assistant_tool_calls(msg.tool_calls),
             }
@@ -187,16 +188,16 @@ class CohereChatClient:
         max_tokens: int | None,
         accepted: AcceptedMedia | None = None,
     ) -> dict:
-        corpo: dict[str, Any] = {
+        corpo: JsonObject = {
             "model": self.model,
-            "messages": _to_cohere_messages(messages, accepted),
+            "messages": [*_to_cohere_messages(messages, accepted)],
         }
         if temperature is not None:
             corpo["temperature"] = temperature
         if max_tokens is not None:
             corpo["max_tokens"] = max_tokens
         if tools:
-            corpo["tools"] = [t.openai_schema() for t in tools]
+            corpo["tools"] = [chat_completions_tool(t) for t in tools]
         return corpo
 
     async def _accepted_media(self, messages: list[VMessage]) -> AcceptedMedia:

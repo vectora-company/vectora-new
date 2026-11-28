@@ -27,7 +27,12 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -69,16 +74,22 @@ _RECORD_FIELDS = (
 )
 
 
+class _Printable(Protocol):
+    """Argumento de tool que só precisa saber virar texto."""
+
+    def __str__(self) -> str: ...
+
+
 def _truncate(text: str) -> str:
     """Executa a operação  truncate."""
     return text if len(text) <= _MAX_FIELD_LEN else text[:_MAX_FIELD_LEN] + "…"
 
 
-def _summarize_args(args: dict[str, Any] | None) -> dict[str, str]:
+def _summarize_args(args: Mapping[str, JsonValue | _Printable] | None) -> JsonObject:
     """Reduz args de tool call a strings curtas — nunca grava payload completo."""
     if not args:
         return {}
-    summary: dict[str, str] = {}
+    summary: JsonObject = {}
     for key, value in args.items():
         try:
             text = str(value)
@@ -93,7 +104,7 @@ class TelemetryJSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Executa a operação format."""
-        payload: dict[str, Any] = {
+        payload: JsonObject = {
             "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
             "event": getattr(record, "telemetry_event", record.getMessage()),
         }
@@ -165,7 +176,7 @@ class VectoraTelemetry:
 
         return True
 
-    def _emit(self, level: int, event: str, **fields: Any) -> None:
+    def _emit(self, level: int, event: str, **fields: JsonValue) -> None:
         """Executa a operação  emit."""
         if not self._enabled():
             return
@@ -198,7 +209,7 @@ class VectoraTelemetry:
     async def record_tool_call(
         self,
         tool_name: str,
-        args: dict[str, Any] | None,
+        args: Mapping[str, JsonValue | _Printable] | None,
         duration_ms: float,
         success: bool,
         error: BaseException | None = None,
@@ -209,7 +220,7 @@ class VectoraTelemetry:
         Nunca propaga exceção — nem a recebida em ``error`` (apenas registrada),
         nem falhas internas de gravação.
         """
-        fields: dict[str, Any] = {
+        fields: JsonObject = {
             "tool_name": tool_name,
             "args_summary": _summarize_args(args),
             "duration_ms": round(duration_ms, 2),
@@ -227,10 +238,10 @@ class VectoraTelemetry:
         exc: BaseException,
         *,
         include_message: bool = True,
-        **extra: Any,
+        **extra: JsonValue,
     ) -> None:
         """Grava um erro não tratado. Síncrono — chamável de qualquer bloco except."""
-        fields: dict[str, Any] = {
+        fields: JsonObject = {
             "source": source,
             "error_type": type(exc).__name__,
             **extra,
@@ -239,14 +250,14 @@ class VectoraTelemetry:
             fields["error_message"] = _truncate(str(exc))
         self._emit(logging.ERROR, "unhandled_error", **fields)
 
-    def record_cancellation(self, source: str, **extra: Any) -> None:
+    def record_cancellation(self, source: str, **extra: JsonValue) -> None:
         """Grava um cancelamento pedido pelo usuário ou pelo shutdown.
 
         Cancelar não é falha: sai como INFO, fora do ``unhandled_error``.
         """
         self._emit(logging.INFO, "turn_cancelled", source=source, **extra)
 
-    def record_media_quota(self, event: str, **fields: Any) -> None:
+    def record_media_quota(self, event: str, **fields: JsonValue) -> None:
         """Emite um evento de quota sem aceitar conteúdo de mídia.
 
         O contrato limita os campos a identificadores e valores agregados;

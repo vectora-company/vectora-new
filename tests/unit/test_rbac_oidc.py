@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -31,14 +32,14 @@ _DISCOVERY = oidc.OIDCDiscovery(
 
 
 @pytest.fixture(autouse=True)
-def _clean_pending_logins():
+def _clean_pending_logins() -> Iterator[None]:
     oidc._pending_logins.clear()
     yield
     oidc._pending_logins.clear()
 
 
 class TestPKCE:
-    def test_gera_par_s256_valido(self):
+    def test_gera_par_s256_valido(self) -> None:
         verifier, challenge = oidc.generate_pkce_pair()
 
         assert len(verifier) >= 43
@@ -58,7 +59,7 @@ class TestPKCE:
 
 
 class TestDiscover:
-    async def test_descoberta_feliz_devolve_endpoints(self):
+    async def test_descoberta_feliz_devolve_endpoints(self) -> None:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "authorization_endpoint": _DISCOVERY.authorization_endpoint,
@@ -78,7 +79,7 @@ class TestDiscover:
         assert result.authorization_endpoint == _DISCOVERY.authorization_endpoint
         assert result.userinfo_endpoint == "https://idp.example.com/userinfo"
 
-    async def test_idp_fora_do_ar_ou_resposta_incompleta_viram_oidc_error(self):
+    async def test_idp_fora_do_ar_ou_resposta_incompleta_viram_oidc_error(self) -> None:
         """Erro/borda: falha de rede e JSON sem os campos obrigatórios viram
         `OIDCError` tipado, nunca a exceção crua de `httpx`."""
         import httpx
@@ -108,7 +109,7 @@ class TestDiscover:
 
 
 class TestVerifyIdToken:
-    def test_token_valido_devolve_claims(self):
+    def test_token_valido_devolve_claims(self) -> None:
         fake_claims = {"sub": "user-1", "email": "dev@example.com"}
         fake_signing_key = MagicMock()
         fake_signing_key.key = "fake-key"
@@ -125,7 +126,9 @@ class TestVerifyIdToken:
         assert result == fake_claims
         mock_decode.assert_called_once()
 
-    def test_assinatura_invalida_vira_oidc_error_sem_propagar_jwterror_cru(self):
+    def test_assinatura_invalida_vira_oidc_error_sem_propagar_jwterror_cru(
+        self,
+    ) -> None:
         import jwt as pyjwt
 
         with patch("jwt.PyJWKClient") as mock_jwk_cls:
@@ -137,7 +140,7 @@ class TestVerifyIdToken:
 
 
 class TestStartAndCompleteLogin:
-    def test_start_login_gera_url_e_guarda_state_pendente(self):
+    def test_start_login_gera_url_e_guarda_state_pendente(self) -> None:
         url = oidc.start_login(
             _DISCOVERY, _CONFIG, redirect_uri="https://app.local/callback"
         )
@@ -147,7 +150,7 @@ class TestStartAndCompleteLogin:
         assert "code_challenge_method=S256" in url
         assert len(oidc._pending_logins) == 1
 
-    async def test_complete_login_feliz_e_state_desconhecido_vira_erro(self):
+    async def test_complete_login_feliz_e_state_desconhecido_vira_erro(self) -> None:
         """Erro/borda: `state` nunca visto (ou já consumido) é rejeitado
         como possível CSRF — nunca completa o login silenciosamente."""
         with pytest.raises(oidc.OIDCError, match="state"):
@@ -178,7 +181,7 @@ class TestStartAndCompleteLogin:
             await oidc.complete_login(_DISCOVERY, _CONFIG, state=state, code="abc")
         assert url  # sanity: url foi de fato gerada no arrange acima
 
-    async def test_resposta_do_idp_sem_id_token_vira_oidc_error(self):
+    async def test_resposta_do_idp_sem_id_token_vira_oidc_error(self) -> None:
         oidc.start_login(_DISCOVERY, _CONFIG, redirect_uri="https://app.local/callback")
         state = next(iter(oidc._pending_logins))
 
@@ -189,7 +192,9 @@ class TestStartAndCompleteLogin:
             with pytest.raises(oidc.OIDCError, match="id_token"):
                 await oidc.complete_login(_DISCOVERY, _CONFIG, state=state, code="abc")
 
-    def test_state_expirado_e_limpo_e_tratado_como_desconhecido(self, monkeypatch):
+    def test_state_expirado_e_limpo_e_tratado_como_desconhecido(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: TTL de 10min — state velho nunca completa login,
         mesmo com code/state corretos."""
         oidc.start_login(_DISCOVERY, _CONFIG, redirect_uri="https://app.local/callback")

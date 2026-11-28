@@ -23,7 +23,7 @@ from backend.llm.media_parts import prepare_content
 from backend.llm.openai.client import OpenAIClient, OpenAIResponseError
 from backend.llm.prompt_cache import prompt_cache_key
 from backend.llm.reasoning import openai_reasoning, reasoning_effort
-from backend.vtypes.contracts import UsageSnapshot
+from backend.vtypes.contracts import JsonObject, JsonValue, UsageSnapshot
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -40,17 +40,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _normalize_strict_schema(schema: dict) -> dict:
+def _normalize_strict_schema(schema: JsonObject) -> JsonObject:
     """Aplica os requisitos do `strict:true` da Responses API recursivamente:
     `additionalProperties:false` em todo objeto, e todo campo em `required`
     (campos opcionais viram `type:[tipo, "null"]`)."""
     schema = dict(schema)
-    if schema.get("type") == "object" and "properties" in schema:
-        props = schema["properties"]
-        original_required = set(schema.get("required") or [])
-        novo_props: dict[str, Any] = {}
+    props = schema.get("properties")
+    if schema.get("type") == "object" and isinstance(props, dict):
+        required = schema.get("required")
+        original_required = (
+            {name for name in required if isinstance(name, str)}
+            if isinstance(required, list)
+            else set()
+        )
+        novo_props: JsonObject = {}
         for nome, subschema in props.items():
-            sub = (
+            sub: JsonValue = (
                 _normalize_strict_schema(subschema)
                 if isinstance(subschema, dict)
                 else subschema
@@ -65,12 +70,12 @@ def _normalize_strict_schema(schema: dict) -> dict:
                     sub = {**sub, "type": [tipo, "null"]}
             novo_props[nome] = sub
         schema["properties"] = novo_props
-        schema["required"] = list(props.keys())
+        schema["required"] = [*props]
         schema["additionalProperties"] = False
     return schema
 
 
-def _to_openai_tool(spec: ToolSpec) -> dict:
+def _to_openai_tool(spec: ToolSpec) -> JsonObject:
     """Converte um ``ToolSpec`` pro formato flat da Responses API
     (`{type, name, description, parameters, strict}`) — diferente do formato
     aninhado `{type:"function", function:{...}}` da Chat Completions.
@@ -95,7 +100,7 @@ _ROLE_POR_TIPO = {
 }
 
 
-def _to_openai_content(content: list[ContentBlock]) -> str | list[dict]:
+def _to_openai_content(content: list[ContentBlock]) -> str | list[JsonValue]:
     """Bloco `text` vira string simples (caso comum); qualquer bloco
     `image_url` presente força o formato de lista de partes da Responses API
     (`input_text`/`input_image`) — nunca descarta o bloco de imagem só
@@ -103,7 +108,7 @@ def _to_openai_content(content: list[ContentBlock]) -> str | list[dict]:
     content = prepare_content(content, "openai")
     if not any(b.kind in {"image_url", "media"} for b in content):
         return "".join(b.text or "" for b in content if b.kind == "text")
-    partes: list[dict] = []
+    partes: list[JsonValue] = []
     for bloco in content:
         if bloco.kind == "text" and bloco.text:
             partes.append({"type": "input_text", "text": bloco.text})
@@ -120,9 +125,9 @@ def _to_openai_content(content: list[ContentBlock]) -> str | list[dict]:
     return partes
 
 
-def _tool_output(msg: VMessage) -> str | list[dict]:
+def _tool_output(msg: VMessage) -> str | list[JsonValue]:
     """``function_call_output`` aceita lista de partes com ``input_image``."""
-    imagens = [
+    imagens: list[JsonValue] = [
         {"type": "input_image", "image_url": b.image_url}
         for b in msg.content
         if b.kind == "image_url" and b.image_url
@@ -238,9 +243,9 @@ class OpenAIChatClient:
         temperature: float | None,
         max_tokens: int | None,
     ) -> dict:
-        body: dict[str, Any] = {
+        body: JsonObject = {
             "model": self.model,
-            "input": _to_openai_input(messages),
+            "input": [*_to_openai_input(messages)],
         }
         if temperature is not None:
             body["temperature"] = temperature

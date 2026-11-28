@@ -11,9 +11,11 @@ import contextlib
 import json
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from pydantic import BaseModel, Field
+
+from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,23 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+#: Ordem de reconstrução: data, origem (0 mensagem, 1 evento) e identificador.
+_SortKey = tuple[str, int, int]
+
+
+class _LegacyMessageEvent(TypedDict):
+    """Evento de mensagem antiga ainda ausente do ledger."""
+
+    event_key: str
+    role: str
+    turn_id: str | None
+    run_id: str | None
+    message_id: int
+    tool_call_id: str | None
+    payload_json: str
+    created_at: str
+
+
 class ThreadLedgerEvent(BaseModel):
     """Evento canônico registrado no ledger durável da thread."""
 
@@ -79,7 +98,7 @@ class ThreadLedgerEvent(BaseModel):
     message_id: int | None = None
     tool_call_id: str | None = None
     interrupt_id: str | None = None
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: JsonObject = Field(default_factory=dict)
     created_at: str = Field(default_factory=_now)
 
 
@@ -264,7 +283,7 @@ async def backfill_thread_ledger(
                 (thread_id,),
             )
             existing_events = list(await cur_events.fetchall())
-            missing: list[tuple[tuple[object, ...], dict[str, object]]] = []
+            missing: list[tuple[_SortKey, _LegacyMessageEvent]] = []
             for m in msgs:
                 m_id, role, c_json, tc_id, is_err, turn_id, run_id, created_at = m
                 event_key = make_message_created_key(m_id)
@@ -312,13 +331,12 @@ async def backfill_thread_ledger(
                 # by their original timestamp instead of being appended after newer
                 # events.  Cursors are remapped by their old sequence below.
                 current_seq = len(existing_events) + len(missing)
-                descriptors: list[tuple[tuple[object, ...], str, dict[str, object]]] = [
-                    ((str(row[2] or now), 1, int(row[1])), str(row[0]), {})
+                descriptors: list[tuple[_SortKey, str, _LegacyMessageEvent | None]] = [
+                    ((str(row[2] or now), 1, int(row[1])), str(row[0]), None)
                     for row in existing_events
                 ]
                 descriptors.extend(
-                    (sort_key, str(data["event_key"]), data)
-                    for sort_key, data in missing
+                    (sort_key, data["event_key"], data) for sort_key, data in missing
                 )
                 descriptors.sort(key=lambda item: item[0])
                 remap = {

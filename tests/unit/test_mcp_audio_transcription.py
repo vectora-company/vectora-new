@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -21,8 +22,8 @@ def _audio(data: bytes = WAV, mime: str = "audio/wav") -> SimpleNamespace:
     )
 
 
-def _result(*blocks: SimpleNamespace) -> SimpleNamespace:
-    return SimpleNamespace(content=list(blocks), isError=False)
+def _result(*blocks: SimpleNamespace) -> MagicMock:
+    return MagicMock(content=list(blocks), isError=False)
 
 
 @pytest.fixture

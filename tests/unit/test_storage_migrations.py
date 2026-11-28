@@ -9,15 +9,17 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
+from aiosqlite import Connection
 
 
 class TestMigrationRunner:
     """Schema migration runner — arquivo único (sqlite/schema.sql)."""
 
     @pytest.fixture
-    async def runner_conn(self, tmp_path):
+    async def runner_conn(self, tmp_path: Path):
         import aiosqlite
 
         db_path = str(tmp_path / "test_migrations.db")
@@ -27,7 +29,7 @@ class TestMigrationRunner:
         await conn.close()
 
     @pytest.fixture
-    async def raw_conn(self, tmp_path):
+    async def raw_conn(self, tmp_path: Path):
         """Conexão sem row_factory — simula o contexto de produção (server.py)."""
         import aiosqlite
 
@@ -37,7 +39,7 @@ class TestMigrationRunner:
         await conn.close()
 
     @pytest.mark.asyncio
-    async def test_status_pending_on_empty_db(self, runner_conn):
+    async def test_status_pending_on_empty_db(self, runner_conn: Connection) -> None:
         """status() mostra applied=False num banco vazio."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -48,7 +50,9 @@ class TestMigrationRunner:
         assert status.checksum
 
     @pytest.mark.asyncio
-    async def test_status_shows_applied_after_upgrade(self, runner_conn):
+    async def test_status_shows_applied_after_upgrade(
+        self, runner_conn: Connection
+    ) -> None:
         """status() mostra applied=True e drift=False após upgrade() rodar."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -60,7 +64,9 @@ class TestMigrationRunner:
         assert status.applied_at is not None
 
     @pytest.mark.asyncio
-    async def test_upgrade_applies_schema_and_returns_true(self, runner_conn):
+    async def test_upgrade_applies_schema_and_returns_true(
+        self, runner_conn: Connection
+    ) -> None:
         """upgrade() aplica o schema.sql inteiro e retorna True na 1ª chamada."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -69,7 +75,7 @@ class TestMigrationRunner:
         assert applied is True
 
     @pytest.mark.asyncio
-    async def test_upgrade_idempotent(self, runner_conn):
+    async def test_upgrade_idempotent(self, runner_conn: Connection) -> None:
         """Segunda chamada a upgrade() é no-op (checksum já bate) — retorna False."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -79,7 +85,9 @@ class TestMigrationRunner:
         assert second is False
 
     @pytest.mark.asyncio
-    async def test_schema_migrations_table_created(self, runner_conn):
+    async def test_schema_migrations_table_created(
+        self, runner_conn: Connection
+    ) -> None:
         """Tabela de controle schema_migrations é criada ao instanciar runner."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -93,7 +101,7 @@ class TestMigrationRunner:
         assert row is not None
 
     @pytest.mark.asyncio
-    async def test_upgrade_without_row_factory(self, raw_conn):
+    async def test_upgrade_without_row_factory(self, raw_conn: Connection) -> None:
         """upgrade() funciona com conexão sem row_factory (caso de produção)."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -105,8 +113,8 @@ class TestMigrationRunner:
 
     @pytest.mark.asyncio
     async def test_colunas_do_kanban_chegam_em_banco_ja_populado(
-        self, runner_conn, monkeypatch
-    ):
+        self, runner_conn: Connection, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """`CREATE TABLE IF NOT EXISTS` é no-op quando a tabela já existe sem
         as colunas `status`/`block_kind`/`claim_lock`/`budget_cents` etc —
         os `ALTER TABLE` correspondentes precisam rodar mesmo assim, senão o
@@ -170,14 +178,16 @@ class TestMigrationRunner:
         # contra o schema migrado.
         from backend.scheduling import kanban
 
-        async def _get_db():
+        async def _get_db() -> Connection:
             return runner_conn
 
         monkeypatch.setattr(kanban, "_get_db", _get_db)
         assert await kanban.release_stale_claims() == 0
 
     @pytest.mark.asyncio
-    async def test_vectora_sessions_table_created(self, runner_conn):
+    async def test_vectora_sessions_table_created(
+        self, runner_conn: Connection
+    ) -> None:
         """O schema cria a tabela vectora_sessions."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -189,7 +199,9 @@ class TestMigrationRunner:
         assert await cur.fetchone() is not None
 
     @pytest.mark.asyncio
-    async def test_vectora_sessions_has_extra_column(self, runner_conn):
+    async def test_vectora_sessions_has_extra_column(
+        self, runner_conn: Connection
+    ) -> None:
         """vectora_sessions tem a coluna extra (onde mode/title/workspace vivem)."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -201,8 +213,8 @@ class TestMigrationRunner:
 
     @pytest.mark.asyncio
     async def test_reapply_after_content_change_updates_checksum(
-        self, runner_conn, tmp_path
-    ):
+        self, runner_conn: Connection, tmp_path: Path
+    ) -> None:
         """Editar o schema.sql muda o checksum: upgrade() reaplica e status() reflete."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -236,7 +248,9 @@ class TestMigrationRunner:
         assert status.drift is False
 
     @pytest.mark.asyncio
-    async def test_plan_diagnostica_sem_mutar_o_banco(self, runner_conn):
+    async def test_plan_diagnostica_sem_mutar_o_banco(
+        self, runner_conn: Connection
+    ) -> None:
         """O plano expõe drift e contagem sem aplicar ou criar tabelas do
         schema de negócio."""
         from backend.storage.migrations.runner import MigrationRunner
@@ -251,7 +265,9 @@ class TestMigrationRunner:
         assert await cur.fetchone() is None
 
     @pytest.mark.asyncio
-    async def test_history_diagnostica_sem_mutar_banco_vazio(self, runner_conn):
+    async def test_history_diagnostica_sem_mutar_banco_vazio(
+        self, runner_conn: Connection
+    ) -> None:
         """history() é somente leitura quando não há tabelas de controle."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -263,7 +279,7 @@ class TestMigrationRunner:
         assert await cur.fetchall() == []
 
     @pytest.mark.asyncio
-    async def test_history_ignora_formato_sem_id(self, runner_conn):
+    async def test_history_ignora_formato_sem_id(self, runner_conn: Connection) -> None:
         """history() rejeita tabela de controle sem a coluna de ordenação."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -275,7 +291,9 @@ class TestMigrationRunner:
         assert await MigrationRunner(runner_conn).history() == []
 
     @pytest.mark.asyncio
-    async def test_alter_add_column_skips_existing_column(self, runner_conn):
+    async def test_alter_add_column_skips_existing_column(
+        self, runner_conn: Connection
+    ) -> None:
         """ALTER TABLE ... ADD COLUMN não falha quando a coluna já existe."""
         from backend.storage.migrations.runner import MigrationRunner
 
@@ -289,7 +307,9 @@ class TestMigrationRunner:
         )
 
     @pytest.mark.asyncio
-    async def test_upgrade_from_old_versioned_control_table(self, runner_conn):
+    async def test_upgrade_from_old_versioned_control_table(
+        self, runner_conn: Connection
+    ) -> None:
         """Um `schema_migrations` no formato antigo versionado (version, name,
         applied_at, checksum) — sem coluna `id` — não pode fazer apply()
         quebrar com "no such column: id"."""
@@ -322,7 +342,7 @@ class TestReadSchemaPermissionRetry:
     em vez de derrubar o boot inteiro nessa janela."""
 
     @pytest.fixture
-    async def runner_conn(self, tmp_path):
+    async def runner_conn(self, tmp_path: Path):
         import aiosqlite
 
         db_path = str(tmp_path / "test_migrations.db")
@@ -338,8 +358,8 @@ class TestReadSchemaPermissionRetry:
         "S0-4 (AV/indexador escaneando schema.sql) é um cenário Windows-only",
     )
     async def test_retry_ate_sucesso_quando_lock_solta_antes_do_teto(
-        self, runner_conn, tmp_path, monkeypatch
-    ):
+        self, runner_conn, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Lock (simulado por abrir o arquivo em modo exclusivo) solta antes
         do teto de tentativas — `apply()` retenta e conclui normalmente."""
         # `if sys.platform == "win32":` (não só o skipif do decorator, que só
@@ -366,7 +386,7 @@ class TestReadSchemaPermissionRetry:
             fh = schema_file.open("r+b")
             msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
 
-            async def _release_soon():
+            async def _release_soon() -> None:
                 await asyncio.sleep(0.02)
                 msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
                 fh.close()
@@ -386,8 +406,8 @@ class TestReadSchemaPermissionRetry:
 
     @pytest.mark.asyncio
     async def test_permission_error_persistente_propaga_apos_esgotar_tentativas(
-        self, runner_conn, tmp_path, monkeypatch
-    ):
+        self, runner_conn: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Erro/borda: lock que NUNCA solta (permissão genuinamente negada)
         continua falhando após as tentativas — sem mascarar um erro real."""
         from pathlib import Path
@@ -399,7 +419,7 @@ class TestReadSchemaPermissionRetry:
         schema_file.write_text("CREATE TABLE x (id INTEGER);", encoding="utf-8")
         monkeypatch.setattr(runner_mod, "_READ_SCHEMA_RETRY_DELAY_S", 0.01)
 
-        def _sempre_nega(self, *args, **kwargs):
+        def _sempre_nega(self, *args, **kwargs: str) -> NoReturn:
             raise PermissionError("Permission denied (simulado)")
 
         monkeypatch.setattr(Path, "read_text", _sempre_nega)
@@ -413,7 +433,7 @@ class TestDataMigrationDryRun:
     """Migrações de dados — apenas dry-run para não precisar de infra."""
 
     @pytest.mark.asyncio
-    async def test_to_postgres_dry_run(self, tmp_path):
+    async def test_to_postgres_dry_run(self, tmp_path: Path) -> None:
         """dry-run retorna contagem sem conectar ao Postgres."""
         import aiosqlite
 
@@ -438,7 +458,7 @@ class TestDataMigrationDryRun:
         assert "vectora_users" in result["tables"]
 
     @pytest.mark.asyncio
-    async def test_to_postgres_dry_run_missing_table(self, tmp_path):
+    async def test_to_postgres_dry_run_missing_table(self, tmp_path: Path) -> None:
         """Tabela ausente não levanta erro no dry-run."""
         import aiosqlite
 
@@ -456,7 +476,7 @@ class TestDataMigrationDryRun:
         assert result["total_rows"] == 0
 
     @pytest.mark.asyncio
-    async def test_memory_to_native_store_missing_table(self, tmp_path):
+    async def test_memory_to_native_store_missing_table(self, tmp_path: Path) -> None:
         """Banco sem tabela 'memories' retorna total=0 sem erro."""
         import aiosqlite
 
@@ -476,7 +496,7 @@ class TestDataMigrationDryRun:
         assert result["total"] == 0
 
     @pytest.mark.asyncio
-    async def test_memory_to_native_store_dry_run(self, tmp_path):
+    async def test_memory_to_native_store_dry_run(self, tmp_path: Path) -> None:
         """dry-run conta registros sem chamar store."""
         import aiosqlite
 
@@ -515,7 +535,7 @@ class TestDataMigrationLanceDBSource:
     pytestmark = pytest.mark.real_lancedb
 
     @pytest.fixture
-    async def source_table(self, tmp_path):
+    async def source_table(self, tmp_path: Path) -> str:
         import lancedb
 
         db = await lancedb.connect_async(str(tmp_path / "lancedb"))
@@ -533,7 +553,9 @@ class TestDataMigrationLanceDBSource:
         return str(tmp_path / "lancedb")
 
     @pytest.mark.asyncio
-    async def test_to_qdrant_colecao_ausente_retorna_erro_sem_lancar(self, tmp_path):
+    async def test_to_qdrant_colecao_ausente_retorna_erro_sem_lancar(
+        self, tmp_path: Path
+    ) -> None:
         import lancedb
 
         from backend.storage.migrations.data_migration import migrate_to_qdrant
@@ -551,7 +573,9 @@ class TestDataMigrationLanceDBSource:
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_to_qdrant_dry_run_conta_sem_conectar(self, source_table):
+    async def test_to_qdrant_dry_run_conta_sem_conectar(
+        self, source_table: str
+    ) -> None:
         from backend.storage.migrations.data_migration import migrate_to_qdrant
 
         result = await migrate_to_qdrant(
@@ -565,7 +589,9 @@ class TestDataMigrationLanceDBSource:
         assert result["upserted"] == 0
 
     @pytest.mark.asyncio
-    async def test_to_qdrant_upsert_todos_os_vetores_em_batches(self, source_table):
+    async def test_to_qdrant_upsert_todos_os_vetores_em_batches(
+        self, source_table: str
+    ) -> None:
         from unittest.mock import MagicMock, patch
 
         from backend.storage.migrations.data_migration import migrate_to_qdrant
@@ -590,7 +616,9 @@ class TestDataMigrationLanceDBSource:
         assert all_point_ids == {f"doc-{i}" for i in range(5)}
 
     @pytest.mark.asyncio
-    async def test_to_qdrant_pula_linhas_sem_vetor_sem_lancar(self, tmp_path):
+    async def test_to_qdrant_pula_linhas_sem_vetor_sem_lancar(
+        self, tmp_path: Path
+    ) -> None:
         """Borda: linha com `vector` nulo (registro corrompido ou legado sem
         embedding gerado) é pulada, não vira `PointStruct` com
         `vector=None` (o que o Qdrant rejeitaria)."""
@@ -626,7 +654,9 @@ class TestDataMigrationLanceDBSource:
         assert [p.id for p in call.kwargs["points"]] == ["doc-0"]
 
     @pytest.mark.asyncio
-    async def test_to_pgvector_colecao_ausente_retorna_erro_sem_lancar(self, tmp_path):
+    async def test_to_pgvector_colecao_ausente_retorna_erro_sem_lancar(
+        self, tmp_path: Path
+    ) -> None:
         import lancedb
 
         from backend.storage.migrations.data_migration import migrate_to_pgvector
@@ -644,7 +674,9 @@ class TestDataMigrationLanceDBSource:
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_to_pgvector_dry_run_conta_sem_conectar(self, source_table):
+    async def test_to_pgvector_dry_run_conta_sem_conectar(
+        self, source_table: str
+    ) -> None:
         from backend.storage.migrations.data_migration import migrate_to_pgvector
 
         result = await migrate_to_pgvector(
@@ -658,7 +690,9 @@ class TestDataMigrationLanceDBSource:
         assert result["upserted"] == 0
 
     @pytest.mark.asyncio
-    async def test_to_pgvector_upsert_todos_os_vetores_em_batches(self, source_table):
+    async def test_to_pgvector_upsert_todos_os_vetores_em_batches(
+        self, source_table: str
+    ) -> None:
         from unittest.mock import AsyncMock, patch
 
         from backend.storage.migrations.data_migration import migrate_to_pgvector
@@ -687,7 +721,9 @@ class TestDataMigrationLanceDBSource:
         assert all("ON CONFLICT (id) DO NOTHING" in c.args[0] for c in insert_calls)
 
     @pytest.mark.asyncio
-    async def test_to_pgvector_pula_linhas_sem_vetor_sem_lancar(self, tmp_path):
+    async def test_to_pgvector_pula_linhas_sem_vetor_sem_lancar(
+        self, tmp_path: Path
+    ) -> None:
         from unittest.mock import AsyncMock, patch
 
         import lancedb
@@ -726,8 +762,8 @@ class TestDataMigrationLanceDBSource:
 
     @pytest.mark.asyncio
     async def test_to_pgvector_fecha_conexao_mesmo_com_falha_no_insert(
-        self, source_table
-    ):
+        self, source_table: str
+    ) -> None:
         """Erro/borda: se um INSERT falhar no meio da migração, `pg_conn`
         precisa ser fechado mesmo assim (bloco `finally`) — senão a conexão
         vaza a cada tentativa de migração que falha."""
@@ -737,7 +773,7 @@ class TestDataMigrationLanceDBSource:
 
         mock_conn = AsyncMock()
 
-        async def _execute(query: str, *_args):
+        async def _execute(query: str, *_args: str) -> None:
             if "INSERT INTO" in query:
                 raise RuntimeError("conexão perdida")
 

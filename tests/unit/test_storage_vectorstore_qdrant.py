@@ -6,6 +6,7 @@ testes reais em `tests/integration/test_storage_qdrant.py`)."""
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -23,13 +24,13 @@ from backend.storage.vectorstore.qdrant_backend import QdrantBackend, _point_id
 
 
 @pytest.fixture
-def backend():
+def backend() -> QdrantBackend:
     """Executa a operação backend."""
     return QdrantBackend(url="http://localhost:6333")
 
 
 @pytest.fixture
-def mock_client():
+def mock_client() -> Iterator[AsyncMock]:
     """Executa a operação mock client."""
     with patch("backend.storage.vectorstore.qdrant_backend.AsyncQdrantClient") as cls:
         instance = AsyncMock()
@@ -40,8 +41,8 @@ def mock_client():
 class TestQdrantBackendSearch:
     @pytest.mark.asyncio
     async def test_search_converte_score_em_distancia_e_parseia_payload(
-        self, backend, mock_client
-    ):
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de search converte score em distancia e parseia payload."""
         mock_client.collection_exists.return_value = True
         mock_client.query_points.return_value = QueryResponse(
@@ -65,8 +66,8 @@ class TestQdrantBackendSearch:
 
     @pytest.mark.asyncio
     async def test_search_colecao_inexistente_retorna_vazio_sem_propagar(
-        self, backend, mock_client
-    ):
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de search colecao inexistente retorna vazio sem propagar."""
         mock_client.collection_exists.return_value = False
 
@@ -79,8 +80,8 @@ class TestQdrantBackendSearch:
 class TestQdrantBackendSearchText:
     @pytest.mark.asyncio
     async def test_search_text_rankeia_por_overlap_de_termos(
-        self, backend, mock_client
-    ):
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de search text rankeia por overlap de termos."""
         mock_client.collection_exists.return_value = True
         mock_client.scroll.return_value = (
@@ -107,8 +108,8 @@ class TestQdrantBackendSearchText:
 
     @pytest.mark.asyncio
     async def test_search_text_colecao_inexistente_retorna_vazio_sem_propagar(
-        self, backend, mock_client
-    ):
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de search text colecao inexistente retorna vazio sem propagar."""
         mock_client.collection_exists.return_value = False
 
@@ -119,8 +120,8 @@ class TestQdrantBackendSearchText:
 
     @pytest.mark.asyncio
     async def test_search_text_erro_no_scroll_retorna_vazio_sem_propagar(
-        self, backend, mock_client
-    ):
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de search text erro no scroll retorna vazio sem propagar."""
         mock_client.collection_exists.return_value = True
         mock_client.scroll.side_effect = RuntimeError("qdrant indisponível")
@@ -131,8 +132,8 @@ class TestQdrantBackendSearchText:
 
     @pytest.mark.asyncio
     async def test_search_text_create_index_falhando_nao_impede_busca(
-        self, backend, mock_client
-    ):
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de search text create index falhando nao impede busca."""
         mock_client.collection_exists.return_value = True
         mock_client.create_payload_index.side_effect = RuntimeError("índice já existe")
@@ -149,7 +150,9 @@ class TestQdrantBackendSearchText:
 
 class TestQdrantBackendUpsert:
     @pytest.mark.asyncio
-    async def test_upsert_cria_colecao_e_envia_pontos(self, backend, mock_client):
+    async def test_upsert_cria_colecao_e_envia_pontos(
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de upsert cria colecao e envia pontos."""
         mock_client.collection_exists.return_value = False
 
@@ -165,7 +168,9 @@ class TestQdrantBackendUpsert:
         assert kwargs["points"][0].id == _point_id("articles", "p1")
 
     @pytest.mark.asyncio
-    async def test_upsert_lista_vazia_nao_chama_cliente(self, backend, mock_client):
+    async def test_upsert_lista_vazia_nao_chama_cliente(
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de upsert lista vazia nao chama cliente."""
         await backend.upsert("articles", [])
 
@@ -176,8 +181,8 @@ class TestQdrantBackendUpsert:
 class TestQdrantBackendListRows:
     @pytest.mark.asyncio
     async def test_list_rows_pagina_via_scroll_ate_offset_none(
-        self, backend, mock_client
-    ):
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de list rows pagina via scroll ate offset none."""
         mock_client.collection_exists.return_value = True
         page1 = [
@@ -203,8 +208,8 @@ class TestQdrantBackendListRows:
 
     @pytest.mark.asyncio
     async def test_list_rows_colecao_inexistente_retorna_vazio(
-        self, backend, mock_client
-    ):
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de list rows colecao inexistente retorna vazio."""
         mock_client.collection_exists.return_value = False
 
@@ -216,7 +221,9 @@ class TestQdrantBackendListRows:
 
 class TestQdrantBackendDelete:
     @pytest.mark.asyncio
-    async def test_delete_envia_point_ids_list(self, backend, mock_client):
+    async def test_delete_envia_point_ids_list(
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de delete envia point ids list."""
         mock_client.count.return_value = CountResult(count=2)
         count = await backend.delete("articles", ["p1", "p2"])
@@ -247,7 +254,7 @@ class TestQdrantBackendDelete:
         active_counts = 0
         max_active_counts = 0
 
-        async def fake_count(*args: object, **kwargs: object) -> CountResult:
+        async def fake_count[**P](*args: P.args, **kwargs: P.kwargs) -> CountResult:
             """Executa a operação fake count."""
             nonlocal active_counts, max_active_counts
             active_counts += 1
@@ -258,7 +265,7 @@ class TestQdrantBackendDelete:
             finally:
                 active_counts -= 1
 
-        async def fake_delete(*args: object, **kwargs: object) -> None:
+        async def fake_delete[**P](*args: P.args, **kwargs: P.kwargs) -> None:
             """Executa a operação fake delete."""
             nonlocal count
             await asyncio.sleep(0)
@@ -275,7 +282,9 @@ class TestQdrantBackendDelete:
         mock_client.delete.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_delete_lista_vazia_nao_chama_cliente(self, backend, mock_client):
+    async def test_delete_lista_vazia_nao_chama_cliente(
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de delete lista vazia nao chama cliente."""
         count = await backend.delete("articles", [])
 
@@ -285,7 +294,9 @@ class TestQdrantBackendDelete:
 
 class TestQdrantBackendCollections:
     @pytest.mark.asyncio
-    async def test_list_collections_extrai_nomes(self, backend, mock_client):
+    async def test_list_collections_extrai_nomes(
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de list collections extrai nomes."""
         mock_client.get_collections.return_value = CollectionsResponse(
             collections=[
@@ -300,8 +311,8 @@ class TestQdrantBackendCollections:
 
     @pytest.mark.asyncio
     async def test_list_collections_erro_retorna_vazio_sem_propagar(
-        self, backend, mock_client
-    ):
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de list collections erro retorna vazio sem propagar."""
         mock_client.get_collections.side_effect = RuntimeError("conexão recusada")
 
@@ -312,7 +323,9 @@ class TestQdrantBackendCollections:
 
 class TestQdrantBackendCount:
     @pytest.mark.asyncio
-    async def test_count_retorna_valor_exato(self, backend, mock_client):
+    async def test_count_retorna_valor_exato(
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de count retorna valor exato."""
         mock_client.count.return_value = CountResult(count=42)
 
@@ -323,7 +336,9 @@ class TestQdrantBackendCount:
         assert kwargs["exact"] is True
 
     @pytest.mark.asyncio
-    async def test_count_erro_retorna_none_sem_propagar(self, backend, mock_client):
+    async def test_count_erro_retorna_none_sem_propagar(
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de count erro retorna none sem propagar."""
         mock_client.count.side_effect = RuntimeError("timeout")
 
@@ -334,14 +349,18 @@ class TestQdrantBackendCount:
 
 class TestQdrantBackendPurge:
     @pytest.mark.asyncio
-    async def test_purge_apaga_colecao(self, backend, mock_client):
+    async def test_purge_apaga_colecao(
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de purge apaga colecao."""
         await backend.purge("articles")
 
         mock_client.delete_collection.assert_awaited_once_with("articles")
 
     @pytest.mark.asyncio
-    async def test_purge_idempotente_em_colecao_inexistente(self, backend, mock_client):
+    async def test_purge_idempotente_em_colecao_inexistente(
+        self, backend: QdrantBackend, mock_client: AsyncMock
+    ) -> None:
         """Verifica o comportamento de purge idempotente em colecao inexistente."""
         mock_client.delete_collection.side_effect = RuntimeError("not found")
 

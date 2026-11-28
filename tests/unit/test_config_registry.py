@@ -9,6 +9,9 @@ usa um `RuntimeSettings` apontando pra `tmp_path`, `ConfigTomlAdapter` usa
 
 from __future__ import annotations
 
+from argparse import Namespace
+from collections.abc import Iterator
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -27,6 +30,8 @@ from backend.config.registry import (
     set_value,
     setting_field,
 )
+from backend.settings import Settings
+from backend.vtypes.contracts import JsonValue
 
 # ---------------------------------------------------------------------------
 # registry.py
@@ -34,7 +39,7 @@ from backend.config.registry import (
 
 
 @pytest.fixture
-def clean_registry():
+def clean_registry() -> Iterator[None]:
     """Isola o registry global entre testes que registram campos ad hoc —
     sem isso, o segundo teste que registrar `"x"` colidiria com o primeiro."""
     snapshot = dict(registry_mod._REGISTRY)
@@ -45,15 +50,15 @@ def clean_registry():
 
 
 class _NoopAdapter:
-    def get(self, key: str) -> object:
+    def get(self, key: str) -> JsonValue:
         return None
 
-    def set(self, key: str, value: object) -> None:
+    def set(self, key: str, value: JsonValue) -> None:
         pass
 
 
 class TestSettingField:
-    def test_registra_e_recupera(self, clean_registry):
+    def test_registra_e_recupera(self, clean_registry: None) -> None:
         setting_field(
             "x",
             category="preferences",
@@ -66,7 +71,7 @@ class TestSettingField:
         assert field.category == "preferences"
         assert field.cli_flag == "--x"
 
-    def test_chave_duplicada_levanta_erro(self, clean_registry):
+    def test_chave_duplicada_levanta_erro(self, clean_registry: None) -> None:
         setting_field(
             "y",
             category="preferences",
@@ -83,20 +88,20 @@ class TestSettingField:
                 adapter=_NoopAdapter(),
             )
 
-    def test_chave_inexistente_retorna_none(self, clean_registry):
+    def test_chave_inexistente_retorna_none(self, clean_registry: None) -> None:
         assert get_field("nao-existe") is None
 
     def test_get_set_value_delegam_para_adapter(
         self: TestSettingField, clean_registry: None
     ) -> None:
-        calls: list[tuple[str, object, object | None]] = []
+        calls: list[tuple[str, str, JsonValue]] = []
 
         class _RecordingAdapter:
-            def get(self, key: str) -> object:
+            def get(self, key: str) -> JsonValue:
                 calls.append(("get", key, None))
                 return "value"
 
-            def set(self, key: str, value: object) -> None:
+            def set(self, key: str, value: JsonValue) -> None:
                 calls.append(("set", key, value))
 
         adapter = _RecordingAdapter()
@@ -116,7 +121,9 @@ class TestSettingField:
         with pytest.raises(KeyError):
             get_value("missing")
 
-    def test_fields_for_category_filtra_corretamente(self, clean_registry):
+    def test_fields_for_category_filtra_corretamente(
+        self, clean_registry: None
+    ) -> None:
         setting_field(
             "a",
             category="cat1",
@@ -135,15 +142,15 @@ class TestSettingField:
         assert [f.key for f in fields_for_category("cat2")] == ["b"]
         assert fields_for_category("cat-vazia") == []
 
-    def test_get_set_delegam_pro_adapter(self, clean_registry):
-        calls: list[tuple[str, object]] = []
+    def test_get_set_delegam_pro_adapter(self, clean_registry: None) -> None:
+        calls: list[tuple[str, JsonValue]] = []
 
         class _RecordingAdapter:
-            def get(self, key: str) -> object:
+            def get(self, key: str) -> JsonValue:
                 calls.append(("get", key))
                 return "valor"
 
-            def set(self, key: str, value: object) -> None:
+            def set(self, key: str, value: JsonValue) -> None:
                 calls.append(("set", value))
 
         field = setting_field(
@@ -162,7 +169,7 @@ class TestFieldsRealmenteRegistrados:
     """Confirma que importar backend.config popula o registry com os campos
     reais definidos em fields.py — não é só uma API vazia."""
 
-    def test_categorias_esperadas_existem(self):
+    def test_categorias_esperadas_existem(self) -> None:
         from backend.config import all_categories
 
         cats = all_categories()
@@ -170,7 +177,7 @@ class TestFieldsRealmenteRegistrados:
         assert "connect" in cats
         assert "preferences" in cats
 
-    def test_google_api_key_registrada(self):
+    def test_google_api_key_registrada(self) -> None:
         field = get_field("google_api_key")
         assert field is not None
         assert field.category == "integrations"
@@ -183,7 +190,7 @@ class TestFieldsRealmenteRegistrados:
 
 
 @pytest.fixture
-def _restore_settings():
+def _restore_settings() -> Iterator[Settings]:
     from backend.settings import settings
 
     original = {
@@ -197,8 +204,11 @@ def _restore_settings():
 
 class TestEnvAdapter:
     def test_set_delega_pra_apply_llm_env_key(
-        self, tmp_path, monkeypatch, _restore_settings
-    ):
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        _restore_settings: Settings,
+    ) -> None:
         from backend.settings import settings
 
         monkeypatch.setattr(settings, "vectora_home", tmp_path / ".vectora")
@@ -211,7 +221,9 @@ class TestEnvAdapter:
         mock_upsert.assert_called_once()
         assert _restore_settings.google_api_key == "AIza-nova"
 
-    def test_get_le_do_settings_singleton(self, monkeypatch, _restore_settings):
+    def test_get_le_do_settings_singleton(
+        self, monkeypatch: pytest.MonkeyPatch, _restore_settings: Settings
+    ) -> None:
         """`EnvAdapter.get` lê a fonte canônica em runtime: `os.environ`
         (que `apply_llm_env_key` seta na escrita). `settings` espelha no
         boot, mas uma key gravada/limpa em runtime só reflete aqui."""
@@ -223,7 +235,9 @@ class TestEnvAdapter:
 
 
 class TestRuntimeSettingsAdapter:
-    def test_get_set_isolado_por_tmp_path(self, tmp_path, monkeypatch):
+    def test_get_set_isolado_por_tmp_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.workspace.runtime_settings as rs_mod
         from backend.workspace.runtime_settings import RuntimeSettings
 
@@ -236,7 +250,9 @@ class TestRuntimeSettingsAdapter:
         # Confirma isolamento real (não é a instância global).
         assert isolated.get("theme") == "light"
 
-    def test_settings_key_diferente_da_chave_publica(self, tmp_path, monkeypatch):
+    def test_settings_key_diferente_da_chave_publica(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.workspace.runtime_settings as rs_mod
         from backend.workspace.runtime_settings import RuntimeSettings
 
@@ -251,8 +267,8 @@ class TestRuntimeSettingsAdapter:
 
 class TestConfigTomlAdapter:
     def test_set_chama_write_config_section_e_atualiza_settings(
-        self, monkeypatch, _restore_settings
-    ):
+        self, monkeypatch: pytest.MonkeyPatch, _restore_settings: Settings
+    ) -> None:
         calls: list[tuple[str, dict]] = []
 
         def _fake_write(section: str, values: dict) -> None:
@@ -268,7 +284,7 @@ class TestConfigTomlAdapter:
         assert calls == [("server", {"default_model": "gemini-2.5-pro"})]
         assert _restore_settings.default_model == "gemini-2.5-pro"
 
-    def test_set_rejeita_tipo_invalido(self):
+    def test_set_rejeita_tipo_invalido(self) -> None:
         adapter = ConfigTomlAdapter("server")
         with pytest.raises(TypeError):
             adapter.set("x", {"nested": "dict"})
@@ -280,7 +296,7 @@ class TestConfigTomlAdapter:
 
 
 class TestCliCategoryCommand:
-    def _ns(self, **overrides):
+    def _ns(self, **overrides: list[str] | str) -> Namespace:
         import argparse
 
         base = {
@@ -295,7 +311,12 @@ class TestCliCategoryCommand:
         base.update(overrides)
         return argparse.Namespace(**base)
 
-    def test_set_e_get_roundtrip(self, tmp_path, monkeypatch, capsys):
+    def test_set_e_get_roundtrip(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
         import backend.workspace.runtime_settings as rs_mod
         from backend.cli.config import run_config
         from backend.workspace.runtime_settings import RuntimeSettings
@@ -311,7 +332,9 @@ class TestCliCategoryCommand:
         out = capsys.readouterr().out
         assert "theme=light" in out
 
-    def test_get_chave_de_outra_categoria_da_erro(self, capsys):
+    def test_get_chave_de_outra_categoria_da_erro(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         from backend.cli.config import run_config
 
         with pytest.raises(SystemExit) as exc:
@@ -322,21 +345,28 @@ class TestCliCategoryCommand:
         out = capsys.readouterr().out
         assert "não existe na categoria" in out
 
-    def test_set_formato_invalido_da_erro(self):
+    def test_set_formato_invalido_da_erro(self) -> None:
         from backend.cli.config import run_config
 
         with pytest.raises(SystemExit) as exc:
             run_config(self._ns(config_action="preferences", set_values=["sem-igual"]))
         assert exc.value.code == 1
 
-    def test_sem_get_nem_set_lista_campos_da_categoria(self, capsys):
+    def test_sem_get_nem_set_lista_campos_da_categoria(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         from backend.cli.config import run_config
 
         run_config(self._ns(config_action="integrations"))
         out = capsys.readouterr().out
         assert "google_api_key" in out
 
-    def test_secret_mascarado_na_listagem(self, tmp_path, monkeypatch, capsys):
+    def test_secret_mascarado_na_listagem(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
         from backend.cli.config import run_config
         from backend.settings import settings
 
@@ -362,7 +392,7 @@ class TestCliCollectionCommand:
     """`vectora config provider-routing|memory|account --list` — cobre a
     listagem das categorias de coleção pelo dispatcher de configuração da CLI."""
 
-    def _ns(self, **overrides):
+    def _ns(self, **overrides: bool | str) -> Namespace:
         import argparse
 
         base = {
@@ -377,7 +407,7 @@ class TestCliCollectionCommand:
         base.update(overrides)
         return argparse.Namespace(**base)
 
-    def test_sem_list_flag_da_erro(self, capsys):
+    def test_sem_list_flag_da_erro(self, capsys: pytest.CaptureFixture[str]) -> None:
         from backend.cli.config import run_config
 
         with pytest.raises(SystemExit) as exc:
@@ -386,11 +416,13 @@ class TestCliCollectionCommand:
         out = capsys.readouterr().out
         assert "--list" in out
 
-    def test_provider_routing_lista_modelos_registrados(self, capsys, monkeypatch):
+    def test_provider_routing_lista_modelos_registrados(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.cli.config import run_config
         from backend.config.adapters import RegisteredModelsTableAdapter
 
-        async def _fake_list(self):
+        async def _fake_list(self) -> list[dict[str, str]]:
             return [{"id": "1", "tag": "llama3", "created_at": "2026-01-01"}]
 
         monkeypatch.setattr(RegisteredModelsTableAdapter, "list_items", _fake_list)
@@ -400,7 +432,9 @@ class TestCliCollectionCommand:
         assert "ollama_registered_models" in out
         assert "llama3" in out
 
-    def test_provider_routing_sem_itens_nao_quebra(self, capsys, monkeypatch):
+    def test_provider_routing_sem_itens_nao_quebra(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.cli.config import run_config
         from backend.config.adapters import RegisteredModelsTableAdapter
 
@@ -413,13 +447,15 @@ class TestCliCollectionCommand:
         out = capsys.readouterr().out
         assert "(nenhum item)" in out
 
-    def test_memory_usa_user_id_local_por_default(self, capsys, monkeypatch):
+    def test_memory_usa_user_id_local_por_default(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.cli.config import run_config
         from backend.config.adapters import MemoryAdapter
 
         seen_user_ids = []
 
-        async def _fake_list(self, user_id):
+        async def _fake_list(self, user_id: str) -> list[dict[str, str]]:
             seen_user_ids.append(user_id)
             return [{"key": "k1", "content": "prefere respostas curtas"}]
 
@@ -430,13 +466,15 @@ class TestCliCollectionCommand:
         assert seen_user_ids == ["local"]
         assert "prefere respostas curtas" in out
 
-    def test_account_respeita_user_id_explicito(self, capsys, monkeypatch):
+    def test_account_respeita_user_id_explicito(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.cli.config import run_config
         from backend.config.adapters import UserProfileAdapter
 
         seen_user_ids = []
 
-        async def _fake_list(self, user_id):
+        async def _fake_list(self, user_id: str) -> list[dict[str, str]]:
             seen_user_ids.append(user_id)
             return [{"id": user_id, "username": "bruno"}]
 

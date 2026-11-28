@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +28,7 @@ def _iso(value: datetime) -> str:
     return value.astimezone(UTC).isoformat()
 
 
-async def _sqlite_connection() -> Any:
+async def _sqlite_connection() -> aiosqlite.Connection:
     import aiosqlite
 
     from backend.settings import settings

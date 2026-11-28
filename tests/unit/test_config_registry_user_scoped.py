@@ -9,14 +9,18 @@ no schema.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+
+from backend.vtypes.contracts import JsonObject
 
 
 class TestUserProfileAdapter:
     """`account` — perfil do usuário por id (nome etc.), via rbac.auth."""
 
     @pytest.mark.asyncio
-    async def test_pega_nome_do_usuario(self, monkeypatch):
+    async def test_pega_nome_do_usuario(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import backend.rbac.auth as auth_svc
         from backend.config.adapters import UserProfileAdapter
 
@@ -38,11 +42,13 @@ class TestUserProfileAdapter:
         assert profile[0]["role"] == "root"
 
     @pytest.mark.asyncio
-    async def test_retorna_vazio_quando_usuario_inexistente(self, monkeypatch):
+    async def test_retorna_vazio_quando_usuario_inexistente(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.rbac.auth as auth_svc
         from backend.config.adapters import UserProfileAdapter
 
-        async def fake_get(user_id: str):
+        async def fake_get(user_id: str) -> None:
             return None
 
         monkeypatch.setattr(auth_svc, "get_user_by_id", fake_get)
@@ -50,7 +56,9 @@ class TestUserProfileAdapter:
         assert await adapter.list_items("ghost") == []
 
     @pytest.mark.asyncio
-    async def test_atualiza_nome_delega_ao_servico(self, monkeypatch):
+    async def test_atualiza_nome_delega_ao_servico(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.rbac.auth as auth_svc
         from backend.config.adapters import UserProfileAdapter
 
@@ -67,7 +75,7 @@ class TestUserProfileAdapter:
 
             return _U()
 
-        async def fake_update(user_id: str, *, name: str):
+        async def fake_update(user_id: str, *, name: str) -> None:
             calls.append((user_id, name))
 
         monkeypatch.setattr(auth_svc, "get_user_by_id", fake_get)
@@ -81,7 +89,9 @@ class TestMemoryAdapter:
     """`memory` — fatos de memória por usuário, via store do agente."""
 
     @pytest.mark.asyncio
-    async def test_lista_memorias_do_usuario(self, monkeypatch, tmp_path):
+    async def test_lista_memorias_do_usuario(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         from backend.config.adapters import MemoryAdapter
 
         ns = ("user", "user-1", "memories")
@@ -94,7 +104,13 @@ class TestMemoryAdapter:
                 self.score = None
 
         class _FakeStore:
-            async def asearch(self, ns, *, query=None, limit=100):
+            async def asearch(
+                self,
+                ns: tuple[str, str, str],
+                *,
+                query: str | None = None,
+                limit: int = 100,
+            ):
                 return [_Item(key, val["content"]) for key, val in store_rows.items()]
 
         monkeypatch.setattr("backend.tools.memory._get_store", lambda ctx: _FakeStore())
@@ -104,14 +120,18 @@ class TestMemoryAdapter:
         assert {i["content"] for i in items} == {"prefere dark", "scoped"}
 
     @pytest.mark.asyncio
-    async def test_salva_delega_aput_no_store(self, monkeypatch):
+    async def test_salva_delega_aput_no_store(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import backend.tools.memory as mem_mod
         from backend.config.adapters import MemoryAdapter
 
         calls: list[tuple] = []
 
         class _FakeStore:
-            async def aput(self, ns, key, value):
+            async def aput(
+                self, ns: tuple[str, str, str], key: str, value: JsonObject
+            ) -> None:
                 calls.append((ns, key, value))
 
         monkeypatch.setattr(mem_mod, "_get_store", lambda ctx: _FakeStore())

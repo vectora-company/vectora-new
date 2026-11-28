@@ -1,5 +1,7 @@
 """Voz padrão por modelo de fala do OpenRouter (cada modelo tem as suas vozes)."""
 
+from types import TracebackType
+
 import pytest
 
 from backend.llm.openrouter import media
@@ -21,12 +23,17 @@ class _Resp:
 
 
 class _Client:
-    def __init__(self, *_a: object, **_k: object) -> None: ...
+    def __init__[**P](self, *_a: P.args, **_k: P.kwargs) -> None: ...
 
     async def __aenter__(self) -> "_Client":
         return self
 
-    async def __aexit__(self, *_a: object) -> None: ...
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None: ...
 
     async def get(self, _url: str) -> _Resp:
         return _Resp()

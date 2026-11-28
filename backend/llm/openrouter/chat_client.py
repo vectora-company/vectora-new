@@ -30,7 +30,8 @@ from backend.llm.media_parts import (
 )
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
 from backend.llm.prompt_cache import prompt_cache_key
-from backend.vtypes.contracts import UsageSnapshot
+from backend.llm.tool_schema import chat_completions_tool
+from backend.vtypes.contracts import JsonObject, JsonValue, UsageSnapshot, as_int
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -57,13 +58,13 @@ class _UsagePayload(TypedDict, total=False):
     completion_tokens: int
     total_tokens: int
     cost: float
-    prompt_tokens_details: dict[str, Any]
+    prompt_tokens_details: JsonObject
 
 
 _AUDIO_FORMATS = {"audio/mpeg": "mp3", "audio/wav": "wav"}
 
 
-def _media_part(bloco: ContentBlock) -> dict | None:
+def _media_part(bloco: ContentBlock) -> JsonObject | None:
     """Parte Chat-Completions de um anexo enviado como arquivo."""
     data_url = bloco.media_data_url or ""
     mime_type, _, dado = data_url.partition(";base64,")
@@ -88,7 +89,7 @@ def _media_part(bloco: ContentBlock) -> dict | None:
 
 def _to_openrouter_content(
     content: list[ContentBlock], accepted: AcceptedMedia | None = None
-) -> str | list[dict]:
+) -> str | list[JsonValue]:
     """Bloco `text` vira string simples (caso comum); imagens e anexos
     enviados como arquivo forçam o formato de lista de partes
     Chat-Completions — nunca descarta a imagem só porque `msg.text()` só
@@ -101,7 +102,7 @@ def _to_openrouter_content(
     content = prepare_content(content, accepted or {})
     if not any(b.kind in {"image_url", "media"} for b in content):
         return "".join(b.text or "" for b in content if b.kind == "text")
-    partes: list[dict] = []
+    partes: list[JsonValue] = []
     for bloco in content:
         if bloco.kind == "text" and bloco.text:
             partes.append({"type": "text", "text": bloco.text})
@@ -122,7 +123,7 @@ def _to_openrouter_message(
         erro = f"Mensagem de role {msg.role!r} não tem equivalente no OpenRouter"
         raise ValueError(erro)
 
-    saida: dict[str, Any] = {
+    saida: JsonObject = {
         "role": role,
         "content": _to_openrouter_content(msg.content, accepted),
     }
@@ -154,22 +155,22 @@ def _to_openrouter_message(
 
 def _to_openrouter_messages(
     messages: list[VMessage], accepted: AcceptedMedia | None = None
-) -> list[dict]:
+) -> list[JsonObject]:
     """Traduz o histórico e entrega imagens de ferramentas (screenshots).
 
     Depois de cada sequência de mensagens de tool, as imagens que elas
     trouxeram seguem numa mensagem de usuário, o formato que o Chat
     Completions aceita para imagem.
     """
-    saida: list[dict] = []
-    pendentes: list[dict] = []
+    saida: list[JsonObject] = []
+    pendentes: list[JsonValue] = []
     for msg in messages:
         if msg.role != MessageRole.TOOL and pendentes:
             saida.append({"role": "user", "content": pendentes})
             pendentes = []
         saida.append(_to_openrouter_message(msg, accepted))
         if msg.role == MessageRole.TOOL:
-            imagens = [
+            imagens: list[JsonValue] = [
                 {"type": "image_url", "image_url": {"url": b.image_url}}
                 for b in msg.content
                 if b.kind == "image_url" and b.image_url
@@ -222,21 +223,21 @@ def _parse_tool_call_chunks(bruto: list) -> list[ToolCallChunk]:
     return pedacos
 
 
-_CACHE_CONTROL = {"type": "ephemeral"}
+_CACHE_CONTROL: JsonObject = {"type": "ephemeral"}
 
 
-def mark_cache_breakpoints(messages: list[dict[str, Any]]) -> None:
+def mark_cache_breakpoints(messages: list[JsonObject]) -> None:
     """Marca system e as duas últimas mensagens com ``cache_control``.
 
     O conteúdo em string vira uma lista de partes para poder carregar a marca.
     """
-    targets: list[dict[str, Any]] = []
+    targets: list[JsonObject] = []
     system = next((m for m in messages if m.get("role") == "system"), None)
     if system is not None:
         targets.append(system)
     targets.extend(m for m in messages[-2:] if m is not system)
     for message in targets:
-        content = message.get("content")
+        content: JsonValue = message.get("content")
         if isinstance(content, str):
             if not content:
                 continue
@@ -245,10 +246,11 @@ def mark_cache_breakpoints(messages: list[dict[str, Any]]) -> None:
             continue
         last = content[-1]
         if isinstance(last, dict) and last.get("type") == "text":
-            message["content"] = [
+            marked: list[JsonValue] = [
                 *content[:-1],
                 {**last, "cache_control": _CACHE_CONTROL},
             ]
+            message["content"] = marked
 
 
 def _usage_metadata(usage: _UsagePayload | None) -> UsageSnapshot | None:
@@ -263,12 +265,12 @@ def _usage_metadata(usage: _UsagePayload | None) -> UsageSnapshot | None:
         "total_tokens": int(usage.get("total_tokens") or input_tokens + output_tokens),
     }
     details = usage.get("prompt_tokens_details") or {}
-    cached = int(details.get("cached_tokens") or 0)
+    cached = as_int(details.get("cached_tokens") or 0)
     if cached:
         snapshot["cached_input_tokens"] = cached
     # OpenRouter chama de `cache_write_tokens`; 9Router e OmniRoute, de
     # `cache_creation_tokens`.
-    written = int(
+    written = as_int(
         details.get("cache_write_tokens") or details.get("cache_creation_tokens") or 0
     )
     if written:
@@ -327,20 +329,15 @@ class OpenRouterChatClient:
         accepted: AcceptedMedia | None = None,
     ) -> dict:
         """Executa a operação  payload."""
-        body: dict[str, Any] = {
-            "model": self.model,
-            "messages": _to_openrouter_messages(messages, accepted),
-        }
+        translated = _to_openrouter_messages(messages, accepted)
+        body: JsonObject = {"model": self.model}
         if self.compact_system_prompt:
             from backend.llm.prompt_projection import compact_small_model_system_prompt
 
-            for message in body["messages"]:
-                if message.get("role") == "system" and isinstance(
-                    message.get("content"), str
-                ):
-                    message["content"] = compact_small_model_system_prompt(
-                        message["content"]
-                    )
+            for message in translated:
+                content = message.get("content")
+                if message.get("role") == "system" and isinstance(content, str):
+                    message["content"] = compact_small_model_system_prompt(content)
                     break
         if temperature is not None:
             # Tiny local models often enter a deterministic repetition loop
@@ -353,7 +350,8 @@ class OpenRouterChatClient:
         if max_tokens is not None:
             body["max_tokens"] = max_tokens
         if tools:
-            body["tools"] = [t.openai_schema() for t in tools]
+            body["tools"] = [chat_completions_tool(t) for t in tools]
+        body["messages"] = [*translated]
         self._apply_prompt_cache(body)
         return body
 
@@ -369,7 +367,7 @@ class OpenRouterChatClient:
         key = prompt_cache_key.get()
         return {"x-session-id": key[:256]} if key else None
 
-    def _apply_prompt_cache(self, body: dict[str, Any]) -> None:
+    def _apply_prompt_cache(self, body: JsonObject) -> None:
         """Cache de prompt conforme o backend por trás deste client.
 
         - OpenRouter com modelo Anthropic ou Gemini: marca system e as duas
@@ -396,7 +394,12 @@ class OpenRouterChatClient:
             if session_id:
                 body["session_id"] = session_id
             if self.model.startswith(("anthropic/", "google/gemini")):
-                mark_cache_breakpoints(body["messages"])
+                sent = body.get("messages")
+                mark_cache_breakpoints(
+                    [m for m in sent if isinstance(m, dict)]
+                    if isinstance(sent, list)
+                    else []
+                )
 
     @staticmethod
     def _first_choice(body: dict) -> dict:

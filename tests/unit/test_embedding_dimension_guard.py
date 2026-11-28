@@ -41,7 +41,7 @@ async def _cleanup(collection: str) -> None:
 
 
 class TestCheckEmbeddingDimension:
-    async def test_first_time_persists_dimension_without_raising(self):
+    async def test_first_time_persists_dimension_without_raising(self) -> None:
         collection = _unique_collection("first-time")
         await _cleanup(collection)
         try:
@@ -51,7 +51,7 @@ class TestCheckEmbeddingDimension:
         finally:
             await _cleanup(collection)
 
-    async def test_same_dimension_does_not_raise(self):
+    async def test_same_dimension_does_not_raise(self) -> None:
         collection = _unique_collection("same")
         await _cleanup(collection)
         try:
@@ -60,7 +60,7 @@ class TestCheckEmbeddingDimension:
         finally:
             await _cleanup(collection)
 
-    async def test_different_dimension_raises_with_clear_message(self):
+    async def test_different_dimension_raises_with_clear_message(self) -> None:
         collection = _unique_collection("mismatch")
         await _cleanup(collection)
         try:
@@ -78,7 +78,7 @@ class TestCheckEmbeddingDimension:
         finally:
             await _cleanup(collection)
 
-    async def test_different_collections_are_independent(self):
+    async def test_different_collections_are_independent(self) -> None:
         collection_a = _unique_collection("independent-a")
         collection_b = _unique_collection("independent-b")
         await _cleanup(collection_a)

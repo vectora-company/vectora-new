@@ -8,7 +8,10 @@ config MCP (``plugins.tools_version``) ou a política de tools
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.llm.base import ChatClient
 
 #: cache: (user_id, mcp_version, policy_version) -> LLM bindado
-_bound_cache: dict[tuple[str, int, int], Any] = {}
+_bound_cache: dict[tuple[str, int, int], ChatClient] = {}

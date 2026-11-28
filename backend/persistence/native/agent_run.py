@@ -10,7 +10,9 @@ import re
 from datetime import UTC, datetime
 from typing import Any, Literal, overload
 
-from pydantic import BaseModel, Field, JsonValue
+from pydantic import BaseModel, Field
+
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 # ---------------------------------------------------------------------------
 # Estados Canônicos de AgentRun
@@ -129,8 +131,35 @@ def redact_sensitive_data(value: str) -> str:
 
 
 @overload
-def redact_sensitive_data(value: dict[str, JsonValue]) -> dict[str, JsonValue]:
+def redact_sensitive_data(value: None) -> None:
+    """Define a sobrecarga para ausência de valor."""
+
+
+@overload
+def redact_sensitive_data(value: str | None) -> str | None:
+    """Define a sobrecarga para texto opcional."""
+
+
+@overload
+def redact_sensitive_data(value: JsonObject) -> JsonObject:
     """Define a sobrecarga para objetos JSON."""
+
+
+@overload
+def redact_sensitive_data(value: list[str]) -> list[str]:
+    """Define a sobrecarga para listas de texto."""
+
+
+@overload
+def redact_sensitive_data(value: list[JsonObject]) -> list[JsonObject]:
+    """Define a sobrecarga para listas de objetos JSON."""
+
+
+@overload
+def redact_sensitive_data(
+    value: tuple[JsonValue, ...],
+) -> tuple[JsonValue, ...]:
+    """Define a sobrecarga para tuplas JSON."""
 
 
 @overload
@@ -139,21 +168,14 @@ def redact_sensitive_data(value: list[JsonValue]) -> list[JsonValue]:
 
 
 @overload
-def redact_sensitive_data(value: tuple[JsonValue, ...]) -> tuple[JsonValue, ...]:
-    """Define a sobrecarga para tuplas JSON."""
+def redact_sensitive_data(value: JsonValue) -> JsonValue:
+    """Define a sobrecarga para qualquer valor JSON."""
 
 
-@overload
-def redact_sensitive_data(value: Any) -> Any:
-    """Define a sobrecarga para valores heterogêneos."""
-
-
-def redact_sensitive_data(value: Any) -> Any:
-    """Aplica redação recursiva a segredos, tokens e chaves conhecidas.
-
-    Usa `Any` justificadamente na implementação interna para acomodar estruturas
-    heterogêneas, árvores arbitrárias de evidências e payloads de logs.
-    """
+def redact_sensitive_data(
+    value: JsonValue | tuple[JsonValue, ...] | list[str] | list[JsonObject],
+) -> JsonValue | tuple[JsonValue, ...] | list[str] | list[JsonObject]:
+    """Aplica redação recursiva a segredos, tokens e chaves conhecidas."""
     if isinstance(value, str):
         redacted = value
         for pattern in _SECRET_PATTERNS:
@@ -168,7 +190,7 @@ def redact_sensitive_data(value: Any) -> Any:
                 redacted = pattern.sub("[REDACTED]", redacted)
         return redacted
     if isinstance(value, dict):
-        result: dict[str, Any] = {}
+        result: JsonObject = {}
         for k, v in value.items():
             if _is_sensitive_key(str(k)):
                 # Usage counters are metadata, not credentials. Preserve them

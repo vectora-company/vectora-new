@@ -21,12 +21,14 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from backend.persistence.native.store import is_store_value_expired
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.store import AgentStore
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +48,7 @@ _LIST_ALL_LIMIT = 1000
 class MemoryItem(BaseModel):
     key: str
     content: str
-    metadata: dict[str, Any] = {}
+    metadata: JsonObject = {}
     updated_at: str = ""
 
 
@@ -58,7 +60,7 @@ class ListMemoriesResponse(BaseModel):
 class CreateMemoryRequest(BaseModel):
     key: str
     content: str
-    metadata: dict[str, Any] = {}
+    metadata: JsonObject = {}
 
 
 class CreateMemoryResponse(BaseModel):
@@ -68,7 +70,7 @@ class CreateMemoryResponse(BaseModel):
 
 class UpdateMemoryRequest(BaseModel):
     content: str
-    metadata: dict[str, Any] = {}
+    metadata: JsonObject = {}
 
 
 class UpdateMemoryResponse(BaseModel):
@@ -156,7 +158,12 @@ def _namespace_candidates(request: Request) -> list[tuple[str, ...]]:
     return [scoped] if scoped == legacy else [scoped, legacy]
 
 
-async def _store() -> Any:
+def _metadata(value: JsonObject) -> JsonObject:
+    metadata = value.get("metadata")
+    return metadata if isinstance(metadata, dict) else {}
+
+
+async def _store() -> AgentStore:
     """Executa a operação  store."""
     from backend.services.agent_factory import get_store
 
@@ -223,9 +230,9 @@ async def list_memories(
         all_mems = [
             MemoryItem(
                 key=item.key,
-                content=item.value.get("content", ""),
-                metadata=item.value.get("metadata") or {},
-                updated_at=item.value.get("updated_at", ""),
+                content=str(item.value.get("content", "")),
+                metadata=_metadata(item.value),
+                updated_at=str(item.value.get("updated_at", "")),
             )
             for item in items
         ]
@@ -265,15 +272,15 @@ async def get_journey(request: Request) -> JourneyResponse:
                     seen.add(item.key)
                     items.append(item)
         for item in items:
-            metadata = item.value.get("metadata") or {}
+            metadata = _metadata(item.value)
             if metadata.get("tag") != "user_model":
                 continue
             facts.append(
                 JourneyFact(
                     key=item.key,
-                    content=item.value.get("content", ""),
+                    content=str(item.value.get("content", "")),
                     source=str(metadata.get("source", "")),
-                    updated_at=item.value.get("updated_at", ""),
+                    updated_at=str(item.value.get("updated_at", "")),
                 )
             )
         facts.sort(key=lambda f: f.updated_at, reverse=True)
@@ -317,9 +324,9 @@ async def get_memory_by_key(request: Request, key: str) -> MemoryItem:
             )
         return MemoryItem(
             key=key,
-            content=item.value.get("content", ""),
-            metadata=item.value.get("metadata") or {},
-            updated_at=item.value.get("updated_at", ""),
+            content=str(item.value.get("content", "")),
+            metadata=_metadata(item.value),
+            updated_at=str(item.value.get("updated_at", "")),
         )
     except HTTPException:
         raise

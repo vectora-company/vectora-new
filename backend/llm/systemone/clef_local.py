@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
 
 import httpx
 
@@ -31,6 +30,7 @@ from backend.llm.systemone.types import (
     SystemOneResponse,
     parse_systemone_response,
 )
+from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ class ClefLocalAdapter(SystemOneProvider):
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
-        serialized_questions: dict[str, Any] = {}
+        serialized_questions: JsonObject = {}
         for q_id, q in request.questions.items():
             if isinstance(q, NoulQuestion):
                 serialized_questions[q_id] = {
@@ -127,7 +127,7 @@ class ClefLocalAdapter(SystemOneProvider):
             elif isinstance(q, ChoiceQuestion):
                 serialized_questions[q_id] = {
                     "type": "choice",
-                    "options": q.options,
+                    "options": [*q.options],
                     **(
                         {"instructions": q.instructions}
                         if q.instructions is not None
@@ -147,7 +147,7 @@ class ClefLocalAdapter(SystemOneProvider):
                     ),
                 }
 
-        payload: dict[str, Any] = {
+        payload: JsonObject = {
             "model": request.model,
             "state": request.state,
             "questions": serialized_questions,

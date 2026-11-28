@@ -11,13 +11,13 @@ from unittest.mock import patch
 
 
 class TestOutPath:
-    def test_out_path_no_parts(self):
+    def test_out_path_no_parts(self) -> None:
         from backend.context_graph.paths import GRAPH_OUT, out_path
 
         result = out_path()
         assert result == Path(GRAPH_OUT)
 
-    def test_out_path_with_parts(self):
+    def test_out_path_with_parts(self) -> None:
         from backend.context_graph.paths import GRAPH_OUT, out_path
 
         result = out_path("cache", "ast")
@@ -25,7 +25,7 @@ class TestOutPath:
 
 
 class TestDefaultGraphJson:
-    def test_returns_string(self):
+    def test_returns_string(self) -> None:
         from backend.context_graph.paths import default_graph_json
 
         result = default_graph_json()
@@ -34,7 +34,7 @@ class TestDefaultGraphJson:
 
 
 class TestGraphOutEnvOverride:
-    def test_absolute_path_override_name(self):
+    def test_absolute_path_override_name(self) -> None:
         with patch.dict(os.environ, {"VECTORA_GRAPH_OUT": "/shared/output"}):
             import importlib
 

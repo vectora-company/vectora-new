@@ -29,7 +29,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import urlparse
 
 from backend.vtypes.browser import (
@@ -41,18 +41,51 @@ from backend.vtypes.browser import (
     validate_browser_tab,
 )
 
+if TYPE_CHECKING:
+    from playwright.async_api import (
+        Browser,
+        BrowserContext,
+        CDPSession,
+        ConsoleMessage,
+        Dialog,
+        Page,
+        Playwright,
+        Request,
+        Response,
+        Route,
+    )
+
+    from backend.vtypes.contracts import JsonObject
+
 logger = logging.getLogger(__name__)
+
+
+class BrowserSession(TypedDict):
+    """Conexão CDP de um workspace e suas abas."""
+
+    playwright: Playwright
+    browser: Browser
+    context: BrowserContext
+    owns_browser: bool
+    tabs: dict[str, TabState]
+    active_tab_id: str
+
+
+class DialogPolicy(TypedDict):
+    action: str
+    prompt_text: str | None
+
 
 _LOG_MAXLEN = 500
 
-_sessions: dict[str, dict[str, Any]] = {}
+_sessions: dict[str, BrowserSession] = {}
 # A CDP target is a shared process-global object. Keep an explicit ownership
 # map so a second workspace cannot silently select and navigate the first
 # workspace's BrowserView. Keyed by stable target_id string.
 
 #: Referências às tasks de accept/dismiss de dialog em voo — sem isso o
 #: garbage collector pode coletar a task antes dela rodar (RUF006).
-_pending_dialog_tasks: set[asyncio.Task[Any]] = set()
+_pending_dialog_tasks: set[asyncio.Task[None]] = set()
 
 
 # --- Bloqueio de egress por salto de redirect (CDP) -------------------------
@@ -72,7 +105,7 @@ _CHECKED_SCHEMES = frozenset({"http", "https"})
 
 
 async def install_redirect_guard(
-    page: Any, check_url: UrlCheck, blocked: dict[str, str]
+    page: Page, check_url: UrlCheck, blocked: dict[str, str]
 ) -> Callable[[], Awaitable[None]] | None:
     """Pausa toda requisição http(s) da página e bloqueia as não permitidas.
 
@@ -82,15 +115,16 @@ async def install_redirect_guard(
     ``blocked["reason"]`` recebe o motivo da última requisição recusada.
     """
     context = getattr(page, "context", None)
-    new_session: Any = getattr(context, "new_cdp_session", None)
+    new_session = getattr(context, "new_cdp_session", None)
     if not callable(new_session):
         return None
     session = await new_session(page)
     pending: set[asyncio.Task[None]] = set()
 
-    async def _resolve(event: dict[str, Any]) -> None:
+    async def _resolve(event: JsonObject) -> None:
         request_id = event["requestId"]
-        url = str(event.get("request", {}).get("url", ""))
+        request = event.get("request")
+        url = str(request.get("url", "")) if isinstance(request, dict) else ""
         allowed = True
         reason = ""
         if urlparse(url).scheme.lower() in _CHECKED_SCHEMES:
@@ -111,7 +145,7 @@ async def install_redirect_guard(
         except Exception:
             logger.debug("redirect_guard: requisição já encerrada", exc_info=True)
 
-    def _on_paused(event: dict[str, Any]) -> None:
+    def _on_paused(event: JsonObject) -> None:
         task = asyncio.ensure_future(_resolve(event))
         pending.add(task)
         task.add_done_callback(pending.discard)
@@ -130,7 +164,7 @@ async def install_redirect_guard(
     return release
 
 
-async def _release_route_guard(page: Any) -> None:
+async def _release_route_guard(page: Page) -> None:
     """Remove a temporary new-tab guard when its page is explicitly closed."""
     owner = getattr(page, "_vectora_route_owner", None)
     handler = getattr(page, "_vectora_route_handler", None)
@@ -156,16 +190,16 @@ async def _release_route_guard(page: Any) -> None:
 class TabState:
     """Estado de uma aba: página Playwright + sessão CDP + buffers de log."""
 
-    page: Any
-    cdp: Any
+    page: Page
+    cdp: CDPSession
     console_log: deque[BrowserConsoleEntry] = field(
         default_factory=lambda: deque(maxlen=_LOG_MAXLEN)
     )
     network_log: deque[BrowserNetworkEntry] = field(
         default_factory=lambda: deque(maxlen=_LOG_MAXLEN)
     )
-    dialog_policy: dict[str, Any] | None = None
-    _request_entries: dict[int, dict[str, Any]] = field(default_factory=dict)
+    dialog_policy: DialogPolicy | None = None
+    _request_entries: dict[int, BrowserNetworkEntry] = field(default_factory=dict)
 
 
 def has_browser_session(workspace_id: str) -> bool:
@@ -194,7 +228,7 @@ def _register_page_listeners(tab: TabState) -> None:
     """
     page = tab.page
 
-    def _on_console(msg: Any) -> None:
+    def _on_console(msg: ConsoleMessage) -> None:
         try:
             entry: BrowserConsoleEntry = {"type": msg.type, "text": msg.text}
             validate_browser_console_entry(entry)
@@ -202,23 +236,22 @@ def _register_page_listeners(tab: TabState) -> None:
         except Exception:
             logger.debug("browser_session: falha ao capturar console log")
 
-    def _on_request(request: Any) -> None:
+    def _on_request(request: Request) -> None:
         try:
-            entry = {
+            entry: BrowserNetworkEntry = {
                 "request_id": str(id(request)),
                 "url": request.url,
                 "method": request.method,
                 "resource_type": request.resource_type,
                 "status": None,
             }
-            network_entry = cast("BrowserNetworkEntry", entry)
-            validate_browser_network_entry(network_entry)
-            tab.network_log.append(network_entry)
+            validate_browser_network_entry(entry)
+            tab.network_log.append(entry)
             tab._request_entries[id(request)] = entry
         except Exception:
             logger.debug("browser_session: falha ao capturar network request")
 
-    def _on_response(response: Any) -> None:
+    def _on_response(response: Response) -> None:
         try:
             entry = tab._request_entries.get(id(response.request))
             if entry is not None:
@@ -226,17 +259,17 @@ def _register_page_listeners(tab: TabState) -> None:
         except Exception:
             logger.debug("browser_session: falha ao capturar network response")
 
-    def _on_request_failed(request: Any) -> None:
+    def _on_request_failed(request: Request) -> None:
         try:
             entry = tab._request_entries.get(id(request))
             if entry is not None:
                 entry["status"] = "failed"
                 entry["error"] = getattr(request.failure, "error_text", None)
-                validate_browser_network_entry(cast("BrowserNetworkEntry", entry))
+                validate_browser_network_entry(entry)
         except Exception:
             logger.debug("browser_session: falha ao capturar falha de request")
 
-    def _on_dialog(dialog: Any) -> None:
+    def _on_dialog(dialog: Dialog) -> None:
         policy = tab.dialog_policy
         if policy is None:
             # Sem política definida — mesmo comportamento de hoje: o dialog
@@ -261,12 +294,13 @@ def _register_page_listeners(tab: TabState) -> None:
     page.on("dialog", _on_dialog)
 
 
-async def _create_tab_state(page: Any) -> TabState:
+async def _create_tab_state(page: Page) -> TabState:
     cdp = await page.context.new_cdp_session(page)
     target_id: str | None = None
     try:
         info = await cdp.send("Target.getTargetInfo")
-        val = info.get("targetInfo", {}).get("targetId")
+        target_info = info.get("targetInfo")
+        val = target_info.get("targetId") if isinstance(target_info, dict) else None
         if isinstance(val, str) and val.strip():
             target_id = val.strip()
     except Exception as exc:
@@ -281,13 +315,13 @@ async def _create_tab_state(page: Any) -> TabState:
             "Não foi possível obter uma identidade de alvo CDP estável para a página"
         )
 
-    page._target_id = target_id
+    page.__dict__["_target_id"] = target_id
     tab = TabState(page=page, cdp=cdp)
     _register_page_listeners(tab)
     return tab
 
 
-def _find_agent_page(context: Any) -> Any:
+def _find_agent_page(context: BrowserContext) -> Page:
     """Select an existing Electron BrowserView target.
 
     Electron's CDP endpoint does not implement ``Target.createTarget``;
@@ -319,7 +353,7 @@ def _find_agent_page(context: Any) -> Any:
 _page_owners: dict[str, str] = {}
 
 
-def _page_target_id(page: Any) -> str:
+def _page_target_id(page: Page) -> str:
     """Extrai uma identidade estável do alvo CDP/Chromium associado à página.
 
     Evita que wrappers Python distintos do Playwright (vindos de conexões CDP
@@ -340,7 +374,7 @@ def _page_target_id(page: Any) -> str:
     )
 
 
-def _forget_page_owner(page: Any) -> None:
+def _forget_page_owner(page: Page) -> None:
     """Esquece o dono da página. Uma página sem identidade de alvo (já fechada
     ou nunca ligada ao Chromium) não tem dono registrado, e isso não pode
     impedir o fechamento da sessão."""
@@ -350,7 +384,7 @@ def _forget_page_owner(page: Any) -> None:
         logger.debug("browser_session: página sem identidade de alvo ao fechar")
 
 
-def _claim_page(page: Any, workspace_id: str) -> None:
+def _claim_page(page: Page, workspace_id: str) -> None:
     tid = _page_target_id(page)
     owner = _page_owners.get(tid)
     if owner is not None and owner != workspace_id:
@@ -360,7 +394,7 @@ def _claim_page(page: Any, workspace_id: str) -> None:
     _page_owners[tid] = workspace_id
 
 
-async def get_browser_page(workspace_id: str, tab_id: str | None = None) -> Any:
+async def get_browser_page(workspace_id: str, tab_id: str | None = None) -> Page:
     """Retorna a `Page` da aba resolvida (ativa, se `tab_id` omitido),
     criando o browser (e a primeira aba) sob demanda."""
     session = _sessions.get(workspace_id)
@@ -464,8 +498,8 @@ async def new_tab(
             "O Browser Workbench não suporta criar uma nova aba via CDP; "
             "selecione uma aba existente ou abra uma nova aba no Electron."
         ) from exc
-    route_handler: Callable[[Any], Awaitable[None]] | None = None
-    route_owner: Any | None = None
+    route_handler: Callable[[Route], Awaitable[None]] | None = None
+    route_owner: Page | BrowserContext
     blocked_reason: dict[str, str] = {}
     # A page-level route can miss the first request of a newly-created popup.
     # Prefer the context while the target is being initialized so redirects
@@ -482,7 +516,7 @@ async def new_tab(
         route = getattr(route_owner, "route", None)
     if url and url_validator is not None and callable(route):
 
-        async def _guard(route_obj: Any) -> None:
+        async def _guard(route_obj: Route) -> None:
             """Abort navigation requests rejected by the workspace policy."""
             request = getattr(route_obj, "request", None)
             request_url = str(getattr(request, "url", ""))
@@ -508,15 +542,15 @@ async def new_tab(
             page, _check_redirect_hop, blocked_reason
         )
         if release_redirect is not None:
-            page._vectora_redirect_release = release_redirect
+            page.__dict__["_vectora_redirect_release"] = release_redirect
     navigation_succeeded = False
     try:
         if url:
             await page.goto(url, wait_until="domcontentloaded")
         navigation_succeeded = True
         if route_handler is not None:
-            page._vectora_route_owner = route_owner
-            page._vectora_route_handler = route_handler
+            page.__dict__["_vectora_route_owner"] = route_owner
+            page.__dict__["_vectora_route_handler"] = route_handler
     except Exception as exc:
         await _release_route_guard(page)
         with suppress(Exception):
@@ -614,7 +648,9 @@ def get_tab_state(workspace_id: str, tab_id: str | None = None) -> TabState | No
     return session["tabs"].get(resolved)
 
 
-async def get_cdp_session(workspace_id: str, tab_id: str | None = None) -> Any:
+async def get_cdp_session(
+    workspace_id: str, tab_id: str | None = None
+) -> CDPSession | None:
     """Sessão CDP da aba resolvida, ou `None` se a sessão/aba não existir."""
     tab = get_tab_state(workspace_id, tab_id)
     return tab.cdp if tab is not None else None
@@ -654,7 +690,7 @@ function(value) {
 
 
 async def resolve_uid_center(
-    cdp: Any, backend_node_id: int
+    cdp: CDPSession, backend_node_id: int
 ) -> tuple[float, float] | None:
     """Centro (x, y) em coordenadas de viewport do elemento identificado por
     `backend_node_id` (o `uid` de `browser_snapshot`), via CDP
@@ -672,7 +708,7 @@ async def resolve_uid_center(
     return (sum(xs) / len(xs), sum(ys) / len(ys))
 
 
-async def set_value_by_uid(cdp: Any, backend_node_id: int, value: str) -> bool:
+async def set_value_by_uid(cdp: CDPSession, backend_node_id: int, value: str) -> bool:
     """Preenche o elemento identificado por `backend_node_id` com `value`,
     de um jeito compatível com inputs controlados por React (ver
     `_SET_VALUE_JS`). `False` se o nó não existe mais ou não é

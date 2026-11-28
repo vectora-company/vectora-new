@@ -17,10 +17,13 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import ClassVar, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from backend.settings import settings
 from backend.vtypes import Workspace
+
+if TYPE_CHECKING:
+    from backend.vtypes.tools import GitInfo
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +149,7 @@ class WorkspaceRegistry:
         if wid not in self._workspaces:
             name = Path(resolved).name or "workspace"
             # Auto-detecção de git
-            git_info: dict = {}
+            git_info: GitInfo = {"is_git_repo": False}
             try:
                 from backend.tools.git import detect_git_info
 

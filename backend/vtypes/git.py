@@ -2,37 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class GitContract(BaseModel):
-    """Modelo imutável que também oferece leitura compatível com mappings."""
+    """Base imutável dos contratos do Git Workbench."""
 
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
-
-    # Any is intentional: this compatibility boundary mirrors dynamic JSON access.
-    def __getitem__(self, key: str) -> Any:
-        """Compatibilidade de leitura para callers JSON legados.
-
-        ``Any`` is intentional here: the accessor mirrors Pydantic's dynamic
-        field lookup for legacy mapping callers, while typed model attributes
-        remain the preferred API for new code.
-        """
-        return getattr(self, key)
-
-    # Any is intentional: legacy mapping callers expect the stored field type.
-    def get(self, key: str, default: object = None) -> Any:
-        """Lê um campo opcional para callers JSON legados.
-
-        ``Any`` is intentional for the same dynamic compatibility boundary as
-        :meth:`__getitem__`; typed attributes remain available to new code.
-        """
-        return getattr(self, key, default)
-
-    def __contains__(self, key: object) -> bool:
-        return isinstance(key, str) and key in type(self).model_fields
 
 
 class GitCommitSnapshot(GitContract):

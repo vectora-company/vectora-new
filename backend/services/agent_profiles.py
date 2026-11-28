@@ -15,7 +15,15 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Unpack
+
+from backend.vtypes.sql import optional_text
+
+if TYPE_CHECKING:
+    import aiosqlite
+
+    from backend.vtypes.services import ProfileChanges
+    from backend.vtypes.sql import SqlRow
 
 logger = logging.getLogger(__name__)
 
@@ -39,30 +47,31 @@ class AgentProfile:
     updated_at: str | None = None
 
 
-def _row_to_profile(row: dict[str, Any]) -> AgentProfile:
-    scope_raw = row.get("tool_scope") or "[]"
+def _row_to_profile(row: aiosqlite.Row) -> AgentProfile:
+    data: SqlRow = dict(row)
     try:
-        scope = json.loads(scope_raw) if isinstance(scope_raw, str) else list(scope_raw)
-    except (ValueError, TypeError):
+        scope = json.loads(str(data.get("tool_scope") or "[]"))
+    except ValueError:
         scope = []
+    budget = data.get("budget_cents")
     return AgentProfile(
-        id=row["id"],
-        user_id=str(row["user_id"]),
-        name=row["name"],
-        title=row.get("title") or "",
-        icon=row.get("icon") or "",
-        color=row.get("color") or "",
-        instruction_path=row.get("instruction_path"),
+        id=str(data["id"]),
+        user_id=str(data["user_id"]),
+        name=str(data["name"]),
+        title=str(data.get("title") or ""),
+        icon=str(data.get("icon") or ""),
+        color=str(data.get("color") or ""),
+        instruction_path=optional_text(data.get("instruction_path")),
         tool_scope=scope,
-        model_override=row.get("model_override"),
-        budget_cents=row.get("budget_cents"),
-        status=row.get("status") or "active",
-        created_at=row.get("created_at"),
-        updated_at=row.get("updated_at"),
+        model_override=optional_text(data.get("model_override")),
+        budget_cents=int(budget) if budget is not None else None,
+        status=str(data.get("status") or "active"),
+        created_at=optional_text(data.get("created_at")),
+        updated_at=optional_text(data.get("updated_at")),
     )
 
 
-async def _get_db() -> Any:
+async def _get_db() -> aiosqlite.Connection:
     """Conexão aiosqlite com row_factory de dict (injetável em testes) —
     mesmo padrão de ``backend/scheduling/background_tasks.py::_get_db``."""
     import aiosqlite
@@ -70,10 +79,8 @@ async def _get_db() -> Any:
     from backend.settings import settings
 
     db_path = settings.db_dsn or ":memory:"
-    conn: Any = await aiosqlite.connect(db_path)
-    conn.row_factory = lambda c, r: dict(
-        zip([col[0] for col in c.description], r, strict=False)
-    )
+    conn = await aiosqlite.connect(db_path)
+    conn.row_factory = aiosqlite.Row
     return conn
 
 
@@ -184,7 +191,9 @@ async def get_profile(profile_id: str) -> AgentProfile | None:
     return _row_to_profile(row) if row else None
 
 
-async def update_profile(profile_id: str, **changes: Any) -> AgentProfile | None:
+async def update_profile(
+    profile_id: str, **changes: Unpack[ProfileChanges]
+) -> AgentProfile | None:
     """Atualiza os campos passados; devolve ``None`` se o perfil não existir.
 
     Loga os campos alterados (auditoria mínima — não é a revisão versionada

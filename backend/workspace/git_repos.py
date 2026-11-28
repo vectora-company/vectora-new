@@ -15,7 +15,7 @@ import tempfile
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from backend.workspace.workspace_config import WORKSPACE_CONFIG_FILENAME
 
@@ -41,6 +41,10 @@ _SKIP_DIRECTORIES: Final = frozenset(
         "coverage",
     }
 )
+
+
+if TYPE_CHECKING:
+    from backend.vtypes.sandbox import TomlValue
 
 
 @dataclass(frozen=True)
@@ -125,7 +129,7 @@ def discover_repos(root: Path) -> list[GitRepoEntry]:
     return entries + sorted(found, key=lambda entry: entry.path)
 
 
-def normalize_repo_path(value: object) -> str | None:
+def normalize_repo_path(value: TomlValue | None) -> str | None:
     """Caminho relativo e seguro, em ``/``; ``""`` é o padrão; ``None`` se inválido.
 
     Recusa absoluto, unidade do Windows, ``..`` e caracteres nulos: a escolha nunca

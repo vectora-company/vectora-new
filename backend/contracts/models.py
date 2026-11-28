@@ -5,13 +5,14 @@ Contratos canônicos de settings.json versionado e perfis de verificação pós-
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 # ============================================================================
 # Contrato canônico de settings.json (v1)
 # ============================================================================
+from backend.vtypes.contracts import JsonObject
 
 
 class LocaleSettings(BaseModel):
@@ -106,32 +107,32 @@ class FileSettings(BaseModel):
 class WorkbenchesSettings(BaseModel):
     """Configurações específicas das workbenches.
 
-    O uso de `dict[str, Any]` é justificado pois as seções de cada workbench são
+    O uso de `JsonObject` é justificado pois as seções de cada workbench são
     livres e flexíveis na v1 do schema e poderão ser estritamente tipadas em versões futuras.
     """
 
-    git: dict[str, Any] = Field(
+    git: JsonObject = Field(
         default_factory=dict, description="Configurações da Git Workbench"
     )
-    plan: dict[str, Any] = Field(
+    plan: JsonObject = Field(
         default_factory=dict, description="Configurações do Plan Mode"
     )
-    tasks: dict[str, Any] = Field(
+    tasks: JsonObject = Field(
         default_factory=dict, description="Configurações de tarefas agendadas"
     )
-    browser: dict[str, Any] = Field(
+    browser: JsonObject = Field(
         default_factory=dict, description="Configurações da Browser Workbench"
     )
-    storage: dict[str, Any] = Field(
+    storage: JsonObject = Field(
         default_factory=dict, description="Configurações de storage/banco"
     )
-    contextGraph: dict[str, Any] = Field(
+    contextGraph: JsonObject = Field(
         default_factory=dict, description="Configurações do Context Graph"
     )
-    library: dict[str, Any] = Field(
+    library: JsonObject = Field(
         default_factory=dict, description="Configurações da biblioteca/docs"
     )
-    terminal: dict[str, Any] = Field(
+    terminal: JsonObject = Field(
         default_factory=dict, description="Configurações do Terminal integrado"
     )
 

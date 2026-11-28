@@ -13,13 +13,20 @@ submódulo específico é necessário.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 __all__ = [
     "runtime_settings",
     "workspace_registry",
 ]
 
 
-def __getattr__(name: str) -> object:
+if TYPE_CHECKING:
+    from backend.workspace.runtime_settings import RuntimeSettings
+    from backend.workspace.workspace import WorkspaceRegistry
+
+
+def __getattr__(name: str) -> WorkspaceRegistry | RuntimeSettings:
     if name == "workspace_registry":
         from backend.workspace.workspace import workspace_registry
 

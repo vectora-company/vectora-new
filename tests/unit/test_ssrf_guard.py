@@ -32,38 +32,38 @@ class TestIsBlockedIp:
             "64:ff9b::c000:0201",  # NAT64 embedding 192.0.2.1
         ],
     )
-    def test_blocks_private_and_special_ranges(self, ip):
+    def test_blocks_private_and_special_ranges(self, ip: str) -> None:
         assert _is_blocked_ip(ip) is True
 
     @pytest.mark.parametrize("ip", ["8.8.8.8", "1.1.1.1", "93.184.216.34"])
-    def test_allows_public_ips(self, ip):
+    def test_allows_public_ips(self, ip: str) -> None:
         assert _is_blocked_ip(ip) is False
 
-    def test_unparseable_string_is_blocked(self):
+    def test_unparseable_string_is_blocked(self) -> None:
         assert _is_blocked_ip("not-an-ip") is True
 
 
 class TestIsUrlSsrfSafe:
-    def test_blocks_metadata_ip(self):
+    def test_blocks_metadata_ip(self) -> None:
         with patch(
             "socket.getaddrinfo",
             return_value=[(2, 1, 6, "", ("169.254.169.254", 80))],
         ):
             assert is_url_ssrf_safe("http://169.254.169.254/latest/meta-data/") is False
 
-    def test_blocks_localhost(self):
+    def test_blocks_localhost(self) -> None:
         with patch(
             "socket.getaddrinfo", return_value=[(2, 1, 6, "", ("127.0.0.1", 8080))]
         ):
             assert is_url_ssrf_safe("http://localhost:8080/health") is False
 
-    def test_allows_public_domain(self):
+    def test_allows_public_domain(self) -> None:
         with patch(
             "socket.getaddrinfo", return_value=[(2, 1, 6, "", ("93.184.216.34", 80))]
         ):
             assert is_url_ssrf_safe("https://example.com/") is True
 
-    def test_dns_rebinding_domain_resolving_to_private_ip_is_blocked(self):
+    def test_dns_rebinding_domain_resolving_to_private_ip_is_blocked(self) -> None:
         """Domínio público que resolve pra IP interno (DNS rebinding) — o
         ponto de checar o IP resolvido, não só a string do host."""
         with patch(
@@ -71,16 +71,16 @@ class TestIsUrlSsrfSafe:
         ):
             assert is_url_ssrf_safe("http://attacker-controlled.example/") is False
 
-    def test_dns_rebinding_domain_resolving_to_cgnat_is_blocked(self):
+    def test_dns_rebinding_domain_resolving_to_cgnat_is_blocked(self) -> None:
         """CGNAT não é público só porque ``ipaddress`` não o chama privado."""
         with patch(
             "socket.getaddrinfo", return_value=[(2, 1, 6, "", ("100.64.0.1", 80))]
         ):
             assert is_url_ssrf_safe("http://internal-carrier.example/") is False
 
-    def test_url_without_hostname_is_blocked(self):
+    def test_url_without_hostname_is_blocked(self) -> None:
         assert is_url_ssrf_safe("not-a-valid-url") is False
 
-    def test_dns_resolution_failure_is_blocked(self):
+    def test_dns_resolution_failure_is_blocked(self) -> None:
         with patch("socket.getaddrinfo", side_effect=OSError("no such host")):
             assert is_url_ssrf_safe("http://nonexistent.invalid/") is False

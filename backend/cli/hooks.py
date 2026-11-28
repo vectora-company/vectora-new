@@ -12,10 +12,11 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 from backend.engine import hooks as engine_hooks
 from backend.tools.context import ToolContext
+from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.workspace.workspace_config import (
     HookRule,
     hooks_approval_valid,
@@ -35,15 +36,15 @@ class HooksArgs(Protocol):
 
 
 def _result(
-    status: str, data: object = None, error: str | None = None
-) -> dict[str, object]:
-    value: dict[str, object] = {"schema_version": "1", "status": status, "data": data}
+    status: str, data: JsonValue = None, error: str | None = None
+) -> JsonObject:
+    value: JsonObject = {"schema_version": "1", "status": status, "data": data}
     if error is not None:
         value["error"] = error
     return value
 
 
-def _print(value: dict[str, object], output: str) -> int:
+def _print(value: JsonObject, output: str) -> int:
     if output == "json":
         print(json.dumps(value, ensure_ascii=False, sort_keys=True))
     elif value["status"] == "error":
@@ -83,7 +84,7 @@ def _rules_of(root: Path) -> list[HookRule]:
     return list(config.hooks.rules) if config is not None else []
 
 
-def _list(root: Path) -> dict[str, object]:
+def _list(root: Path) -> JsonObject:
     rules = _rules_of(root)
     return _result(
         "ok",
@@ -95,9 +96,9 @@ def _list(root: Path) -> dict[str, object]:
                     "id": rule.id,
                     "event": rule.event,
                     "mode": rule.mode,
-                    "tools": rule.tools,
+                    "tools": [*rule.tools],
                     "timeout_s": rule.timeout_s,
-                    "command": rule.command,
+                    "command": [*rule.command],
                 }
                 for rule in rules
             ],
@@ -105,7 +106,7 @@ def _list(root: Path) -> dict[str, object]:
     )
 
 
-def _synthetic_arguments(raw: str) -> dict[str, Any] | None:
+def _synthetic_arguments(raw: str) -> JsonObject | None:
     try:
         parsed = json.loads(raw or "{}")
     except json.JSONDecodeError:
@@ -113,7 +114,7 @@ def _synthetic_arguments(raw: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _test(root: Path, args: HooksArgs) -> dict[str, object]:
+def _test(root: Path, args: HooksArgs) -> JsonObject:
     rule = next((item for item in _rules_of(root) if item.id == args.rule_id), None)
     if rule is None:
         return _result("error", error=f"regra não encontrada: {args.rule_id}")

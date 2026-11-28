@@ -6,15 +6,18 @@ from __future__ import annotations
 import pytest
 
 from backend.testing.mocks import FakeChatClient, text_chunk, text_response
+from backend.vtypes import VMessage
 from backend.vtypes.message import MessageRole, ToolCall, ToolCallChunk, VMessageChunk
 
 
-async def _collect(client: FakeChatClient, messages, **kwargs) -> list[VMessageChunk]:
+async def _collect(
+    client: FakeChatClient, messages: list[VMessage], **kwargs
+) -> list[VMessageChunk]:
     return [chunk async for chunk in client.astream(messages, **kwargs)]
 
 
 class TestAstream:
-    async def test_devolve_o_proximo_turno_roteirizado_a_cada_chamada(self):
+    async def test_devolve_o_proximo_turno_roteirizado_a_cada_chamada(self) -> None:
         client = FakeChatClient(turns=[[text_chunk("um")], [text_chunk("dois")]])
 
         primeiro = await _collect(client, [])
@@ -24,7 +27,7 @@ class TestAstream:
         assert [c.delta_text for c in segundo] == ["dois"]
         assert client.stream_calls == 2
 
-    async def test_tool_call_chunk_roteirizavel(self):
+    async def test_tool_call_chunk_roteirizavel(self) -> None:
         turno = [
             VMessageChunk(
                 tool_call_chunks=[
@@ -38,7 +41,7 @@ class TestAstream:
 
         assert chunks[0].tool_call_chunks[0].name == "buscar"
 
-    async def test_registra_mensagens_e_tools_recebidas(self):
+    async def test_registra_mensagens_e_tools_recebidas(self) -> None:
         client = FakeChatClient(turns=[[text_chunk("ok")]])
         msgs = [text_response("oi")]
 
@@ -48,7 +51,7 @@ class TestAstream:
         assert client.calls[0]["kind"] == "astream"
         assert client.calls[0]["messages"] == msgs
 
-    async def test_estourar_o_script_levanta_assertion_error_clara(self):
+    async def test_estourar_o_script_levanta_assertion_error_clara(self) -> None:
         client = FakeChatClient(turns=[[text_chunk("único turno")]])
         await _collect(client, [])
 
@@ -57,7 +60,7 @@ class TestAstream:
 
 
 class TestAgenerate:
-    async def test_devolve_a_proxima_resposta_roteirizada(self):
+    async def test_devolve_a_proxima_resposta_roteirizada(self) -> None:
         client = FakeChatClient(responses=[text_response("primeira")])
 
         resultado = await client.agenerate([])
@@ -66,7 +69,7 @@ class TestAgenerate:
         assert resultado.role == MessageRole.ASSISTANT
         assert client.generate_calls == 1
 
-    async def test_resposta_com_tool_calls(self):
+    async def test_resposta_com_tool_calls(self) -> None:
         resposta = text_response("")
         resposta.tool_calls = [ToolCall(id="1", name="somar", args={"a": 1, "b": 2})]
         client = FakeChatClient(responses=[resposta])
@@ -75,7 +78,7 @@ class TestAgenerate:
 
         assert resultado.tool_calls[0].name == "somar"
 
-    async def test_estourar_o_script_levanta_assertion_error_clara(self):
+    async def test_estourar_o_script_levanta_assertion_error_clara(self) -> None:
         client = FakeChatClient(responses=[])
 
         with pytest.raises(AssertionError, match="script insuficiente"):

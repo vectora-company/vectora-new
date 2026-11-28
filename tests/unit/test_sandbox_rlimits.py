@@ -10,7 +10,7 @@ import pytest
 from backend.sandbox import rlimits
 
 
-def _fake_resource_module():
+def _fake_resource_module() -> MagicMock:
     fake = MagicMock()
     fake.RLIMIT_NPROC = 1
     fake.RLIMIT_NOFILE = 2
@@ -19,7 +19,9 @@ def _fake_resource_module():
     return fake
 
 
-def test_perfil_normal_aplica_valores_esperados(monkeypatch):
+def test_perfil_normal_aplica_valores_esperados(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake = _fake_resource_module()
     monkeypatch.setitem(__import__("sys").modules, "resource", fake)
 
@@ -37,7 +39,9 @@ def test_perfil_normal_aplica_valores_esperados(monkeypatch):
     assert calls[fake.RLIMIT_CORE] == (0, 0)
 
 
-def test_perfil_lockdown_usa_valores_mais_restritos(monkeypatch):
+def test_perfil_lockdown_usa_valores_mais_restritos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake = _fake_resource_module()
     monkeypatch.setitem(__import__("sys").modules, "resource", fake)
 
@@ -52,7 +56,7 @@ def test_perfil_lockdown_usa_valores_mais_restritos(monkeypatch):
     assert rlimits.LOCKDOWN_PROFILE.nofile < rlimits.NORMAL_PROFILE.nofile
 
 
-def test_modulo_resource_ausente_nao_lanca(monkeypatch):
+def test_modulo_resource_ausente_nao_lanca(monkeypatch: pytest.MonkeyPatch) -> None:
     # Erro/borda: plataforma sem `resource` (ex. Windows) — nunca deve
     # levantar, o worker segue sem os limites.
     import sys
@@ -62,7 +66,9 @@ def test_modulo_resource_ausente_nao_lanca(monkeypatch):
     rlimits.apply_rlimits(lockdown=False)
 
 
-def test_setrlimit_levantando_oserror_nao_propaga(monkeypatch):
+def test_setrlimit_levantando_oserror_nao_propaga(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Erro/borda: baixar um limite já reduzido pelo SO (permissão
     # insuficiente) levanta OSError/ValueError — degrada com aviso.
     fake = _fake_resource_module()
@@ -73,7 +79,9 @@ def test_setrlimit_levantando_oserror_nao_propaga(monkeypatch):
 
 
 @pytest.mark.parametrize("lockdown", [True, False])
-def test_todos_os_tres_limites_sao_configurados(monkeypatch, lockdown):
+def test_todos_os_tres_limites_sao_configurados(
+    monkeypatch: pytest.MonkeyPatch, lockdown: bool
+) -> None:
     fake = _fake_resource_module()
     monkeypatch.setitem(__import__("sys").modules, "resource", fake)
 
@@ -85,7 +93,7 @@ def test_todos_os_tres_limites_sao_configurados(monkeypatch, lockdown):
 # ── tamanho de arquivo e memória ────────────────────────────────────────────
 
 
-def _aplicar_em_subprocesso(**limites):
+def _aplicar_em_subprocesso(**limites: int) -> dict[str, int]:
     """Aplica os limites num processo filho e devolve o que ele enxerga depois."""
     import json
     import subprocess
@@ -109,19 +117,19 @@ def _aplicar_em_subprocesso(**limites):
     return json.loads(saida.stdout)
 
 
-def test_max_file_mb_limita_o_tamanho_de_cada_arquivo():
+def test_max_file_mb_limita_o_tamanho_de_cada_arquivo() -> None:
     limites = _aplicar_em_subprocesso(max_file_mb=64)
 
     assert limites["fsize"] == 64 * 1024 * 1024
 
 
-def test_memory_limit_mb_limita_o_espaco_de_enderecamento():
+def test_memory_limit_mb_limita_o_espaco_de_enderecamento() -> None:
     limites = _aplicar_em_subprocesso(memory_limit_mb=2048)
 
     assert limites["as"] == 2048 * 1024 * 1024
 
 
-def test_sem_declarar_nao_limita_arquivo_nem_memoria():
+def test_sem_declarar_nao_limita_arquivo_nem_memoria() -> None:
     import resource
 
     limites = _aplicar_em_subprocesso()
@@ -130,7 +138,9 @@ def test_sem_declarar_nao_limita_arquivo_nem_memoria():
     assert limites["as"] == resource.RLIM_INFINITY
 
 
-def test_limits_from_environment_le_so_inteiros_positivos(monkeypatch):
+def test_limits_from_environment_le_so_inteiros_positivos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.sandbox.rlimits import limits_from_environment
 
     monkeypatch.setenv("VECTORA_SANDBOX_MAX_FILE_MB", "512")

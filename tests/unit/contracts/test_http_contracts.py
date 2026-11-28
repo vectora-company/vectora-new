@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 from fastapi.testclient import TestClient

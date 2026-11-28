@@ -14,7 +14,9 @@ import json
 import logging
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+from pydantic import TypeAdapter
 
 from backend.browser.session import (
     close_tab,
@@ -29,7 +31,21 @@ from backend.services.egress_policy import async_is_url_allowed, is_url_allowed
 from backend.services.policy_compiler import PolicySnapshot, compile_policy_snapshot
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
-from backend.vtypes.browser import NetworkProfile
+from backend.vtypes.browser import (
+    AxNode,
+    AxValue,
+    HeapDelta,
+    HeapGroup,
+    HeapSnapshot,
+    LongTask,
+    NetworkProfile,
+    TraceAnalysis,
+)
+
+if TYPE_CHECKING:
+    from playwright.async_api import CDPSession
+
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -351,7 +367,10 @@ async def browser_get_network_request(
     )
 
 
-def _build_ax_outline(nodes: list[dict[str, Any]], max_nodes: int = 500) -> str:
+_EMPTY_AX_VALUE: AxValue = {}
+
+
+def _build_ax_outline(nodes: list[AxNode], max_nodes: int = 500) -> str:
     """Achata a árvore de acessibilidade (CDP `Accessibility.getFullAXTree`)
     numa lista indentada por role/nome, um `[uid=<backendDOMNodeId>]` por nó
     — o `backendDOMNodeId` é estável enquanto o nó não sai do DOM, e é o
@@ -380,8 +399,8 @@ def _build_ax_outline(nodes: list[dict[str, Any]], max_nodes: int = 500) -> str:
             return
         child_depth = depth
         if not node.get("ignored", False):
-            role = node.get("role", {}).get("value", "")
-            name = node.get("name", {}).get("value", "")
+            role = node.get("role", _EMPTY_AX_VALUE).get("value", "")
+            name = node.get("name", _EMPTY_AX_VALUE).get("value", "")
             backend_id = node.get("backendDOMNodeId")
             label = f'{role} "{name}"' if name else str(role)
             uid_part = f" [uid={backend_id}]" if backend_id is not None else ""
@@ -424,7 +443,8 @@ async def browser_snapshot(ctx: ToolContext, tab_id: str | None = None) -> str:
     try:
         await tab.cdp.send("Accessibility.enable")
         data = await tab.cdp.send("Accessibility.getFullAXTree")
-        return _build_ax_outline(data.get("nodes", []))
+        nodes = TypeAdapter(list[AxNode]).validate_python(data.get("nodes", []))
+        return _build_ax_outline(nodes)
     except Exception as exc:
         logger.exception("browser_snapshot failed")
         return json.dumps({"status": "error", "error": str(exc)})
@@ -568,7 +588,8 @@ async def browser_emulate(
 
         if network_throttle is not None:
             await tab.cdp.send(
-                "Network.emulateNetworkConditions", _NETWORK_PROFILES[network_throttle]
+                "Network.emulateNetworkConditions",
+                dict(_NETWORK_PROFILES[network_throttle]),
             )
             applied.append("network_throttle")
 
@@ -592,13 +613,13 @@ async def browser_emulate(
 #: não fica no TabState em si porque é um estado transitório de uma chamada
 #: de tool, não algo que a aba carrega durante toda sua vida (diferente de
 #: console_log/network_log).
-_trace_buffers: dict[int, list[dict[str, Any]]] = {}
+_trace_buffers: dict[int, list[JsonObject]] = {}
 _screencast_buffers: dict[int, list[str]] = {}
 
 #: Referências às tasks de ack de frame de screencast em voo — mesmo motivo
 #: de `_pending_dialog_tasks` em `backend/browser/session.py`: sem isso o
 #: garbage collector pode coletar a task antes dela rodar (RUF006).
-_pending_screencast_ack_tasks: set[asyncio.Task[Any]] = set()
+_pending_screencast_ack_tasks: set[asyncio.Task[JsonObject]] = set()
 
 
 def _artifacts_dir(workspace_id: str) -> Path | None:
@@ -649,11 +670,13 @@ async def browser_start_trace(ctx: ToolContext, tab_id: str | None = None) -> st
             {"status": "error", "error": "já existe um trace em andamento nesta aba"}
         )
 
-    events: list[dict[str, Any]] = []
+    events: list[JsonObject] = []
     _trace_buffers[key] = events
 
-    def _on_data(params: dict[str, Any]) -> None:
-        events.extend(params.get("value", []))
+    def _on_data(params: JsonObject) -> None:
+        values = params.get("value")
+        if isinstance(values, list):
+            events.extend(item for item in values if isinstance(item, dict))
 
     try:
         tab.cdp.on("Tracing.dataCollected", _on_data)
@@ -701,7 +724,7 @@ async def browser_stop_trace(ctx: ToolContext, tab_id: str | None = None) -> str
     try:
         done = asyncio.Event()
 
-        def _on_complete(_params: dict[str, Any]) -> None:
+        def _on_complete(_params: JsonObject) -> None:
             done.set()
 
         tab.cdp.on("Tracing.tracingComplete", _on_complete)
@@ -714,7 +737,7 @@ async def browser_stop_trace(ctx: ToolContext, tab_id: str | None = None) -> str
         events = _trace_buffers.pop(key, [])
         categories: dict[str, int] = {}
         for ev in events:
-            cat = ev.get("cat", "unknown")
+            cat = str(ev.get("cat", "unknown"))
             categories[cat] = categories.get(cat, 0) + 1
 
         artifact_path = None
@@ -743,7 +766,15 @@ async def browser_stop_trace(ctx: ToolContext, tab_id: str | None = None) -> str
 _LONG_TASK_THRESHOLD_US = 50_000
 
 
-def _analyze_trace_events(events: list[dict[str, Any]]) -> dict[str, Any]:
+def _number(value: JsonValue) -> float:
+    """Valor numérico de um evento de trace; outros formatos são recusados."""
+    if isinstance(value, int | float):
+        return value
+    msg = f"evento de trace com valor não numérico: {value!r}"
+    raise TypeError(msg)
+
+
+def _analyze_trace_events(events: list[JsonObject]) -> TraceAnalysis:
     """Interpreta os eventos brutos de um trace já capturado (CDP Tracing) —
     duração total, LCP (se o marcador `largestContentfulPaint::Candidate`
     estiver presente na categoria capturada) e long tasks (>50ms) ordenadas
@@ -758,27 +789,27 @@ def _analyze_trace_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             "top_long_tasks": [],
         }
 
-    timestamps = [e["ts"] for e in events if "ts" in e]
+    timestamps = [_number(e["ts"]) for e in events if "ts" in e]
     t_min = min(timestamps) if timestamps else 0
     t_max = max(timestamps) if timestamps else 0
 
     nav_start = next((e for e in events if e.get("name") == "navigationStart"), None)
-    t0 = nav_start["ts"] if nav_start else t_min
+    t0 = _number(nav_start["ts"]) if nav_start else t_min
 
     lcp_event = next(
         (e for e in events if e.get("name") == "largestContentfulPaint::Candidate"),
         None,
     )
-    lcp_ms = (lcp_event["ts"] - t0) / 1000 if lcp_event else None
+    lcp_ms = (_number(lcp_event["ts"]) - t0) / 1000 if lcp_event else None
 
-    long_tasks = [
+    long_tasks: list[LongTask] = [
         {
-            "name": e.get("name", "?"),
-            "start_ms": (e.get("ts", t0) - t0) / 1000,
-            "duration_ms": e["dur"] / 1000,
+            "name": str(e.get("name", "?")),
+            "start_ms": (_number(e.get("ts", t0)) - t0) / 1000,
+            "duration_ms": _number(e["dur"]) / 1000,
         }
         for e in events
-        if e.get("dur") is not None and e["dur"] >= _LONG_TASK_THRESHOLD_US
+        if e.get("dur") is not None and _number(e["dur"]) >= _LONG_TASK_THRESHOLD_US
     ]
     long_tasks.sort(key=lambda t: t["duration_ms"], reverse=True)
 
@@ -828,32 +859,30 @@ async def browser_analyze_trace(artifact_path: str) -> str:
         return json.dumps({"status": "error", "error": str(exc)})
 
 
-async def _take_heap_snapshot_via_cdp(cdp: Any) -> dict[str, Any]:
+async def _take_heap_snapshot_via_cdp(cdp: CDPSession) -> HeapSnapshot:
     """`HeapProfiler.takeHeapSnapshot` chega em chunks de string via evento
     (`HeapProfiler.addHeapSnapshotChunk`), concatenados aqui e parseados
     como o JSON único do formato de heap snapshot do V8."""
     chunks: list[str] = []
 
-    def _on_chunk(params: dict[str, Any]) -> None:
-        chunks.append(params.get("chunk", ""))
+    def _on_chunk(params: JsonObject) -> None:
+        chunks.append(str(params.get("chunk", "")))
 
     cdp.on("HeapProfiler.addHeapSnapshotChunk", _on_chunk)
     await cdp.send("HeapProfiler.takeHeapSnapshot", {"reportProgress": False})
-    return json.loads("".join(chunks))
+    return TypeAdapter(HeapSnapshot).validate_json("".join(chunks))
 
 
-def _summarize_heap_snapshot(
-    data: dict[str, Any], top_n: int = 15
-) -> list[dict[str, Any]]:
+def _summarize_heap_snapshot(data: HeapSnapshot, top_n: int = 15) -> list[HeapGroup]:
     """Agrega os nós do heap snapshot por (tipo, nome) — soma de
     `self_size` e contagem. Não é um analisador de grafo de retenção
     completo (sem cálculo de retained size via arestas), só um resumo
     suficiente pra apontar onde a memória está concentrada."""
     meta = data["snapshot"]["meta"]
-    node_fields: list[str] = meta["node_fields"]
-    node_types: list[Any] = meta["node_types"]
-    strings: list[str] = data["strings"]
-    nodes: list[int] = data["nodes"]
+    node_fields = meta["node_fields"]
+    node_types = meta["node_types"]
+    strings = data["strings"]
+    nodes = data["nodes"]
 
     fields_per_node = len(node_fields)
     type_idx = node_fields.index("type")
@@ -867,7 +896,8 @@ def _summarize_heap_snapshot(
     edge_count_idx = (
         node_fields.index("edge_count") if "edge_count" in node_fields else None
     )
-    type_names = node_types[type_idx] if isinstance(node_types[type_idx], list) else []
+    declared = node_types[type_idx]
+    type_names = declared if isinstance(declared, list) else []
 
     totals: dict[str, int] = {}
     counts: dict[str, int] = {}
@@ -897,23 +927,25 @@ def _summarize_heap_snapshot(
 
 
 def _diff_heap_summaries(
-    before: list[dict[str, Any]], after: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+    before: list[HeapGroup], after: list[HeapGroup]
+) -> list[HeapDelta]:
     """Delta de memória por construtor entre dois resumos de
     `_summarize_heap_snapshot` — positivo = cresceu do `before` pro `after`.
     Ordenado do que mais cresceu pro que mais encolheu."""
     before_map = {b["constructor"]: b for b in before}
     after_map = {a["constructor"]: a for a in after}
-    diffs = [
-        {
-            "constructor": key,
-            "size_delta": after_map.get(key, {}).get("total_size", 0)
-            - before_map.get(key, {}).get("total_size", 0),
-            "count_delta": after_map.get(key, {}).get("count", 0)
-            - before_map.get(key, {}).get("count", 0),
-        }
-        for key in set(before_map) | set(after_map)
-    ]
+    diffs: list[HeapDelta] = []
+    for key in set(before_map) | set(after_map):
+        old, new = before_map.get(key), after_map.get(key)
+        diffs.append(
+            {
+                "constructor": key,
+                "size_delta": (new["total_size"] if new else 0)
+                - (old["total_size"] if old else 0),
+                "count_delta": (new["count"] if new else 0)
+                - (old["count"] if old else 0),
+            }
+        )
     diffs.sort(key=lambda d: d["size_delta"], reverse=True)
     return diffs
 
@@ -1151,8 +1183,8 @@ async def browser_screencast_start(ctx: ToolContext, tab_id: str | None = None) 
     frames: list[str] = []
     _screencast_buffers[key] = frames
 
-    def _on_frame(params: dict[str, Any]) -> None:
-        frames.append(params.get("data", ""))
+    def _on_frame(params: JsonObject) -> None:
+        frames.append(str(params.get("data", "")))
         session_id = params.get("sessionId")
         if session_id is not None:
             task = asyncio.create_task(

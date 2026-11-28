@@ -23,7 +23,9 @@ _ELECTRON_DEV_UNAVAILABLE_REASON = (
 )
 
 
-def _patch_dirs(monkeypatch, frontend_dir: Path, electron_dir: Path) -> None:
+def _patch_dirs(
+    monkeypatch: pytest.MonkeyPatch, frontend_dir: Path, electron_dir: Path
+) -> None:
     """node_modules/electron/ vive em frontend_dir (pacote único); dist/main.js
     vive em electron_dir (tsconfig próprio, ver electron_launcher.py)."""
     monkeypatch.setattr(electron_launcher, "_frontend_dir", lambda: frontend_dir)
@@ -32,8 +34,8 @@ def _patch_dirs(monkeypatch, frontend_dir: Path, electron_dir: Path) -> None:
 
 class TestResolveElectronLaunch:
     def test_resolve_electron_empacotado_por_override(
-        self, tmp_path: Path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         executable = tmp_path / "vectora-electron"
         executable.write_bytes(b"fake electron")
         executable.chmod(0o755)
@@ -42,8 +44,11 @@ class TestResolveElectronLaunch:
         assert electron_launcher.resolve_electron_launch() == (str(executable), [])
 
     def test_override_empacotado_invalido_retorna_none(
-        self, tmp_path: Path, monkeypatch, caplog
-    ):
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         monkeypatch.setenv(
             "VECTORA_PACKAGED_ELECTRON_PATH", str(tmp_path / "missing-electron")
         )
@@ -51,14 +56,24 @@ class TestResolveElectronLaunch:
             assert electron_launcher.resolve_electron_launch() is None
         assert "VECTORA_PACKAGED_ELECTRON_PATH" in caplog.text
 
-    def test_sem_main_js_retorna_none(self, tmp_path: Path, monkeypatch, caplog):
+    def test_sem_main_js_retorna_none(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         _patch_dirs(monkeypatch, tmp_path, tmp_path)
         with caplog.at_level("WARNING"):
             assert electron_launcher.resolve_electron_launch() is None
         assert "ausente" in caplog.text
         assert "electron:build" in caplog.text
 
-    def test_sem_path_txt_retorna_none(self, tmp_path: Path, monkeypatch, caplog):
+    def test_sem_path_txt_retorna_none(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         (tmp_path / "dist").mkdir()
         (tmp_path / "dist" / "main.js").write_text("// main", encoding="utf-8")
         _patch_dirs(monkeypatch, tmp_path, tmp_path)
@@ -71,8 +86,11 @@ class TestResolveElectronLaunch:
         assert "pnpm rebuild electron" in caplog.text
 
     def test_build_desatualizado_em_relacao_ao_fonte_retorna_none(
-        self, tmp_path: Path, monkeypatch, caplog
-    ):
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         src_dir = tmp_path / "src"
         src_dir.mkdir()
         source = src_dir / "main.ts"
@@ -91,7 +109,12 @@ class TestResolveElectronLaunch:
         assert "desatualizado" in caplog.text
         assert "electron:build" in caplog.text
 
-    def test_path_txt_vazio_retorna_none(self, tmp_path: Path, monkeypatch, caplog):
+    def test_path_txt_vazio_retorna_none(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         (tmp_path / "dist").mkdir()
         (tmp_path / "dist" / "main.js").write_text("// main", encoding="utf-8")
         node_electron = tmp_path / "node_modules" / "electron"
@@ -103,8 +126,11 @@ class TestResolveElectronLaunch:
         assert "vazio" in caplog.text
 
     def test_binario_referenciado_nao_existe_retorna_none(
-        self, tmp_path: Path, monkeypatch, caplog
-    ):
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         # Par de erro: path.txt aponta para um executável que não foi
         # baixado (dist/ do pacote electron incompleto) — nunca lança.
         (tmp_path / "dist").mkdir()
@@ -118,8 +144,8 @@ class TestResolveElectronLaunch:
         assert "pnpm rebuild electron" in caplog.text
 
     def test_tudo_presente_resolve_executavel_e_main_js(
-        self, tmp_path: Path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         electron_dir = tmp_path / "electron"
         electron_dir.mkdir()
         (electron_dir / "dist").mkdir()
@@ -149,11 +175,13 @@ class TestResolveElectronLaunch:
         ("auto", None),
     ],
 )
-def test_resolve_linux_ozone_argument(requested: str | None, expected: str | None):
+def test_resolve_linux_ozone_argument(
+    requested: str | None, expected: str | None
+) -> None:
     assert electron_launcher.resolve_linux_ozone_argument(requested) == expected
 
 
-def test_resolve_linux_ozone_argument_rejects_unknown_platform():
+def test_resolve_linux_ozone_argument_rejects_unknown_platform() -> None:
     with pytest.raises(ValueError, match="VECTORA_OZONE_PLATFORM inválido"):
         electron_launcher.resolve_linux_ozone_argument("mir")
 
@@ -162,7 +190,7 @@ def test_resolve_linux_ozone_argument_rejects_unknown_platform():
     not electron_launcher.resolve_electron_launch(),
     reason=_ELECTRON_DEV_UNAVAILABLE_REASON,
 )
-def test_resolve_no_repo_real_aponta_para_arquivos_que_existem():
+def test_resolve_no_repo_real_aponta_para_arquivos_que_existem() -> None:
     result = electron_launcher.resolve_electron_launch()
     assert result is not None
     exe, args = result
@@ -187,7 +215,7 @@ class _HealthHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+    def log_message[**P](self, format: str, *args: P.args, **_kwargs: P.kwargs) -> None:  # noqa: A002
         pass  # silencia o log padrão do BaseHTTPRequestHandler
 
 
@@ -196,7 +224,7 @@ class _HealthHandler(http.server.BaseHTTPRequestHandler):
     not electron_launcher.resolve_electron_launch(),
     reason=_ELECTRON_DEV_UNAVAILABLE_REASON,
 )
-def test_electron_dev_spawnado_em_modo_attached_conecta_ao_backend_real():
+def test_electron_dev_spawnado_em_modo_attached_conecta_ao_backend_real() -> None:
     """Spawna o Electron dev build de verdade (binário real, não mockado)
     em modo "attached" (VECTORA_EXTERNAL_BACKEND=1) contra um servidor
     HTTP real respondendo /health, e confirma que o processo Electron

@@ -40,7 +40,14 @@ import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import FrameType
+
+    import uvicorn
+    from pystray import Icon
 
 
 def _find_free_port(preferred: int | None = None) -> int:
@@ -190,12 +197,20 @@ def _force_exit() -> None:
     os._exit(130)
 
 
-def _install_terminal_signals(server: Any, icon_ref: list[Any]) -> None:
+class _StoppableServer(Protocol):
+    """Parte do ``uvicorn.Server`` usada pelos handlers de sinal."""
+
+    should_exit: bool
+
+
+def _install_terminal_signals(
+    server: _StoppableServer, icon_ref: list[Icon | None]
+) -> None:
     """Instala handlers de SIGINT/SIGTERM/SIGHUP para shutdown limpo — ver
     `_should_install_terminal_signals` para quando isso é chamado."""
     shutdown_started = False
 
-    def _shutdown(_signum: int, _frame: Any) -> None:
+    def _shutdown(_signum: int, _frame: FrameType | None) -> None:
         """Executa a operação shutdown."""
         nonlocal shutdown_started
         if shutdown_started:
@@ -235,7 +250,7 @@ def _install_terminal_signals(server: Any, icon_ref: list[Any]) -> None:
         signal.signal(signal.SIGBREAK, _shutdown)  # type: ignore[attr-defined]
 
 
-def _disable_uvicorn_signal_capture(server: Any) -> None:
+def _disable_uvicorn_signal_capture(server: _StoppableServer) -> None:
     """Keep the process-owner handlers active while Uvicorn serves.
 
     Versões novas do Uvicorn instalam os handlers em ``capture_signals`` (e
@@ -244,8 +259,9 @@ def _disable_uvicorn_signal_capture(server: Any) -> None:
     handler do processo só rodava depois do shutdown e o filtro de logs não
     sabia que o encerramento era esperado.
     """
-    server.install_signal_handlers = lambda: None
-    server.capture_signals = contextlib.nullcontext
+    # Substituídos na instância: o nome do gancho muda entre versões do Uvicorn.
+    server.__dict__["install_signal_handlers"] = lambda: None
+    server.__dict__["capture_signals"] = contextlib.nullcontext
 
 
 # ---------------------------------------------------------------------------
@@ -1127,7 +1143,7 @@ def _run_start(args: argparse.Namespace, *, force_web: bool = False) -> None:
     # Aplicado ANTES do branch Windows named-pipe abaixo — esse branch tem um
     # `return` próprio, e sem instalar o handler aqui primeiro ele nunca seria
     # alcançado nesse caminho (o mais comum em dev desktop no Windows).
-    icon_ref: list[Any] = [None]
+    icon_ref: list[Icon | None] = [None]
     if _should_install_terminal_signals(dict(os.environ), force_web=force_web):
         _install_terminal_signals(server, icon_ref)
         # Uvicorn installs its own capture handler inside ``serve``. Keep the
@@ -1336,7 +1352,7 @@ def _run_eval_command(args: argparse.Namespace) -> None:
 # args" — start/web (têm variantes force_web) e auth (tratado à parte
 # acima, mas despachado pela mesma tabela) ficam fora por clareza no
 # restante de `run()`.
-_COMMAND_HANDLERS: dict[str, Any] = {
+_COMMAND_HANDLERS: dict[str, Callable[[argparse.Namespace], None]] = {
     "config": _run_config_command,
     "sessions": _run_sessions_command,
     "storage": _run_storage_command,

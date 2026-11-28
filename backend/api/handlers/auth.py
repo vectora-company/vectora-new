@@ -43,6 +43,8 @@ from backend.api.schemas import (
     UsernameAvailableResponse,
     UserResponse,
 )
+from backend.vtypes.contracts import as_int
+from backend.vtypes.services import UsageWindows
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +116,7 @@ def _token_exp(access_token: str) -> int | None:
 
     try:
         exp = decode_access_token(access_token).get("exp")
-        return int(exp) if exp is not None else None
+        return as_int(exp) if exp is not None else None
     except Exception:
         return None
 
@@ -367,7 +369,7 @@ async def update_me_endpoint(
 
 
 @router.get("/usage")
-async def get_usage(request: Request) -> dict:
+async def get_usage(request: Request) -> UsageWindows:
     """Consumo de requisições do usuário na janela de rate limit."""
     user = getattr(request.state, "user", None)
     if user is None:

@@ -53,3 +53,11 @@ class ApprovalMetadata(TypedDict, total=False):
     idempotency_key: str
     balance_after_reservation: int
     source: NotRequired[str]
+
+
+def as_int(value: JsonValue) -> int:
+    """Converte um escalar JSON como ``int()``; outros formatos são recusados."""
+    if isinstance(value, int | float | str):
+        return int(value)
+    msg = f"valor sem conversão para inteiro: {value!r}"
+    raise TypeError(msg)

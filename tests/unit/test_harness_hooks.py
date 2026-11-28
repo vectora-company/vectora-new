@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, TypedDict, Unpack, cast
 
 import pytest
 from pydantic import create_model
@@ -20,6 +21,7 @@ from backend.engine.tool_batch import (
 )
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, ToolRegistry, ToolSpec
+from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.vtypes.message import ToolCall
 from backend.workspace.workspace_config import (
     HookRule,
@@ -27,15 +29,32 @@ from backend.workspace.workspace_config import (
     hook_rules_digest,
     load_workspace_config,
 )
+from tests.json_values import as_object
 
 PY = json.dumps(sys.executable)
 
 
-def _rule(command: list[str], **overrides: object) -> HookRule:
-    data: dict[str, object] = {
+class _RunOverrides(TypedDict, total=False):
+    ctx: ToolContext
+    tool_name: str
+    tool_args: JsonObject
+    result: str | None
+    root: Path
+    approved: bool
+    sandboxed: bool
+    workspace_id: str
+    redact: Callable[[str], str]
+
+
+class _RunParams(_RunOverrides):
+    pass
+
+
+def _rule(command: list[str], **overrides: JsonValue) -> HookRule:
+    data: JsonObject = {
         "id": "regra",
         "event": "pre_tool",
-        "command": command,
+        "command": [*command],
         **overrides,
     }
     return HookRule.model_validate(data)
@@ -51,8 +70,10 @@ def _ctx() -> ToolContext:
     return ToolContext(user_id="u1", thread_id="t1")
 
 
-async def _run(rule: HookRule, tmp_path: Path, **overrides: Any) -> hooks.HookOutcome:
-    params: dict[str, Any] = {
+async def _run(
+    rule: HookRule, tmp_path: Path, **overrides: Unpack[_RunOverrides]
+) -> hooks.HookOutcome:
+    params: _RunParams = {
         "ctx": _ctx(),
         "tool_name": "run_command",
         "tool_args": {"command": "ls"},
@@ -91,8 +112,8 @@ def test_regra_valida_tem_padroes_seguros() -> None:
         {"extra": 1},
     ],
 )
-def test_regra_invalida_e_recusada(campos: dict[str, object]) -> None:
-    base: dict[str, object] = {
+def test_regra_invalida_e_recusada(campos: JsonObject) -> None:
+    base: JsonObject = {
         "id": "ok",
         "event": "pre_tool",
         "command": ["python", "x.py"],
@@ -203,14 +224,14 @@ async def test_hook_no_sandbox_recebe_ambiente_minimo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "segredo-do-backend")
-    captured: dict[str, Any] = {}
+    captured: dict[str, JsonValue] = {}
 
     class FakeWorker:
-        async def request(self, op: str, **kwargs: Any) -> dict[str, Any]:
+        async def request(self, op: str, **kwargs: JsonValue) -> JsonObject:
             captured.update(kwargs)
             return {"stdout": "", "exit_code": 0}
 
-    async def get_or_spawn(*_args: Any, **_kwargs: Any) -> FakeWorker:
+    async def get_or_spawn[**P](*_args: P.args, **_kwargs: P.kwargs) -> FakeWorker:
         return FakeWorker()
 
     from backend.sandbox.workspace_jail import jail_manager
@@ -221,8 +242,8 @@ async def test_hook_no_sandbox_recebe_ambiente_minimo(
         rule, "{}", tmp_path, sandboxed=True, workspace_id="w1"
     )
     assert code == 0
-    assert "OPENAI_API_KEY" not in captured["env"]
-    assert captured["env"]["VECTORA_HOOK_ID"] == rule.id
+    assert "OPENAI_API_KEY" not in as_object(captured["env"])
+    assert as_object(captured["env"])["VECTORA_HOOK_ID"] == rule.id
 
 
 async def test_hook_informativo_nunca_bloqueia(tmp_path: Path) -> None:
@@ -508,7 +529,7 @@ async def test_autorizacao_revogada_durante_o_hook_impede_a_tool(
     _workspace(tmp_path, _toml_rule("ok", "pre_tool", allow))
     calls: list[int] = []
 
-    def authorize(*_args: Any, **_kwargs: Any) -> tuple[bool, str]:
+    def authorize[**P](*_args: P.args, **_kwargs: P.kwargs) -> tuple[bool, str]:
         calls.append(1)
         # A primeira checagem passa; a revogação chega enquanto o hook roda.
         return (True, "") if len(calls) == 1 else (False, "policy_revoked")
@@ -580,7 +601,7 @@ def test_no_windows_o_encerramento_percorre_a_arvore_com_taskkill(
     calls: list[list[str]] = []
     killed: list[bool] = []
 
-    def fake_run(argv: list[str], **_kwargs: Any) -> None:
+    def fake_run[**P](argv: list[str], *_args: P.args, **_kwargs: P.kwargs) -> None:
         calls.append(argv)
 
     monkeypatch.setattr(hooks.os, "name", "nt")

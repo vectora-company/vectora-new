@@ -5,19 +5,25 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from typing import Any, cast
+from typing import TYPE_CHECKING, cast
 
 from backend.llm.systemone.types import DecisionProviderType
+from backend.vtypes.contracts import JsonObject
+
+if TYPE_CHECKING:
+    from backend.vtypes.context import VectoraContext
 
 
-def decision_model_preferences(ctx: object) -> dict[str, Any]:
+def decision_model_preferences(ctx: VectoraContext) -> JsonObject:
     """Return the validated preferences attached by ``ctx_from_config``."""
     extra = getattr(ctx, "_extra", None)
     value = extra.get("decision_model_preferences") if isinstance(extra, dict) else None
     return value if isinstance(value, dict) else {}
 
 
-def decision_model_enabled_for(ctx: object, surface: str | tuple[str, ...]) -> bool:
+def decision_model_enabled_for(
+    ctx: VectoraContext, surface: str | tuple[str, ...]
+) -> bool:
     """Require every applicable surface in the durable preference snapshot."""
     preferences = decision_model_preferences(ctx)
     surfaces = preferences.get("surfaces")
@@ -35,7 +41,9 @@ _DECISION_PROVIDERS = frozenset(
 )
 
 
-def selected_decision_model_provider(ctx: object) -> DecisionProviderType | None:
+def selected_decision_model_provider(
+    ctx: VectoraContext,
+) -> DecisionProviderType | None:
     """Return a supported provider id from the trusted context snapshot."""
     provider = decision_model_preferences(ctx).get("provider")
     if provider in _DECISION_PROVIDERS:
@@ -89,7 +97,9 @@ def decision_model_runtime_fingerprint(provider: str | None) -> str | None:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def decision_model_surfaces_for_tool(ctx: object, tool_name: str) -> tuple[str, ...]:
+def decision_model_surfaces_for_tool(
+    ctx: VectoraContext, tool_name: str
+) -> tuple[str, ...]:
     """Require provenance, execution mode and capability flags for a tool call."""
     extra = getattr(ctx, "_extra", None)
     extra = extra if isinstance(extra, dict) else {}

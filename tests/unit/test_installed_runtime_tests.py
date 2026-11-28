@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.cli import runtime_tests
+from backend.vtypes.contracts import JsonObject
 
 
 def test_missing_bundled_suite_fails_before_downloading_tools(
@@ -93,7 +94,7 @@ def test_runner_uses_isolated_test_dependencies_and_propagates_result(
     suite.write_text("# packaged suite", encoding="utf-8")
     (suite.parent / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
     uv.write_bytes(b"uv test binary placeholder")
-    captured: dict[str, object] = {}
+    captured: dict[str, list[str] | dict[str, str] | bool] = {}
     monkeypatch.setattr(runtime_tests.sys, "frozen", True, raising=False)
 
     def fake_run(

@@ -17,7 +17,12 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
+
+from backend.vtypes.sql import SqlRow, SqlValue, optional_text
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 
 @dataclass
@@ -31,21 +36,22 @@ class Board:
     archived_at: str | None
 
 
-async def _get_db() -> Any:
+async def _get_db() -> aiosqlite.Connection:
     from backend.scheduling.background_tasks import _get_db as _tasks_db
 
     return await _tasks_db()
 
 
-def _row_to_board(row: dict[str, Any]) -> Board:
+def _row_to_board(row: aiosqlite.Row | SqlRow) -> Board:
+    data: SqlRow = dict(row)
     return Board(
-        id=row["id"],
-        user_id=row["user_id"],
-        slug=row["slug"],
-        name=row["name"],
-        workspace_id=row.get("workspace_id"),
-        created_at=row.get("created_at"),
-        archived_at=row.get("archived_at"),
+        id=str(data["id"]),
+        user_id=str(data["user_id"]),
+        slug=str(data["slug"]),
+        name=str(data["name"]),
+        workspace_id=optional_text(data.get("workspace_id")),
+        created_at=optional_text(data.get("created_at")),
+        archived_at=optional_text(data.get("archived_at")),
     )
 
 
@@ -131,7 +137,7 @@ async def update_board(
         return None
 
     sets: list[str] = []
-    args: list[Any] = []
+    args: list[SqlValue] = []
     if name is not None:
         nome = name.strip()
         if not nome:

@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from backend.services.availability import require_services, services_enabled
 from backend.services.extension_trust import TrustState
 from backend.services.service_auth import services_auth_headers
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class McpCatalogEntry(BaseModel):
 
     @field_validator("env_vars", mode="before")
     @classmethod
-    def _normalize_env_vars(cls, value: object) -> list[str]:
+    def _normalize_env_vars(cls, value: JsonValue) -> list[str]:
         if value is None:
             return []
         if isinstance(value, str):
@@ -106,7 +107,9 @@ class McpCatalogEntry(BaseModel):
         return [item for item in value if isinstance(item, str) and item]
 
 
-def validate_mcp_catalog_entries(entries: Iterable[object]) -> list[McpCatalogEntry]:
+def validate_mcp_catalog_entries(
+    entries: Iterable[JsonValue],
+) -> list[McpCatalogEntry]:
     """Validate untrusted registry payloads before they cross service layers."""
     validated: list[McpCatalogEntry] = []
     for entry in entries:
@@ -145,7 +148,7 @@ def _cache_path(kind: RegistryKind) -> Path:
     return CACHE_DIR / f"{kind}.json"
 
 
-def _read_cache(kind: RegistryKind) -> dict | None:
+def _read_cache(kind: RegistryKind) -> JsonObject | None:
     path = _cache_path(kind)
     if not path.is_file():
         return None
@@ -156,21 +159,28 @@ def _read_cache(kind: RegistryKind) -> dict | None:
         return None
 
 
-def _write_cache(kind: RegistryKind, entries: list[dict]) -> None:
+def _write_cache(kind: RegistryKind, entries: list[JsonObject]) -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     payload = {"entries": entries, "fetched_at": datetime.now(UTC).isoformat()}
     _cache_path(kind).write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def _cache_is_fresh(payload: dict, ttl: timedelta) -> bool:
+def _cache_is_fresh(payload: JsonObject, ttl: timedelta) -> bool:
     try:
-        fetched_at = datetime.fromisoformat(payload["fetched_at"])
+        fetched_at = datetime.fromisoformat(str(payload["fetched_at"]))
     except (KeyError, ValueError):
         return False
     return datetime.now(UTC) - fetched_at < ttl
 
 
-def _cache_has_current_mcp_shape(payload: Mapping[str, object]) -> bool:
+def _cached_entries(cache: JsonObject) -> list[JsonObject]:
+    entries = cache.get("entries")
+    if not isinstance(entries, list):
+        return []
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def _cache_has_current_mcp_shape(payload: Mapping[str, JsonValue]) -> bool:
     entries = payload.get("entries")
     return isinstance(entries, list) and all(
         isinstance(entry, Mapping)
@@ -180,7 +190,7 @@ def _cache_has_current_mcp_shape(payload: Mapping[str, object]) -> bool:
     )
 
 
-def _normalize_library_entry(entry: Mapping[str, object]) -> dict:
+def _normalize_library_entry(entry: Mapping[str, JsonValue]) -> JsonObject:
     """Converte uma entrada da Library do Services no formato do catálogo local.
 
     A Library identifica cada entrada pelo ``slug`` (o nome no registry de
@@ -199,7 +209,7 @@ def _normalize_library_entry(entry: Mapping[str, object]) -> dict:
     return normalized
 
 
-async def fetch_catalog(kind: RegistryKind) -> list[dict]:
+async def fetch_catalog(kind: RegistryKind) -> list[JsonObject]:
     """Busca o catálogo `kind` ("mcp" | "skills") do registry remoto.
 
     Cache-first: com cache ainda dentro do TTL online (6h), serve direto
@@ -210,7 +220,7 @@ async def fetch_catalog(kind: RegistryKind) -> list[dict]:
     cache = _read_cache(kind)
     if not services_enabled():
         return (
-            list(cache.get("entries", []))
+            _cached_entries(cache)
             if cache is not None
             and (kind != "mcp" or _cache_has_current_mcp_shape(cache))
             and _cache_is_fresh(cache, CACHE_TTL_OFFLINE)
@@ -221,7 +231,7 @@ async def fetch_catalog(kind: RegistryKind) -> list[dict]:
         and (kind != "mcp" or _cache_has_current_mcp_shape(cache))
         and _cache_is_fresh(cache, CACHE_TTL_ONLINE)
     ):
-        return list(cache.get("entries", []))
+        return _cached_entries(cache)
     try:
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             url = f"{_registry_url()}/{kind}"
@@ -249,7 +259,7 @@ async def fetch_catalog(kind: RegistryKind) -> list[dict]:
             and _cache_is_fresh(cache, CACHE_TTL_OFFLINE)
         ):
             logger.info("registry_client: usando cache offline de %s", kind)
-            return list(cache.get("entries", []))
+            return _cached_entries(cache)
         return []
 
 
@@ -287,7 +297,9 @@ async def fetch_catalog_status(kind: Literal["mcp", "skills"]) -> RegistryStatus
         return fallback
 
 
-async def fetch_enterprise_catalog(kind: Literal["mcp", "skills"]) -> list[dict]:
+async def fetch_enterprise_catalog(
+    kind: Literal["mcp", "skills"],
+) -> list[JsonObject]:
     """Fetch an optional enterprise catalog without affecting base sources."""
     if not services_enabled():
         return []
@@ -311,29 +323,39 @@ async def fetch_enterprise_catalog(kind: Literal["mcp", "skills"]) -> list[dict]
         return []
 
 
-def _npm_stdio_package(server: dict) -> dict | None:
+def _json_object(value: JsonValue) -> JsonObject:
+    return value if isinstance(value, dict) else {}
+
+
+def _json_objects(value: JsonValue) -> list[JsonObject]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _npm_stdio_package(server: JsonObject) -> JsonObject | None:
     """Primeiro pacote npm/stdio do server — só esses são instaláveis pelo
     fluxo atual (`_connector_to_server` monta um McpServer stdio via npx)."""
-    for pkg in server.get("packages", []):
+    for pkg in _json_objects(server.get("packages")):
         if (
             pkg.get("registryType") == "npm"
-            and pkg.get("transport", {}).get("type", "stdio") == "stdio"
+            and _json_object(pkg.get("transport")).get("type", "stdio") == "stdio"
         ):
             return pkg
     return None
 
 
-def _official_entry_to_connector_dict(item: dict) -> dict | None:
-    server = item.get("server", {})
+def _official_entry_to_connector_dict(item: JsonObject) -> JsonObject | None:
+    server = _json_object(item.get("server"))
     pkg = _npm_stdio_package(server)
     if pkg is None or not pkg.get("identifier"):
         return None
-    name = server.get("name", "")
+    name = str(server.get("name") or "")
     if not name:
         return None
-    env_vars = [
+    env_vars: list[JsonValue] = [
         ev["name"]
-        for ev in pkg.get("environmentVariables", [])
+        for ev in _json_objects(pkg.get("environmentVariables"))
         if ev.get("isRequired") and ev.get("name")
     ]
     return {
@@ -342,12 +364,12 @@ def _official_entry_to_connector_dict(item: dict) -> dict | None:
         "description": server.get("description", ""),
         "install_cmd": f"npx -y {pkg['identifier']}",
         "env_vars": env_vars,
-        "homepage": (server.get("repository") or {}).get("url", ""),
+        "homepage": _json_object(server.get("repository")).get("url", ""),
         "category": "community",
     }
 
 
-async def fetch_official_mcp_registry(*, max_entries: int = 100) -> list[dict]:
+async def fetch_official_mcp_registry(*, max_entries: int = 100) -> list[JsonObject]:
     """Busca o catálogo oficial de MCP servers em registry.modelcontextprotocol.io
     (mantido pela Anthropic/comunidade — não confundir com o registry próprio
     da Vectora). Só inclui servers com pacote npm/stdio (único
@@ -361,9 +383,9 @@ async def fetch_official_mcp_registry(*, max_entries: int = 100) -> list[dict]:
     """
     cache = _read_cache("mcp_official")
     if cache is not None and _cache_is_fresh(cache, CACHE_TTL_ONLINE):
-        return list(cache.get("entries", []))
+        return _cached_entries(cache)
     try:
-        connectors: dict[str, dict] = {}
+        connectors: dict[str, JsonObject] = {}
         cursor: str | None = None
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             while len(connectors) < max_entries:
@@ -376,7 +398,7 @@ async def fetch_official_mcp_registry(*, max_entries: int = 100) -> list[dict]:
                 for item in data.get("servers", []):
                     connector = _official_entry_to_connector_dict(item)
                     if connector is not None:
-                        connectors[connector["id"]] = connector
+                        connectors[str(connector["id"])] = connector
                 cursor = (data.get("metadata") or {}).get("nextCursor")
                 if not cursor or not data.get("servers"):
                     break
@@ -388,7 +410,7 @@ async def fetch_official_mcp_registry(*, max_entries: int = 100) -> list[dict]:
             "registry_client: falha ao buscar registry oficial de MCP (%s)", exc
         )
         if cache is not None and _cache_is_fresh(cache, CACHE_TTL_OFFLINE):
-            return list(cache.get("entries", []))
+            return _cached_entries(cache)
         return []
 
 

@@ -8,13 +8,17 @@ import threading
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from functools import partial
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from playwright.async_api import Browser, Page, async_playwright
+from playwright.async_api import Browser, Page, Route, async_playwright
 
 from backend.browser import session as browser_session
+from backend.services.policy_compiler import PolicySnapshot
+from backend.vtypes.contracts import JsonObject
+
+type _RouteHandler = Callable[..., Awaitable[None]]
 
 
 @pytest.fixture(autouse=True)
@@ -117,21 +121,21 @@ async def test_new_tab_preserva_motivo_de_bloqueio_e_remove_guard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A rota bloqueada deve produzir erro de policy sem exceção no callback."""
-    registered: dict[str, object] = {}
-    unroutes: list[tuple[str, object]] = []
+    registered: dict[str, _RouteHandler] = {}
+    unroutes: list[tuple[str, _RouteHandler]] = []
     abort = AsyncMock()
     continue_ = AsyncMock()
 
     class _Page:
-        async def route(self, pattern: str, handler: object) -> None:
+        async def route(self, pattern: str, handler: _RouteHandler) -> None:
             registered[pattern] = handler
 
-        async def unroute(self, pattern: str, handler: object) -> None:
+        async def unroute(self, pattern: str, handler: _RouteHandler) -> None:
             assert registered[pattern] is handler
             unroutes.append((pattern, handler))
 
-        async def goto(self, _url: str, **_kwargs: object) -> None:
-            handler = cast("Callable[[object], Awaitable[object]]", registered["**/*"])
+        async def goto(self, _url: str, **_kwargs: str | float) -> NoReturn:
+            handler = registered["**/*"]
             route = SimpleNamespace(
                 request=SimpleNamespace(url="http://127.0.0.1/private"),
                 abort=abort,
@@ -168,21 +172,21 @@ async def test_new_tab_mantem_guard_apos_navegacao_e_libera_ao_fechar(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Redirects tardios continuam protegidos até o fechamento da aba."""
-    registered: dict[str, object] = {}
-    unroutes: list[tuple[str, object]] = []
+    registered: dict[str, _RouteHandler] = {}
+    unroutes: list[tuple[str, _RouteHandler]] = []
 
     class _Page:
         url = "https://example.com"
         _target_id = ""
 
-        async def route(self, pattern: str, handler: object) -> None:
+        async def route(self, pattern: str, handler: _RouteHandler) -> None:
             registered[pattern] = handler
 
-        async def unroute(self, pattern: str, handler: object) -> None:
+        async def unroute(self, pattern: str, handler: _RouteHandler) -> None:
             unroutes.append((pattern, handler))
 
-        async def goto(self, _url: str, **_kwargs: object) -> None:
-            handler = cast("Callable[[object], Awaitable[object]]", registered["**/*"])
+        async def goto(self, _url: str, **_kwargs: str | float) -> None:
+            handler = registered["**/*"]
             route = SimpleNamespace(
                 request=SimpleNamespace(url="https://example.com"),
                 abort=AsyncMock(),
@@ -213,8 +217,9 @@ async def test_new_tab_mantem_guard_apos_navegacao_e_libera_ao_fechar(
     )
 
     assert tab_id
-    assert cast("Any", page)._vectora_route_handler is registered["**/*"]
-    await browser_session._release_route_guard(page)
+    assert getattr(page, "_vectora_route_handler")  # noqa: B009 is registered["**/*"]
+    tab = browser_session._sessions["ws-persistent-guard"]["tabs"][tab_id]
+    await browser_session._release_route_guard(tab.page)
     assert unroutes == [("**/*", registered["**/*"])]
 
 
@@ -223,25 +228,25 @@ async def test_new_tab_instala_guard_no_contexto_antes_do_primeiro_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A primeira requisição do popup também passa pelo mesmo egress guard."""
-    registered: dict[str, object] = {}
-    unroutes: list[tuple[str, object]] = []
+    registered: dict[str, _RouteHandler] = {}
+    unroutes: list[tuple[str, _RouteHandler]] = []
     abort = AsyncMock()
     continue_ = AsyncMock()
 
     class _Context:
-        async def route(self, pattern: str, handler: object) -> None:
+        async def route(self, pattern: str, handler: _RouteHandler) -> None:
             registered[pattern] = handler
 
-        async def unroute(self, pattern: str, handler: object) -> None:
+        async def unroute(self, pattern: str, handler: _RouteHandler) -> None:
             assert registered[pattern] is handler
             unroutes.append((pattern, handler))
 
-        async def new_page(self) -> object:
+        async def new_page(self) -> _Page:
             return page
 
     class _Page:
-        async def goto(self, _url: str, **_kwargs: object) -> None:
-            handler = cast("Callable[[object], Awaitable[object]]", registered["**/*"])
+        async def goto(self, _url: str, **_kwargs: str | float) -> NoReturn:
+            handler = registered["**/*"]
             route = SimpleNamespace(
                 request=SimpleNamespace(url="http://127.0.0.1/private"),
                 abort=abort,
@@ -324,7 +329,7 @@ def test_find_agent_page_rejeita_vectora_app_e_ui() -> None:
     workbench_tab_page = MagicMock()
     workbench_tab_page.url = "https://github.com/vectora-company/vectora/pull/355"
 
-    context_with_only_app = SimpleNamespace(
+    context_with_only_app = MagicMock(
         pages=[app_shell_page, localhost_page, devtools_page]
     )
     with pytest.raises(
@@ -332,7 +337,7 @@ def test_find_agent_page_rejeita_vectora_app_e_ui() -> None:
     ):
         browser_session._find_agent_page(context_with_only_app)
 
-    context_with_real_tab = SimpleNamespace(pages=[app_shell_page, workbench_tab_page])
+    context_with_real_tab = MagicMock(pages=[app_shell_page, workbench_tab_page])
     assert browser_session._find_agent_page(context_with_real_tab) is workbench_tab_page
 
 
@@ -344,16 +349,16 @@ async def test_close_tab_da_ultima_aba_libera_guards_antes_de_reusar_a_pagina(
     reset; se o reset falhar, a aba continua na sessão e mantém todos os guards."""
     from backend.tools import browser as browser_tools
 
-    unroutes: list[tuple[str, object]] = []
-    released: list[object] = []
+    unroutes: list[tuple[str, _RouteHandler]] = []
+    released: list[str] = []
     redirect_released: list[str] = []
-    handler = object()
+    handler: _RouteHandler = AsyncMock()
 
     async def _release_redirect() -> None:
         redirect_released.append("redirect")
 
     class _Owner:
-        async def unroute(self, pattern: str, route_handler: object) -> None:
+        async def unroute(self, pattern: str, route_handler: _RouteHandler) -> None:
             unroutes.append((pattern, route_handler))
 
     page = SimpleNamespace(
@@ -371,7 +376,7 @@ async def test_close_tab_da_ultima_aba_libera_guards_antes_de_reusar_a_pagina(
         dialog_policy=None,
     )
 
-    async def _release(target: object) -> None:
+    async def _release(target: str) -> None:
         released.append(target)
 
     monkeypatch.setattr(browser_tools, "release_navigation_guard", _release)
@@ -409,14 +414,14 @@ class _FakeCdp:
     """Sessão CDP que registra os comandos e deixa o teste disparar eventos."""
 
     def __init__(self) -> None:
-        self.sent: list[tuple[str, dict[str, Any]]] = []
-        self.handlers: dict[str, Any] = {}
+        self.sent: list[tuple[str, JsonObject]] = []
+        self.handlers: dict[str, Callable[[JsonObject], None]] = {}
         self.detached = False
 
-    def on(self, name: str, handler: Any) -> None:
+    def on(self, name: str, handler: Callable[[JsonObject], None]) -> None:
         self.handlers[name] = handler
 
-    async def send(self, method: str, params: dict[str, Any] | None = None) -> None:
+    async def send(self, method: str, params: JsonObject | None = None) -> None:
         self.sent.append((method, params or {}))
 
     async def detach(self) -> None:
@@ -430,11 +435,13 @@ class _FakeCdp:
         await asyncio.sleep(0)
 
 
-def _page_with_cdp(cdp: _FakeCdp) -> Any:
-    async def new_cdp_session(_page: object) -> _FakeCdp:
+def _page_with_cdp(cdp: _FakeCdp) -> MagicMock:
+    async def new_cdp_session(_page: Page) -> _FakeCdp:
         return cdp
 
-    return SimpleNamespace(context=SimpleNamespace(new_cdp_session=new_cdp_session))
+    page = MagicMock(spec=Page)
+    page.context.new_cdp_session = new_cdp_session
+    return page
 
 
 async def test_cada_salto_e_validado_e_o_bloqueado_falha_antes_do_envio() -> None:
@@ -491,7 +498,7 @@ async def test_pagina_sem_sessao_cdp_nao_instala_guarda() -> None:
         return True, ""
 
     assert (
-        await browser_session.install_redirect_guard(SimpleNamespace(), check, {})
+        await browser_session.install_redirect_guard(MagicMock(spec=[]), check, {})
         is None
     )
 
@@ -505,18 +512,17 @@ async def test_navigation_guard_instala_e_libera_a_guarda_de_redirect(
     routed: list[str] = []
     page = _page_with_cdp(cdp)
 
-    async def route(pattern: str, handler: Any) -> None:
+    async def route(pattern: str, handler: _RouteHandler) -> None:
         routed.append(pattern)
 
-    async def unroute(pattern: str, handler: Any) -> None:
+    async def unroute(pattern: str, handler: _RouteHandler) -> None:
         routed.remove(pattern)
 
     page.route, page.unroute = route, unroute
-    snapshot: Any = SimpleNamespace(
-        egress_policy=SimpleNamespace(allowed_hosts=["permitido.example"])
-    )
+    snapshot = MagicMock(spec=PolicySnapshot)
+    snapshot.egress_policy = SimpleNamespace(allowed_hosts=["permitido.example"])
 
-    async def allowed(url: str, policy: object) -> tuple[bool, str, None]:
+    async def allowed(url: str, policy: SimpleNamespace) -> tuple[bool, str, None]:
         return ("permitido.example" in url, "fora da allowlist", None)
 
     monkeypatch.setattr(browser_tools, "async_is_url_allowed", allowed)
@@ -558,7 +564,7 @@ def _redirector(
             self.send_header("Location", location())
             self.end_headers()
 
-        def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+        def log_message(self, format: str, *args: str) -> None:  # noqa: A002
             return
 
     return Handler
@@ -579,7 +585,7 @@ def redirect_target() -> Iterator[tuple[http.server.HTTPServer, _Counter]]:
             self.end_headers()
             self.wfile.write(b"target")
 
-        def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+        def log_message(self, format: str, *args: str) -> None:  # noqa: A002
             return
 
     server = _serve(Handler)
@@ -627,7 +633,7 @@ async def _navigate(
             return False, "destino privado"
         return True, ""
 
-    async def route_handler(route: Any) -> None:
+    async def route_handler(route: Route) -> None:
         allowed, reason = await check_url(route.request.url)
         if allowed:
             await route.continue_()

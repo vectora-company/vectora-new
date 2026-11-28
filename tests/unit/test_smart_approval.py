@@ -14,14 +14,17 @@ from __future__ import annotations
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
 from backend.services import smart_approval as sa
+from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture(autouse=True)
-def _runtime_settings_isolado(tmp_path, monkeypatch):
+def _runtime_settings_isolado(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Evita que os testes leiam/gravem no `app_settings` real do usuário."""
     from backend.workspace.runtime_settings import RuntimeSettings
 
@@ -31,7 +34,7 @@ def _runtime_settings_isolado(tmp_path, monkeypatch):
 
 
 class TestAssinatura:
-    def test_hash_cobre_todos_os_argumentos(self):
+    def test_hash_cobre_todos_os_argumentos(self) -> None:
         # Happy: JSON canônico produz o mesmo hash.
         a = sa._signature("terminal", {"command": "git status"})
         b = sa._signature("terminal", {"command": "git status"})
@@ -43,10 +46,10 @@ class TestAssinatura:
 
 
 class TestAllowlist:
-    def test_grant_e_de_uso_unico_e_limitado_a_workspace_run_tool_args(self):
+    def test_grant_e_de_uso_unico_e_limitado_a_workspace_run_tool_args(self) -> None:
         assert sa.get_allowlist("ws1") == []
 
-        args = {"command": "git status"}
+        args: JsonObject = {"command": "git status"}
         grants = sa.add_to_allowlist("ws1", "terminal", args, run_id="run-1")
         assert len(grants) == 1
         assert sa.consume_run_grant("ws2", "run-1", "terminal", args) is None
@@ -61,14 +64,14 @@ class TestAllowlist:
         assert sa.get_allowlist("ws1") == []
 
     def test_grant_de_uso_unico_e_atomico_entre_instancias_sqlite(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Caches stale de processos distintos não podem consumir a mesma grant."""
         from backend.workspace.runtime_settings import RuntimeSettings
 
         path = tmp_path / "runtime-settings.db"
         primeira = RuntimeSettings(path)
-        args = {"command": "git status"}
+        args: JsonObject = {"command": "git status"}
         monkeypatch.setattr(sa, "_runtime_settings", lambda: primeira)
         expected_grant = sa.add_to_allowlist("ws", "terminal", args, run_id="run")
         segunda = RuntimeSettings(path)
@@ -105,37 +108,37 @@ class TestAllowlist:
             primeira._conn.close()
             segunda._conn.close()
 
-    def test_workspace_vazio_e_recusado_na_escrita(self):
+    def test_workspace_vazio_e_recusado_na_escrita(self) -> None:
         """Erro/borda: allowlist é por workspace — sem id não há onde
         persistir, e gravar sob chave vazia vazaria entre workspaces."""
         with pytest.raises(ValueError, match="workspace_id"):
             sa.add_to_allowlist("", "terminal", {"command": "git status"}, run_id="run")
 
-    def test_run_vazio_e_ferramenta_irreversivel_sao_recusados(self):
+    def test_run_vazio_e_ferramenta_irreversivel_sao_recusados(self) -> None:
         with pytest.raises(ValueError, match="run_id"):
             sa.add_to_allowlist("ws", "terminal", {}, run_id=" ")
         with pytest.raises(ValueError, match="não aceita"):
             sa.add_to_allowlist("ws", "git_push", {}, run_id="run")
 
-    def test_workspace_desconhecido_na_leitura_devolve_vazio_sem_lancar(self):
+    def test_workspace_desconhecido_na_leitura_devolve_vazio_sem_lancar(self) -> None:
         assert sa.get_allowlist("ws-nunca-existiu") == []
         assert sa.is_allowlisted("ws-nunca-existiu", "terminal", {}) is False
 
-    def test_allowlists_de_workspaces_diferentes_nao_se_misturam(self):
-        args = {"command": "git status"}
+    def test_allowlists_de_workspaces_diferentes_nao_se_misturam(self) -> None:
+        args: JsonObject = {"command": "git status"}
         sa.add_to_allowlist("ws-a", "terminal", args, run_id="run-a")
 
         assert sa.consume_run_grant("ws-a", "run-a", "terminal", args) is not None
         assert sa.consume_run_grant("ws-b", "run-a", "terminal", args) is None
 
-    def test_adicionar_duplicata_nao_duplica(self):
+    def test_adicionar_duplicata_nao_duplica(self) -> None:
         sa.add_to_allowlist("ws1", "terminal", {"command": "git status"}, run_id="run")
         sinais = sa.add_to_allowlist(
             "ws1", "terminal", {"command": "git status"}, run_id="run"
         )
         assert len(sinais) == 1
 
-    def test_concessao_expirada_nao_e_consumida(self):
+    def test_concessao_expirada_nao_e_consumida(self) -> None:
         sa.add_to_allowlist("ws", "terminal", {"command": "ls"}, run_id="run")
         sa._runtime_settings().update_list(
             sa._allowlist_key("ws"),
@@ -147,7 +150,7 @@ class TestAllowlist:
         )
         assert sa.consume_run_grant("ws", "run", "terminal", {"command": "ls"}) is None
 
-    def test_concessao_com_expiracao_sem_fuso_ou_invalida_e_descartada(self):
+    def test_concessao_com_expiracao_sem_fuso_ou_invalida_e_descartada(self) -> None:
         sa.add_to_allowlist("ws", "terminal", {"command": "ls"}, run_id="run")
         sa._runtime_settings().update_list(
             sa._allowlist_key("ws"),
@@ -165,10 +168,10 @@ class TestAllowlist:
 
 class TestEvaluateCommand:
     @pytest.mark.asyncio
-    async def test_concessao_nao_vira_anotacao_visual_de_avaliador(self):
+    async def test_concessao_nao_vira_anotacao_visual_de_avaliador(self) -> None:
         chamou = {"llm": False}
 
-        async def _nunca(*_a, **_k):
+        async def _nunca(*_a, **_k) -> bool:
             chamou["llm"] = True
             return True
 
@@ -187,8 +190,8 @@ class TestEvaluateCommand:
         assert chamou["llm"] is True
 
     @pytest.mark.asyncio
-    async def test_nao_allowlisted_consulta_o_avaliador_auxiliar(self):
-        async def _diz_seguro(_tool_name, _args):
+    async def test_nao_allowlisted_consulta_o_avaliador_auxiliar(self) -> None:
+        async def _diz_seguro(_tool_name, _args) -> bool:
             return True
 
         resultado = await sa.evaluate_command(
@@ -200,7 +203,7 @@ class TestEvaluateCommand:
 
         assert resultado is True
 
-        async def _diz_revisar(_tool_name, _args):
+        async def _diz_revisar(_tool_name, _args) -> bool:
             return False
 
         recusado = await sa.evaluate_command(
@@ -212,12 +215,12 @@ class TestEvaluateCommand:
         assert recusado is False
 
     @pytest.mark.asyncio
-    async def test_falha_do_avaliador_degrada_pra_sem_pre_aprovacao(self):
+    async def test_falha_do_avaliador_degrada_pra_sem_pre_aprovacao(self) -> None:
         """Regra 11: falha na camada acessória nunca impede o HITL normal —
         `evaluate_command` nunca lança, e o padrão seguro é `False`
         (continua pedindo aprovação sem o atalho visual)."""
 
-        async def _explode(_tool_name, _args):
+        async def _explode(_tool_name, _args) -> NoReturn:
             raise RuntimeError("provider fora do ar")
 
         resultado = await sa.evaluate_command(
@@ -230,7 +233,7 @@ class TestEvaluateCommand:
         assert resultado is False
 
     @pytest.mark.asyncio
-    async def test_anotacao_do_avaliador_nao_decide_o_gate(self):
+    async def test_anotacao_do_avaliador_nao_decide_o_gate(self) -> None:
         """O sinal do avaliador nunca é importado pelo predicado do HITL."""
         import inspect
 

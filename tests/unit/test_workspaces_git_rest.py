@@ -28,6 +28,7 @@ from backend.api.handlers.workspaces import (
     pr_create,
     pr_list,
 )
+from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture
@@ -164,9 +165,9 @@ async def test_pr_list_propagates_authenticated_user_to_gh(
 
     captured: dict[str, str | None] = {}
 
-    async def fake_gh_run(*_args: object, **kwargs: object) -> dict[str, object]:
+    async def fake_gh_run(*_args: list[str], **kwargs: str | None) -> JsonObject:
         value = kwargs.get("user_id")
-        captured["user_id"] = value if isinstance(value, str) else None
+        captured["user_id"] = value
         return {"status": "ok", "output": "[]"}
 
     monkeypatch.setattr(github_cli, "run_gh_command", fake_gh_run)
@@ -184,9 +185,9 @@ async def test_pr_create_propagates_authenticated_user_to_gh(
 
     captured: dict[str, str | None] = {}
 
-    async def fake_gh_run(*_args: object, **kwargs: object) -> dict[str, object]:
+    async def fake_gh_run(*_args: list[str], **kwargs: str | None) -> JsonObject:
         value = kwargs.get("user_id")
-        captured["user_id"] = value if isinstance(value, str) else None
+        captured["user_id"] = value
         return {"status": "ok", "output": "https://github.com/o/r/pull/1"}
 
     monkeypatch.setattr(github_cli, "run_gh_command", fake_gh_run)
@@ -272,7 +273,7 @@ async def test_reorder_lista_vazia_devolve_erro(
 
 
 @pytest.mark.asyncio
-async def test_cherry_pick_via_rest(ws_repo):
+async def test_cherry_pick_via_rest(ws_repo: tuple[git.Repo, Path]) -> None:
     repo, tmp_path = ws_repo
     repo.git.checkout("-b", "feature")
     (tmp_path / "feat.txt").write_text("feat\n")
@@ -287,7 +288,9 @@ async def test_cherry_pick_via_rest(ws_repo):
 
 
 @pytest.mark.asyncio
-async def test_cherry_pick_sha_invalido_devolve_erro(ws_repo):
+async def test_cherry_pick_sha_invalido_devolve_erro(
+    ws_repo: tuple[git.Repo, Path],
+) -> None:
     result = await git_cherry_pick_inline(
         "ws-git", GitCherryPickRequest(sha="sha-invalido-000")
     )

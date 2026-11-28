@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.transport import TransportBackend
+    from backend.workspace.workspace import Workspace
 
 
 async def resolve_remote_workspace_path(
-    transport: Any, workspace: Any, requested: str
+    transport: TransportBackend, workspace: Workspace, requested: str
 ) -> tuple[str | None, str | None]:
     """Resolve um caminho no host remoto e o confina à raiz do workspace."""
     raw = PurePosixPath(requested)

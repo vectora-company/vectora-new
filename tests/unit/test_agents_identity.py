@@ -11,23 +11,23 @@ from backend.agents._identity import VECTORA_IDENTITY, detect_system_language
 # ---------------------------------------------------------------------------
 
 
-def test_identity_is_string():
+def test_identity_is_string() -> None:
     assert isinstance(VECTORA_IDENTITY, str)
     assert len(VECTORA_IDENTITY) > 200
 
 
-def test_identity_contains_stack():
+def test_identity_contains_stack() -> None:
     assert "Native engine" in VECTORA_IDENTITY
     assert "LanceDB" in VECTORA_IDENTITY
 
 
-def test_identity_names_official_organization_and_founder():
+def test_identity_names_official_organization_and_founder() -> None:
     assert "[vectora-ltda](https://github.com/vectora-ltda/)" in VECTORA_IDENTITY
     assert "[brunosrz](https://github.com/brunosrz/)" in VECTORA_IDENTITY
     assert "Founder and lead maintainer" in VECTORA_IDENTITY
 
 
-def test_identity_reconhece_licenca_open_source_sem_anunciar_no_cumprimento():
+def test_identity_reconhece_licenca_open_source_sem_anunciar_no_cumprimento() -> None:
     """A identidade distingue AGPL open source do produto comercial self-hosted."""
     lowered = VECTORA_IDENTITY.lower()
     # Normaliza quebras de linha do blockquote markdown antes de checar frases
@@ -44,7 +44,7 @@ def test_identity_reconhece_licenca_open_source_sem_anunciar_no_cumprimento():
     assert "is not open source" not in flat
 
 
-def test_identity_conhece_workbench_tarefas():
+def test_identity_conhece_workbench_tarefas() -> None:
     """A identidade conhece a workbench de Tarefas (tasks, antiga "Segundo plano")."""
     lowered = VECTORA_IDENTITY.lower()
     assert "tasks" in lowered
@@ -53,11 +53,11 @@ def test_identity_conhece_workbench_tarefas():
     assert "webhook" in lowered
 
 
-def test_identity_mentions_cohere():
+def test_identity_mentions_cohere() -> None:
     assert "Cohere" in VECTORA_IDENTITY
 
 
-def test_identity_describes_agents():
+def test_identity_describes_agents() -> None:
     lowered = VECTORA_IDENTITY.lower()
     assert "directly by default" in lowered
     assert "optional" in lowered
@@ -80,7 +80,7 @@ def test_identity_describes_agents():
 
 
 @pytest.fixture
-def clean_locale_env(monkeypatch):
+def clean_locale_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     """Remove LC_ALL / LC_MESSAGES / LANG do ambiente do teste."""
     for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
         monkeypatch.delenv(var, raising=False)
@@ -88,27 +88,35 @@ def clean_locale_env(monkeypatch):
 
 
 class TestDetectSystemLanguage:
-    def test_returns_lc_all_when_set(self, clean_locale_env):
+    def test_returns_lc_all_when_set(
+        self, clean_locale_env: pytest.MonkeyPatch
+    ) -> None:
         clean_locale_env.setenv("LC_ALL", "pt_BR.UTF-8")
         assert detect_system_language() == "pt_BR"
 
-    def test_returns_lang_when_lc_all_absent(self, clean_locale_env):
+    def test_returns_lang_when_lc_all_absent(
+        self, clean_locale_env: pytest.MonkeyPatch
+    ) -> None:
         clean_locale_env.setenv("LANG", "en_US.UTF-8")
         assert detect_system_language() == "en_US"
 
-    def test_lc_all_has_priority_over_lang(self, clean_locale_env):
+    def test_lc_all_has_priority_over_lang(
+        self, clean_locale_env: pytest.MonkeyPatch
+    ) -> None:
         """LC_ALL vence LANG (semântica POSIX)."""
         clean_locale_env.setenv("LC_ALL", "es_ES.UTF-8")
         clean_locale_env.setenv("LANG", "pt_BR.UTF-8")
         assert detect_system_language() == "es_ES"
 
-    def test_lc_messages_between_lc_all_and_lang(self, clean_locale_env):
+    def test_lc_messages_between_lc_all_and_lang(
+        self, clean_locale_env: pytest.MonkeyPatch
+    ) -> None:
         """LC_MESSAGES > LANG quando LC_ALL ausente."""
         clean_locale_env.setenv("LC_MESSAGES", "fr_FR.UTF-8")
         clean_locale_env.setenv("LANG", "pt_BR.UTF-8")
         assert detect_system_language() == "fr_FR"
 
-    def test_drops_encoding_suffix(self, clean_locale_env):
+    def test_drops_encoding_suffix(self, clean_locale_env: pytest.MonkeyPatch) -> None:
         """`.UTF-8`, `.cp1252` etc. são descartados — só o sufixo de encoding."""
         clean_locale_env.setenv("LC_ALL", "pt_BR.UTF-8")
         assert detect_system_language() == "pt_BR"
@@ -117,7 +125,9 @@ class TestDetectSystemLanguage:
         clean_locale_env.setenv("LANG", "es_AR.ISO8859-1")
         assert detect_system_language() == "es_AR"
 
-    def test_no_normalization_of_format(self, clean_locale_env):
+    def test_no_normalization_of_format(
+        self, clean_locale_env: pytest.MonkeyPatch
+    ) -> None:
         """O formato é repassado cru — hífen vs underscore, código longo etc."""
         clean_locale_env.setenv("LC_ALL", "es-419")
         assert detect_system_language() == "es-419"
@@ -126,7 +136,9 @@ class TestDetectSystemLanguage:
         clean_locale_env.setenv("LANG", "pt-br")
         assert detect_system_language() == "pt-br"
 
-    def test_ignores_c_and_posix_locales(self, clean_locale_env):
+    def test_ignores_c_and_posix_locales(
+        self, clean_locale_env: pytest.MonkeyPatch
+    ) -> None:
         """`C` e `POSIX` são locales "neutros" — equivalem a "sem preferência"."""
         clean_locale_env.setenv("LC_ALL", "C")
         # Sem fallback do SO, deve devolver vazio. Mocka getdefaultlocale para
@@ -146,7 +158,9 @@ class TestDetectSystemLanguage:
         clean_locale_env.setenv("LC_ALL", "POSIX")
         assert detect_system_language() == ""
 
-    def test_returns_empty_when_nothing_set_and_locale_empty(self, clean_locale_env):
+    def test_returns_empty_when_nothing_set_and_locale_empty(
+        self, clean_locale_env: pytest.MonkeyPatch
+    ) -> None:
         """Sem env vars e sem locale do SO → string vazia."""
         import locale as _locale
 
@@ -154,7 +168,9 @@ class TestDetectSystemLanguage:
         clean_locale_env.setattr(_locale, "getlocale", lambda *a, **kw: (None, None))
         assert detect_system_language() == ""
 
-    def test_falls_back_to_getdefaultlocale(self, clean_locale_env):
+    def test_falls_back_to_getdefaultlocale(
+        self, clean_locale_env: pytest.MonkeyPatch
+    ) -> None:
         """Sem env vars, getdefaultlocale do Python decide (caso típico Windows)."""
         import locale as _locale
 
@@ -163,7 +179,9 @@ class TestDetectSystemLanguage:
         )
         assert detect_system_language() == "pt_BR"
 
-    def test_accepts_windows_style_locale(self, clean_locale_env):
+    def test_accepts_windows_style_locale(
+        self, clean_locale_env: pytest.MonkeyPatch
+    ) -> None:
         """Locale estilo Windows ('Portuguese_Brazil') é repassado cru."""
         import locale as _locale
 

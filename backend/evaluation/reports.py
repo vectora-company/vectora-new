@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from backend.evaluation.metrics import BenchmarkMetric, RunProvenance
 from backend.persistence.native.agent_run import redact_sensitive_data
+from backend.vtypes.contracts import JsonObject
 
 RunStatus = Literal["passed", "failed", "blocked", "skipped", "not_run", "cancelled"]
 Profile = Literal["cold", "warm"]
@@ -418,7 +419,7 @@ def export_csv(
     for run in report.runs:
         metrics = run.metrics or [None]
         for metric in metrics:
-            row = {
+            row: JsonObject = {
                 "report_id": report.report_id,
                 "report_command": json.dumps(report.command, ensure_ascii=False),
                 "run_id": run.run_id,

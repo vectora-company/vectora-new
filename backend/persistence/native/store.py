@@ -13,10 +13,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from backend.persistence.telemetry import telemetry
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 if TYPE_CHECKING:
     from backend.storage.protocols import HealthResult
     from backend.storage.sqlite.pool import AsyncConnectionPool
+    from backend.vtypes.store import EmbeddingIndex
 
 _SETUP_SQL = """
 CREATE TABLE IF NOT EXISTS store_items (
@@ -44,9 +46,7 @@ def _ns_from_str(namespace: str) -> tuple[str, ...]:
     return tuple(namespace.split(_NS_SEP)) if namespace else ()
 
 
-def is_store_value_expired(
-    value: dict[str, Any], *, now: datetime | None = None
-) -> bool:
+def is_store_value_expired(value: JsonObject, *, now: datetime | None = None) -> bool:
     """Retorna se um item persistido passou do seu ``valid_until``."""
     valid_until = value.get("valid_until")
     if not isinstance(valid_until, str) or not valid_until:
@@ -73,17 +73,33 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
-_FILTER_OPERATORS = {
-    "$eq": lambda v, target: v == target,
-    "$ne": lambda v, target: v != target,
-    "$gt": lambda v, target: v is not None and v > target,
-    "$gte": lambda v, target: v is not None and v >= target,
-    "$lt": lambda v, target: v is not None and v < target,
-    "$lte": lambda v, target: v is not None and v <= target,
+def _ordered(value: JsonValue, target: JsonValue) -> int | None:
+    """Sinal da comparação entre dois números ou dois textos; ``None`` se não há ordem."""
+    if isinstance(value, int | float) and isinstance(target, int | float):
+        return (value > target) - (value < target)
+    if isinstance(value, str) and isinstance(target, str):
+        return (value > target) - (value < target)
+    return None
+
+
+_ORDER_OPERATORS: dict[str, frozenset[int]] = {
+    "$gt": frozenset({1}),
+    "$gte": frozenset({0, 1}),
+    "$lt": frozenset({-1}),
+    "$lte": frozenset({-1, 0}),
 }
 
 
-def _matches_filter(value: dict[str, Any], filter_: dict[str, Any] | None) -> bool:
+def _matches_operator(operator: str, value: JsonValue, target: JsonValue) -> bool:
+    if operator == "$eq":
+        return value == target
+    if operator == "$ne":
+        return value != target
+    accepted = _ORDER_OPERATORS.get(operator)
+    return accepted is not None and _ordered(value, target) in accepted
+
+
+def _matches_filter(value: JsonObject, filter_: JsonObject | None) -> bool:
     """Executa a operação  matches filter."""
     if not filter_:
         return True
@@ -91,8 +107,7 @@ def _matches_filter(value: dict[str, Any], filter_: dict[str, Any] | None) -> bo
         actual = value.get(key)
         if isinstance(condition, dict):
             for op, target in condition.items():
-                fn = _FILTER_OPERATORS.get(op)
-                if fn is None or not fn(actual, target):
+                if not _matches_operator(op, actual, target):
                     return False
         elif actual != condition:
             return False
@@ -108,7 +123,7 @@ def _matches_filter(value: dict[str, Any], filter_: dict[str, Any] | None) -> bo
 class Item:
     """Um item persistido no store — retorno de ``aget``."""
 
-    value: dict[str, Any]
+    value: JsonObject
     key: str
     namespace: tuple[str, ...]
     created_at: datetime
@@ -190,7 +205,7 @@ def tokenize_path(path: str) -> list[str]:
     return tokens
 
 
-def get_text_at_path(obj: Any, path: str | list[str]) -> list[str]:
+def get_text_at_path(obj: JsonValue, path: str | list[str]) -> list[str]:
     """Extrai texto de ``obj`` seguindo ``path``.
 
     Sintaxes suportadas:
@@ -208,7 +223,7 @@ def get_text_at_path(obj: Any, path: str | list[str]) -> list[str]:
     return _extract_from_obj(obj, tokens, 0)
 
 
-def _extract_from_obj(obj: Any, tokens: list[str], pos: int) -> list[str]:
+def _extract_from_obj(obj: JsonValue, tokens: list[str], pos: int) -> list[str]:
     """Executa a operação  extract from obj."""
     if pos >= len(tokens):
         if isinstance(obj, str | int | float | bool):
@@ -246,7 +261,7 @@ def _extract_from_obj(obj: Any, tokens: list[str], pos: int) -> list[str]:
             nested_tokens = tokenize_path(field)
             if not nested_tokens:
                 continue
-            current: Any = obj
+            current: JsonValue = obj
             for nested_token in nested_tokens:
                 if isinstance(current, dict) and nested_token in current:
                     current = current[nested_token]
@@ -289,7 +304,7 @@ class VectoraStore:
     """
 
     def __init__(
-        self, pool: AsyncConnectionPool, *, index: dict[str, Any] | None = None
+        self, pool: AsyncConnectionPool, *, index: EmbeddingIndex | None = None
     ) -> None:
         """Inicializa o estado da instância."""
         self._pool = pool
@@ -352,7 +367,7 @@ class VectoraStore:
         )
 
     async def aput(
-        self, namespace: tuple[str, ...], key: str, value: dict[str, Any]
+        self, namespace: tuple[str, ...], key: str, value: JsonObject
     ) -> None:
         """Executa a operação aput."""
         started = time.perf_counter()
@@ -421,7 +436,7 @@ class VectoraStore:
                         "SELECT namespace, key, value FROM store_items "
                         "ORDER BY namespace, key LIMIT 200"
                     )
-                    page_params: tuple[object, ...] = ()
+                    page_params: tuple[str, ...] = ()
                 else:
                     page_sql = (
                         "SELECT namespace, key, value FROM store_items "
@@ -462,7 +477,7 @@ class VectoraStore:
         *,
         query: str | None = None,
         limit: int = 10,
-        filter: dict[str, Any] | None = None,  # noqa: A002 — mesmo nome do protocolo
+        filter: JsonObject | None = None,  # noqa: A002 — mesmo nome do protocolo
         offset: int = 0,
         include_expired: bool = False,
     ) -> list[SearchItem]:
@@ -538,7 +553,7 @@ class VectoraStore:
         except Exception as exc:
             return _err(str(exc))
 
-    async def _embed_for_index(self, value: dict[str, Any]) -> str | None:
+    async def _embed_for_index(self, value: JsonObject) -> str | None:
         """Calcula o embedding médio dos campos indexados de ``value``, ou
         ``None`` se não há índice configurado / nada extraído."""
         if self._index is None:

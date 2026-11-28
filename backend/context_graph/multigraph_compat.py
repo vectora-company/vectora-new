@@ -152,7 +152,7 @@ def _probe_reserved_key_attr_rejected() -> bool | str:
     the regression.
     """
     graph = nx.MultiDiGraph()
-    attrs: dict[str, Any] = {"key": "attr-key", "relation": "calls"}
+    attrs: dict[str, str] = {"key": "attr-key", "relation": "calls"}
     try:
         graph.add_edge("a", "b", key="schema-key", **attrs)
     except TypeError:

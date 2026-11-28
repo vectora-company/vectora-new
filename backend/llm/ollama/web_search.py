@@ -14,7 +14,10 @@ Entram como mais um backend do roteador de busca, não como tool própria.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +42,11 @@ def web_search_available() -> bool:
 
 
 async def _post(
-    path: str, payload: dict, *, api_key: str, http_client: Any = None
+    path: str,
+    payload: dict,
+    *,
+    api_key: str,
+    http_client: httpx.AsyncClient | None = None,
 ) -> dict:
     if not (api_key or "").strip():
         raise ValueError(_SEM_KEY)
@@ -74,7 +81,7 @@ async def ollama_web_search(
     *,
     api_key: str,
     max_results: int = 5,
-    http_client: Any = None,
+    http_client: httpx.AsyncClient | None = None,
 ) -> list[dict]:
     """Busca na web via Ollama Cloud. Sem resultado devolve lista vazia."""
     if max_results > _MAX_RESULTS_LIMITE:
@@ -105,7 +112,9 @@ async def ollama_web_search(
     ]
 
 
-async def ollama_web_fetch(url: str, *, api_key: str, http_client: Any = None) -> dict:
+async def ollama_web_fetch(
+    url: str, *, api_key: str, http_client: httpx.AsyncClient | None = None
+) -> dict:
     """Extrai o conteúdo de uma URL via Ollama Cloud."""
     if not (url or "").strip():
         msg = "url vazia — nada a buscar"

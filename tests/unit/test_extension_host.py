@@ -23,6 +23,8 @@ from backend.extensions.models import (
     Grants,
 )
 from backend.extensions.store import ExtensionStore
+from backend.tools.context import ToolContext
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 class FakeClient:
@@ -34,23 +36,27 @@ class FakeClient:
     call_delay = 0.0
 
     def __init__(self) -> None:
-        self.connections: dict[str, dict[str, Any]] = {}
-        self.calls: list[tuple[str, dict[str, Any], Any]] = []
+        self.connections: dict[str, JsonObject] = {}
+        self.calls: list[tuple[str, JsonObject, ToolContext | None]] = []
         self.closed = False
         FakeClient.instances.append(self)
 
     async def connect(
-        self, connections: dict[str, dict[str, Any]], *, strict: bool = False
+        self, connections: dict[str, JsonObject], *, strict: bool = False
     ) -> None:
         if FakeClient.fail_connect:
             raise RuntimeError("sem jail")
         self.connections = connections
 
-    def tools(self) -> dict[str, Any]:
-        return {"echo": object(), "secret": object()}
+    def tools(self) -> list[str]:
+        return ["echo", "secret"]
 
     async def call_tool(
-        self, name: str, arguments: dict[str, Any], ctx: Any = None
+        self,
+        name: str,
+        /,
+        arguments: JsonObject,
+        ctx: ToolContext | None = None,
     ) -> str:
         if FakeClient.call_delay:
             await asyncio.sleep(FakeClient.call_delay)
@@ -92,10 +98,10 @@ def _request(
     *,
     version: str = "1.0.0",
     content: str = "x",
-    **overrides: Any,
+    **overrides: JsonValue | list[Contribution],
 ) -> InstallRequest:
     path = _bundle(host, f"demo-{version}-{content}", content)
-    release: dict[str, Any] = {
+    release: dict[str, JsonValue | list[Contribution]] = {
         "version": version,
         "digest": compute_bundle_digest(path),
         "install_path": str(path),
@@ -314,10 +320,12 @@ async def test_call_tool_rejects_unserializable_and_oversized_arguments(
 ) -> None:
     await _active_host(host)
 
+    # Referência circular: um objeto que o JSON não consegue serializar.
+    circular: JsonObject = {}
+    circular["x"] = circular
+
     with pytest.raises(ExtensionError) as bad:
-        await host.call_tool(
-            "demo", "echo", {"x": object()}, workspace_id="ws1", actor="u"
-        )
+        await host.call_tool("demo", "echo", circular, workspace_id="ws1", actor="u")
     with pytest.raises(ExtensionError) as big:
         await host.call_tool(
             "demo", "echo", {"x": "a" * 300_000}, workspace_id="ws1", actor="u"
@@ -493,8 +501,8 @@ async def test_shutdown_stops_every_running_extension(host: ExtensionHost) -> No
         {"kind": "settings_page", "entry": "pagina.js"},
     ],
 )
-def test_contribution_entry_rules(overrides: dict[str, Any]) -> None:
-    data: dict[str, Any] = {"id": "ok", "label": "Ok", **overrides}
+def test_contribution_entry_rules(overrides: JsonObject) -> None:
+    data: JsonObject = {"id": "ok", "label": "Ok", **overrides}
 
     with pytest.raises(ValidationError):
         Contribution.model_validate(data)

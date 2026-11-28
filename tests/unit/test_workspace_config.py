@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from backend.workspace.workspace_config import (
     WORKSPACE_LOCAL_DIR,
     ensure_workspace_files,
@@ -9,7 +13,7 @@ from backend.workspace.workspace_config import (
 )
 
 
-def test_ensure_workspace_files_creates_toml_and_local_dir(tmp_path):
+def test_ensure_workspace_files_creates_toml_and_local_dir(tmp_path: Path) -> None:
     ensure_workspace_files(tmp_path, name="meu-projeto")
 
     toml_path = tmp_path / "vectora.toml"
@@ -21,7 +25,7 @@ def test_ensure_workspace_files_creates_toml_and_local_dir(tmp_path):
     assert (local_dir / ".gitignore").read_text(encoding="utf-8") == "*\n"
 
 
-def test_ensure_workspace_files_is_idempotent(tmp_path):
+def test_ensure_workspace_files_is_idempotent(tmp_path: Path) -> None:
     ensure_workspace_files(tmp_path, name="meu-projeto")
     toml_path = tmp_path / "vectora.toml"
     toml_path.write_text("# editado pelo usuário\n", encoding="utf-8")
@@ -31,7 +35,7 @@ def test_ensure_workspace_files_is_idempotent(tmp_path):
     assert toml_path.read_text(encoding="utf-8") == "# editado pelo usuário\n"
 
 
-def test_ensure_workspace_files_skips_nonexistent_dir(tmp_path):
+def test_ensure_workspace_files_skips_nonexistent_dir(tmp_path: Path) -> None:
     missing = tmp_path / "does-not-exist"
 
     ensure_workspace_files(missing, name="x")
@@ -39,7 +43,7 @@ def test_ensure_workspace_files_skips_nonexistent_dir(tmp_path):
     assert not missing.exists()
 
 
-def test_ensure_workspace_files_appends_gitignore_entry(tmp_path):
+def test_ensure_workspace_files_appends_gitignore_entry(tmp_path: Path) -> None:
     (tmp_path / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
 
     ensure_workspace_files(tmp_path, name="meu-projeto")
@@ -49,13 +53,15 @@ def test_ensure_workspace_files_appends_gitignore_entry(tmp_path):
     assert ".vectora/" in content
 
 
-def test_ensure_workspace_files_does_not_create_gitignore(tmp_path):
+def test_ensure_workspace_files_does_not_create_gitignore(tmp_path: Path) -> None:
     ensure_workspace_files(tmp_path, name="meu-projeto")
 
     assert not (tmp_path / ".gitignore").exists()
 
 
-def test_ensure_workspace_files_does_not_duplicate_gitignore_entry(tmp_path):
+def test_ensure_workspace_files_does_not_duplicate_gitignore_entry(
+    tmp_path: Path,
+) -> None:
     (tmp_path / ".gitignore").write_text(".vectora/\n", encoding="utf-8")
 
     ensure_workspace_files(tmp_path, name="meu-projeto")
@@ -65,11 +71,13 @@ def test_ensure_workspace_files_does_not_duplicate_gitignore_entry(tmp_path):
     assert "!.vectora/skills.lock.json" in content.splitlines()
 
 
-def test_load_workspace_config_returns_none_when_missing(tmp_path):
+def test_load_workspace_config_returns_none_when_missing(tmp_path: Path) -> None:
     assert load_workspace_config(tmp_path) is None
 
 
-def test_load_workspace_config_rejects_symlink_outside_workspace(tmp_path):
+def test_load_workspace_config_rejects_symlink_outside_workspace(
+    tmp_path: Path,
+) -> None:
     outside = tmp_path.parent / f"{tmp_path.name}-outside.toml"
     outside.write_text('[workspace]\nname = "outside"\n', encoding="utf-8")
     config_path = tmp_path / "vectora.toml"
@@ -83,7 +91,9 @@ def test_load_workspace_config_rejects_symlink_outside_workspace(tmp_path):
     assert load_workspace_config(tmp_path) is None
 
 
-def test_load_workspace_config_parses_and_resolves_env(tmp_path, monkeypatch):
+def test_load_workspace_config_parses_and_resolves_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("MEUPROJETO_POSTGRES_DSN", "postgresql://x/y")
     (tmp_path / "vectora.toml").write_text(
         """
@@ -115,7 +125,7 @@ allowed_models = ["claude-sonnet-4-6"]
     assert cfg.agent.allowed_models == ["claude-sonnet-4-6"]
 
 
-def test_load_workspace_config_reads_hooks_and_auto_commit(tmp_path):
+def test_load_workspace_config_reads_hooks_and_auto_commit(tmp_path: Path) -> None:
     (tmp_path / "vectora.toml").write_text(
         """
 [agent]
@@ -137,7 +147,9 @@ post_file_write = ["ruff format {file}", "prettier --write {file}"]
     ]
 
 
-def test_load_workspace_config_defaults_hooks_and_auto_commit_when_absent(tmp_path):
+def test_load_workspace_config_defaults_hooks_and_auto_commit_when_absent(
+    tmp_path: Path,
+) -> None:
     """Edge — sem [hooks]/[agent].auto_commit no toml, defaults seguros (off)."""
     (tmp_path / "vectora.toml").write_text(
         '[workspace]\nname = "demo"\n', encoding="utf-8"
@@ -150,7 +162,7 @@ def test_load_workspace_config_defaults_hooks_and_auto_commit_when_absent(tmp_pa
     assert cfg.hooks.post_file_write == []
 
 
-def test_load_workspace_config_returns_none_on_invalid_toml(tmp_path):
+def test_load_workspace_config_returns_none_on_invalid_toml(tmp_path: Path) -> None:
     (tmp_path / "vectora.toml").write_text("not valid toml [[[", encoding="utf-8")
 
     assert load_workspace_config(tmp_path) is None

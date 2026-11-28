@@ -17,9 +17,12 @@ from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import aiosqlite
+
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.dag import DagPlanRecord
+from backend.vtypes.sql import optional_text
 
 
 class DAGValidationError(ValueError):
@@ -205,7 +208,7 @@ class DAGStore:
         )
         return plan_id, created_hash
 
-    async def get_plan(self, plan_id: str) -> dict[str, Any] | None:
+    async def get_plan(self, plan_id: str) -> DagPlanRecord | None:
         async with self.db.execute(
             "SELECT plan_id,run_id,workspace_id,stages_json,plan_hash,status,"
             "approved_by,approved_at,created_at FROM vectora_dag_plans WHERE plan_id=?",
@@ -214,39 +217,52 @@ class DAGStore:
             row = await cur.fetchone()
         if row is None:
             return None
-        plan = dict(row)
-        plan["stages"] = json.loads(plan.pop("stages_json"))
+        record: DagPlanRecord = {
+            "plan_id": str(row["plan_id"]),
+            "run_id": str(row["run_id"]),
+            "workspace_id": optional_text(row["workspace_id"]),
+            "plan_hash": str(row["plan_hash"]),
+            "status": str(row["status"]),
+            "approved_by": optional_text(row["approved_by"]),
+            "approved_at": optional_text(row["approved_at"]),
+            "created_at": str(row["created_at"]),
+            "stages": json.loads(str(row["stages_json"])),
+            "execution": None,
+        }
         async with self.db.execute(
             "SELECT execution_id,status FROM vectora_dag_executions "
             "WHERE plan_id=? ORDER BY created_at DESC LIMIT 1",
             (plan_id,),
         ) as cur:
             execution = await cur.fetchone()
-        plan["execution"] = dict(execution) if execution is not None else None
-        if execution is not None:
-            execution_snapshot: dict[str, Any] = dict(execution)
-            async with self.db.execute(
-                "SELECT stage_id,name,depends_on_json,status,attempt,error,output_json "
-                "FROM vectora_dag_stages WHERE execution_id=? ORDER BY rowid",
-                (execution["execution_id"],),
-            ) as cur:
-                rows = await cur.fetchall()
-            execution_snapshot["stages"] = [
+        if execution is None:
+            return record
+        execution_id = str(execution["execution_id"])
+        async with self.db.execute(
+            "SELECT stage_id,name,depends_on_json,status,attempt,error,output_json "
+            "FROM vectora_dag_stages WHERE execution_id=? ORDER BY rowid",
+            (execution_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+        record["execution"] = {
+            "execution_id": execution_id,
+            "status": str(execution["status"]),
+            "stages": [
                 {
-                    "stage_id": row["stage_id"],
-                    "name": row["name"],
-                    "depends_on": json.loads(row["depends_on_json"]),
-                    "status": row["status"],
-                    "attempt": row["attempt"],
-                    "error": row["error"],
-                    "output": json.loads(row["output_json"])
-                    if row["output_json"]
+                    "stage_id": str(stage["stage_id"]),
+                    "name": str(stage["name"]),
+                    "depends_on": json.loads(str(stage["depends_on_json"])),
+                    "status": str(stage["status"]),
+                    "attempt": int(stage["attempt"]),
+                    "error": optional_text(stage["error"]),
+                    "output": json.loads(str(stage["output_json"]))
+                    if stage["output_json"]
                     else None,
                 }
-                for row in rows
-            ]
-            plan["execution"] = execution_snapshot
-        return plan
+                for stage in rows
+            ],
+        }
+        return record
 
     async def list_active_executions(self) -> list[dict[str, str]]:
         async with self.db.execute(
@@ -255,7 +271,7 @@ class DAGStore:
         ) as cur:
             return [dict(row) for row in await cur.fetchall()]
 
-    async def get_plan_for_run(self, run_id: str) -> dict[str, Any] | None:
+    async def get_plan_for_run(self, run_id: str) -> DagPlanRecord | None:
         async with self.db.execute(
             "SELECT plan_id FROM vectora_dag_plans WHERE run_id=? "
             "ORDER BY created_at DESC LIMIT 1",
@@ -264,7 +280,7 @@ class DAGStore:
             row = await cur.fetchone()
         return await self.get_plan(str(row[0])) if row is not None else None
 
-    async def get_plan_by_execution(self, execution_id: str) -> dict[str, Any] | None:
+    async def get_plan_by_execution(self, execution_id: str) -> DagPlanRecord | None:
         async with self.db.execute(
             "SELECT plan_id FROM vectora_dag_executions WHERE execution_id=?",
             (execution_id,),
@@ -591,7 +607,7 @@ class DAGStore:
         *,
         claim_token: str,
         passed: bool,
-        output: dict[str, Any] | None = None,
+        output: JsonObject | None = None,
         error: str | None = None,
     ) -> None:
         status = "passed" if passed else "failed"
@@ -736,7 +752,7 @@ class DAGStore:
         execution_id: str,
         stage_id: str | None,
         kind: str,
-        payload: dict[str, Any],
+        payload: JsonObject,
     ) -> None:
         await self.db.execute(
             "INSERT INTO vectora_dag_events(event_id,execution_id,stage_id,event_type,payload_json,created_at) VALUES(?,?,?,?,?,?)",

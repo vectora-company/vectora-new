@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 
 import pytest
 
@@ -25,7 +26,7 @@ from backend.embedding.queue import EmbeddingQueue
 
 @pytest.mark.stress
 @pytest.mark.asyncio
-async def test_queue_reader_writer_contention(tmp_path):
+async def test_queue_reader_writer_contention(tmp_path: Path) -> None:
     """50 writers + 10 readers simultâneos — sem deadlock nem perda de dados."""
     N_WRITES = 50
     N_READS = 10
@@ -67,7 +68,9 @@ async def test_queue_reader_writer_contention(tmp_path):
     [(10, 2), (50, 10), (100, 20), (200, 5), (20, 50)],
     ids=["w10_r2", "w50_r10", "w100_r20", "w200_r5", "w20_r50"],
 )
-async def test_queue_reader_writer_various_ratios(tmp_path, writers, readers):
+async def test_queue_reader_writer_various_ratios(
+    tmp_path: Path, writers: int, readers: int
+) -> None:
     """Proporções variadas de leitores/escritores concorrentes — nunca há exceção nem perda."""
     db_path = tmp_path / f"stress_rw_{writers}_{readers}.db"
     queue = EmbeddingQueue(f"sqlite+aiosqlite:///{db_path}")
@@ -93,7 +96,7 @@ async def test_queue_reader_writer_various_ratios(tmp_path, writers, readers):
 @pytest.mark.stress
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waves", [1, 3, 5, 10], ids=lambda n: f"waves={n}")
-async def test_queue_reader_writer_sequential_waves(tmp_path, waves):
+async def test_queue_reader_writer_sequential_waves(tmp_path: Path, waves: int) -> None:
     """Múltiplas rajadas sucessivas de leitura/escrita concorrente — sem degradação entre ondas."""
     db_path = tmp_path / f"stress_waves_{waves}.db"
     queue = EmbeddingQueue(f"sqlite+aiosqlite:///{db_path}")
@@ -122,7 +125,7 @@ async def test_queue_reader_writer_sequential_waves(tmp_path, waves):
 @pytest.mark.stress
 @pytest.mark.asyncio
 @pytest.mark.parametrize("n", [50, 100, 300], ids=lambda n: f"n={n}")
-async def test_queue_mixed_read_write_mark_concurrency(tmp_path, n):
+async def test_queue_mixed_read_write_mark_concurrency(tmp_path: Path, n: int) -> None:
     """Leitura, escrita e mark_success acontecendo ao mesmo tempo — consistência final garantida."""
     db_path = tmp_path / f"stress_mixed_{n}.db"
     queue = EmbeddingQueue(f"sqlite+aiosqlite:///{db_path}")
@@ -158,7 +161,7 @@ async def test_queue_mixed_read_write_mark_concurrency(tmp_path, n):
 @pytest.mark.stress
 @pytest.mark.asyncio
 @pytest.mark.parametrize("n_readers", [1, 5, 10, 25, 50], ids=lambda n: f"readers={n}")
-async def test_queue_reader_only_concurrency(tmp_path, n_readers):
+async def test_queue_reader_only_concurrency(tmp_path: Path, n_readers: int) -> None:
     """N leitores concorrentes contra fila pré-populada — nenhuma exceção, leituras consistentes."""
     db_path = tmp_path / f"stress_readers_{n_readers}.db"
     queue = EmbeddingQueue(f"sqlite+aiosqlite:///{db_path}")

@@ -8,7 +8,9 @@ reidratação, a imagem anexada nunca chegava ao modelo.
 from __future__ import annotations
 
 import base64
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -19,13 +21,14 @@ from backend.services.assets import AssetStore
 from backend.services.media_hydration import hydrate_media_blocks
 from backend.settings import settings
 from backend.storage.sqlite.pool import AsyncConnectionPool
-from backend.vtypes.message import ContentBlock, MessageRole, VMessage
+from backend.tools.registry import ToolSpec
+from backend.vtypes.message import ContentBlock, MessageRole, VMessage, VMessageChunk
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
 
 @pytest.fixture
-async def store(tmp_path: Path):
+async def store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "sessions.db"), min_size=1, max_size=2)
     await pool.open()
     session_store = SessionStore(pool)
@@ -136,7 +139,7 @@ def test_url_inline_e_remota_nao_sao_alteradas() -> None:
     remote = ContentBlock(kind="image_url", image_url="https://example.com/a.png")
     message = VMessage(role=MessageRole.USER, content=[remote])
 
-    def _fail(*_a: object, **_k: object) -> None:
+    def _fail[**P](*_a: P.args, **_k: P.kwargs) -> NoReturn:
         raise AssertionError("não deveria ler asset")
 
     assert hydrate_media_blocks(
@@ -174,14 +177,24 @@ async def test_loop_envia_a_imagem_do_historico_ao_chat_client(
 
     class _Client:
         async def astream(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> AsyncIterator[VMessageChunk]:
             received.append(list(messages))
             yield VMessageChunk(delta_text="uma imagem")
 
         async def agenerate(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> VMessage:
             raise NotImplementedError
 
     await run_conversation(
@@ -270,8 +283,13 @@ async def test_anexos_sobrevivem_tool_call_e_recarga_do_historico(
 
     class _Client:
         async def astream(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> AsyncIterator[VMessageChunk]:
             received.append(list(messages))
             if len(received) == 1:
                 yield VMessageChunk(
@@ -289,8 +307,13 @@ async def test_anexos_sobrevivem_tool_call_e_recarga_do_historico(
                 yield VMessageChunk(delta_text="Comparei as imagens e o código.")
 
         async def agenerate(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> VMessage:
             raise NotImplementedError
 
     await run_conversation(

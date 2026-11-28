@@ -16,7 +16,7 @@ import os
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import NoReturn, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -28,7 +28,7 @@ from fastapi import HTTPException, Request
 
 
 @pytest.fixture
-def fake_home(tmp_path, monkeypatch):
+def fake_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Isola ``settings.vectora_home`` em tmp_path — os helpers do handler
     resolvem o diretório de artifacts a partir dele."""
     from backend.settings import settings
@@ -54,8 +54,8 @@ def _write_artifact(home: Path, session_id: str, slug: str, content: str) -> Pat
 class TestListArtifacts:
     @pytest.mark.asyncio
     async def test_lists_markdown_plans_from_the_owned_local_workspace(
-        self, fake_home, tmp_path, monkeypatch
-    ):
+        self, fake_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers.artifacts import get_artifact, list_artifacts
         from backend.workspace.workspace import workspace_registry
 
@@ -97,7 +97,9 @@ class TestListArtifacts:
         request.state.user = SimpleNamespace(id="owner")
 
         class SessionStore:
-            async def get_session(self, thread_id, *, user_id=None):
+            async def get_session(
+                self, thread_id: str, *, user_id: str | None = None
+            ) -> dict[str, str]:
                 assert thread_id == "thread-with-workspace"
                 return {"workspace_id": "workspace-1", "user_id": "owner"}
 
@@ -151,7 +153,7 @@ class TestListArtifacts:
         )
         assert opened.artifact_type == "workspace_plan"
 
-        def deny_workspace_access(workspace_id, request):
+        def deny_workspace_access(workspace_id: str, request) -> NoReturn:
             raise HTTPException(status_code=403, detail="Sem acesso")
 
         monkeypatch.setattr(
@@ -164,8 +166,8 @@ class TestListArtifacts:
 
     @pytest.mark.asyncio
     async def test_does_not_list_local_plans_for_remote_workspaces(
-        self, fake_home, tmp_path, monkeypatch
-    ):
+        self, fake_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers.artifacts import list_artifacts
         from backend.workspace.workspace import workspace_registry
 
@@ -189,7 +191,9 @@ class TestListArtifacts:
         request.state.user = SimpleNamespace(id="owner")
 
         class SessionStore:
-            async def get_session(self, thread_id, *, user_id=None):
+            async def get_session(
+                self, thread_id: str, *, user_id: str | None = None
+            ) -> dict[str, str]:
                 return {"workspace_id": "workspace-remote", "user_id": "owner"}
 
         async def get_session_store():
@@ -220,8 +224,8 @@ class TestListArtifacts:
 
     @pytest.mark.asyncio
     async def test_storage_read_failure_is_not_reported_as_an_empty_plan(
-        self, fake_home, monkeypatch
-    ):
+        self, fake_home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.artifacts import list_artifacts
@@ -243,8 +247,8 @@ class TestListArtifacts:
 
     @pytest.mark.asyncio
     async def test_merges_configured_and_legacy_artifacts_for_same_session(
-        self, fake_home, tmp_path, monkeypatch
-    ):
+        self, fake_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers.artifacts import get_artifact, list_artifacts
 
         legacy_home = tmp_path / "legacy-home"
@@ -280,8 +284,8 @@ class TestListArtifacts:
 
     @pytest.mark.asyncio
     async def test_reads_legacy_artifact_directory_when_profile_home_changed(
-        self, fake_home, tmp_path, monkeypatch
-    ):
+        self, fake_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.api.handlers.artifacts import list_artifacts
 
         legacy_home = tmp_path / "legacy-home"
@@ -299,7 +303,7 @@ class TestListArtifacts:
         assert legacy_path.is_file()
 
     @pytest.mark.asyncio
-    async def test_empty_for_unknown_session(self, fake_home):
+    async def test_empty_for_unknown_session(self, fake_home: Path) -> None:
         """Verifica o comportamento de empty for unknown session."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -307,7 +311,7 @@ class TestListArtifacts:
         assert resp.artifacts == []
 
     @pytest.mark.asyncio
-    async def test_empty_for_blank_session_id(self, fake_home):
+    async def test_empty_for_blank_session_id(self, fake_home: Path) -> None:
         """Verifica o comportamento de empty for blank session id."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -315,7 +319,7 @@ class TestListArtifacts:
         assert resp.artifacts == []
 
     @pytest.mark.asyncio
-    async def test_lists_existing_artifacts(self, fake_home):
+    async def test_lists_existing_artifacts(self, fake_home: Path) -> None:
         """Verifica o comportamento de lists existing artifacts."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -328,7 +332,7 @@ class TestListArtifacts:
         assert "spec-y" in slugs
 
     @pytest.mark.asyncio
-    async def test_orders_by_mtime_desc(self, fake_home):
+    async def test_orders_by_mtime_desc(self, fake_home: Path) -> None:
         """Mais recentes primeiro — o usuário vê o último plano no topo."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -344,7 +348,7 @@ class TestListArtifacts:
         assert slugs[1] == "antigo"
 
     @pytest.mark.asyncio
-    async def test_content_preview_truncated_to_200(self, fake_home):
+    async def test_content_preview_truncated_to_200(self, fake_home: Path) -> None:
         """O preview no list é limitado — não devolve markdown gigante."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -355,7 +359,7 @@ class TestListArtifacts:
         assert len(resp.artifacts[0].content_preview) <= 200
 
     @pytest.mark.asyncio
-    async def test_exposes_artifact_type_from_sidecar(self, fake_home):
+    async def test_exposes_artifact_type_from_sidecar(self, fake_home: Path) -> None:
         """Verifica o comportamento de exposes artifact type from sidecar."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -365,7 +369,7 @@ class TestListArtifacts:
         resp = await list_artifacts(session_id="typed")
         assert resp.artifacts[0].artifact_type == "plan"
 
-    async def test_exposes_integrity_metadata(self, fake_home):
+    async def test_exposes_integrity_metadata(self, fake_home: Path) -> None:
         """Verifica o comportamento de exposes integrity metadata."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -388,7 +392,9 @@ class TestListArtifacts:
         assert artifact.retention_class == "run"
 
     @pytest.mark.asyncio
-    async def test_legacy_artifact_without_sidecar_defaults_to_other(self, fake_home):
+    async def test_legacy_artifact_without_sidecar_defaults_to_other(
+        self, fake_home: Path
+    ) -> None:
         """Erro/borda: artifact criado antes do campo existir (sem sidecar)
         não quebra a listagem — cai num default sensato."""
         from backend.api.handlers.artifacts import list_artifacts
@@ -399,7 +405,7 @@ class TestListArtifacts:
         assert resp.artifacts[0].artifact_type == "other"
 
     @pytest.mark.asyncio
-    async def test_session_id_traversal_is_stripped(self, fake_home):
+    async def test_session_id_traversal_is_stripped(self, fake_home: Path) -> None:
         """`..` e barras no session_id são removidos — não foge da pasta."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -418,7 +424,9 @@ class TestListArtifacts:
         assert not any("secreto" in p for p in paths)
 
     @pytest.mark.asyncio
-    async def test_authenticated_owner_can_list_artifacts(self, fake_home):
+    async def test_authenticated_owner_can_list_artifacts(
+        self, fake_home: Path
+    ) -> None:
         """Verifica o comportamento de authenticated owner can list artifacts."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -437,7 +445,9 @@ class TestListArtifacts:
         assert len(response.artifacts) == 1
 
     @pytest.mark.asyncio
-    async def test_unauthenticated_artifact_request_is_rejected(self, fake_home):
+    async def test_unauthenticated_artifact_request_is_rejected(
+        self, fake_home: Path
+    ) -> None:
         """Verifica o comportamento de unauthenticated artifact request is rejected."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -448,7 +458,9 @@ class TestListArtifacts:
         assert exc_info.value.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_different_authenticated_user_cannot_list_artifacts(self, fake_home):
+    async def test_different_authenticated_user_cannot_list_artifacts(
+        self, fake_home: Path
+    ) -> None:
         """Verifica o comportamento de different authenticated user cannot list artifacts."""
         from backend.api.handlers.artifacts import list_artifacts
 
@@ -478,8 +490,8 @@ class TestListArtifacts:
 class TestGetArtifact:
     @pytest.mark.asyncio
     async def test_read_failure_is_not_returned_as_empty_content(
-        self, fake_home, monkeypatch
-    ):
+        self, fake_home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.artifacts import get_artifact
@@ -487,7 +499,7 @@ class TestGetArtifact:
         path = _write_artifact(fake_home, "unreadable", "plan", "# Existing plan")
         original_read_text = Path.read_text
 
-        def fail_for_artifact(file_path: Path, *args, **kwargs):
+        def fail_for_artifact(file_path: Path, *args, **kwargs: str):
             if file_path == path:
                 raise PermissionError("storage unavailable")
             return original_read_text(file_path, *args, **kwargs)
@@ -504,7 +516,7 @@ class TestGetArtifact:
         )
 
     @pytest.mark.asyncio
-    async def test_returns_content(self, fake_home):
+    async def test_returns_content(self, fake_home: Path) -> None:
         """Verifica o comportamento de returns content."""
         from backend.api.handlers.artifacts import get_artifact
 
@@ -516,7 +528,7 @@ class TestGetArtifact:
         assert resp.created_at  # ISO 8601 do mtime
 
     @pytest.mark.asyncio
-    async def test_returns_artifact_type_from_sidecar(self, fake_home):
+    async def test_returns_artifact_type_from_sidecar(self, fake_home: Path) -> None:
         """Verifica o comportamento de returns artifact type from sidecar."""
         from backend.api.handlers.artifacts import get_artifact
 
@@ -527,7 +539,7 @@ class TestGetArtifact:
         assert resp.artifact_type == "spec"
 
     @pytest.mark.asyncio
-    async def test_returns_empty_for_missing(self, fake_home):
+    async def test_returns_empty_for_missing(self, fake_home: Path) -> None:
         """Verifica o comportamento de returns empty for missing."""
         from backend.api.handlers.artifacts import get_artifact
 
@@ -535,7 +547,7 @@ class TestGetArtifact:
         assert resp.content == ""
 
     @pytest.mark.asyncio
-    async def test_slug_traversal_is_stripped(self, fake_home):
+    async def test_slug_traversal_is_stripped(self, fake_home: Path) -> None:
         """Slug com `..` e barras não consegue ler arquivos fora da pasta."""
         from backend.api.handlers.artifacts import get_artifact
 
@@ -551,7 +563,9 @@ class TestGetArtifact:
         assert "FORA" not in resp.content
 
     @pytest.mark.asyncio
-    async def test_session_id_traversal_is_stripped_in_get(self, fake_home):
+    async def test_session_id_traversal_is_stripped_in_get(
+        self, fake_home: Path
+    ) -> None:
         """Verifica o comportamento de session id traversal is stripped in get."""
         from backend.api.handlers.artifacts import get_artifact
 
@@ -572,7 +586,9 @@ class TestMediaNaListagem:
     ponto de gerar mídia."""
 
     @pytest.mark.asyncio
-    async def test_media_aparece_junto_dos_documentos(self, monkeypatch, tmp_path):
+    async def test_media_aparece_junto_dos_documentos(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Verifica o comportamento de media aparece junto dos documentos."""
         from backend.api.handlers import artifacts as mod
 
@@ -601,7 +617,9 @@ class TestMediaNaListagem:
         assert all(a.sha256 == "" for a in media)
 
     @pytest.mark.asyncio
-    async def test_sessao_sem_media_nao_quebra(self, monkeypatch, tmp_path):
+    async def test_sessao_sem_media_nao_quebra(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Erro/borda: a esmagadora maioria das sessões nunca gera mídia — a
         ausência da pasta é o caso comum, não um erro."""
         from backend.api.handlers import artifacts as mod
@@ -616,7 +634,9 @@ class TestMediaNaListagem:
         assert [a.title for a in out.artifacts] == ["spec"]
 
     @pytest.mark.asyncio
-    async def test_media_ilegivel_nao_derruba_a_listagem(self, monkeypatch, tmp_path):
+    async def test_media_ilegivel_nao_derruba_a_listagem(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Erro/borda: `iterdir` estourando (permissão, disco) não pode fazer a
         aba inteira sumir — os documentos continuam listados."""
         from backend.api.handlers import artifacts as mod
@@ -626,7 +646,7 @@ class TestMediaNaListagem:
         (base / "guia.md").write_text("# Guia", encoding="utf-8")
         monkeypatch.setattr(mod, "_artifact_dirs", lambda _s: (base,))
 
-        def _explode(_self):
+        def _explode(_self: Path) -> NoReturn:
             """Executa a operação  explode."""
             raise OSError("sem permissão")
 
@@ -644,7 +664,9 @@ class TestGetMediaArtifact:
     esperam)."""
 
     @pytest.mark.asyncio
-    async def test_serve_arquivo_existente(self, monkeypatch, tmp_path):
+    async def test_serve_arquivo_existente(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Verifica o comportamento de serve arquivo existente."""
         from backend.api.handlers import artifacts as mod
         from backend.settings import settings
@@ -660,8 +682,8 @@ class TestGetMediaArtifact:
 
     @pytest.mark.asyncio
     async def test_arquivo_ausente_devolve_404_e_path_traversal_e_neutralizado(
-        self, monkeypatch, tmp_path
-    ):
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Erro/borda no mesmo teste: arquivo inexistente vira 404 (não
         `FileNotFoundError` cru), e um `filename`/`session_id` tentando
         escapar via `..`/barras não pode servir nada fora de

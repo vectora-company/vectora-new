@@ -11,7 +11,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from backend.contracts.models import (
     QualityGatePolicy,
@@ -23,6 +23,9 @@ from backend.contracts.models import (
 )
 from backend.services.verification.profile_store import get_verification_profile
 from backend.services.verification.snapshot import compute_files_snapshot
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +61,7 @@ class VerificationResult:
             return "Verificação concluída com sucesso."
         return f"Falha nos quality gates: {self.failure_feedback or ''}"
 
-    def to_evidence_entry(self) -> dict[str, Any]:
+    def to_evidence_entry(self) -> JsonObject:
         """Formata o resultado da verificação como evidência persistível no AgentRun."""
         return {
             "kind": "quality_gate_verification",
@@ -141,18 +144,13 @@ async def _execute_single_gate(
                 output_buffer.extend(chunk[:remaining])
 
     try:
-        kwargs: dict[str, Any] = {
-            "cwd": str(cwd),
-            "stdout": asyncio.subprocess.PIPE,
-            "stderr": asyncio.subprocess.STDOUT,
-        }
-        if os.name != "nt":
-            kwargs["start_new_session"] = True
-
         proc = await asyncio.create_subprocess_exec(
             cmd[0],
             *cmd[1:],
-            **kwargs,
+            cwd=str(cwd),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            start_new_session=os.name != "nt",
         )
         try:
             if proc.stdout is not None:

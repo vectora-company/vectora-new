@@ -48,8 +48,17 @@ from backend.services.context_manifest import (
     ContextCheckpointContract,
     ContextProjectionContract,
 )
-from backend.vtypes.contracts import ToolOption
-from backend.vtypes.message import VMessage
+from backend.vtypes.contracts import JsonObject, JsonValue, ToolOption
+from backend.vtypes.message import SerializedMessage, VMessage
+from backend.vtypes.persistence import (
+    BranchComparison,
+    BranchHead,
+    ContextCheckpointRecord,
+    ContextProjectionRecord,
+    PendingApprovalRecord,
+    PurgedContextCount,
+    SessionRecord,
+)
 
 if TYPE_CHECKING:
     import asyncpg
@@ -138,20 +147,24 @@ def _message_to_row(
     )
 
 
-def _row_to_message(row: Mapping[str, Any]) -> VMessage:
+def _row_to_message(
+    row: asyncpg.Record | Mapping[str, str | bool | None],
+) -> VMessage:
     """Executa a operação  row to message."""
-    data = {
-        "role": row["role"],
-        "content": json.loads(row["content_json"]),
-        "tool_calls": (
-            json.loads(row["tool_calls_json"]) if row["tool_calls_json"] else []
-        ),
-        "tool_call_id": row["tool_call_id"],
-        "name": row["name"],
+    tool_calls = row["tool_calls_json"]
+    tool_call_id = row["tool_call_id"]
+    name = row["name"]
+    is_error = row.get("is_error", False)
+    data: SerializedMessage = {
+        "role": str(row["role"]),
+        "content": json.loads(str(row["content_json"])),
+        "tool_calls": json.loads(str(tool_calls)) if tool_calls else [],
+        "tool_call_id": None if tool_call_id is None else str(tool_call_id),
+        "name": None if name is None else str(name),
         "finish_reason": None,
         # Preserve the tri-state contract; missing legacy values remain false,
         # while an explicit NULL remains unknown.
-        "is_error": row.get("is_error", False),
+        "is_error": None if is_error is None else bool(is_error),
     }
     return VMessage.from_dict(data)
 
@@ -240,7 +253,7 @@ class PostgresSessionStore:
 
     async def get_session(
         self, thread_id: str, *, user_id: str | None = None
-    ) -> dict[str, Any] | None:
+    ) -> SessionRecord | None:
         """Retorna metadados nativos para reidratar um HITL após restart."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -494,7 +507,7 @@ class PostgresSessionStore:
         )
 
     async def attach_edited_files(
-        self, thread_id: str, run_id: str, files: list[dict[str, object]]
+        self, thread_id: str, run_id: str, files: list[JsonObject]
     ) -> None:
         """Persiste os arquivos finais associados a um run de resposta."""
         await self.setup()
@@ -511,7 +524,7 @@ class PostgresSessionStore:
 
     async def get_edited_files_for_thread(
         self, thread_id: str
-    ) -> dict[int, list[dict[str, object]]]:
+    ) -> dict[int, list[JsonObject]]:
         """Retorna os payloads de arquivos persistidos por mensagem."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -520,7 +533,7 @@ class PostgresSessionStore:
                 "WHERE thread_id = $1 AND edited_files_json IS NOT NULL",
                 thread_id,
             )
-        result: dict[int, list[dict[str, object]]] = {}
+        result: dict[int, list[JsonObject]] = {}
         for row in rows:
             try:
                 value = json.loads(row["edited_files_json"])
@@ -699,7 +712,7 @@ class PostgresSessionStore:
 
     async def list_branch_heads(
         self, thread_id: str, *, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    ) -> list[BranchHead]:
         """Lista folhas da conversa, incluindo branches antigas."""
         await self.setup()
         bounded_limit = max(1, min(limit, 500))
@@ -714,7 +727,7 @@ class PostgresSessionStore:
                 thread_id,
                 bounded_limit,
             )
-        result: list[dict[str, Any]] = []
+        result: list[BranchHead] = []
         for row in rows:
             head_id = int(row["id"])
             history = await self.get_history_with_ids(
@@ -732,7 +745,7 @@ class PostgresSessionStore:
 
     async def compare_branches(
         self, thread_id: str, selected_head_id: int
-    ) -> dict[str, Any]:
+    ) -> BranchComparison:
         """Compara a ponta ativa com outra ponta da mesma thread."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -765,7 +778,7 @@ class PostgresSessionStore:
             if left != right:
                 break
             common += 1
-        result = {
+        result: BranchComparison = {
             "active_head_message_id": active_head,
             "selected_head_message_id": selected_head_id,
             "common_message_ids": active_ids[:common],
@@ -777,7 +790,9 @@ class PostgresSessionStore:
             raise ValueError("comparação de branches excede o limite permitido")
         return result
 
-    async def get_pending_approval(self, thread_id: str) -> dict[str, Any] | None:
+    async def get_pending_approval(
+        self, thread_id: str
+    ) -> PendingApprovalRecord | None:
         """Executa a operação get pending approval."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -858,7 +873,7 @@ class PostgresSessionStore:
 
     async def claim_pending_approval(
         self, thread_id: str, *, interrupt_id: str
-    ) -> dict[str, Any] | None:
+    ) -> PendingApprovalRecord | None:
         """Atomically consume a matching pending approval for one resumer,
         recording an approval_resolved event in the ledger on the same transaction."""
         await self.setup()
@@ -934,7 +949,7 @@ class PostgresSessionStore:
         tool_name: str,
         tool_call_id: str,
         run_id: str | None = None,
-        args: dict[str, Any],
+        args: JsonObject,
         reasoning: str | None = None,
         options: list[ToolOption] | None = None,
         priority: int = 0,
@@ -1181,7 +1196,7 @@ class PostgresSessionStore:
         message_id: int | None = None,
         tool_call_id: str | None = None,
         interrupt_id: str | None = None,
-        payload: dict[str, Any] | None = None,
+        payload: JsonObject | None = None,
         created_at: str | None = None,
     ) -> ThreadLedgerEvent:
         """Helper para registrar eventos no ledger Postgres usando argumentos nomeados."""
@@ -1782,13 +1797,13 @@ class PostgresSessionStore:
         self,
         run_id: str,
         *,
-        evidence: dict[str, Any] | None = None,
-        artifact: dict[str, Any] | None = None,
-        command: dict[str, Any] | None = None,
-        test_result: dict[str, Any] | None = None,
+        evidence: JsonObject | None = None,
+        artifact: JsonObject | None = None,
+        command: JsonObject | None = None,
+        test_result: JsonObject | None = None,
         tool_used: str | None = None,
-        approval: dict[str, Any] | None = None,
-        file_touched: dict[str, Any] | None = None,
+        approval: JsonObject | None = None,
+        file_touched: JsonObject | None = None,
     ) -> None:
         """Registra evidências incrementais no AgentRun de forma atômica."""
         await self.setup()
@@ -1844,7 +1859,7 @@ class PostgresSessionStore:
         self,
         thread_id: str,
         run_id: str,
-        projection: ContextProjectionContract | Mapping[str, object],
+        projection: ContextProjectionContract | Mapping[str, JsonValue],
     ) -> None:
         """Persiste a projeção versionada fora do transcript canônico."""
         await self.setup()
@@ -1856,7 +1871,7 @@ class PostgresSessionStore:
             if isinstance(projection, ContextProjectionContract)
             else projection
         )
-        clean: dict[str, object] = {
+        clean: JsonObject = {
             key: value
             if key
             in {
@@ -1950,7 +1965,7 @@ class PostgresSessionStore:
         *,
         policy_version: str | None = None,
         source_transcript_hash: str | None = None,
-    ) -> dict[str, object] | None:
+    ) -> ContextProjectionRecord | None:
         """Carrega projeção compatível com política e hash, se informados."""
         await self.setup()
         async with self._pool.acquire() as conn:
@@ -1961,7 +1976,7 @@ class PostgresSessionStore:
                 "pending_tool_calls_json, omitted_sequences_json, content_json, created_at "
                 "FROM vectora_native_context_projections WHERE thread_id = $1 "
             )
-            params: list[Any] = [thread_id]
+            params: list[str] = [thread_id]
             clauses = ["thread_id = $1"]
             if policy_version is not None:
                 params.append(policy_version)
@@ -2009,7 +2024,7 @@ class PostgresSessionStore:
         self,
         thread_id: str,
         run_id: str,
-        checkpoint: ContextCheckpointContract | Mapping[str, object],
+        checkpoint: ContextCheckpointContract | Mapping[str, JsonValue],
     ) -> None:
         """Persiste o estado mínimo para retomada por snapshot + deltas."""
         await self.setup()
@@ -2018,7 +2033,7 @@ class PostgresSessionStore:
             if isinstance(checkpoint, ContextCheckpointContract)
             else checkpoint
         )
-        clean: dict[str, object] = {
+        clean: JsonObject = {
             key: redact_sensitive_data(value)
             for key, value in checkpoint_values.items()
         }
@@ -2053,12 +2068,12 @@ class PostgresSessionStore:
         *,
         source_hash: str | None = None,
         run_id: str | None = None,
-    ) -> dict[str, object] | None:
+    ) -> ContextCheckpointRecord | None:
         """Carrega o checkpoint mais recente compatível com o transcript."""
         await self.setup()
         async with self._pool.acquire() as conn:
             clauses = ["thread_id = $1"]
-            params: list[Any] = [thread_id]
+            params: list[str] = [thread_id]
             if source_hash is not None:
                 params.append(source_hash)
                 clauses.append(f"source_hash = ${len(params)}")
@@ -2089,7 +2104,7 @@ class PostgresSessionStore:
 
     async def purge_context_records(
         self, older_than: str, *, limit: int = 500
-    ) -> dict[str, int]:
+    ) -> PurgedContextCount:
         """Remove projections/checkpoints older than a bounded cutoff."""
         if not older_than.strip():
             raise ValueError("older_than não pode ser vazio")

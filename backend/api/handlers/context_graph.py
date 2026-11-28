@@ -21,11 +21,13 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
+
+from backend.vtypes.contracts import JsonObject, JsonValue, as_int
 
 logger = logging.getLogger(__name__)
 
@@ -138,10 +140,13 @@ class SymbolResolutionResponse(BaseModel):
     truncated: bool
 
 
+_JSON_OBJECTS = TypeAdapter(list[JsonObject])
+
+
 class GraphQueryResponse(BaseModel):
     answer: str
-    nodes: list[dict[str, Any]] = []
-    edges: list[dict[str, Any]] = []
+    nodes: list[JsonObject] = []
+    edges: list[JsonObject] = []
 
 
 class FalkorDBConfigRequest(BaseModel):
@@ -195,7 +200,15 @@ def _require_graph_dir(workspace_id: str) -> Path:
     return d
 
 
-def _require_graph_json(workspace_id: str) -> dict[str, Any]:
+def _graph_nodes(data: JsonObject) -> list[JsonObject]:
+    """Nós do ``graph.json`` que têm o formato de objeto."""
+    nodes = data.get("nodes")
+    if not isinstance(nodes, list):
+        return []
+    return [node for node in nodes if isinstance(node, dict)]
+
+
+def _require_graph_json(workspace_id: str) -> JsonObject:
     d = _require_graph_dir(workspace_id)
     graph_file = d / "graph.json"
     if not graph_file.exists():
@@ -247,8 +260,8 @@ async def _validate_falkordb_destination(
     return ip
 
 
-def _write_status(graph_dir: Path, status: str, **extra: Any) -> None:
-    payload: dict[str, Any] = {
+def _write_status(graph_dir: Path, status: str, **extra: JsonValue) -> None:
+    payload: JsonObject = {
         "status": status,
         "built_at": datetime.now(UTC).isoformat(),
         **extra,
@@ -300,7 +313,7 @@ async def _run_build(workspace_id: str, req: BuildRequest) -> None:
         files_done=0,
     )
 
-    _state: dict[str, Any] = {
+    _state: JsonObject = {
         "files_list": [],
         "step": None,
         "step_total": None,
@@ -323,8 +336,8 @@ async def _run_build(workspace_id: str, req: BuildRequest) -> None:
         _state["files_done"] = files_done
         _state["files_total"] = files_total
         if files_list is not None:
-            _state["files_list"] = files_list
-        kw: dict[str, Any] = {
+            _state["files_list"] = [*files_list]
+        kw: JsonObject = {
             "step": step,
             "step_total": step_total,
             "step_label": label,
@@ -366,7 +379,7 @@ async def _run_build(workspace_id: str, req: BuildRequest) -> None:
                 "context-graph: quota esgotada em todos os providers — build pausado",
                 extra={"workspace_id": workspace_id},
             )
-            paused_kw: dict[str, Any] = {"error": str(exc), "partial": True}
+            paused_kw: JsonObject = {"error": str(exc), "partial": True}
             if _state["step"] is not None:
                 paused_kw["step"] = _state["step"]
                 paused_kw["step_total"] = _state["step_total"]
@@ -514,14 +527,13 @@ async def post_query(
         {e.get("source") for e in neighborhood_edges}
         | {e.get("target") for e in neighborhood_edges}
     ) - matched_ids
-    all_nodes: list[dict] = data.get("nodes", [])
-    neighbor_nodes = [n for n in all_nodes if n.get("id") in neighbor_ids]
+    neighbor_nodes = [n for n in _graph_nodes(data) if n.get("id") in neighbor_ids]
 
     summary = f"Encontrei {len(matched_nodes)} nó(s) correspondente(s) à consulta."
     return GraphQueryResponse(
         answer=summary,
-        nodes=matched_nodes + neighbor_nodes,
-        edges=neighborhood_edges,
+        nodes=_JSON_OBJECTS.validate_python([*matched_nodes, *neighbor_nodes]),
+        edges=_JSON_OBJECTS.validate_python(neighborhood_edges),
     )
 
 
@@ -545,7 +557,9 @@ async def post_explain(
         f"{len(connected)} arestas | {len(neighbors)} vizinhos"
     )
     return GraphQueryResponse(
-        answer=summary, nodes=[target, *neighbors], edges=connected
+        answer=summary,
+        nodes=_JSON_OBJECTS.validate_python([target, *neighbors]),
+        edges=_JSON_OBJECTS.validate_python(connected),
     )
 
 
@@ -640,10 +654,10 @@ async def post_resolve_symbol(
     from backend.context_graph.symbol_resolution import resolve_graph_symbol
 
     try:
-        result = resolve_graph_symbol(data.get("nodes", []), body.symbol)
+        result = resolve_graph_symbol(_graph_nodes(data), body.symbol)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return SymbolResolutionResponse(**result)
+    return SymbolResolutionResponse.model_validate(result)
 
 
 @router.get("/export/{export_format}")
@@ -827,7 +841,7 @@ async def get_falkordb_config(request: Request) -> FalkorDBConfigResponse:
     return FalkorDBConfigResponse(
         configured=True,
         host=str(raw.get("host", "")),
-        port=int(raw.get("port", 6379)),
+        port=as_int(raw.get("port", 6379)),
         graph_name=str(raw.get("graph_name", "context graph")),
         has_username=bool(raw.get("has_username", False)),
         has_password=bool(raw.get("has_password", False)),
@@ -945,7 +959,7 @@ async def push_graph_to_falkordb(
 
     host = str(raw.get("host", ""))
     try:
-        port = int(raw.get("port", 6379))
+        port = as_int(raw.get("port", 6379))
     except (TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=409, detail="Configuração FalkorDB inválida"
@@ -978,11 +992,12 @@ async def push_graph_to_falkordb(
     graph = build_from_json(data, directed=bool(data.get("directed", False)))
     community_nodes: dict[int, list[str]] = {}
     for node in nodes:
-        if not isinstance(node, dict) or not isinstance(node.get("community"), int):
+        if not isinstance(node, dict):
             continue
-        community_nodes.setdefault(node["community"], []).append(
-            str(node.get("id", ""))
-        )
+        community = node.get("community")
+        if not isinstance(community, int):
+            continue
+        community_nodes.setdefault(community, []).append(str(node.get("id", "")))
     uri_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
     uri = f"redis://{uri_host}:{port}"
     try:

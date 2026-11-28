@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import socket
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -37,7 +38,7 @@ def _free_port() -> int:
 
 
 @pytest.fixture(autouse=True)
-async def _clean_sidecar_state(monkeypatch: pytest.MonkeyPatch):
+async def _clean_sidecar_state(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     """Garante nenhum sidecar sobrando de um teste anterior, antes e depois.
 
     Aponta VECTORA_PORT pra uma porta livre sem nada escutando — sem isso
@@ -53,7 +54,7 @@ async def _clean_sidecar_state(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
-async def test_ensure_electron_sidecar_sobe_processo_real():
+async def test_ensure_electron_sidecar_sobe_processo_real() -> None:
     proc = await electron_sidecar.ensure_electron_sidecar()
 
     assert proc is not None
@@ -71,7 +72,7 @@ async def test_ensure_electron_sidecar_sobe_processo_real():
 
 
 @pytest.mark.asyncio
-async def test_ensure_electron_sidecar_reusa_processo_ja_rodando_de_verdade():
+async def test_ensure_electron_sidecar_reusa_processo_ja_rodando_de_verdade() -> None:
     first = await electron_sidecar.ensure_electron_sidecar()
     assert first is not None
     first_pid = first.pid
@@ -83,7 +84,7 @@ async def test_ensure_electron_sidecar_reusa_processo_ja_rodando_de_verdade():
 
 
 @pytest.mark.asyncio
-async def test_stop_electron_sidecar_e_idempotente_com_processo_real():
+async def test_stop_electron_sidecar_e_idempotente_com_processo_real() -> None:
     await electron_sidecar.ensure_electron_sidecar()
 
     await electron_sidecar.stop_electron_sidecar()
@@ -93,7 +94,9 @@ async def test_stop_electron_sidecar_e_idempotente_com_processo_real():
 
 
 @pytest.mark.asyncio
-async def test_ensure_electron_sidecar_chamado_concorrentemente_nao_duplica_processo():
+async def test_ensure_electron_sidecar_chamado_concorrentemente_nao_duplica_processo() -> (
+    None
+):
     """Regra 18 — edge case de concorrência (mesma lição de
     test_nats_sidecar_real.py — se este teste falhar, é um bug de produção
     real, não do teste)."""

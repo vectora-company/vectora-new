@@ -8,6 +8,7 @@ import pytest
 from starlette.requests import Request
 
 from backend.api.handlers.workspaces import _to_info
+from backend.vtypes import Workspace
 from backend.workspace.workspace import WorkspaceRegistry
 
 RULE = '[[hooks.rules]]\nid = "guarda"\nevent = "pre_tool"\ncommand = ["true"]\n'
@@ -25,7 +26,7 @@ def _request() -> Request:
     return Request({"type": "http", "method": "GET", "path": "/", "headers": []})
 
 
-def _workspace(registry: WorkspaceRegistry, tmp_path: Path, toml: str):
+def _workspace(registry: WorkspaceRegistry, tmp_path: Path, toml: str) -> Workspace:
     project = tmp_path / "proj"
     project.mkdir()
     (project / "vectora.toml").write_text(toml, encoding="utf-8")

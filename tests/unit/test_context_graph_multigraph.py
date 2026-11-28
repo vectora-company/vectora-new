@@ -6,15 +6,17 @@ CapabilityCheck, MultigraphCapabilityResult.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 
 class TestCapabilityCheck:
-    def test_ok_check(self):
+    def test_ok_check(self) -> None:
         from backend.context_graph.multigraph_compat import CapabilityCheck
 
         c = CapabilityCheck(name="test", ok=True, detail="ok")
         assert c.ok is True
 
-    def test_failed_check(self):
+    def test_failed_check(self) -> None:
         from backend.context_graph.multigraph_compat import CapabilityCheck
 
         c = CapabilityCheck(name="test", ok=False, detail="failed")
@@ -22,7 +24,7 @@ class TestCapabilityCheck:
 
 
 class TestMultigraphCapabilityResult:
-    def test_ok_when_all_checks_pass(self):
+    def test_ok_when_all_checks_pass(self) -> None:
         from backend.context_graph.multigraph_compat import (
             CapabilityCheck,
             MultigraphCapabilityResult,
@@ -39,7 +41,7 @@ class TestMultigraphCapabilityResult:
         assert r.ok is True
         assert r.failed == ()
 
-    def test_not_ok_when_any_check_fails(self):
+    def test_not_ok_when_any_check_fails(self) -> None:
         from backend.context_graph.multigraph_compat import (
             CapabilityCheck,
             MultigraphCapabilityResult,
@@ -56,7 +58,7 @@ class TestMultigraphCapabilityResult:
         assert r.ok is False
         assert len(r.failed) == 1
 
-    def test_error_message_ok(self):
+    def test_error_message_ok(self) -> None:
         from backend.context_graph.multigraph_compat import (
             CapabilityCheck,
             MultigraphCapabilityResult,
@@ -70,7 +72,7 @@ class TestMultigraphCapabilityResult:
         msg = r.error_message()
         assert "passed" in msg
 
-    def test_error_message_fail(self):
+    def test_error_message_fail(self) -> None:
         from backend.context_graph.multigraph_compat import (
             CapabilityCheck,
             MultigraphCapabilityResult,
@@ -87,30 +89,30 @@ class TestMultigraphCapabilityResult:
 
 
 class TestCheckHelper:
-    def test_returns_ok_when_true(self):
+    def test_returns_ok_when_true(self) -> None:
         from backend.context_graph.multigraph_compat import _check
 
         result = _check("name", lambda: True)
         assert result.ok is True
 
-    def test_returns_fail_on_exception(self):
+    def test_returns_fail_on_exception(self) -> None:
         from backend.context_graph.multigraph_compat import _check
 
-        def boom():
+        def boom() -> NoReturn:
             raise ValueError("oops")
 
         result = _check("name", boom)
         assert result.ok is False
         assert "oops" in result.detail
 
-    def test_returns_fail_on_string(self):
+    def test_returns_fail_on_string(self) -> None:
         from backend.context_graph.multigraph_compat import _check
 
         result = _check("name", lambda: "something went wrong")
         assert result.ok is False
         assert "something went wrong" in result.detail
 
-    def test_returns_fail_on_unexpected_result(self):
+    def test_returns_fail_on_unexpected_result(self) -> None:
         from backend.context_graph.multigraph_compat import CapabilityCheck
 
         # Direct construction with unexpected truth value — covers the else branch
@@ -119,42 +121,42 @@ class TestCheckHelper:
 
 
 class TestProbeIndividualFunctions:
-    def test_probe_keyed_parallel_edges_passes(self):
+    def test_probe_keyed_parallel_edges_passes(self) -> None:
         from backend.context_graph.multigraph_compat import (
             _probe_keyed_parallel_edges,
         )
 
         assert _probe_keyed_parallel_edges() is True
 
-    def test_probe_node_link_round_trip_passes(self):
+    def test_probe_node_link_round_trip_passes(self) -> None:
         from backend.context_graph.multigraph_compat import (
             _probe_node_link_round_trip,
         )
 
         assert _probe_node_link_round_trip() is True
 
-    def test_probe_duplicate_key_overwrite_semantics(self):
+    def test_probe_duplicate_key_overwrite_semantics(self) -> None:
         from backend.context_graph.multigraph_compat import (
             _probe_duplicate_key_overwrite_semantics,
         )
 
         assert _probe_duplicate_key_overwrite_semantics() is True
 
-    def test_probe_reserved_key_attr_rejected(self):
+    def test_probe_reserved_key_attr_rejected(self) -> None:
         from backend.context_graph.multigraph_compat import (
             _probe_reserved_key_attr_rejected,
         )
 
         assert _probe_reserved_key_attr_rejected() is True
 
-    def test_probe_remove_edges_from_two_tuple(self):
+    def test_probe_remove_edges_from_two_tuple(self) -> None:
         from backend.context_graph.multigraph_compat import (
             _probe_remove_edges_from_two_tuple_semantics,
         )
 
         assert _probe_remove_edges_from_two_tuple_semantics() is True
 
-    def test_probe_to_undirected_preserves_multigraph_type(self):
+    def test_probe_to_undirected_preserves_multigraph_type(self) -> None:
         from backend.context_graph.multigraph_compat import (
             _probe_to_undirected_preserves_multigraph_type,
         )
@@ -163,7 +165,7 @@ class TestProbeIndividualFunctions:
 
 
 class TestProbeMultigraphCapabilities:
-    def test_result_is_ok(self):
+    def test_result_is_ok(self) -> None:
         from backend.context_graph.multigraph_compat import (
             probe_multigraph_capabilities,
         )
@@ -171,7 +173,7 @@ class TestProbeMultigraphCapabilities:
         result = probe_multigraph_capabilities()
         assert result.ok is True
 
-    def test_contains_python_and_nx_versions(self):
+    def test_contains_python_and_nx_versions(self) -> None:
         from backend.context_graph.multigraph_compat import (
             probe_multigraph_capabilities,
         )
@@ -180,7 +182,7 @@ class TestProbeMultigraphCapabilities:
         assert "." in result.python_version
         assert "." in result.networkx_version
 
-    def test_cached_result_same_object(self):
+    def test_cached_result_same_object(self) -> None:
         from backend.context_graph.multigraph_compat import (
             probe_multigraph_capabilities,
         )
@@ -191,7 +193,7 @@ class TestProbeMultigraphCapabilities:
 
 
 class TestRequireMultigraphCapabilities:
-    def test_does_not_raise_on_capable_runtime(self):
+    def test_does_not_raise_on_capable_runtime(self) -> None:
         from backend.context_graph.multigraph_compat import (
             require_multigraph_capabilities,
         )

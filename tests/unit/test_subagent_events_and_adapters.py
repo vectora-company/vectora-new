@@ -9,12 +9,13 @@ tool calls/results, eventos thread/done/error).
 from __future__ import annotations
 
 import json
+from typing import NoReturn
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def _isolated(_no_thread_persistence):
+def _isolated(_no_thread_persistence: None) -> None:
     pass
 
 
@@ -31,13 +32,13 @@ def _parse(sse: str) -> dict:
 class TestSubagentOutputEventSchema:
     """SubagentOutputEvent carrega a identidade do subagente delegado via task()."""
 
-    def test_thinking_event_foi_removido(self):
+    def test_thinking_event_foi_removido(self) -> None:
         """Erro/borda: o ThinkingEvent legado não existe mais no schema."""
         from backend.api import schemas
 
         assert not hasattr(schemas, "ThinkingEvent")
 
-    def test_campos_e_defaults(self):
+    def test_campos_e_defaults(self) -> None:
         from backend.api.schemas import SubagentOutputEvent
 
         e = SubagentOutputEvent(subagent_type="coder")
@@ -58,7 +59,7 @@ class TestSubagentOutputEventSchema:
         assert full.content == "achei X"
         assert full.is_delta is True
 
-    def test_encode_tem_type_subagent_output(self):
+    def test_encode_tem_type_subagent_output(self) -> None:
         from backend.api.schemas import SubagentOutputEvent, encode_event
 
         line = encode_event(
@@ -68,14 +69,16 @@ class TestSubagentOutputEventSchema:
         assert data["type"] == "subagent_output"
         assert data["subagent_type"] == "coder"
 
-    def test_no_stream_payload_union(self):
+    def test_no_stream_payload_union(self) -> None:
         from backend.api.schemas import StreamChatEventPayload, SubagentOutputEvent
 
         e: StreamChatEventPayload = SubagentOutputEvent(subagent_type="coder")
         assert e is not None
 
     @pytest.mark.asyncio
-    async def test_subagent_output_running_and_complete_via_stream_engine_events(self):
+    async def test_subagent_output_running_and_complete_via_stream_engine_events(
+        self,
+    ) -> None:
         """A delegação de subagente emite ``subagent_output`` 'running' (início)
         e 'complete' (fim, com o resultado) — identidade do subagente pro
         card. Cobertura da emissão SSE em si (o registro na aba Tarefas é
@@ -83,7 +86,7 @@ class TestSubagentOutputEventSchema:
         from backend.api.native_stream import stream_engine_events
         from backend.engine.stream_events import SubagentOutput
 
-        async def run(on_event):
+        async def run(on_event) -> str:
             await on_event(
                 SubagentOutput(
                     subagent_type="coder",
@@ -120,14 +123,14 @@ class TestSubagentOutputEventSchema:
         assert subs[1]["is_delta"] is False
 
     @pytest.mark.asyncio
-    async def test_subagent_output_status_error(self):
+    async def test_subagent_output_status_error(self) -> None:
         """Erro/borda: quando a delegação falha (``SubagentOutput`` final com
         status='error'), o evento sai com status='error' (não 'complete') —
         o card precisa distinguir falha de sucesso."""
         from backend.api.native_stream import stream_engine_events
         from backend.engine.stream_events import SubagentOutput
 
-        async def run(on_event):
+        async def run(on_event) -> str:
             await on_event(
                 SubagentOutput(
                     subagent_type="search",
@@ -164,33 +167,33 @@ class TestSubagentOutputEventSchema:
 class TestNodeLabels:
     """node_labels.py mapeia nome interno de nó para label legível."""
 
-    def test_node_labels_module_importable(self):
+    def test_node_labels_module_importable(self) -> None:
         from backend.api import node_labels
 
-    def test_get_node_label_returns_string(self):
+    def test_get_node_label_returns_string(self) -> None:
         from backend.api.node_labels import get_node_label
 
         label = get_node_label("orchestrator")
         assert isinstance(label, str)
         assert len(label) > 0
 
-    def test_get_node_label_model(self):
+    def test_get_node_label_model(self) -> None:
         from backend.api.node_labels import get_node_label
 
         assert get_node_label("model") == "Analisando..."
 
-    def test_get_node_label_search(self):
+    def test_get_node_label_search(self) -> None:
         from backend.api.node_labels import get_node_label
 
         assert get_node_label("search") == "Pesquisando…"
 
-    def test_get_node_label_tools(self):
+    def test_get_node_label_tools(self) -> None:
         from backend.api.node_labels import get_node_label
 
         label = get_node_label("tools")
         assert "ferramenta" in label.lower()
 
-    def test_get_node_label_coder(self):
+    def test_get_node_label_coder(self) -> None:
         from backend.api.node_labels import get_node_label
 
         label = get_node_label("coder")
@@ -200,28 +203,28 @@ class TestNodeLabels:
             or "programa" in label.lower()
         )
 
-    def test_get_node_label_main_agent(self):
+    def test_get_node_label_main_agent(self) -> None:
         from backend.api.node_labels import get_node_label
 
         label = get_node_label("vectora")
         assert isinstance(label, str)
         assert len(label) > 0
 
-    def test_get_node_label_unknown_returns_generic(self):
+    def test_get_node_label_unknown_returns_generic(self) -> None:
         from backend.api.node_labels import get_node_label
 
         label = get_node_label("nó_desconhecido_xyz")
         assert isinstance(label, str)
         assert len(label) > 0
 
-    def test_node_labels_dict_exported(self):
+    def test_node_labels_dict_exported(self) -> None:
         from backend.api.node_labels import NODE_LABELS
 
         assert isinstance(NODE_LABELS, dict)
         assert "model" in NODE_LABELS
         assert "coder" in NODE_LABELS
 
-    def test_node_label_routing_decision(self):
+    def test_node_label_routing_decision(self) -> None:
         """Label especial quando o agente delega ao sub-agent de busca."""
         from backend.api.node_labels import get_routing_label
 
@@ -232,21 +235,21 @@ class TestNodeLabels:
             or "web" in label.lower()
         )
 
-    def test_get_routing_label_rag(self):
+    def test_get_routing_label_rag(self) -> None:
         from backend.api.node_labels import get_routing_label
 
         label = get_routing_label("rag_agent")
         assert isinstance(label, str)
         assert len(label) > 0
 
-    def test_get_routing_label_unknown(self):
+    def test_get_routing_label_unknown(self) -> None:
         from backend.api.node_labels import get_routing_label
 
         label = get_routing_label("agente_desconhecido")
         assert isinstance(label, str)
         assert len(label) > 0
 
-    def test_every_soul_in_catalog_has_a_real_label_not_generic(self):
+    def test_every_soul_in_catalog_has_a_real_label_not_generic(self) -> None:
         """Achado real: node_labels.py só cobria coder/search, as outras 8
         SOULs caíam no genérico "Processando…"/"Roteando para X…" cru. Toda
         entrada de SOUL_CATALOG precisa de label específico dos dois dicts."""
@@ -263,7 +266,7 @@ class TestNodeLabels:
                 f"{name} caindo no fallback genérico de roteamento"
             )
 
-    def test_node_event_with_label_in_sse(self):
+    def test_node_event_with_label_in_sse(self) -> None:
         """NodeEvent com started deve emitir label semântico no campo node_label."""
         from backend.api.schemas import NodeEvent, encode_event
 
@@ -287,7 +290,7 @@ class TestNodeLabels:
 
 
 class TestNodeEventDuration:
-    def test_node_event_duration_schema(self):
+    def test_node_event_duration_schema(self) -> None:
         from backend.api.schemas import NodeEvent
 
         e = NodeEvent(node="n", status="finished", duration_ms=1337)
@@ -307,10 +310,10 @@ class TestAdaptersRegression:
     stream (thread/done/error), que qualquer ``run`` precisa respeitar."""
 
     @pytest.mark.asyncio
-    async def test_stream_always_starts_with_thread_event(self):
+    async def test_stream_always_starts_with_thread_event(self) -> None:
         from backend.api.native_stream import stream_engine_events
 
-        async def run(on_event):
+        async def run(on_event) -> str:
             return "stop"
 
         payloads = [
@@ -321,10 +324,10 @@ class TestAdaptersRegression:
         assert payloads[0]["thread_id"] == "t-xyz"
 
     @pytest.mark.asyncio
-    async def test_stream_always_ends_with_done_event(self):
+    async def test_stream_always_ends_with_done_event(self) -> None:
         from backend.api.native_stream import stream_engine_events
 
-        async def run(on_event):
+        async def run(on_event) -> str:
             return "stop"
 
         payloads = [
@@ -335,10 +338,10 @@ class TestAdaptersRegression:
         assert payloads[-1]["thread_id"] == "t-xyz"
 
     @pytest.mark.asyncio
-    async def test_stream_emits_error_event_on_exception(self):
+    async def test_stream_emits_error_event_on_exception(self) -> None:
         from backend.api.native_stream import stream_engine_events
 
-        async def run(on_event):
+        async def run(on_event) -> NoReturn:
             raise RuntimeError("erro simulado")
 
         payloads = [

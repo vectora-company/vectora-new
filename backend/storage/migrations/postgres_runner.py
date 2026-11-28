@@ -19,7 +19,11 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import asyncpg
+    from asyncpg.pool import PoolConnectionProxy
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +55,7 @@ class PostgresMigrationRunner:
 
     def __init__(
         self,
-        conn: Any,
+        conn: asyncpg.Connection | PoolConnectionProxy,
         schema_file: str | Path | None = None,
     ) -> None:
         self._conn = conn

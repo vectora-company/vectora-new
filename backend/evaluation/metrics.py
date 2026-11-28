@@ -17,6 +17,9 @@ from pydantic import BaseModel, Field, model_validator
 MetricStatus = Literal["measured", "unavailable", "blocked", "skipped", "not_run"]
 
 
+from backend.vtypes.contracts import JsonObject
+
+
 def _host_memory_total_bytes() -> int | None:
     """Return physical memory when the host API can report it."""
     try:
@@ -86,7 +89,7 @@ class RunProvenance(BaseModel):
     def from_configuration(
         cls,
         scenario_id: str,
-        configuration: dict[str, object],
+        configuration: JsonObject,
         *,
         runtime_version: str | None = None,
         source_revision: str | None = None,

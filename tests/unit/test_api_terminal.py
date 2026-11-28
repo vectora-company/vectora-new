@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Iterator
+from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 
 import pytest
 from fastapi import HTTPException, Request
 
 import backend.api.handlers.terminal as terminal_handler
 from backend.api.handlers.terminal import CloseBody, close_terminal, list_terminals
+from backend.services.policy_compiler import EgressPolicy
 from backend.services.pty_registry import pty_registry
 from backend.services.pty_session import PtySession
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 
 def _request(user_id: str) -> Request:
@@ -93,7 +97,7 @@ class _FakeInteractiveSession:
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     pty_registry._sessions.clear()
     pty_registry._closed.clear()
     yield
@@ -256,7 +260,7 @@ async def test_close_route_thread_scope_rejects_terminal_from_another_thread() -
 @pytest.mark.parametrize("workspace_case", ["existing", "newly-created"])
 async def test_terminal_websocket_creates_interactive_pty_for_trusted_local_workspace(
     workspace_case: str,
-    tmp_path,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from pathlib import Path
@@ -270,14 +274,14 @@ async def test_terminal_websocket_creates_interactive_pty_for_trusted_local_work
         transport="local",
         owner_id=None,
     )
-    created: dict[str, object] = {}
+    created: JsonObject = {}
     session = _FakeInteractiveSession("terminal-1", workspace.id)
 
-    def create_pty(**kwargs: object) -> _FakeInteractiveSession:
+    def create_pty(**kwargs: JsonValue) -> _FakeInteractiveSession:
         created.update(kwargs)
         return session
 
-    async def no_egress(_workspace_id: str, _policy: object) -> None:
+    async def no_egress(_workspace_id: str, _policy: EgressPolicy) -> None:
         return None
 
     monkeypatch.setattr(terminal_handler, "_auth_enabled", lambda: False)
@@ -312,7 +316,7 @@ async def _async_none(_token: str) -> None:
 
 @pytest.mark.asyncio
 async def test_terminal_websocket_returns_pty_creation_error_to_client(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     workspace = SimpleNamespace(
         id="workspace-1",
@@ -322,10 +326,10 @@ async def test_terminal_websocket_returns_pty_creation_error_to_client(
         owner_id=None,
     )
 
-    def fail_to_create(**_kwargs: object) -> None:
+    def fail_to_create[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
         raise RuntimeError("PTY backend unavailable")
 
-    async def no_egress(_workspace_id: str, _policy: object) -> None:
+    async def no_egress(_workspace_id: str, _policy: EgressPolicy) -> None:
         return None
 
     monkeypatch.setattr(terminal_handler, "_auth_enabled", lambda: False)

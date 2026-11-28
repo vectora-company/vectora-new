@@ -9,11 +9,13 @@ Cobre:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import git
 import pytest
+from aiosqlite import Connection
 
 from backend.api.handlers.threads import (
     CheckpointsResponse,
@@ -30,7 +32,7 @@ from backend.api.handlers.threads import (
 
 
 @pytest.fixture
-async def mem_db():
+async def mem_db() -> Connection:
     """Conexão aiosqlite em memória com schema criado."""
     import aiosqlite
 
@@ -40,7 +42,7 @@ async def mem_db():
 
 
 @pytest.fixture(autouse=True)
-def patch_get_db(mem_db):
+def patch_get_db(mem_db: Connection) -> Iterator[Connection]:
     """Substitui _get_db() pelo banco em memória em todos os testes."""
     with patch(
         "backend.api.handlers.threads._get_db", new=AsyncMock(return_value=mem_db)
@@ -54,13 +56,15 @@ def patch_get_db(mem_db):
 
 
 @pytest.mark.asyncio
-async def test_ensure_schema_is_idempotent(mem_db):
+async def test_ensure_schema_is_idempotent(mem_db: Connection) -> None:
     """Chamar _ensure_schema duas vezes não lança erro."""
     await _ensure_schema(mem_db)  # segunda chamada — deve passar sem erro
 
 
 @pytest.mark.asyncio
-async def test_ensure_schema_creates_checkpoint_artifacts_table(mem_db):
+async def test_ensure_schema_creates_checkpoint_artifacts_table(
+    mem_db: Connection,
+) -> None:
     async with mem_db.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='vectora_checkpoint_artifacts'"
     ) as cur:
@@ -74,14 +78,14 @@ async def test_ensure_schema_creates_checkpoint_artifacts_table(mem_db):
 
 
 @pytest.mark.asyncio
-async def test_list_checkpoints_empty(mem_db):
+async def test_list_checkpoints_empty(mem_db: Connection) -> None:
     result = await list_thread_checkpoints("thread-1")
     assert isinstance(result, CheckpointsResponse)
     assert result.checkpoints == []
 
 
 @pytest.mark.asyncio
-async def test_list_checkpoints_returns_inserted_rows(mem_db):
+async def test_list_checkpoints_returns_inserted_rows(mem_db: Connection) -> None:
     import uuid
     from datetime import UTC, datetime
 
@@ -103,7 +107,7 @@ async def test_list_checkpoints_returns_inserted_rows(mem_db):
 
 
 @pytest.mark.asyncio
-async def test_list_checkpoints_does_not_mix_threads(mem_db):
+async def test_list_checkpoints_does_not_mix_threads(mem_db: Connection) -> None:
     import uuid
     from datetime import UTC, datetime
 
@@ -130,7 +134,7 @@ async def test_list_checkpoints_does_not_mix_threads(mem_db):
 
 
 @pytest.mark.asyncio
-async def test_rewind_404_when_checkpoint_not_found():
+async def test_rewind_404_when_checkpoint_not_found() -> None:
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc_info:
@@ -141,7 +145,7 @@ async def test_rewind_404_when_checkpoint_not_found():
 
 
 @pytest.mark.asyncio
-async def test_rewind_422_when_workspace_cannot_be_resolved(mem_db):
+async def test_rewind_422_when_workspace_cannot_be_resolved(mem_db: Connection) -> None:
     """Nenhum workspace_id na query nem no banco → 422."""
     import uuid
     from datetime import UTC, datetime
@@ -165,7 +169,7 @@ async def test_rewind_422_when_workspace_cannot_be_resolved(mem_db):
 
 
 @pytest.mark.asyncio
-async def test_rewind_ok_on_git_repo(tmp_path: Path, mem_db):
+async def test_rewind_ok_on_git_repo(tmp_path: Path, mem_db: Connection) -> None:
     """Rewind com git_sha válido deve chamar restore_git_checkpoint e retornar ok."""
     import uuid
     from datetime import UTC, datetime
@@ -220,8 +224,8 @@ async def test_rewind_ok_on_git_repo(tmp_path: Path, mem_db):
 
 @pytest.mark.asyncio
 async def test_rewind_com_message_checkpoint_id_trunca_a_conversa(
-    tmp_path: Path, mem_db
-):
+    tmp_path: Path, mem_db: Connection
+) -> None:
     """Além de restaurar os arquivos, passar `message_checkpoint_id` reaponta
     a branch ativa da thread pra aquele ponto — mensagens depois dele somem
     de `get_history` (mas não são apagadas: SessionStore é append-only)."""
@@ -245,6 +249,7 @@ async def test_rewind_com_message_checkpoint_id_trunca_a_conversa(
     from backend.persistence.checkpoint import create_git_checkpoint
 
     ckpt = create_git_checkpoint(repo, "thread-1", "estado A")
+    assert ckpt["status"] == "ok"
     git_sha = ckpt["sha"]
 
     now = datetime.now(UTC).isoformat()

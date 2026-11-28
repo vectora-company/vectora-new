@@ -18,7 +18,9 @@ from backend.llm.fallback_chat_client import load_chat_client
 from backend.services.env import GetEnvError
 
 
-def test_openai_usa_cliente_nativo_e_nao_chat_openai(monkeypatch):
+def test_openai_usa_cliente_nativo_e_nao_chat_openai(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verifica o comportamento de openai usa cliente nativo e nao chat openai."""
     from backend.llm.openai.chat_client import OpenAIChatClient
 
@@ -29,7 +31,9 @@ def test_openai_usa_cliente_nativo_e_nao_chat_openai(monkeypatch):
     assert isinstance(modelo, OpenAIChatClient)
 
 
-def test_openrouter_usa_cliente_nativo_e_nao_chat_openai(monkeypatch):
+def test_openrouter_usa_cliente_nativo_e_nao_chat_openai(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verifica o comportamento de openrouter usa cliente nativo e nao chat openai."""
     from backend.llm.openrouter.chat_client import OpenRouterChatClient
 
@@ -40,7 +44,9 @@ def test_openrouter_usa_cliente_nativo_e_nao_chat_openai(monkeypatch):
     assert isinstance(modelo, OpenRouterChatClient)
 
 
-def test_openrouter_sem_api_key_levanta_erro_claro(monkeypatch):
+def test_openrouter_sem_api_key_levanta_erro_claro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verifica o comportamento de openrouter sem api key levanta erro claro."""
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
@@ -49,8 +55,8 @@ def test_openrouter_sem_api_key_levanta_erro_claro(monkeypatch):
 
 
 def test_nine_router_reusa_cliente_nativo_do_openrouter_com_base_url_trocada(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """9Router fala o mesmo protocolo Chat Completions que o adapter nativo
     do OpenRouter já implementa — reusa ``OpenRouterChatClient``/
     ``OpenRouterClient`` com ``base_url`` apontando pro 9Router, em vez da
@@ -68,7 +74,9 @@ def test_nine_router_reusa_cliente_nativo_do_openrouter_com_base_url_trocada(
     assert modelo.model == "cc/claude-opus-4-7"
 
 
-def test_nine_router_sem_config_levanta_erro_claro(monkeypatch):
+def test_nine_router_sem_config_levanta_erro_claro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verifica o comportamento de nine router sem config levanta erro claro."""
     from backend.settings import settings
 
@@ -79,7 +87,9 @@ def test_nine_router_sem_config_levanta_erro_claro(monkeypatch):
         load_chat_client("nine_router:cc/claude-opus-4-7")
 
 
-def test_ollama_usa_cliente_nativo_e_nao_init_chat_model(monkeypatch):
+def test_ollama_usa_cliente_nativo_e_nao_init_chat_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verifica o comportamento de ollama usa cliente nativo e nao init chat model."""
     from backend.llm.ollama.chat_client import OllamaChatClient
     from backend.settings import settings
@@ -94,7 +104,9 @@ def test_ollama_usa_cliente_nativo_e_nao_init_chat_model(monkeypatch):
     assert modelo.client._headers() == {"Authorization": "Bearer test-bearer"}
 
 
-def test_llamacpp_usa_projecao_compacta_para_modelos_locais(monkeypatch):
+def test_llamacpp_usa_projecao_compacta_para_modelos_locais(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """O provider local deve preservar as regras essenciais sem enviar ao
     modelo pequeno todo o catálogo de ferramentas e o contexto operacional."""
     from backend.llm.openrouter.chat_client import OpenRouterChatClient

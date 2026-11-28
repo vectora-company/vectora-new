@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,6 +27,7 @@ from backend.llm.systemone.types import (
     ScoreQuestion,
     SystemOneQuestion,
 )
+from backend.vtypes.contracts import JsonObject
 
 PatternOperationMode = Literal["off", "shadow", "advisory", "enforced"]
 RetentionPolicyType = Literal["none", "ephemeral", "audit_metadata_only"]
@@ -125,7 +126,7 @@ class DecisionPatternSpec(BaseModel):
 
 
 def serialize_canonical_state(
-    state: dict[str, Any] | str,
+    state: JsonObject | str,
     spec: DecisionPatternSpec,
 ) -> tuple[str, str]:
     """Valida as evidências obrigatórias e serializa o estado de forma determinística.

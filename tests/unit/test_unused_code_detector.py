@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from utils.unused_code import VULTURE_IGNORE_DECORATORS, VULTURE_IGNORE_NAMES
 
 
 def test_protocol_override_is_ignored_without_hiding_same_named_method(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     vulture = pytest.importorskip("vulture")
     source = tmp_path / "protocols.py"

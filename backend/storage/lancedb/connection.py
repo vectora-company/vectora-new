@@ -22,7 +22,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lancedb.db import AsyncConnection
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +46,10 @@ class LanceDBConnectionCache:
 
     def __init__(self, default_path: str | Path | None = None) -> None:
         self._default_path: Path | None = Path(default_path) if default_path else None
-        self._cache: dict[Path, Any] = {}  # path → AsyncConnection (lancedb)
+        self._cache: dict[Path, AsyncConnection] = {}
         self._lock = asyncio.Lock()
 
-    async def connect(self, path: str | Path | None = None) -> Any:
+    async def connect(self, path: str | Path | None = None) -> AsyncConnection:
         """Retorna (ou cria) a conexão LanceDB para ``path``.
 
         Args:
@@ -135,7 +138,7 @@ def default_lancedb_cache() -> LanceDBConnectionCache:
     return _default_cache
 
 
-async def get_lancedb(path: str | Path | None = None) -> Any:
+async def get_lancedb(path: str | Path | None = None) -> AsyncConnection:
     """Atalho: retorna a conexão LanceDB para ``path`` via cache padrão.
 
     Na maioria dos casos você só precisa disso:

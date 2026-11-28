@@ -18,10 +18,10 @@ import asyncio
 import contextlib
 import json
 import logging
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, tzinfo
-from typing import Any, TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, Unpack, cast
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -36,7 +36,20 @@ from backend.engine.goal_mode import resume_goal, run_goal
 from backend.engine.hitl import should_require_approval
 from backend.llm.fallback_chat_client import FallbackChatClient
 from backend.vtypes.context import ctx_from_config
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import MessageRole, text_message
+from backend.vtypes.sql import SqlRow, SqlValue, optional_text
+
+if TYPE_CHECKING:
+    import aiosqlite
+
+    from backend.agents.souls import Soul
+    from backend.engine.hitl import ApprovalGate
+    from backend.llm.base import ChatClient
+    from backend.persistence.native.session_store import SessionStore
+    from backend.tools.context import ToolContext
+    from backend.tools.registry import ToolRegistry
+    from backend.vtypes.persistence import PendingApprovalRecord
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +88,7 @@ class BackgroundTask:
     name: str
     instruction: str
     trigger_type: str
-    trigger_config: dict[str, Any] = field(default_factory=dict)
+    trigger_config: JsonObject = field(default_factory=dict)
     workspace_id: str | None = None
     enabled: bool = True
     last_run_at: str | None = None
@@ -103,7 +116,7 @@ class BackgroundTask:
     #: agrupamento nomeado por cima.
     board_id: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonObject:
         return {
             "id": self.id,
             "session_id": self.session_id,
@@ -129,6 +142,18 @@ class BackgroundTask:
         }
 
 
+class TaskUpdates(TypedDict, total=False):
+    """Campos que ``update_task`` aceita alterar."""
+
+    name: str | None
+    instruction: str | None
+    enabled: bool | None
+    trigger_config: JsonObject | None
+    priority: str | None
+    agent_profile_id: str | None
+    board_id: str | None
+
+
 class BackgroundRunRow(TypedDict):
     """Linha de run exposta pelos endpoints de histórico."""
 
@@ -143,34 +168,35 @@ class BackgroundRunRow(TypedDict):
     finished_at: str | None
 
 
-def _row_to_task(row: dict[str, Any]) -> BackgroundTask:
-    cfg_raw = row.get("trigger_config") or "{}"
+def _row_to_task(row: aiosqlite.Row | SqlRow) -> BackgroundTask:
+    data: SqlRow = dict(row)
+    cfg_raw = data.get("trigger_config") or "{}"
     try:
-        cfg = json.loads(cfg_raw) if isinstance(cfg_raw, str) else dict(cfg_raw)
-    except (ValueError, TypeError):
-        cfg = {}
+        parsed = json.loads(cfg_raw) if isinstance(cfg_raw, str | bytes) else None
+    except ValueError:
+        parsed = None
     return BackgroundTask(
-        id=row["id"],
-        session_id=row["session_id"],
-        user_id=str(row["user_id"]),
-        kind=row["kind"],
-        name=row["name"],
-        instruction=row["instruction"],
-        trigger_type=row["trigger_type"],
-        trigger_config=cfg,
-        workspace_id=row.get("workspace_id"),
-        enabled=bool(row.get("enabled", 1)),
-        last_run_at=row.get("last_run_at"),
-        next_run_at=row.get("next_run_at"),
-        created_at=row.get("created_at"),
-        updated_at=row.get("updated_at"),
-        status=row.get("status") or "todo",
-        block_kind=row.get("block_kind"),
-        block_reason=row.get("block_reason"),
-        agent_profile_id=row.get("agent_profile_id"),
-        priority=row.get("priority") or "normal",
-        claim_expires_at=row.get("claim_expires_at"),
-        board_id=row.get("board_id"),
+        id=str(data["id"]),
+        session_id=str(data["session_id"]),
+        user_id=str(data["user_id"]),
+        kind=str(data["kind"]),
+        name=str(data["name"]),
+        instruction=str(data["instruction"]),
+        trigger_type=str(data["trigger_type"]),
+        trigger_config=parsed if isinstance(parsed, dict) else {},
+        workspace_id=optional_text(data.get("workspace_id")),
+        enabled=bool(data.get("enabled", 1)),
+        last_run_at=optional_text(data.get("last_run_at")),
+        next_run_at=optional_text(data.get("next_run_at")),
+        created_at=optional_text(data.get("created_at")),
+        updated_at=optional_text(data.get("updated_at")),
+        status=str(data.get("status") or "todo"),
+        block_kind=optional_text(data.get("block_kind")),
+        block_reason=optional_text(data.get("block_reason")),
+        agent_profile_id=optional_text(data.get("agent_profile_id")),
+        priority=str(data.get("priority") or "normal"),
+        claim_expires_at=optional_text(data.get("claim_expires_at")),
+        board_id=optional_text(data.get("board_id")),
     )
 
 
@@ -179,17 +205,15 @@ def _row_to_task(row: dict[str, Any]) -> BackgroundTask:
 # ---------------------------------------------------------------------------
 
 
-async def _get_db() -> Any:
-    """Conexão aiosqlite com row_factory de dict (injetável em testes)."""
+async def _get_db() -> aiosqlite.Connection:
+    """Conexão aiosqlite com ``aiosqlite.Row`` (injetável em testes)."""
     import aiosqlite
 
     from backend.settings import settings
 
     db_path = settings.db_dsn or ":memory:"
-    conn: Any = await aiosqlite.connect(db_path)
-    conn.row_factory = lambda c, r: dict(
-        zip([col[0] for col in c.description], r, strict=False)
-    )
+    conn = await aiosqlite.connect(db_path)
+    conn.row_factory = aiosqlite.Row
     return conn
 
 
@@ -201,7 +225,7 @@ async def _get_db() -> Any:
 def _validate(
     kind: str,
     trigger_type: str,
-    trigger_config: dict[str, Any],
+    trigger_config: JsonObject,
     priority: str = "normal",
 ) -> None:
     if kind not in VALID_KINDS:
@@ -218,14 +242,16 @@ def _validate(
         if not cron:
             raise ValueError("trigger 'interval' requer trigger_config.cron_expr")
         # croniter levanta se o cron for inválido.
-        croniter(cron, datetime.now(UTC))
+        croniter(str(cron), datetime.now(UTC))
     if trigger_type == "once" and (trigger_config or {}).get("cron_expr"):
         raise ValueError(
             "trigger 'once' não aceita trigger_config.cron_expr (não é recorrente)"
         )
 
 
-async def _check_quota(conn: Any, workspace_id: str | None, trigger_type: str) -> None:
+async def _check_quota(
+    conn: aiosqlite.Connection, workspace_id: str | None, trigger_type: str
+) -> None:
     """Levanta ValueError se o workspace já atingiu
     ``MAX_SCHEDULED_TASKS_PER_WORKSPACE`` tarefas não-manuais. Sem
     ``workspace_id`` (tarefas fora de um workspace) ou `trigger_type`
@@ -300,7 +326,7 @@ async def create_task(
     name: str,
     instruction: str,
     trigger_type: str,
-    trigger_config: dict[str, Any] | None = None,
+    trigger_config: JsonObject | None = None,
     workspace_id: str | None = None,
     next_run_at: str | None = None,
     agent_profile_id: str | None = None,
@@ -321,7 +347,9 @@ async def create_task(
         next_run = next_run_at
     else:
         next_run = (
-            _next_run(cfg.get("cron_expr")) if trigger_type == "interval" else None
+            _next_run(_config_text(cfg, "cron_expr"))
+            if trigger_type == "interval"
+            else None
         )
 
     # Task com data de disparo futura nasce em "scheduled" — distingue de
@@ -429,7 +457,9 @@ async def get_task(task_id: str) -> BackgroundTask | None:
     return _row_to_task(row) if row else None
 
 
-async def update_task(task_id: str, **updates: Any) -> BackgroundTask | None:
+async def update_task(
+    task_id: str, **updates: Unpack[TaskUpdates]
+) -> BackgroundTask | None:
     """Atualiza campos (name, instruction, enabled, trigger_config). Recalcula
     next_run_at quando o cron muda. Retorna a tarefa atualizada ou None."""
     task = await get_task(task_id)
@@ -437,7 +467,7 @@ async def update_task(task_id: str, **updates: Any) -> BackgroundTask | None:
         return None
 
     sets: list[str] = []
-    args: list[Any] = []
+    args: list[SqlValue] = []
     if "name" in updates and updates["name"] is not None:
         sets.append("name = ?")
         args.append(updates["name"])
@@ -454,7 +484,7 @@ async def update_task(task_id: str, **updates: Any) -> BackgroundTask | None:
         args.append(json.dumps(cfg))
         if task.trigger_type == "interval":
             sets.append("next_run_at = ?")
-            args.append(_next_run(cfg.get("cron_expr")))
+            args.append(_next_run(_config_text(cfg, "cron_expr")))
     if "priority" in updates and updates["priority"] is not None:
         priority = updates["priority"]
         if priority not in VALID_PRIORITIES:
@@ -730,7 +760,7 @@ async def _touch_last_run(task_id: str) -> None:
             await conn.close()
 
 
-async def list_runs(session_id: str, limit: int = 50) -> list[dict[str, Any]]:
+async def list_runs(session_id: str, limit: int = 50) -> list[SqlRow]:
     """Lista as execuções recentes de uma session."""
     conn = await _get_db()
     try:
@@ -743,7 +773,7 @@ async def list_runs(session_id: str, limit: int = 50) -> list[dict[str, Any]]:
     finally:
         with contextlib.suppress(Exception):
             await conn.close()
-    return list(rows)
+    return [dict(row) for row in rows]
 
 
 async def list_runs_for_user(
@@ -776,7 +806,7 @@ async def list_runs_for_user(
     finally:
         with contextlib.suppress(Exception):
             await conn.close()
-    return [cast("BackgroundRunRow", row) for row in rows]
+    return [cast("BackgroundRunRow", dict(row)) for row in rows]
 
 
 async def runs_have_owned_tasks(session_id: str, user_id: str) -> bool:
@@ -808,7 +838,7 @@ async def runs_have_owned_tasks(session_id: str, user_id: str) -> bool:
             await conn.close()
 
 
-async def list_runs_for_task(task_id: str, limit: int = 20) -> list[dict[str, Any]]:
+async def list_runs_for_task(task_id: str, limit: int = 20) -> list[SqlRow]:
     """Histórico de execuções de UMA task — o que falta pro card do Kanban
     conectar run history (hoje só `list_runs` por session existe, sem
     filtro por card)."""
@@ -823,7 +853,7 @@ async def list_runs_for_task(task_id: str, limit: int = 20) -> list[dict[str, An
     finally:
         with contextlib.suppress(Exception):
             await conn.close()
-    return list(rows)
+    return [dict(row) for row in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -893,7 +923,29 @@ async def record_subagent_delegation(
 # ---------------------------------------------------------------------------
 
 
-def _describe_pending_approval(pending: dict[str, Any] | None) -> str:
+def _config_text(config: JsonObject, key: str) -> str | None:
+    """Texto de uma configuração de gatilho; outros tipos são ignorados."""
+    value = config.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _config_texts(config: JsonObject, key: str) -> list[str]:
+    value = config.get(key)
+    return [str(item) for item in value] if isinstance(value, list) else []
+
+
+def _quality_gates(config: JsonObject) -> list[list[str]] | None:
+    """Comandos de verificação configurados, cada um como lista de argumentos."""
+    value = config.get("quality_gates")
+    if not isinstance(value, list):
+        return None
+    gates = [[str(part) for part in gate] for gate in value if isinstance(gate, list)]
+    return gates or None
+
+
+def _describe_pending_approval(
+    pending: PendingApprovalRecord | Mapping[str, str] | None,
+) -> str:
     """Descrição curta e humana do que a run está esperando aprovar — lê
     ``SessionStore.get_pending_approval``, que carrega uma única tool/args
     por pendência (não uma lista de ações candidatas)."""
@@ -902,7 +954,7 @@ def _describe_pending_approval(pending: dict[str, Any] | None) -> str:
     return f"Aguardando aprovação: {pending.get('tool_name') or 'ação desconhecida'}"
 
 
-def _soul_tool_registry(soul: Any, user_id: str | None) -> Any:
+def _soul_tool_registry(soul: Soul, user_id: str | None) -> ToolRegistry:
     """``ToolRegistry`` nativo com só as tools da SOUL pedida — mesmo
     filtro de RBAC (kill-switch global + ABAC por usuário) que
     ``agent_factory._native_subagent_catalog`` aplica no catálogo de
@@ -1008,7 +1060,7 @@ async def _heartbeat_watchdog(task_id: str, run_id: str) -> None:
 async def run_task(  # noqa: PLR0911
     task: BackgroundTask,
     trigger_source: str,
-    payload: dict[str, Any] | None = None,
+    payload: JsonObject | None = None,
 ) -> str | None:
     """Executa o agente para a tarefa. Cria uma thread visível e grava a run.
 
@@ -1121,7 +1173,7 @@ async def run_task(  # noqa: PLR0911
             evt = json.dumps(payload, ensure_ascii=False)[:4000]
             prompt = f"{prompt}\n\n## Evento recebido\n```json\n{evt}\n```"
 
-        configurable: dict[str, Any] = {
+        configurable: JsonObject = {
             "thread_id": run_thread_id,
             "user_id": task.user_id,
             # Default "auto": sem humano no fluxo de fundo, o HITL dinâmico roda
@@ -1155,7 +1207,7 @@ async def run_task(  # noqa: PLR0911
                 )
             tool_registry = _soul_tool_registry(soul, task.user_id)
             system_prompt = soul.system_prompt
-            subagent_catalog: dict[str, Any] = {}
+            subagent_catalog = {}
         else:
             native_agent = await agent_factory.get_native_agent(
                 user_id=task.user_id,
@@ -1185,10 +1237,10 @@ async def run_task(  # noqa: PLR0911
         await session_store.create_session(
             run_thread_id,
             user_id=task.user_id,
-            workspace_id=configurable.get("workspace_id"),
+            workspace_id=_config_text(configurable, "workspace_id"),
             parent_thread_id=task.session_id or None,
             mode="background",
-            permission_mode=configurable.get("permission_mode", "auto"),
+            permission_mode=_config_text(configurable, "permission_mode") or "auto",
         )
         system_id = await session_store.append_message(
             run_thread_id, text_message(MessageRole.SYSTEM, system_prompt)
@@ -1209,8 +1261,8 @@ async def run_task(  # noqa: PLR0911
                 thread_id=run_thread_id,
                 goal=task.instruction,
                 loop_config=loop_config,
-                quality_gates=task.trigger_config.get("quality_gates") or None,
-                max_goal_turns=int(task.trigger_config.get("max_goal_turns", 20)),
+                quality_gates=_quality_gates(task.trigger_config),
+                max_goal_turns=int(str(task.trigger_config.get("max_goal_turns", 20))),
                 should_require_approval=should_require_approval,
                 approval_gate=approval_gate,
             )
@@ -1431,7 +1483,7 @@ async def _finish_run_and_mark_kanban(
     )
 
 
-async def _get_run(run_id: str) -> dict[str, Any] | None:
+async def _get_run(run_id: str) -> SqlRow | None:
     """Uma run de background por id (ou ``None``)."""
     conn = await _get_db()
     try:
@@ -1440,7 +1492,8 @@ async def _get_run(run_id: str) -> dict[str, Any] | None:
             "FROM vectora_background_runs WHERE id = ?",
             (run_id,),
         )
-        return await cur.fetchone()
+        row = await cur.fetchone()
+        return None if row is None else dict(row)
     finally:
         with contextlib.suppress(Exception):
             await conn.close()
@@ -1451,14 +1504,14 @@ async def _resume_goal_run(
     run_id: str,
     task: BackgroundTask,
     run_thread_id: str,
-    session_store: Any,
-    chat_client: Any,
-    tool_registry: Any,
-    run_ctx: Any,
+    session_store: SessionStore,
+    chat_client: ChatClient,
+    tool_registry: ToolRegistry,
+    run_ctx: ToolContext,
     loop_config: LoopConfig,
     resume_decision: str,
-    edited_args: dict[str, Any] | None,
-    approval_gate: Any,
+    edited_args: JsonObject | None,
+    approval_gate: ApprovalGate,
 ) -> str | None:
     """Retoma uma run ``kind="goal"`` pausada em HITL — extraído de
     ``resume_background_run`` só pra manter o número de saídas da função
@@ -1474,8 +1527,8 @@ async def _resume_goal_run(
         loop_config=loop_config,
         decision=resume_decision,
         edited_args=edited_args,
-        quality_gates=task.trigger_config.get("quality_gates") or None,
-        max_goal_turns=int(task.trigger_config.get("max_goal_turns", 20)),
+        quality_gates=_quality_gates(task.trigger_config),
+        max_goal_turns=int(str(task.trigger_config.get("max_goal_turns", 20))),
         should_require_approval=should_require_approval,
         approval_gate=approval_gate,
     )
@@ -1524,14 +1577,14 @@ async def _resume_normal_run(
     run_id: str,
     task: BackgroundTask,
     run_thread_id: str,
-    session_store: Any,
-    chat_client: Any,
-    tool_registry: Any,
-    run_ctx: Any,
+    session_store: SessionStore,
+    chat_client: ChatClient,
+    tool_registry: ToolRegistry,
+    run_ctx: ToolContext,
     loop_config: LoopConfig,
     resume_decision: str,
-    edited_args: dict[str, Any] | None,
-    approval_gate: Any,
+    edited_args: JsonObject | None,
+    approval_gate: ApprovalGate,
 ) -> str | None:
     """Retoma uma run de kind não-``"goal"`` — extraído de
     ``resume_background_run`` pelo mesmo motivo de ``_resume_goal_run``
@@ -1614,8 +1667,8 @@ async def resume_background_run(  # noqa: PLR0911
     run = await _get_run(run_id)
     if run is None or run.get("status") != "awaiting_approval":
         return None
-    run_thread_id = run.get("run_thread_id") or ""
-    task = await get_task(run["task_id"])
+    run_thread_id = str(run.get("run_thread_id") or "")
+    task = await get_task(str(run["task_id"]))
     if task is None or not run_thread_id:
         return None
     if task.trigger_config.get("dag_execution_id"):
@@ -1650,7 +1703,7 @@ async def resume_background_run(  # noqa: PLR0911
 
         if decision == "approve":
             resume_decision = "approve"
-            edited_args: dict[str, Any] | None = None
+            edited_args: JsonObject | None = None
         elif decision == "reject":
             resume_decision = "reject"
             edited_args = None
@@ -1661,7 +1714,7 @@ async def resume_background_run(  # noqa: PLR0911
             raise ValueError(f"decision inválida: {decision!r}")
 
         mode = task.trigger_config.get("permission_mode", "auto")
-        configurable: dict[str, Any] = {
+        configurable: JsonObject = {
             "thread_id": run_thread_id,
             "user_id": task.user_id,
             "permission_mode": mode,
@@ -1680,7 +1733,7 @@ async def resume_background_run(  # noqa: PLR0911
                 msg = f"subagent_type inválido: {subagent_type!r}"
                 raise ValueError(msg)
             tool_registry = _soul_tool_registry(soul, task.user_id)
-            subagent_catalog: dict[str, Any] = {}
+            subagent_catalog = {}
         else:
             native_agent = await agent_factory.get_native_agent(
                 user_id=task.user_id,
@@ -1781,7 +1834,7 @@ async def cancel_background_run(run_id: str | None) -> str | None:
         return None
     task_id = run.get("task_id")
     task = await get_task(task_id) if isinstance(task_id, str) else None
-    summary = run.get("summary") or "Cancelada pelo usuário."
+    summary = str(run.get("summary") or "Cancelada pelo usuário.")
     if task is None:
         return None
     from backend.scheduling.kanban import cancel_run_and_block
@@ -1864,7 +1917,7 @@ def _event_matches(event_type: str, events: list[str]) -> bool:
 
 
 async def dispatch_webhook_event(
-    provider: str, event_type: str, payload: dict[str, Any]
+    provider: str, event_type: str, payload: JsonObject
 ) -> int:
     """Dispara as tasks 'webhook' habilitadas cujo filtro casa. Retorna quantas.
 
@@ -1891,7 +1944,7 @@ async def dispatch_webhook_event(
         want_provider = cfg.get("provider")
         if want_provider and want_provider != provider:
             continue
-        if not _event_matches(event_type, list(cfg.get("events") or [])):
+        if not _event_matches(event_type, _config_texts(cfg, "events")):
             continue
         await run_task(task, "webhook", payload=payload)
         fired += 1
@@ -1935,7 +1988,7 @@ async def _find_github_issue_sync_anchor() -> BackgroundTask | None:
         cfg = task.trigger_config
         if cfg.get("provider") != "github":
             continue
-        if _event_matches("issues", list(cfg.get("events") or [])):
+        if _event_matches("issues", _config_texts(cfg, "events")):
             return task
     return None
 
@@ -1964,7 +2017,7 @@ async def _upsert_github_issue_card(
     existing: BackgroundTask | None,
     title: str,
     body: str,
-    cfg: dict[str, Any],
+    cfg: JsonObject,
 ) -> BackgroundTask | None:
     """Cria o card na primeira vez que a issue chega; atualiza numa reentrega."""
     if existing is not None:
@@ -1983,7 +2036,7 @@ async def _upsert_github_issue_card(
 
 
 async def sync_github_issue_to_kanban(
-    action: str, repo: str, issue: dict[str, Any]
+    action: str, repo: str, issue: JsonObject
 ) -> BackgroundTask | None:
     """Espelha um evento `issues` do GitHub num card do Kanban — sem LLM no meio.
 
@@ -2009,10 +2062,12 @@ async def sync_github_issue_to_kanban(
     if anchor is None:
         return None
 
-    existing = await find_task_by_github_issue(anchor.session_id, repo, issue_number)
+    existing = await find_task_by_github_issue(
+        anchor.session_id, repo, int(str(issue_number))
+    )
     title = str(issue.get("title") or f"Issue #{issue_number}")
     body = str(issue.get("body") or "")[:_ISSUE_BODY_MAX_CHARS]
-    cfg = {
+    cfg: JsonObject = {
         "source": "github_issue",
         "repo": repo,
         "issue_number": issue_number,
@@ -2109,7 +2164,7 @@ async def find_task_by_observability_alert(
 
 
 async def sync_observability_alert_to_kanban(
-    alert: dict[str, Any],
+    alert: JsonObject,
 ) -> BackgroundTask | None:
     """Espelha um alerta de observabilidade genérico num card do Kanban.
 
@@ -2133,7 +2188,7 @@ async def sync_observability_alert_to_kanban(
     description = str(alert.get("description") or "")[:_ISSUE_BODY_MAX_CHARS]
     severity = str(alert.get("severity") or "").lower()
     status = _SEVERITY_TO_STATUS.get(severity, "todo")
-    cfg = {
+    cfg: JsonObject = {
         "source": _OBSERVABILITY_SOURCE,
         "external_id": external_id,
         "severity": severity,
@@ -2296,7 +2351,7 @@ class BackgroundScheduler:
                     task.next_run_at,
                 )
                 await _set_next_run(
-                    task.id, _next_run(task.trigger_config.get("cron_expr"))
+                    task.id, _next_run(_config_text(task.trigger_config, "cron_expr"))
                 )
                 continue
             await run_task(task, task.trigger_type)

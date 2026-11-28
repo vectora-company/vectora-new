@@ -11,32 +11,32 @@ from pathlib import Path
 
 
 class TestIsMcpConfigPath:
-    def test_mcp_json(self):
+    def test_mcp_json(self) -> None:
         from backend.context_graph.mcp_ingest import is_mcp_config_path
 
         assert is_mcp_config_path(Path(".mcp.json")) is True
 
-    def test_claude_desktop_config(self):
+    def test_claude_desktop_config(self) -> None:
         from backend.context_graph.mcp_ingest import is_mcp_config_path
 
         assert is_mcp_config_path(Path("claude_desktop_config.json")) is True
 
-    def test_mcp_servers_json(self):
+    def test_mcp_servers_json(self) -> None:
         from backend.context_graph.mcp_ingest import is_mcp_config_path
 
         assert is_mcp_config_path(Path("mcp_servers.json")) is True
 
-    def test_mcp_plain(self):
+    def test_mcp_plain(self) -> None:
         from backend.context_graph.mcp_ingest import is_mcp_config_path
 
         assert is_mcp_config_path(Path("mcp.json")) is True
 
-    def test_random_json_not_mcp(self):
+    def test_random_json_not_mcp(self) -> None:
         from backend.context_graph.mcp_ingest import is_mcp_config_path
 
         assert is_mcp_config_path(Path("config.json")) is False
 
-    def test_non_json_not_mcp(self):
+    def test_non_json_not_mcp(self) -> None:
         from backend.context_graph.mcp_ingest import is_mcp_config_path
 
         assert is_mcp_config_path(Path("settings.yaml")) is False
@@ -48,7 +48,7 @@ class TestExtractMcpConfig:
         p.write_text(json.dumps(data), encoding="utf-8")
         return p
 
-    def test_basic_mcp_servers(self, tmp_path: Path):
+    def test_basic_mcp_servers(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = self._write(
@@ -72,7 +72,7 @@ class TestExtractMcpConfig:
         assert "filesystem" in labels
         assert "github" in labels
 
-    def test_nested_mcp_servers(self, tmp_path: Path):
+    def test_nested_mcp_servers(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = self._write(
@@ -88,7 +88,7 @@ class TestExtractMcpConfig:
         result = extract_mcp_config(p)
         assert any(n["label"] == "rag" for n in result["nodes"])
 
-    def test_env_vars_not_exposed(self, tmp_path: Path):
+    def test_env_vars_not_exposed(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = self._write(
@@ -110,7 +110,7 @@ class TestExtractMcpConfig:
         assert "supersecret123" not in text
         assert "postgres://" not in text
 
-    def test_env_var_names_may_appear(self, tmp_path: Path):
+    def test_env_var_names_may_appear(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = self._write(
@@ -129,14 +129,14 @@ class TestExtractMcpConfig:
         # Values must not appear, names may appear in nodes
         assert "secret" not in text
 
-    def test_file_not_found_returns_error(self, tmp_path: Path):
+    def test_file_not_found_returns_error(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = tmp_path / ".mcp.json"
         result = extract_mcp_config(p)
         assert "error" in result
 
-    def test_file_too_large_returns_error(self, tmp_path: Path):
+    def test_file_too_large_returns_error(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import (
             _MAX_BYTES,
             extract_mcp_config,
@@ -147,7 +147,7 @@ class TestExtractMcpConfig:
         result = extract_mcp_config(p)
         assert "error" in result
 
-    def test_invalid_json_returns_error(self, tmp_path: Path):
+    def test_invalid_json_returns_error(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = tmp_path / ".mcp.json"
@@ -155,7 +155,7 @@ class TestExtractMcpConfig:
         result = extract_mcp_config(p)
         assert "error" in result
 
-    def test_root_not_object_returns_error(self, tmp_path: Path):
+    def test_root_not_object_returns_error(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = tmp_path / ".mcp.json"
@@ -163,14 +163,14 @@ class TestExtractMcpConfig:
         result = extract_mcp_config(p)
         assert "error" in result
 
-    def test_no_mcp_servers_returns_error(self, tmp_path: Path):
+    def test_no_mcp_servers_returns_error(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = self._write(tmp_path, {"version": 1})
         result = extract_mcp_config(p)
         assert "error" in result
 
-    def test_max_servers_limit(self, tmp_path: Path):
+    def test_max_servers_limit(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import (
             _MAX_SERVERS_PER_FILE,
             extract_mcp_config,
@@ -185,7 +185,7 @@ class TestExtractMcpConfig:
         server_nodes = [n for n in result["nodes"] if n.get("kind") == "mcp_server"]
         assert len(server_nodes) <= _MAX_SERVERS_PER_FILE
 
-    def test_server_edges_to_config_file(self, tmp_path: Path):
+    def test_server_edges_to_config_file(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = self._write(
@@ -199,7 +199,7 @@ class TestExtractMcpConfig:
         result = extract_mcp_config(p)
         assert len(result["edges"]) >= 1
 
-    def test_non_dict_server_entry_skipped(self, tmp_path: Path):
+    def test_non_dict_server_entry_skipped(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = self._write(
@@ -216,7 +216,7 @@ class TestExtractMcpConfig:
         assert "good" in labels
         assert "bad" not in labels
 
-    def test_server_name_with_special_chars_produces_node(self, tmp_path: Path):
+    def test_server_name_with_special_chars_produces_node(self, tmp_path: Path) -> None:
         from backend.context_graph.mcp_ingest import extract_mcp_config
 
         p = self._write(
@@ -228,5 +228,5 @@ class TestExtractMcpConfig:
             },
         )
         result = extract_mcp_config(p)
-        labels = [n.get("label", "") for n in result["nodes"]]
+        labels = [str(n.get("label", "")) for n in result["nodes"]]
         assert any("my-server" in lbl for lbl in labels)

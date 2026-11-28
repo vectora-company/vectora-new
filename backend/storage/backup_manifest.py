@@ -17,9 +17,10 @@ import zipfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from backend.storage.migrations.runner import _ALTER_ADD_COLUMN_RE, _split_statements
+from backend.vtypes.contracts import JsonObject, JsonValue
+from backend.vtypes.storage import BackupCategoryResult
 
 MANIFEST = "manifest.json"
 FORMAT_VERSION = 1
@@ -47,7 +48,7 @@ class BackupPreview:
     categories: dict[str, int]
     compatible: bool
     storage_mode: str = "lite"
-    results: dict[str, dict[str, object]] = field(default_factory=dict)
+    results: dict[str, BackupCategoryResult] = field(default_factory=dict)
 
 
 def _digest(data: bytes) -> str:
@@ -235,12 +236,12 @@ def _validate_relative(path: str) -> None:
         raise ValueError("caminho de backup inválido")
 
 
-def _manifest_files(manifest: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def _manifest_files(manifest: JsonObject) -> dict[str, list[JsonObject]]:
     """Executa a operação  manifest files."""
     raw_files = manifest.get("files")
     if not isinstance(raw_files, dict):
         raise ValueError("manifesto sem arquivos")
-    result: dict[str, list[dict[str, Any]]] = {}
+    result: dict[str, list[JsonObject]] = {}
     for category, raw in raw_files.items():
         if category not in _CATEGORIES:
             raise ValueError("categoria de backup inválida")
@@ -250,9 +251,10 @@ def _manifest_files(manifest: dict[str, Any]) -> dict[str, list[dict[str, Any]]]
                 raise ValueError("entrada de manifesto inválida")
             result[category] = []
             continue
-        if not items or any(not isinstance(item, dict) for item in items):
+        entries = [item for item in items if isinstance(item, dict)]
+        if not entries or len(entries) != len(items):
             raise ValueError("entrada de manifesto inválida")
-        result[category] = items
+        result[category] = entries
     return result
 
 
@@ -289,14 +291,15 @@ def create_backup(
     # A categoria vazia é deliberada: no restore ela remove artefatos antigos
     # quando o backup foi criado sem payloads.
     sources["artifacts"] = artifact_entries
-    manifest: dict[str, Any] = {
+    files: dict[str, JsonValue] = {}
+    manifest: JsonObject = {
         "format_version": FORMAT_VERSION,
         "app_version": app_version,
         "storage_mode": storage_mode,
-        "files": {},
+        "files": files,
     }
     for category, entries in sources.items():
-        manifest["files"][category] = [
+        files[category] = [
             {
                 "path": archive_name,
                 "sha256": _digest(data),
@@ -426,9 +429,10 @@ def inspect_backup(archive_path: str | Path) -> BackupPreview:
                     raise ValueError(f"integridade inválida para {category}")
                 if item.get("size") != len(data):
                     raise ValueError(f"tamanho inválido para {category}")
-                if not isinstance(item.get("count", 0), int) or item["count"] < 0:
+                item_count = item.get("count")
+                if not isinstance(item_count, int) or item_count < 0:
                     raise ValueError("contagem de backup inválida")
-                count += item["count"]
+                count += item_count
             if items:
                 categories[category] = count
         if set(names) != declared_paths:
@@ -588,9 +592,9 @@ def restore_backup(
                 if category == "artifacts":
                     root = targets[category]
                     for item in declared[category]:
-                        archive_path = Path(item["path"])
-                        relative = archive_path.relative_to("artifacts")
-                        payload = archive.read(item["path"])
+                        entry_path = str(item["path"])
+                        relative = Path(entry_path).relative_to("artifacts")
+                        payload = archive.read(entry_path)
                         staged_bytes += len(payload)
                         if staged_bytes > MAX_RESTORE_BYTES:
                             raise ValueError(
@@ -598,7 +602,7 @@ def restore_backup(
                             )
                         staged[root / relative] = payload
                 else:
-                    payload = archive.read(declared[category][0]["path"])
+                    payload = archive.read(str(declared[category][0]["path"]))
                     staged_bytes += len(payload)
                     if staged_bytes > MAX_RESTORE_BYTES:
                         raise ValueError("restore excede o limite agregado de dados")
@@ -671,7 +675,7 @@ def restore_backup(
             else:
                 _atomic_write(path, previous, boundary=boundary)
         raise
-    results: dict[str, dict[str, object]] = {
+    results: dict[str, BackupCategoryResult] = {
         category: {
             "status": "imported",
             "count": preview.categories.get(category, 0)

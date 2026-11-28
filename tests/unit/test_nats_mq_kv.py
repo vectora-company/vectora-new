@@ -17,7 +17,7 @@ from backend.scheduling.mq import NatsMQ, StreamMessage
 
 
 @pytest.mark.asyncio
-async def test_nats_mq_enqueue_publishes_to_jetstream():
+async def test_nats_mq_enqueue_publishes_to_jetstream() -> None:
     fake_js = MagicMock()
     fake_js.add_stream = AsyncMock()
     fake_js.publish = AsyncMock(return_value=MagicMock(seq=42))
@@ -36,7 +36,7 @@ async def test_nats_mq_enqueue_publishes_to_jetstream():
 
 
 @pytest.mark.asyncio
-async def test_nats_mq_consume_acks_on_success_and_dispatches_payload():
+async def test_nats_mq_consume_acks_on_success_and_dispatches_payload() -> None:
     fake_msg = MagicMock()
     fake_msg.data = json.dumps({"x": 1}).encode("utf-8")
     fake_msg.reply = "reply-1"
@@ -70,7 +70,7 @@ async def test_nats_mq_consume_acks_on_success_and_dispatches_payload():
 
 
 @pytest.mark.asyncio
-async def test_nats_kv_get_set_delete_round_trip():
+async def test_nats_kv_get_set_delete_round_trip() -> None:
     fake_entry = MagicMock(value=b"valor")
     fake_bucket = MagicMock()
     fake_bucket.get = AsyncMock(return_value=fake_entry)
@@ -94,7 +94,7 @@ async def test_nats_kv_get_set_delete_round_trip():
 
 
 @pytest.mark.asyncio
-async def test_nats_kv_get_returns_none_on_miss():
+async def test_nats_kv_get_returns_none_on_miss() -> None:
     fake_bucket = MagicMock()
     fake_bucket.get = AsyncMock(side_effect=Exception("key not found"))
 

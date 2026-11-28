@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -8,13 +9,13 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 
-def _request(user: object | None) -> Request:
+def _request(user: SimpleNamespace | None) -> Request:
     request = Request({"type": "http", "method": "GET", "path": "/auth/secrets/keys"})
     request.state.user = user
     return request
 
 
-async def test_secret_key_listing_requires_authentication():
+async def test_secret_key_listing_requires_authentication() -> None:
     from backend.api.handlers.auth import list_secret_keys
 
     with pytest.raises(HTTPException) as exc:
@@ -23,7 +24,9 @@ async def test_secret_key_listing_requires_authentication():
     assert exc.value.status_code == 401
 
 
-async def test_secret_key_listing_returns_only_names_for_current_user(monkeypatch):
+async def test_secret_key_listing_returns_only_names_for_current_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import auth
 
     provider = SimpleNamespace(
@@ -37,7 +40,9 @@ async def test_secret_key_listing_returns_only_names_for_current_user(monkeypatc
     provider.list_keys.assert_awaited_once_with("user-1")
 
 
-async def test_secret_key_listing_reports_locked_vault(monkeypatch):
+async def test_secret_key_listing_reports_locked_vault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import auth
 
     provider = SimpleNamespace(
@@ -52,7 +57,9 @@ async def test_secret_key_listing_reports_locked_vault(monkeypatch):
     assert "bloqueado" in exc.value.detail
 
 
-async def test_internal_provider_does_not_list_keys_when_vault_is_locked(monkeypatch):
+async def test_internal_provider_does_not_list_keys_when_vault_is_locked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.secrets import internal
 
     monkeypatch.setattr(internal, "_open_keys", {})
@@ -65,8 +72,8 @@ async def test_internal_provider_does_not_list_keys_when_vault_is_locked(monkeyp
 
 
 async def test_secret_key_listing_isolated_between_real_internal_vaults(
-    monkeypatch, tmp_path
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from backend.api.handlers import auth
     from backend.secrets import internal
 

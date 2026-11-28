@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from backend.services.media_types import EXTENSION_BY_MIME, OCTET_STREAM, sniff_mime
 from backend.settings import settings
+from backend.vtypes.contracts import JsonObject
 
 
 class _Fcntl(Protocol):
@@ -187,7 +188,7 @@ class AssetStore:
                 raise RuntimeError("lock interprocesso de assets indisponível")
             yield
 
-    def _write_records(self, records: dict[str, dict[str, object]]) -> None:
+    def _write_records(self, records: dict[str, JsonObject]) -> None:
         """Atomically replace the metadata index with validated records."""
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", dir=self.root, delete=False
@@ -333,7 +334,7 @@ class AssetStore:
         )
         return asset, payload
 
-    def _read(self, *, strict: bool = False) -> dict[str, dict[str, object]]:
+    def _read(self, *, strict: bool = False) -> dict[str, JsonObject]:
         try:
             value = json.loads(self.index.read_text(encoding="utf-8"))
         except FileNotFoundError:

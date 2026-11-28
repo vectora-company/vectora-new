@@ -13,6 +13,7 @@ error messages instead of silent NoneType errors mid-execution.
 
 import logging
 import os
+from collections.abc import Callable, Mapping
 from enum import StrEnum
 from importlib import resources
 from pathlib import Path
@@ -23,6 +24,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from backend.runtime_profile import resolve_runtime_home
+from backend.vtypes.contracts import JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,10 @@ def _default_vectora_home() -> Path:
     regra sem importar este singleton.
     """
     return resolve_runtime_home()
+
+
+def _validate_fields(init: Callable[..., None], data: Mapping[str, JsonValue]) -> None:
+    init(**data)
 
 
 class Settings(BaseSettings):
@@ -779,7 +785,7 @@ class Settings(BaseSettings):
     # INITIALIZATION & VALIDATION
     # ============================================================================
 
-    def __init__(self, **data: Any) -> None:
+    def __init__(self, **data: JsonValue) -> None:
         """Initialize settings with 3-level hierarchy and validation.
 
         Hierarchy (in precedence order):
@@ -795,7 +801,9 @@ class Settings(BaseSettings):
         self._load_environment_hierarchy()
 
         # Call parent init (validates all fields)
-        super().__init__(**data)
+        # ``BaseSettings.__init__`` também declara as opções ``_...`` das
+        # fontes; aqui só chegam campos, repassados como vieram.
+        _validate_fields(super().__init__, data)
 
         # Initialize derived paths
         self._initialize_directories()

@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 from uuid import uuid4
 
 from backend.embedding.queue import (
@@ -20,6 +19,8 @@ from backend.services.ignore import load_ignore_spec, walk_files
 from backend.services.security import is_safe_file_path
 from backend.services.text import text_service
 from backend.settings import settings
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.embedding_queue import IngestionResult
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +235,7 @@ async def ingest_directory(
     collection: str = "articles",
     workspace_id: str | None = None,
     job_id: str | None = None,
-) -> dict[str, Any]:
+) -> IngestionResult:
     """Varre uma pasta, faz chunk e enfileira no RAG agrupado por ``job_id``.
 
     Respeita ``.gitignore``/``.vectoraignore`` (via ``walk_files``) e filtra
@@ -275,7 +276,7 @@ async def ingest_directory(
             logger.warning("rag_ingest: falha ao ler %s", file_path, exc_info=True)
             continue
         for chunk in text_service.split(text):
-            metadata: dict[str, Any] = {
+            metadata: JsonObject = {
                 "source": str(file_path),
                 "source_dir": str(path),
                 "ingested_at": datetime.now(UTC).isoformat(),

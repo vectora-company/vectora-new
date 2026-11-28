@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from backend.vtypes.contracts import JsonObject, JsonValue
+
 
 def _extraction(
     nodes: list[dict] | None = None,
@@ -25,7 +27,9 @@ def _extraction(
     }
 
 
-def _node(nid: str, label: str = "", source_file: str = "a.py", **kw: object) -> dict:
+def _node(
+    nid: str, label: str = "", source_file: str = "a.py", **kw: JsonValue
+) -> JsonObject:
     return {
         "id": nid,
         "label": label or nid,
@@ -52,21 +56,21 @@ def _edge(
 
 
 class TestBuildFromJson:
-    def test_empty_extraction_returns_empty_graph(self):
+    def test_empty_extraction_returns_empty_graph(self) -> None:
         from backend.context_graph.build import build_from_json
 
         G = build_from_json(_extraction())
         assert G.number_of_nodes() == 0
         assert G.number_of_edges() == 0
 
-    def test_nodes_added(self):
+    def test_nodes_added(self) -> None:
         from backend.context_graph.build import build_from_json
 
         G = build_from_json(_extraction(nodes=[_node("a"), _node("b")]))
         assert "a" in G.nodes
         assert "b" in G.nodes
 
-    def test_edge_added(self):
+    def test_edge_added(self) -> None:
         from backend.context_graph.build import build_from_json
 
         G = build_from_json(
@@ -77,7 +81,7 @@ class TestBuildFromJson:
         )
         assert G.has_edge("a", "b")
 
-    def test_directed_graph(self):
+    def test_directed_graph(self) -> None:
         import networkx as nx
 
         from backend.context_graph.build import build_from_json
@@ -85,7 +89,7 @@ class TestBuildFromJson:
         G = build_from_json(_extraction(nodes=[_node("a"), _node("b")]), directed=True)
         assert isinstance(G, nx.DiGraph)
 
-    def test_links_key_remapped(self):
+    def test_links_key_remapped(self) -> None:
         from backend.context_graph.build import build_from_json
 
         data = {
@@ -95,7 +99,7 @@ class TestBuildFromJson:
         G = build_from_json(data)
         assert G.has_edge("a", "b")
 
-    def test_unknown_edges_skipped(self):
+    def test_unknown_edges_skipped(self) -> None:
         from backend.context_graph.build import build_from_json
 
         G = build_from_json(
@@ -106,7 +110,7 @@ class TestBuildFromJson:
         )
         assert G.number_of_edges() == 0
 
-    def test_hyperedges_stored_in_graph(self):
+    def test_hyperedges_stored_in_graph(self) -> None:
         from backend.context_graph.build import build_from_json
 
         G = build_from_json(
@@ -117,7 +121,9 @@ class TestBuildFromJson:
         )
         assert "hyperedges" in G.graph
 
-    def test_source_field_remapped_to_source_file(self, capsys: pytest.CaptureFixture):
+    def test_source_field_remapped_to_source_file(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
         from backend.context_graph.build import build_from_json
 
         data = {
@@ -128,7 +134,7 @@ class TestBuildFromJson:
         stderr = capsys.readouterr().err
         assert "source_file" in stderr
 
-    def test_invalid_file_type_remapped(self):
+    def test_invalid_file_type_remapped(self) -> None:
         from backend.context_graph.build import build_from_json
 
         data = {
@@ -145,7 +151,7 @@ class TestBuildFromJson:
         G = build_from_json(data)
         assert G.nodes["x"]["file_type"] == "document"
 
-    def test_none_file_type_defaults_to_concept(self):
+    def test_none_file_type_defaults_to_concept(self) -> None:
         from backend.context_graph.build import build_from_json
 
         data = {
@@ -157,7 +163,7 @@ class TestBuildFromJson:
         G = build_from_json(data)
         assert G.nodes["x"]["file_type"] == "concept"
 
-    def test_cross_language_inferred_calls_dropped(self):
+    def test_cross_language_inferred_calls_dropped(self) -> None:
         from backend.context_graph.build import build_from_json
 
         G = build_from_json(
@@ -179,7 +185,7 @@ class TestBuildFromJson:
         )
         assert not G.has_edge("py_fn", "ts_fn")
 
-    def test_preserves_direction_in_attrs(self):
+    def test_preserves_direction_in_attrs(self) -> None:
         from backend.context_graph.build import build_from_json
 
         G = build_from_json(
@@ -194,7 +200,7 @@ class TestBuildFromJson:
 
 
 class TestEdgeData:
-    def test_returns_dict(self):
+    def test_returns_dict(self) -> None:
         from backend.context_graph.build import build_from_json, edge_data
 
         G = build_from_json(
@@ -208,7 +214,7 @@ class TestEdgeData:
 
 
 class TestEdgeDatas:
-    def test_returns_list(self):
+    def test_returns_list(self) -> None:
         from backend.context_graph.build import build_from_json, edge_datas
 
         G = build_from_json(
@@ -223,7 +229,7 @@ class TestEdgeDatas:
 
 
 class TestDedupeNodes:
-    def test_deduplicates_by_id(self):
+    def test_deduplicates_by_id(self) -> None:
         from backend.context_graph.build import dedupe_nodes
 
         nodes = [
@@ -236,7 +242,7 @@ class TestDedupeNodes:
         assert ids.count("x") == 1
         assert ids.count("y") == 1
 
-    def test_last_writer_wins(self):
+    def test_last_writer_wins(self) -> None:
         from backend.context_graph.build import dedupe_nodes
 
         result = dedupe_nodes(
@@ -247,7 +253,7 @@ class TestDedupeNodes:
         )
         assert result[0]["label"] == "Second"
 
-    def test_nodes_without_id_dropped(self):
+    def test_nodes_without_id_dropped(self) -> None:
         from backend.context_graph.build import dedupe_nodes
 
         result = dedupe_nodes([{"label": "NoId"}, {"id": "ok", "label": "OK"}])
@@ -255,7 +261,7 @@ class TestDedupeNodes:
 
 
 class TestDedupeEdges:
-    def test_deduplicates_exact_parallel(self):
+    def test_deduplicates_exact_parallel(self) -> None:
         from backend.context_graph.build import dedupe_edges
 
         edges = [
@@ -266,14 +272,14 @@ class TestDedupeEdges:
         result = dedupe_edges(edges)
         assert len(result) == 2
 
-    def test_empty_list(self):
+    def test_empty_list(self) -> None:
         from backend.context_graph.build import dedupe_edges
 
         assert dedupe_edges([]) == []
 
 
 class TestDeduplicateByLabel:
-    def test_merges_nodes_with_same_label(self):
+    def test_merges_nodes_with_same_label(self) -> None:
         from backend.context_graph.build import deduplicate_by_label
 
         nodes = [
@@ -297,7 +303,7 @@ class TestDeduplicateByLabel:
         ids = {n["id"] for n in new_nodes}
         assert "auth_service_c1" not in ids
 
-    def test_no_duplicates_passthrough(self):
+    def test_no_duplicates_passthrough(self) -> None:
         from backend.context_graph.build import deduplicate_by_label
 
         nodes = [
@@ -311,7 +317,7 @@ class TestDeduplicateByLabel:
 
 
 class TestBuild:
-    def test_merges_multiple_extractions(self):
+    def test_merges_multiple_extractions(self) -> None:
         from backend.context_graph.build import build
 
         ext1 = _extraction(nodes=[_node("a")], edges=[])
@@ -320,7 +326,7 @@ class TestBuild:
         assert "a" in G.nodes
         assert "b" in G.nodes
 
-    def test_empty_extractions(self):
+    def test_empty_extractions(self) -> None:
         from backend.context_graph.build import build
 
         G = build([])
@@ -328,7 +334,7 @@ class TestBuild:
 
 
 class TestBuildMerge:
-    def test_creates_new_graph_when_no_existing(self, tmp_path: Path):
+    def test_creates_new_graph_when_no_existing(self, tmp_path: Path) -> None:
         from backend.context_graph.build import build_merge
 
         graph_path = tmp_path / "graph.json"
@@ -339,7 +345,7 @@ class TestBuildMerge:
         G = build_merge([new_chunk], graph_path=graph_path)
         assert G.number_of_nodes() == 2
 
-    def test_merges_with_existing(self, tmp_path: Path):
+    def test_merges_with_existing(self, tmp_path: Path) -> None:
         from backend.context_graph.build import build_merge
 
         graph_path = tmp_path / "graph.json"
@@ -357,7 +363,7 @@ class TestBuildMerge:
         assert "existing_node" in G.nodes
         assert "new_node" in G.nodes
 
-    def test_prune_deleted_sources(self, tmp_path: Path):
+    def test_prune_deleted_sources(self, tmp_path: Path) -> None:
         from backend.context_graph.build import build_merge
 
         graph_path = tmp_path / "graph.json"
@@ -379,7 +385,7 @@ class TestBuildMerge:
 
 
 class TestPrefixGraphForGlobal:
-    def test_prefixes_node_ids(self):
+    def test_prefixes_node_ids(self) -> None:
         from backend.context_graph.build import (
             build_from_json,
             prefix_graph_for_global,
@@ -390,7 +396,7 @@ class TestPrefixGraphForGlobal:
         assert "repo1::fn1" in H.nodes
         assert "repo1::fn2" in H.nodes
 
-    def test_adds_repo_attr(self):
+    def test_adds_repo_attr(self) -> None:
         from backend.context_graph.build import (
             build_from_json,
             prefix_graph_for_global,
@@ -402,7 +408,7 @@ class TestPrefixGraphForGlobal:
 
 
 class TestPruneRepoFromGraph:
-    def test_removes_nodes_with_repo_tag(self):
+    def test_removes_nodes_with_repo_tag(self) -> None:
         from backend.context_graph.build import (
             build_from_json,
             prune_repo_from_graph,

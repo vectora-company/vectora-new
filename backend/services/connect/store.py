@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +27,7 @@ CREATE TABLE IF NOT EXISTS connect_thread_mappings (
 """
 
 
-async def _get_db() -> Any:
+async def _get_db() -> aiosqlite.Connection:
     """Mesma conexão/`row_factory` de `scheduling/background_tasks.py` — a
     tabela mora no mesmo arquivo SQLite."""
     import aiosqlite
@@ -32,10 +35,8 @@ async def _get_db() -> Any:
     from backend.settings import settings
 
     db_path = settings.db_dsn or ":memory:"
-    conn: Any = await aiosqlite.connect(db_path)
-    conn.row_factory = lambda c, r: dict(
-        zip([col[0] for col in c.description], r, strict=False)
-    )
+    conn = await aiosqlite.connect(db_path)
+    conn.row_factory = aiosqlite.Row
     await conn.execute(_CREATE_TABLE)
     await conn.commit()
     return conn

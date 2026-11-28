@@ -19,14 +19,14 @@ from backend.scheduling.delegate import (
 )
 
 
-def _fake_workspace(cwd: str = "/tmp/ws1"):
+def _fake_workspace(cwd: str = "/tmp/ws1") -> MagicMock:
     ws = MagicMock()
     ws.cwd = cwd
     return ws
 
 
 @pytest.mark.asyncio
-async def test_create_task_worktree_returns_path_on_success():
+async def test_create_task_worktree_returns_path_on_success() -> None:
     with (
         patch("backend.workspace.workspace.workspace_registry") as mock_registry,
         patch("git.Repo") as mock_repo_cls,
@@ -49,7 +49,7 @@ async def test_create_task_worktree_returns_path_on_success():
 
 
 @pytest.mark.asyncio
-async def test_create_task_worktree_unknown_workspace_raises_clear_error():
+async def test_create_task_worktree_unknown_workspace_raises_clear_error() -> None:
     with patch("backend.workspace.workspace.workspace_registry") as mock_registry:
         mock_registry.get.return_value = None
 
@@ -58,7 +58,7 @@ async def test_create_task_worktree_unknown_workspace_raises_clear_error():
 
 
 @pytest.mark.asyncio
-async def test_create_task_worktree_git_failure_raises_delegate_error():
+async def test_create_task_worktree_git_failure_raises_delegate_error() -> None:
     # Erro/borda: branch inválida/disco cheio não deixa a task presa num
     # estado inconsistente — propaga como DelegateError com mensagem clara.
     with (
@@ -75,7 +75,7 @@ async def test_create_task_worktree_git_failure_raises_delegate_error():
 
 
 @pytest.mark.asyncio
-async def test_remove_task_worktree_is_idempotent_on_missing_worktree():
+async def test_remove_task_worktree_is_idempotent_on_missing_worktree() -> None:
     # Erro/borda: remover um worktree que já não existe (ou nunca existiu)
     # não levanta exceção — só loga e segue.
     with (
@@ -91,7 +91,7 @@ async def test_remove_task_worktree_is_idempotent_on_missing_worktree():
 
 
 @pytest.mark.asyncio
-async def test_remove_task_worktree_also_deletes_the_branch():
+async def test_remove_task_worktree_also_deletes_the_branch() -> None:
     # `git worktree add <task_id>` cria implicitamente uma branch com o
     # nome da task; remover só o worktree deixaria essa branch órfã.
     with (
@@ -110,7 +110,7 @@ async def test_remove_task_worktree_also_deletes_the_branch():
 
 
 @pytest.mark.asyncio
-async def test_remove_task_worktree_branch_delete_failure_does_not_raise():
+async def test_remove_task_worktree_branch_delete_failure_does_not_raise() -> None:
     # Erro/borda: branch já deletada manualmente, ou checked out em outro
     # lugar — best-effort, nunca propaga (a remoção do worktree já valeu).
     with (
@@ -128,7 +128,7 @@ async def test_remove_task_worktree_branch_delete_failure_does_not_raise():
 
 
 @pytest.mark.asyncio
-async def test_workspace_without_git_repo_raises_delegate_error():
+async def test_workspace_without_git_repo_raises_delegate_error() -> None:
     with (
         patch("backend.workspace.workspace.workspace_registry") as mock_registry,
         patch("git.Repo", side_effect=Exception("not a git repository")),
@@ -140,7 +140,7 @@ async def test_workspace_without_git_repo_raises_delegate_error():
 
 
 @pytest.mark.asyncio
-async def test_create_task_worktree_ja_existente_gera_erro_claro_de_conflito():
+async def test_create_task_worktree_ja_existente_gera_erro_claro_de_conflito() -> None:
     # Duplicado: criar worktree pra uma task_id que já tem um worktree
     # (git recusa "already exists") deve propagar como DelegateError com a
     # mensagem original do git, não mascarar o motivo do conflito.
@@ -161,7 +161,7 @@ async def test_create_task_worktree_ja_existente_gera_erro_claro_de_conflito():
 
 
 @pytest.mark.asyncio
-async def test_workspace_id_com_caracteres_especiais_e_repassado_intacto():
+async def test_workspace_id_com_caracteres_especiais_e_repassado_intacto() -> None:
     # Espaços, acentos, barras e unicode no workspace_id não devem quebrar
     # a resolução — quem sanitiza pra path é _git_worktree_impl, este
     # wrapper só precisa repassar o valor exato recebido.
@@ -187,7 +187,7 @@ async def test_workspace_id_com_caracteres_especiais_e_repassado_intacto():
 
 
 @pytest.mark.asyncio
-async def test_task_id_com_barra_e_caracteres_de_shell_e_repassado_como_name():
+async def test_task_id_com_barra_e_caracteres_de_shell_e_repassado_como_name() -> None:
     # Erro/borda: task_id vindo do LLM pode conter caracteres que
     # pareceriam injeção de shell (`;`, `&&`) — o wrapper não escapa nem
     # rejeita, só repassa como `name=` (a defesa real é em
@@ -211,7 +211,9 @@ async def test_task_id_com_barra_e_caracteres_de_shell_e_repassado_como_name():
 
 
 @pytest.mark.asyncio
-async def test_criacao_concorrente_de_dois_worktrees_para_tasks_diferentes_nao_colide():
+async def test_criacao_concorrente_de_dois_worktrees_para_tasks_diferentes_nao_colide() -> (
+    None
+):
     # Concorrência: duas tasks distintas do mesmo workspace criando
     # worktree ao mesmo tempo não podem ver o path uma da outra.
     call_paths = {
@@ -219,7 +221,9 @@ async def test_criacao_concorrente_de_dois_worktrees_para_tasks_diferentes_nao_c
         "task-b": "/home/user/.vectora/worktrees/ws1/task-b",
     }
 
-    def _fake_worktree_impl(_repo, _workspace_id, _action, *, name):
+    def _fake_worktree_impl(
+        _repo: MagicMock, _workspace_id: str, _action: str, *, name: str
+    ) -> dict[str, str]:
         return {"status": "ok", "action": "add", "path": call_paths[name]}
 
     with (
@@ -241,7 +245,7 @@ async def test_criacao_concorrente_de_dois_worktrees_para_tasks_diferentes_nao_c
 
 
 @pytest.mark.asyncio
-async def test_remove_task_worktree_com_task_id_vazio_ainda_chama_impl():
+async def test_remove_task_worktree_com_task_id_vazio_ainda_chama_impl() -> None:
     with (
         patch("backend.workspace.workspace.workspace_registry") as mock_registry,
         patch("git.Repo") as mock_repo_cls,
@@ -262,7 +266,9 @@ async def test_remove_task_worktree_com_task_id_vazio_ainda_chama_impl():
 
 
 @pytest.mark.asyncio
-async def test_delegacao_sincrona_nunca_cria_worktree_so_background_cria(monkeypatch):
+async def test_delegacao_sincrona_nunca_cria_worktree_so_background_cria(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`task()` no meio de um turno roda no workspace principal (troca de
     persona, não paralelismo); tarefa em segundo plano isola em worktree
     próprio.

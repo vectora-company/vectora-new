@@ -16,19 +16,19 @@ class TestQdrantConnectivity:
     """Conectividade básica ao Qdrant."""
 
     @pytest.mark.storage
-    def test_health_endpoint(self, qdrant_client):
+    def test_health_endpoint(self, qdrant_client) -> None:
         """Qdrant responde ao health check (list_collections bem-sucedido)."""
         result = qdrant_client.get_collections()
         assert hasattr(result, "collections")
 
     @pytest.mark.storage
-    def test_list_collections(self, qdrant_client):
+    def test_list_collections(self, qdrant_client) -> None:
         """list_collections() retorna lista (pode estar vazia)."""
         collections = qdrant_client.get_collections()
         assert hasattr(collections, "collections")
 
     @pytest.mark.storage
-    def test_create_and_delete_collection(self, qdrant_client):
+    def test_create_and_delete_collection(self, qdrant_client) -> None:
         """Cria e deleta coleção de teste."""
         from qdrant_client.models import Distance, VectorParams
 
@@ -51,7 +51,7 @@ class TestQdrantConnectivity:
         assert name not in collections_after
 
     @pytest.mark.storage
-    def test_upsert_and_search(self, qdrant_client):
+    def test_upsert_and_search(self, qdrant_client) -> None:
         """Insere vetores e recupera por busca de similaridade."""
         from qdrant_client.models import Distance, PointStruct, VectorParams
 
@@ -84,7 +84,7 @@ class TestQdrantConnectivity:
         qdrant_client.delete_collection(name)
 
     @pytest.mark.storage
-    def test_search_error_wrong_dimension(self, qdrant_client):
+    def test_search_error_wrong_dimension(self, qdrant_client) -> None:
         """Erro: busca com vetor de dimensão errada levanta exceção."""
         from qdrant_client.models import Distance, VectorParams
 
@@ -114,7 +114,7 @@ class TestQdrantBackendNative:
     cliente nativo `AsyncQdrantClient`."""
 
     @pytest.fixture
-    def backend(self, _storage_stack_ok, qdrant_url):
+    def backend(self, _storage_stack_ok: bool, qdrant_url: str):
         if not _storage_stack_ok:
             pytest.skip("Docker indisponível — Qdrant não iniciado")
 
@@ -124,7 +124,7 @@ class TestQdrantBackendNative:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_upsert_e_search_roundtrip(self, backend, qdrant_client):
+    async def test_upsert_e_search_roundtrip(self, backend, qdrant_client) -> None:
         from backend.storage.vectorstore.base import VectorRow
 
         name = "_test_backend_search"
@@ -159,14 +159,14 @@ class TestQdrantBackendNative:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_search_colecao_ausente_devolve_lista_vazia(self, backend):
+    async def test_search_colecao_ausente_devolve_lista_vazia(self, backend) -> None:
         """Erro/borda: coleção que nunca foi criada nunca lança — devolve []."""
         hits = await backend.search("_never_created_xyz", [1.0, 0.0], limit=5)
         assert hits == []
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_list_rows_e_delete(self, backend, qdrant_client):
+    async def test_list_rows_e_delete(self, backend, qdrant_client) -> None:
         from backend.storage.vectorstore.base import VectorRow
 
         name = "_test_backend_list_delete"
@@ -197,7 +197,7 @@ class TestQdrantBackendNative:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_purge_e_list_collections(self, backend, qdrant_client):
+    async def test_purge_e_list_collections(self, backend, qdrant_client) -> None:
         from backend.storage.vectorstore.base import VectorRow
 
         name = "_test_backend_purge"
@@ -219,7 +219,7 @@ class TestQdrantBackendNative:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_count(self, backend, qdrant_client):
+    async def test_count(self, backend, qdrant_client) -> None:
         from backend.storage.vectorstore.base import VectorRow
 
         name = "_test_backend_count"
@@ -247,8 +247,8 @@ class TestVectorStoreRoutingRealStack:
     @pytest.mark.asyncio
     @pytest.mark.storage
     async def test_storage_mode_complete_roteia_para_qdrant(
-        self, _storage_stack_ok, monkeypatch
-    ):
+        self, _storage_stack_ok: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         if not _storage_stack_ok:
             pytest.skip("Docker indisponível — Qdrant não iniciado")
 
@@ -267,7 +267,9 @@ class TestVectorStoreRoutingRealStack:
 
     @pytest.mark.asyncio
     @pytest.mark.storage
-    async def test_storage_mode_lite_roteia_para_lancedb(self, monkeypatch):
+    async def test_storage_mode_lite_roteia_para_lancedb(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from backend.storage import factory
         from backend.storage.vectorstore.lancedb_backend import LanceDBBackend
 

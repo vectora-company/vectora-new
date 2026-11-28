@@ -11,22 +11,22 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Literal, NotRequired, TypedDict
 
 from pydantic import TypeAdapter, ValidationError
 
-from backend.vtypes.contracts import JsonObject, UsageSnapshot
+from backend.vtypes.contracts import JsonObject, JsonValue, UsageSnapshot
 
 logger = logging.getLogger(__name__)
 
 
-def coerce_json_object(value: object, *, raw: object | None = None) -> JsonObject:
+def coerce_json_object(value: JsonValue, *, raw: str | None = None) -> JsonObject:
     """Normalize provider tool arguments to the object shape tools require."""
     try:
         return TypeAdapter(JsonObject).validate_python(value)
     except ValidationError:
         pass
-    return {"_parse_error": str(raw if raw is not None else value)}
+    return {"_parse_error": raw if raw is not None else str(value)}
 
 
 class MessageRole(StrEnum):
@@ -102,6 +102,45 @@ class ContentBlock:
         return self.kind in {"text", "media"}
 
 
+class SerializedBlock(TypedDict):
+    """``ContentBlock`` na forma persistida; só ``kind`` é obrigatório."""
+
+    kind: Literal["text", "image_url", "media", "reasoning"]
+    text: NotRequired[str | None]
+    image_url: NotRequired[str | None]
+    asset_id: NotRequired[str | None]
+    attachment_name: NotRequired[str | None]
+    attachment_mime_type: NotRequired[str | None]
+    attachment_size_bytes: NotRequired[int | None]
+    reasoning_text: NotRequired[str | None]
+    media_kind: NotRequired[MediaKind | None]
+    media_sha256: NotRequired[str | None]
+    media_data_url: NotRequired[str | None]
+    media_preview_asset_ids: NotRequired[list[str] | None]
+    media_preview_caption: NotRequired[str | None]
+    media_preview_urls: NotRequired[list[str] | None]
+
+
+class SerializedToolCall(TypedDict):
+    """``ToolCall`` na forma persistida."""
+
+    id: str
+    name: str
+    args: JsonValue
+
+
+class SerializedMessage(TypedDict):
+    """``VMessage`` na forma persistida."""
+
+    role: str
+    content: NotRequired[list[SerializedBlock]]
+    tool_calls: NotRequired[list[SerializedToolCall]]
+    tool_call_id: NotRequired[str | None]
+    name: NotRequired[str | None]
+    finish_reason: NotRequired[str | None]
+    is_error: NotRequired[bool | None]
+
+
 @dataclass(slots=True)
 class VMessage:
     """Mensagem completa (não-streaming) do histórico de conversa."""
@@ -131,7 +170,7 @@ class VMessage:
         """Texto que o modelo recebe, incluindo a forma textual dos anexos."""
         return "".join(b.text or "" for b in self.content if b.is_textual)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> SerializedMessage:
         """Serialização pra persistência (`SessionStore.append_message`)."""
         return {
             "role": self.role.value,
@@ -165,7 +204,7 @@ class VMessage:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> VMessage:
+    def from_dict(cls, data: SerializedMessage) -> VMessage:
         """Desserialização — contraparte de `to_dict`, usada por
         `SessionStore.get_history`. Linha corrompida no histórico nunca
         derruba a reconstrução inteira — vira mensagem de erro visível

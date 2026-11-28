@@ -8,10 +8,13 @@ filho do ``gh codespace ssh``, etc.).
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.transport.base import TransportBackend
 from backend.transport.local import LocalTransport
+
+if TYPE_CHECKING:
+    from backend.workspace.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +22,7 @@ logger = logging.getLogger(__name__)
 _CACHE: dict[str, TransportBackend] = {}
 
 
-def get_transport(workspace: Any) -> TransportBackend:
+def get_transport(workspace: Workspace) -> TransportBackend:
     """Resolve o backend correto para um workspace.
 
     Suporta ``local``, ``ssh`` e ``codespace``; qualquer outro valor de

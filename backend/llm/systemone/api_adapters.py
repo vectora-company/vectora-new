@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
 
 import httpx
 
@@ -32,6 +31,7 @@ from backend.llm.systemone.types import (
     SystemOneResponse,
     parse_systemone_response,
 )
+from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ class BaseSystemOneApiAdapter(SystemOneProvider):
             "Authorization": f"Bearer {self._api_key}",
         }
 
-        serialized_questions: dict[str, Any] = {}
+        serialized_questions: JsonObject = {}
         for q_id, q in request.questions.items():
             if isinstance(q, NoulQuestion):
                 serialized_questions[q_id] = {
@@ -130,7 +130,7 @@ class BaseSystemOneApiAdapter(SystemOneProvider):
             elif isinstance(q, ChoiceQuestion):
                 serialized_questions[q_id] = {
                     "type": "choice",
-                    "options": q.options,
+                    "options": [*q.options],
                     "instructions": q.instructions,
                 }
             elif isinstance(q, ScoreQuestion):
@@ -142,7 +142,7 @@ class BaseSystemOneApiAdapter(SystemOneProvider):
                     "instructions": q.instructions,
                 }
 
-        payload: dict[str, Any] = {
+        payload: JsonObject = {
             "model": request.model,
             "state": request.state,
             "questions": serialized_questions,
@@ -152,7 +152,7 @@ class BaseSystemOneApiAdapter(SystemOneProvider):
         if request.temperature is not None:
             payload["temperature"] = request.temperature
         if request.media_urls:
-            payload["media_urls"] = request.media_urls
+            payload["media_urls"] = [*request.media_urls]
 
         start_time = time.perf_counter()
         try:
@@ -346,16 +346,21 @@ def _openrouter_score_levels(question: ScoreQuestion) -> list[str]:
     ]
 
 
-def _normalized_distribution(value: object) -> object:
+def _normalized_distribution(value: JsonValue) -> JsonValue:
     """Reajusta o arredondamento de 4 casas do OpenRouter para somar 1.0."""
     if not isinstance(value, dict) or not value:
         return value
-    try:
-        total = sum(float(v) for v in value.values())
-    except (TypeError, ValueError):
-        return value
+    numbers: dict[str, float] = {}
+    for key, raw in value.items():
+        if not isinstance(raw, int | float | str):
+            return value
+        try:
+            numbers[key] = float(raw)
+        except ValueError:
+            return value
+    total = sum(numbers.values())
     if total > 0 and abs(total - 1.0) <= 0.01:
-        return {key: float(prob) / total for key, prob in value.items()}
+        return {key: probability / total for key, probability in numbers.items()}
     return value
 
 
@@ -421,11 +426,12 @@ class OpenRouterDecisionAdapter(SystemOneProvider):
         return res.status_code == 200
 
     @staticmethod
-    def _serialize_questions(request: SystemOneRequest) -> dict[str, Any]:
-        serialized: dict[str, Any] = {}
+    def _serialize_questions(request: SystemOneRequest) -> JsonObject:
+        serialized: JsonObject = {}
         for q_id, question in request.questions.items():
+            spec: JsonObject
             if isinstance(question, NoulQuestion):
-                spec: dict[str, Any] = {
+                spec = {
                     "type": "noul",
                     "instructions": "\n".join(
                         part
@@ -434,13 +440,14 @@ class OpenRouterDecisionAdapter(SystemOneProvider):
                     ),
                 }
                 if question.criteria:
-                    spec["criteria"] = question.criteria
+                    spec["criteria"] = {**question.criteria}
             elif isinstance(question, ChoiceQuestion):
                 spec = {
                     "type": "choice",
                     "instructions": question.instructions or "",
-                    "criteria": question.criteria
-                    or {option: option for option in question.options},
+                    "criteria": {**question.criteria}
+                    if question.criteria
+                    else {option: option for option in question.options},
                 }
             elif isinstance(question, ScoreQuestion):
                 spec = {
@@ -450,7 +457,7 @@ class OpenRouterDecisionAdapter(SystemOneProvider):
                         for part in (question.criterion, question.instructions)
                         if part
                     ),
-                    "criteria": _openrouter_score_levels(question),
+                    "criteria": [*_openrouter_score_levels(question)],
                 }
             else:  # pragma: no cover - união fechada
                 continue
@@ -458,15 +465,15 @@ class OpenRouterDecisionAdapter(SystemOneProvider):
         return serialized
 
     def _translate_answers(
-        self, data: dict[str, Any], request: SystemOneRequest
-    ) -> dict[str, Any]:
+        self, data: JsonObject, request: SystemOneRequest
+    ) -> JsonObject:
         """Converte as respostas do OpenRouter para o envelope canônico."""
         raw_answers = data.get("answers")
         if not isinstance(raw_answers, dict):
             raise SystemOneValidationError(
                 "systemone_invalid_response", provider=self.provider_id
             )
-        canonical: dict[str, Any] = {}
+        canonical: JsonObject = {}
         for q_id, question in request.questions.items():
             answer = raw_answers.get(q_id)
             if not isinstance(answer, dict) or answer.get("type") == "refusal":
@@ -595,7 +602,7 @@ class OpenRouterDecisionAdapter(SystemOneProvider):
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
         input_tokens = int(usage.get("input_tokens") or 0)
         output_tokens = int(usage.get("output_tokens") or 0)
-        envelope = {
+        envelope: JsonObject = {
             "answers": self._translate_answers(data, request),
             "usage": {
                 "prompt_tokens": input_tokens,

@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
 
 import pytest
+from git import Repo
 
 from backend.services import commit_message as cm
+from backend.services.commit_message import ChangeContext, ChangedFile
+from backend.vtypes.message import VMessage
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -75,14 +79,14 @@ class TestCollect:
 
         assert {f.path for f in ctx.files} == {"src/app.py", "README.md"}
 
-    def test_keeps_recent_commit_subjects(self, repo) -> None:
+    def test_keeps_recent_commit_subjects(self, repo: Repo) -> None:
         ctx = cm.collect_change_context(repo)
 
         assert ctx.recent_subjects == ["fix: ajusta algo", "feat: primeira versão"]
         assert ctx.uses_conventional_commits
 
     @pytest.mark.parametrize("bad", ["/etc/passwd", "../fora", "a/../../b", "", "  "])
-    def test_ignores_absolute_or_escaping_paths(self, bad) -> None:
+    def test_ignores_absolute_or_escaping_paths(self, bad: str) -> None:
         assert cm._clean_paths([bad]) == []
 
     def test_limits_the_number_of_paths(self) -> None:
@@ -100,7 +104,7 @@ class TestCollect:
         assert [f.path for f in ctx.files] == ["a.py"]
 
 
-def _file(path: str, status: str = "M", add: int = 3, rem: int = 1):
+def _file(path: str, status: str = "M", add: int = 3, rem: int = 1) -> ChangedFile:
     return cm.ChangedFile(path=path, status=status, additions=add, deletions=rem)
 
 
@@ -226,7 +230,7 @@ class _FakeLLM:
         self.answer = answer
         self.messages: list = []
 
-    async def agenerate(self, messages):
+    async def agenerate(self, messages: list[VMessage]) -> SimpleNamespace:
         self.messages = messages
         if isinstance(self.answer, Exception):
             raise self.answer
@@ -235,7 +239,7 @@ class _FakeLLM:
 
 @pytest.mark.asyncio
 class TestGenerate:
-    def _ctx(self):
+    def _ctx(self) -> ChangeContext:
         return cm.ChangeContext(
             files=[
                 cm.ChangedFile(
@@ -245,7 +249,7 @@ class TestGenerate:
             recent_subjects=["feat: a", "fix: b"],
         )
 
-    async def test_uses_the_model_answer(self, monkeypatch) -> None:
+    async def test_uses_the_model_answer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         llm = _FakeLLM('{"title": "fix(app): corrige retorno", "description": "d"}')
         monkeypatch.setattr("backend.services.utils.load_native_llm", lambda *_: llm)
 
@@ -253,7 +257,9 @@ class TestGenerate:
 
         assert suggestion.title == "fix(app): corrige retorno"
 
-    async def test_prompt_carries_the_diff_and_recent_style(self, monkeypatch) -> None:
+    async def test_prompt_carries_the_diff_and_recent_style(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         llm = _FakeLLM('{"title": "x"}')
         monkeypatch.setattr("backend.services.utils.load_native_llm", lambda *_: llm)
 
@@ -266,9 +272,9 @@ class TestGenerate:
         assert "Conventional Commits" in prompt
 
     async def test_unavailable_model_falls_back_to_the_diff_heuristic(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        def boom(*_args: object) -> None:
+        def boom[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
             raise RuntimeError("sem provider")
 
         monkeypatch.setattr("backend.services.utils.load_native_llm", boom)
@@ -279,7 +285,7 @@ class TestGenerate:
         assert "Atualiza 1 arquivo" not in suggestion.title
 
     async def test_invalid_answer_falls_back_to_the_heuristic(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
             "backend.services.utils.load_native_llm", lambda *_: _FakeLLM("lixo")
@@ -289,7 +295,9 @@ class TestGenerate:
 
         assert "app.py" in suggestion.title
 
-    async def test_model_error_falls_back_to_the_heuristic(self, monkeypatch) -> None:
+    async def test_model_error_falls_back_to_the_heuristic(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             "backend.services.utils.load_native_llm",
             lambda *_: _FakeLLM(TimeoutError("lento")),
@@ -299,7 +307,9 @@ class TestGenerate:
 
         assert suggestion.title
 
-    async def test_no_changes_does_not_call_the_model(self, monkeypatch) -> None:
+    async def test_no_changes_does_not_call_the_model(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         called = []
         monkeypatch.setattr(
             "backend.services.utils.load_native_llm",
@@ -310,7 +320,9 @@ class TestGenerate:
 
         assert (suggestion.title, called) == ("", [])
 
-    async def test_diff_sent_to_the_model_is_limited(self, monkeypatch) -> None:
+    async def test_diff_sent_to_the_model_is_limited(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         llm = _FakeLLM('{"title": "x"}')
         monkeypatch.setattr("backend.services.utils.load_native_llm", lambda *_: llm)
         big = cm.ChangeContext(

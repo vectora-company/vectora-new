@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.cohere.client import CohereClient
 from backend.llm.cohere.rerank import VectoraCohereRerank
@@ -37,8 +38,8 @@ def _docs() -> list[Document]:
 
 class TestCohereRerank:
     @pytest.mark.asyncio
-    async def test_reordena_por_relevance_score(self):
-        def handler(_req):
+    async def test_reordena_por_relevance_score(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -56,7 +57,7 @@ class TestCohereRerank:
         assert saida[0].metadata["relevance_score"] == 0.9
 
     @pytest.mark.asyncio
-    async def test_lista_vazia_nao_chama_api(self):
+    async def test_lista_vazia_nao_chama_api(self) -> None:
         chamou = False
 
         def handler(_req):
@@ -71,8 +72,8 @@ class TestCohereRerank:
         assert chamou is False
 
     @pytest.mark.asyncio
-    async def test_results_vazio_degrada_para_ordem_original(self):
-        def handler(_req):
+    async def test_results_vazio_degrada_para_ordem_original(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"results": []})
 
         rr = VectoraCohereRerank(model="rerank-v3.5", client=_cohere_client(handler))
@@ -82,8 +83,8 @@ class TestCohereRerank:
         assert saida == docs
 
     @pytest.mark.asyncio
-    async def test_index_fora_do_intervalo_e_ignorado(self):
-        def handler(_req):
+    async def test_index_fora_do_intervalo_e_ignorado(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -100,10 +101,10 @@ class TestCohereRerank:
         assert [d.page_content for d in saida] == ["doc um"]
 
     @pytest.mark.asyncio
-    async def test_top_n_maior_que_total_de_docs_nao_estoura(self):
+    async def test_top_n_maior_que_total_de_docs_nao_estoura(self) -> None:
         capturado: dict = {}
 
-        def handler(req):
+        def handler(req: Request) -> Response:
             import json as _json
 
             capturado["body"] = _json.loads(req.content)
@@ -119,8 +120,8 @@ class TestCohereRerank:
 
 class TestVoyageRerank:
     @pytest.mark.asyncio
-    async def test_reordena_por_relevance_score(self):
-        def handler(_req):
+    async def test_reordena_por_relevance_score(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -137,7 +138,7 @@ class TestVoyageRerank:
         assert [d.page_content for d in saida] == ["doc dois", "doc um"]
 
     @pytest.mark.asyncio
-    async def test_lista_vazia_nao_chama_api(self):
+    async def test_lista_vazia_nao_chama_api(self) -> None:
         chamou = False
 
         def handler(_req):
@@ -152,8 +153,8 @@ class TestVoyageRerank:
         assert chamou is False
 
     @pytest.mark.asyncio
-    async def test_data_vazio_degrada_para_ordem_original(self):
-        def handler(_req):
+    async def test_data_vazio_degrada_para_ordem_original(self) -> None:
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"data": []})
 
         rr = VectoraVoyageRerank(model="rerank-2.5", client=_voyage_client(handler))
@@ -163,10 +164,10 @@ class TestVoyageRerank:
         assert saida == docs
 
     @pytest.mark.asyncio
-    async def test_erro_de_rede_vira_excecao_tipada(self):
+    async def test_erro_de_rede_vira_excecao_tipada(self) -> None:
         from backend.llm.voyage.client import VoyageServerError
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(500, json={"detail": "internal error"})
 
         rr = VectoraVoyageRerank(model="rerank-2.5", client=_voyage_client(handler))

@@ -12,7 +12,7 @@ não passa despercebida.
 
 from __future__ import annotations
 
-from unittest.mock import create_autospec
+from unittest.mock import MagicMock, create_autospec
 
 import lancedb
 
@@ -22,6 +22,6 @@ def fake_async_table() -> lancedb.AsyncTable:
     return create_autospec(lancedb.AsyncTable, instance=True)
 
 
-def fake_async_connection() -> lancedb.AsyncConnection:
+def fake_async_connection() -> MagicMock:
     """Mock de `AsyncConnection` com assinaturas reais validadas em toda chamada."""
     return create_autospec(lancedb.AsyncConnection, instance=True)

@@ -86,3 +86,67 @@ def validate_browser_console_entry(value: BrowserConsoleEntry) -> None:
 def validate_browser_network_entry(value: BrowserNetworkEntry) -> None:
     """Validate a network event before storing it in the ring buffer."""
     _BROWSER_NETWORK_ENTRY_ADAPTER.validate_python(value)
+
+
+class AxValue(TypedDict):
+    value: NotRequired[str | int | float | bool | None]
+
+
+class AxNode(TypedDict):
+    """Nó da árvore de acessibilidade do Chromium."""
+
+    nodeId: str
+    childIds: NotRequired[list[str]]
+    ignored: NotRequired[bool]
+    role: NotRequired[AxValue]
+    name: NotRequired[AxValue]
+    backendDOMNodeId: NotRequired[int]
+
+
+class HeapSnapshotMeta(TypedDict):
+    """Descrição das colunas de um heap snapshot do V8."""
+
+    node_fields: list[str]
+    node_types: list[list[str] | str]
+
+
+class HeapSnapshotHeader(TypedDict):
+    meta: HeapSnapshotMeta
+
+
+class HeapSnapshot(TypedDict):
+    """Partes de um heap snapshot usadas no resumo."""
+
+    snapshot: HeapSnapshotHeader
+    strings: list[str]
+    nodes: list[int]
+
+
+class HeapGroup(TypedDict):
+    """Memória somada por construtor."""
+
+    constructor: str
+    total_size: int
+    count: int
+    outgoing_edges: NotRequired[int]
+
+
+class HeapDelta(TypedDict):
+    constructor: str
+    size_delta: int
+    count_delta: int
+
+
+class LongTask(TypedDict):
+    name: str
+    start_ms: float
+    duration_ms: float
+
+
+class TraceAnalysis(TypedDict):
+    """Leitura estruturada de um trace do Chromium."""
+
+    total_duration_ms: float
+    lcp_ms: float | None
+    long_task_count: int
+    top_long_tasks: list[LongTask]

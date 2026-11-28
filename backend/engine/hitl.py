@@ -22,13 +22,16 @@ from typing import TYPE_CHECKING, Any
 
 from backend.llm.systemone.errors import SystemOneRateLimitError, SystemOneTimeoutError
 from backend.llm.systemone.preferences import decision_model_enabled_for
-from backend.vtypes.contracts import ToolOption
+from backend.vtypes.contracts import JsonObject, ToolOption
 from backend.vtypes.message import MessageRole
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
     from backend.llm.systemone.harness import SystemOneHarness
     from backend.persistence.native.session_store import SessionStore
     from backend.tools.context import ToolContext
+    from backend.vtypes.engine import NonToolReview
     from backend.vtypes.message import VMessage
 
 logger = logging.getLogger(__name__)
@@ -161,9 +164,7 @@ def _workspace_is_jailed(workspace_id: str) -> bool:
     return jail_manager.has_effective_isolation(workspace_id)
 
 
-def _is_self_kanban_update(
-    ctx: ToolContext, tool_name: str, args: dict[str, Any]
-) -> bool:
+def _is_self_kanban_update(ctx: ToolContext, tool_name: str, args: JsonObject) -> bool:
     """True se `kanban_update_status` está mudando o status da PRÓPRIA task
     em segundo plano — pedir aprovação criaria um loop esperando a própria
     run pausada aprovar a si mesma."""
@@ -244,7 +245,7 @@ def _tool_requires_approval(tool_name: str) -> bool:
 
 
 def call_requires_separate_approval(
-    tool_name: str, args: dict[str, Any] | None = None
+    tool_name: str, args: JsonObject | None = None
 ) -> bool:
     """Verifica se uma invocação específica de ferramenta exige aprovação isolada.
 
@@ -268,7 +269,7 @@ def call_requires_separate_approval(
 def should_require_approval(  # noqa: PLR0911
     tool_name: str,
     ctx: ToolContext,
-    args: dict[str, Any],
+    args: JsonObject,
     history: list[VMessage],
 ) -> bool:
     """Predicate único do HITL nativo — mesma assinatura que `run_conversation`
@@ -413,14 +414,14 @@ def should_require_approval(  # noqa: PLR0911
     return decision
 
 
-def _risk_assessment_key(tool_name: str, args: dict[str, Any]) -> str:
+def _risk_assessment_key(tool_name: str, args: JsonObject) -> str:
     """Executa a operação  risk assessment key."""
     payload = json.dumps(args, sort_keys=True, default=str)
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return f"{tool_name}:{digest}"
 
 
-def _decision_args_summary(args: dict[str, Any]) -> str:
+def _decision_args_summary(args: JsonObject) -> str:
     """Return bounded structured arguments with credentials redacted."""
     from backend.persistence.native.agent_run import redact_sensitive_data
 
@@ -511,7 +512,7 @@ async def precompute_tool_risk_assessment(  # noqa: PLR0911
     *,
     tool_name: str,
     ctx: ToolContext,
-    args: dict[str, Any],
+    args: JsonObject,
     surface: str | tuple[str, ...] = "hitl",
     risk_score_threshold: float = 0.70,
 ) -> bool:
@@ -703,7 +704,7 @@ async def precompute_tool_risk_assessment(  # noqa: PLR0911
     return elevate
 
 
-def _redacted_decision_response(response: Any) -> dict[str, Any]:
+def _redacted_decision_response(response: BaseModel) -> JsonObject:
     """Serialize the provider response through the shared secret redactor."""
     from backend.persistence.native.agent_run import redact_sensitive_data
 
@@ -713,7 +714,7 @@ def _redacted_decision_response(response: Any) -> dict[str, Any]:
 
 
 _MAX_NON_TOOL_REVIEW_RECORDS = 500
-_NON_TOOL_REVIEW_RECORDS: deque[dict[str, Any]] = deque(
+_NON_TOOL_REVIEW_RECORDS: deque[NonToolReview] = deque(
     maxlen=_MAX_NON_TOOL_REVIEW_RECORDS
 )
 
@@ -726,9 +727,9 @@ def record_non_tool_review_request(
     decision_id: str,
     state_version: str,
     reason: str,
-) -> dict[str, Any]:
+) -> NonToolReview:
     """Registra em memória (buffer circular limitado ao processo atual) revisão para decisões sem tool call."""
-    record = {
+    record: NonToolReview = {
         "workspace_id": workspace_id,
         "consumer": consumer,
         "pattern_id": pattern_id,
@@ -738,17 +739,17 @@ def record_non_tool_review_request(
         "status": "pending_review",
     }
     _NON_TOOL_REVIEW_RECORDS.append(record)
-    return dict(record)
+    return record.copy()
 
 
 def list_non_tool_review_requests(
     workspace_id: str | None = None,
-) -> list[dict[str, Any]]:
+) -> list[NonToolReview]:
     """Lista registros de revisão pendentes para consumidores que não usam tool calls."""
     if workspace_id is None:
-        return [dict(r) for r in _NON_TOOL_REVIEW_RECORDS]
+        return [r.copy() for r in _NON_TOOL_REVIEW_RECORDS]
     return [
-        dict(r) for r in _NON_TOOL_REVIEW_RECORDS if r["workspace_id"] == workspace_id
+        r.copy() for r in _NON_TOOL_REVIEW_RECORDS if r["workspace_id"] == workspace_id
     ]
 
 
@@ -763,8 +764,8 @@ class ApprovalGate:
     def __init__(self, session_store: SessionStore) -> None:
         """Inicializa o estado da instância."""
         self._session_store = session_store
-        self._events: dict[str, Any] = {}
-        self._ephemeral_args: dict[str, dict[str, Any]] = {}
+        self._events: dict[str, asyncio.Event] = {}
+        self._ephemeral_args: dict[str, JsonObject] = {}
 
     async def request_approval(
         self,
@@ -774,16 +775,14 @@ class ApprovalGate:
         tool_name: str,
         tool_call_id: str,
         run_id: str | None = None,
-        args: dict[str, Any],
+        args: JsonObject,
         reasoning: str | None = None,
         options: list[ToolOption] | None = None,
         priority: int = 0,
         expires_at: str | None = None,
-        approval_metadata: dict[str, Any] | None = None,
+        approval_metadata: JsonObject | None = None,
     ) -> None:
         """Executa a operação request approval."""
-        import asyncio
-
         safe_args = dict(args)
         if tool_name == "write_terminal":
             raw_input = str(safe_args.pop("input_data", ""))
@@ -827,7 +826,7 @@ class ApprovalGate:
         )
         self._events[thread_id] = asyncio.Event()
 
-    def ephemeral_args(self, interrupt_id: str) -> dict[str, Any] | None:
+    def ephemeral_args(self, interrupt_id: str) -> JsonObject | None:
         """Return raw approval arguments only while the process is alive."""
         args = self._ephemeral_args.get(interrupt_id)
         return dict(args) if args is not None else None
@@ -838,8 +837,6 @@ class ApprovalGate:
         por uma request HTTP nova (processo reiniciado, ou só um handler
         diferente), que consulta `pending_approvals` direto via
         `SessionStore.get_pending_approval`, sem depender deste evento."""
-        import asyncio
-
         event = self._events.get(thread_id)
         if event is None:
             return False

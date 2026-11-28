@@ -14,6 +14,9 @@ CapabilityMaturity = Literal["unassessed", "experimental", "beta", "stable"]
 _CATALOG = Path(__file__).parent / "scenarios" / "v1" / "catalog.json"
 
 
+from backend.vtypes.contracts import JsonObject
+
+
 class BenchmarkScenario(BaseModel):
     """Contrato de cenário, fixture imutável e evidência esperada."""
 
@@ -25,9 +28,9 @@ class BenchmarkScenario(BaseModel):
     task: str
     fixture: str
     fixture_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    context: dict[str, object] = Field(default_factory=dict)
+    context: JsonObject = Field(default_factory=dict)
     tools: list[str] = Field(default_factory=list)
-    policy: dict[str, object] = Field(default_factory=dict)
+    policy: JsonObject = Field(default_factory=dict)
     setup: list[str] = Field(default_factory=list)
     teardown: list[str] = Field(default_factory=list)
     success_criteria: list[str] = Field(min_length=1)

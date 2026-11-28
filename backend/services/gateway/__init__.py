@@ -11,7 +11,7 @@ import asyncio
 import logging
 import random
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import Final, TypedDict, cast
 
 import aiohttp
 
@@ -60,7 +60,7 @@ _MAX_CONCURRENT_FORWARDS = 20
 #: Sentinela de "pare" — um por worker, enfileirado no fechamento da
 #: conexão pra cada worker terminar o que já está processando/enfileirado
 #: e sair, em vez de ficar bloqueado pra sempre em `queue.get()`.
-_STOP_WORKER = object()
+_STOP_WORKER: Final = None
 
 
 class GatewayRequestItem(TypedDict):
@@ -253,7 +253,7 @@ class GatewayClient:
         mais rápido do que o backend local responde.
         """
         ws_url = f"{self._gateway_url}{_WS_PATH}{token}"
-        queue: asyncio.Queue[_ForwardJob | object] = asyncio.Queue(
+        queue: asyncio.Queue[_ForwardJob | None] = asyncio.Queue(
             maxsize=_MAX_CONCURRENT_FORWARDS
         )
         workers = [
@@ -307,7 +307,7 @@ class GatewayClient:
         self,
         ws: aiohttp.ClientWebSocketResponse,
         local_session: aiohttp.ClientSession,
-        queue: asyncio.Queue[_ForwardJob | object],
+        queue: asyncio.Queue[_ForwardJob | None],
     ) -> None:
         """Recebe mensagens do gateway e despacha ao FastAPI local."""
         async for msg in ws:
@@ -321,7 +321,7 @@ class GatewayClient:
         ws: aiohttp.ClientWebSocketResponse,
         local_session: aiohttp.ClientSession,
         message: GatewayMessage,
-        queue: asyncio.Queue[_ForwardJob | object],
+        queue: asyncio.Queue[_ForwardJob | None],
     ) -> None:
         """Enfileira `request`/itens de `queued` pros workers processarem.
 
@@ -348,7 +348,7 @@ class GatewayClient:
             await queue.put((ws, local_session, cast("GatewayRequestItem", message)))
             return
 
-    async def _forward_worker(self, queue: asyncio.Queue[_ForwardJob | object]) -> None:
+    async def _forward_worker(self, queue: asyncio.Queue[_ForwardJob | None]) -> None:
         """Um dos `_MAX_CONCURRENT_FORWARDS` workers fixos da conexão —
         consome a fila até receber `_STOP_WORKER`.
 
@@ -364,9 +364,9 @@ class GatewayClient:
         while True:
             item = await queue.get()
             try:
-                if item is _STOP_WORKER:
+                if item is None:
                     return
-                ws, local_session, req = cast("_ForwardJob", item)
+                ws, local_session, req = item
                 try:
                     await self._forward(ws, local_session, req)
                 except asyncio.CancelledError:

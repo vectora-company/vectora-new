@@ -8,7 +8,12 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import httpx
+
+    from backend.vtypes.contracts import JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +43,7 @@ class OpenAIResponseError(OpenAIError):
     ausente. Separada dos erros de status: aqui o problema é o que voltou."""
 
 
-def _extrair_mensagem(corpo: Any, fallback: str) -> str:
+def _extrair_mensagem(corpo: JsonValue, fallback: str) -> str:
     if isinstance(corpo, dict):
         erro = corpo.get("error")
         if isinstance(erro, dict) and erro.get("message"):
@@ -56,7 +61,7 @@ class OpenAIClient:
         organization: str | None = None,
         project: str | None = None,
         base_url: str = BASE_URL,
-        http_client: Any = None,
+        http_client: httpx.AsyncClient | None = None,
         timeout_s: float = _DEFAULT_TIMEOUT_S,
     ) -> None:
         if not (api_key or "").strip():
@@ -77,7 +82,7 @@ class OpenAIClient:
             headers["OpenAI-Project"] = self._project
         return headers
 
-    async def _ensure_client(self) -> Any:
+    async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
             import httpx
 
@@ -91,7 +96,7 @@ class OpenAIClient:
             with contextlib.suppress(Exception):
                 await self._client.aclose()
 
-    def _raise_for_status(self, status: int, corpo: Any) -> None:
+    def _raise_for_status(self, status: int, corpo: JsonValue) -> None:
         if status < 400:
             return
         msg = _extrair_mensagem(corpo, f"OpenAI respondeu {status}")

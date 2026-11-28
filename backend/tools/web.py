@@ -16,7 +16,7 @@ import inspect
 import json
 import logging
 import time
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -26,6 +26,19 @@ from backend.services.policy_compiler import PolicySnapshot
 from backend.settings import settings
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolExtras, vtool
+from backend.tools.search_registry import SearchBackend
+from backend.vtypes.tools import (
+    BackendResult,
+    ExtractingBackend,
+    InvokableBackend,
+    SearchingBackend,
+)
+
+if TYPE_CHECKING:
+    from backend.tools.tavily.client import TavilyClient
+    from backend.vtypes.contracts import JsonObject
+
+    type SearchTool = SearchBackend | TavilyClient | InvokableBackend
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +48,7 @@ _MAX_RESULTS = 5
 _MAX_TOOL_CONTENT = 120_000
 
 
-def _tavily_client() -> Any:
+def _tavily_client() -> TavilyClient:
     """Cliente Tavily novo por chamada — barato (só monta o httpx sob demanda)
     e evita segurar conexão entre turnos do agente."""
     from backend.tools.tavily.client import TavilyClient
@@ -43,7 +56,7 @@ def _tavily_client() -> Any:
     return TavilyClient(api_key=settings.tavily_api_key or "")
 
 
-def _get_search_tool() -> Any:
+def _get_search_tool() -> SearchTool:
     """Retorna o backend resolvido para busca.
 
     Mantido como ponto de extensão para testes e mocks.
@@ -53,7 +66,7 @@ def _get_search_tool() -> Any:
     return resolve_backend()
 
 
-def _get_extract_tool() -> Any:
+def _get_extract_tool() -> SearchTool:
     """Retorna o backend resolvido para extração de URL."""
     from backend.tools.search_registry import resolve_backend
 
@@ -92,7 +105,7 @@ def _egress_policy(ctx: ToolContext | None = None) -> EgressPolicy:
     return EgressPolicy.for_workspace(ctx.workspace_id if ctx else None)
 
 
-async def _invoke_backend(tool: Any, payload: dict[str, Any]) -> Any:
+async def _invoke_backend(tool: SearchTool, payload: JsonObject) -> list[JsonObject]:
     """Executa um backend de teste ou produção com a interface disponível.
 
     Alguns backends expõem `.search()`/`.extract()`, enquanto os mocks de
@@ -100,12 +113,17 @@ async def _invoke_backend(tool: Any, payload: dict[str, Any]) -> Any:
     externo das tools — o resultado é aguardado só quando o backend
     devolveu algo awaitable (produção); mocks síncronos passam direto.
     """
-    if hasattr(tool, "invoke"):
+    url = payload.get("url")
+    query = payload.get("query")
+    result: BackendResult
+    if isinstance(tool, InvokableBackend):
         result = tool.invoke(payload)
-    elif "url" in payload and hasattr(tool, "extract"):
-        result = tool.extract([payload["url"]], extract_depth="advanced")
-    elif "query" in payload and hasattr(tool, "search"):
-        result = tool.search(payload["query"])
+    elif isinstance(url, str) and isinstance(tool, ExtractingBackend):
+        result = tool.extract([url], extract_depth="advanced")
+    elif (isinstance(query, str) and isinstance(tool, SearchBackend)) or (
+        isinstance(query, str) and isinstance(tool, SearchingBackend)
+    ):
+        result = tool.search(query)
     else:
         raise AttributeError("backend tool does not expose invoke/search/extract")
     if inspect.isawaitable(result):
@@ -511,7 +529,7 @@ async def fetch_url(url: str, ctx: ToolContext | None = None) -> str:
                 )
             return f"No content found at {url}"
 
-        content = results[0].get("raw_content", "") or results[0].get("content", "")
+        content = str(results[0].get("raw_content") or results[0].get("content") or "")
 
         logger.info(
             "fetch_url completed",

@@ -9,13 +9,15 @@ Loop assíncrono que:
 6. Move para DLQ após 3 falhas para auditoria manual
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import logging
 import time
 import traceback
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.embedding.queue import (
     EmbeddingQueueRecord,
@@ -24,6 +26,12 @@ from backend.embedding.queue import (
     get_configured_embedding_queue as get_embedding_queue,
 )
 from backend.settings import settings
+
+if TYPE_CHECKING:
+    from types import SimpleNamespace
+
+    from backend.embedding.queue import EmbeddingQueue, PostgresQueueDB
+    from backend.vtypes.embedding_queue import WorkerQueue
 
 logger = logging.getLogger(__name__)
 
@@ -177,20 +185,21 @@ class BackgroundEmbeddingWorker:
         # Polling adaptativo: _poll_interval cresce enquanto fila está vazia
         # e é resetado ao encontrar items (evita 12+ queries/min em idle).
         self._poll_interval: float = POLL_INTERVAL_MIN
-        self._queue: Any = None
+        self._queue: EmbeddingQueue | PostgresQueueDB | None = None
         # Backoff exponencial + dedup de log para erros persistentes no loop
         # principal (ex: storage_mode inconsistente com a licença efetiva).
         self._consecutive_errors: int = 0
         self._last_error_type: type[BaseException] | None = None
 
-    async def _get_queue(self) -> Any:
+    async def _get_queue(self) -> EmbeddingQueue | PostgresQueueDB:
         """Obtém (e inicializa uma vez) a queue de acordo com storage_mode.
 
         Usa ``get_effective_storage_mode()`` (não ``self.config.storage_mode``
         cru) para respeitar a configuração efetiva escolhida pelo operador.
         """
-        self._queue = await get_embedding_queue(self.config.embedding_queue_dsn)
-        return self._queue
+        queue = await get_embedding_queue(self.config.embedding_queue_dsn)
+        self._queue = queue
+        return queue
 
     async def start(self) -> None:
         """Inicia o worker como asyncio.Task."""
@@ -329,7 +338,9 @@ class BackgroundEmbeddingWorker:
                 continue
 
     async def _process_record(
-        self, record: EmbeddingQueueRecord, queue: Any | None = None
+        self,
+        record: EmbeddingQueueRecord | SimpleNamespace,
+        queue: WorkerQueue | None = None,
     ) -> None:
         """Processa um registro individual com retry exponencial.
 
@@ -340,7 +351,7 @@ class BackgroundEmbeddingWorker:
         if queue is None:
             queue = await self._get_queue()
 
-        queue_id = record.queue_id
+        queue_id = str(record.queue_id)
         attempt = 0
 
         while attempt < MAX_RETRIES:
@@ -475,7 +486,7 @@ class BackgroundEmbeddingWorker:
 
                             await _maybe_emit_job_event(str(record.job_id))
 
-    async def _trip_rate_limit_breaker(self, queue: Any) -> None:
+    async def _trip_rate_limit_breaker(self, queue: WorkerQueue) -> None:
         """Pausa o worker e arquiva a fila ao detectar rate limit / quota.
 
         Idempotente entre as tasks paralelas do mesmo batch: a primeira a
@@ -556,7 +567,7 @@ class BackgroundEmbeddingWorker:
 
     async def _write_to_vector_store(
         self,
-        record: EmbeddingQueueRecord,
+        record: EmbeddingQueueRecord | SimpleNamespace,
         vector: list[float],
         *,
         provider: str = "unknown",

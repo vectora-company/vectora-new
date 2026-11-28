@@ -19,6 +19,9 @@ ContextDomain = Literal[
 ]
 
 
+from backend.vtypes.contracts import JsonObject, JsonValue
+
+
 class ContextProjectionContract(BaseModel):
     """Contrato serializável comum para projeções persistidas."""
 
@@ -37,7 +40,7 @@ class ContextProjectionContract(BaseModel):
     preserved_approvals: list[str] = Field(default_factory=list)
     pending_tool_calls: list[str] = Field(default_factory=list)
     omitted_sequences: list[int] = Field(default_factory=list)
-    content: object | None = None
+    content: JsonValue = None
     created_at: str = ""
 
 
@@ -50,7 +53,7 @@ class ContextCheckpointContract(BaseModel):
     last_sequence: int = 0
     source_hash: str = ""
     schema_version: str = "context.v1"
-    state: dict[str, object] = Field(default_factory=dict)
+    state: JsonObject = Field(default_factory=dict)
     artifact_refs: list[str] = Field(default_factory=list)
     created_at: str = ""
 

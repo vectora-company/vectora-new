@@ -20,7 +20,7 @@ import sys
 import time
 from dataclasses import dataclass, field, replace
 from pathlib import PureWindowsPath
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.sandbox import audit
 from backend.sandbox.dry_run import build_bwrap_command, python_runtime_paths
@@ -37,6 +37,9 @@ from backend.sandbox.windows import (
     build_soft_env,
     close_job_handle,
 )
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +111,11 @@ class JailedWorker:
     policy: SandboxPolicy | None = None
 
     async def request(
-        self, op: str, timeout_s: float = DEFAULT_REQUEST_TIMEOUT_S, **kwargs: Any
-    ) -> dict[str, Any]:
+        self,
+        op: str,
+        timeout_s: float = DEFAULT_REQUEST_TIMEOUT_S,
+        **kwargs: JsonValue | list[str] | dict[str, str],
+    ) -> JsonObject:
         """Estourar `timeout_s` mata o worker com SIGKILL antes de propagar:
         depois de um timeout o protocolo de linhas está dessincronizado (a
         resposta atrasada viraria a resposta da *próxima* requisição), então
@@ -323,7 +329,7 @@ class WorkspaceJailManager:
                 audit.record(
                     workspace_id,
                     "worker_refused",
-                    {"reason": "isolation_incomplete", "missing": missing},
+                    {"reason": "isolation_incomplete", "missing": [*missing]},
                 )
                 raise WorkerSpawnError(
                     "isolamento completo exigido, mas o worker não aplicou: "
@@ -338,7 +344,7 @@ class WorkspaceJailManager:
                 "policy_digest": policy_digest(policy),
                 "network": effective_network(policy),
                 "enforced": worker.isolation_enforced,
-                "isolation": status,
+                "isolation": {**status},
             },
         )
         return worker

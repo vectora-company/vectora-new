@@ -17,7 +17,10 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from watchdog.observers.api import BaseObserver
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +60,8 @@ IGNORED_RELATIVE_PREFIXES: tuple[str, ...] = (
 
 
 def is_ignored_path(
-    path: str | bytes | os.PathLike[Any],
-    root: str | bytes | os.PathLike[Any] | None = None,
+    path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+    root: str | bytes | os.PathLike[str] | os.PathLike[bytes] | None = None,
 ) -> bool:
     """Diz se algum componente do caminho é um diretório ignorado.
 
@@ -111,7 +114,7 @@ def install_watchdog_log_throttle() -> None:
             target.addFilter(throttle)
 
 
-def _build_pruned_observer() -> Any | None:
+def _build_pruned_observer() -> BaseObserver | None:
     """Observer Linux cujo inotify pula diretórios ignorados, ou ``None``."""
     if not sys.platform.startswith("linux"):
         return None
@@ -163,7 +166,7 @@ def _build_pruned_observer() -> Any | None:
     return BaseObserver(emitter_class=_PrunedEmitter)
 
 
-def create_observer() -> Any:
+def create_observer() -> BaseObserver:
     """Cria o observer do workspace, podado quando o watchdog permite."""
     install_watchdog_log_throttle()
     try:

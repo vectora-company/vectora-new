@@ -20,7 +20,7 @@ import contextlib
 import json
 import logging
 import uuid
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket
 from fastapi.websockets import WebSocketDisconnect
@@ -29,6 +29,10 @@ from pydantic import BaseModel
 from backend.api.middleware.auth import _auth_enabled
 from backend.services.pty_registry import pty_registry
 from backend.services.pty_session import PtySession
+
+if TYPE_CHECKING:
+    from backend.rbac.auth import User
+    from backend.workspace.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +44,7 @@ router = APIRouter(prefix="/vectora.terminal.v1", tags=["terminal"])
 # ---------------------------------------------------------------------------
 
 
-async def _user_from_token(token: str) -> Any:
+async def _user_from_token(token: str) -> User | None:
     if not token:
         return None
     try:
@@ -55,7 +59,7 @@ async def _user_from_token(token: str) -> Any:
         return None
 
 
-def _trusted_workspace(workspace_id: str) -> Any:
+def _trusted_workspace(workspace_id: str) -> Workspace | None:
     from backend.workspace.workspace import workspace_registry
 
     ws = workspace_registry.get(workspace_id) if workspace_id else None

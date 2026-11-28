@@ -161,6 +161,50 @@
       "title": "FileSettings",
       "type": "object"
     },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonScalar": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonScalar"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        }
+      ]
+    },
     "LintSettings": {
       "properties": {
         "enabled": {
@@ -248,55 +292,39 @@
       "type": "object"
     },
     "WorkbenchesSettings": {
-      "description": "Configurações específicas das workbenches.\n\nO uso de `dict[str, Any]` é justificado pois as seções de cada workbench são\nlivres e flexíveis na v1 do schema e poderão ser estritamente tipadas em versões futuras.",
+      "description": "Configurações específicas das workbenches.\n\nO uso de `JsonObject` é justificado pois as seções de cada workbench são\nlivres e flexíveis na v1 do schema e poderão ser estritamente tipadas em versões futuras.",
       "properties": {
         "browser": {
-          "additionalProperties": true,
-          "description": "Configurações da Browser Workbench",
-          "title": "Browser",
-          "type": "object"
+          "$ref": "#/$defs/JsonObject",
+          "description": "Configurações da Browser Workbench"
         },
         "contextGraph": {
-          "additionalProperties": true,
-          "description": "Configurações do Context Graph",
-          "title": "Contextgraph",
-          "type": "object"
+          "$ref": "#/$defs/JsonObject",
+          "description": "Configurações do Context Graph"
         },
         "git": {
-          "additionalProperties": true,
-          "description": "Configurações da Git Workbench",
-          "title": "Git",
-          "type": "object"
+          "$ref": "#/$defs/JsonObject",
+          "description": "Configurações da Git Workbench"
         },
         "library": {
-          "additionalProperties": true,
-          "description": "Configurações da biblioteca/docs",
-          "title": "Library",
-          "type": "object"
+          "$ref": "#/$defs/JsonObject",
+          "description": "Configurações da biblioteca/docs"
         },
         "plan": {
-          "additionalProperties": true,
-          "description": "Configurações do Plan Mode",
-          "title": "Plan",
-          "type": "object"
+          "$ref": "#/$defs/JsonObject",
+          "description": "Configurações do Plan Mode"
         },
         "storage": {
-          "additionalProperties": true,
-          "description": "Configurações de storage/banco",
-          "title": "Storage",
-          "type": "object"
+          "$ref": "#/$defs/JsonObject",
+          "description": "Configurações de storage/banco"
         },
         "tasks": {
-          "additionalProperties": true,
-          "description": "Configurações de tarefas agendadas",
-          "title": "Tasks",
-          "type": "object"
+          "$ref": "#/$defs/JsonObject",
+          "description": "Configurações de tarefas agendadas"
         },
         "terminal": {
-          "additionalProperties": true,
-          "description": "Configurações do Terminal integrado",
-          "title": "Terminal",
-          "type": "object"
+          "$ref": "#/$defs/JsonObject",
+          "description": "Configurações do Terminal integrado"
         }
       },
       "title": "WorkbenchesSettings",

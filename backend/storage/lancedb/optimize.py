@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
-from typing import Any
+from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,39 @@ logger = logging.getLogger(__name__)
 _DEFAULT_INTERVAL_S = 3600
 
 
-async def optimize_table(table: Any, *, cleanup_older_than_s: int = 86400) -> bool:
+class _CompactionStats(Protocol):
+    @property
+    def fragments_removed(self) -> int: ...
+    @property
+    def fragments_added(self) -> int: ...
+
+
+class _PruneStats(Protocol):
+    @property
+    def old_versions_removed(self) -> int: ...
+    @property
+    def bytes_removed(self) -> int: ...
+
+
+class _OptimizeStats(Protocol):
+    @property
+    def compaction(self) -> _CompactionStats: ...
+    @property
+    def prune(self) -> _PruneStats: ...
+
+
+class OptimizableTable(Protocol):
+    """A parte de ``lancedb.AsyncTable`` usada pela otimização periódica."""
+
+    @property
+    def name(self) -> str: ...
+
+    async def optimize(self, *, cleanup_older_than: timedelta) -> _OptimizeStats: ...
+
+
+async def optimize_table(
+    table: OptimizableTable, *, cleanup_older_than_s: int = 86400
+) -> bool:
     """Compacta fragmentos e remove versões antigas da ``table``.
 
     ``table.optimize(cleanup_older_than=...)`` compacta fragmentos pequenos
@@ -72,7 +104,7 @@ async def optimize_table(table: Any, *, cleanup_older_than_s: int = 86400) -> bo
 
 
 def schedule_optimize(
-    table: Any,
+    table: OptimizableTable,
     interval_s: float = _DEFAULT_INTERVAL_S,
     *,
     cleanup_older_than_s: int = 86400,

@@ -15,9 +15,10 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
     from backend.workspace.runtime_settings import RuntimeSettings
 
 _BUCKETS_KEY = "rag_buckets"
@@ -35,9 +36,11 @@ class RagBucket:
     created_at: str
 
 
-def _load_buckets(rs: RuntimeSettings) -> dict[str, dict]:
+def _load_buckets(rs: RuntimeSettings) -> dict[str, JsonObject]:
     raw = rs.get(_BUCKETS_KEY, {})
-    return cast("dict[str, dict]", raw) if isinstance(raw, dict) else {}
+    if not isinstance(raw, dict):
+        return {}
+    return {key: value for key, value in raw.items() if isinstance(value, dict)}
 
 
 def _load_active(rs: RuntimeSettings) -> dict[str, list[str]]:
@@ -61,13 +64,14 @@ def _load_pending_purges(rs: RuntimeSettings) -> dict[str, str]:
     }
 
 
-def _to_bucket(bucket_id: str, record: dict) -> RagBucket:
+def _to_bucket(bucket_id: str, record: JsonObject) -> RagBucket:
+    source_path = record.get("source_path")
     return RagBucket(
         id=bucket_id,
         workspace_id=str(record.get("workspace_id", "")),
         name=str(record.get("name", "")),
         description_md=str(record.get("description_md", "")),
-        source_path=record.get("source_path"),
+        source_path=source_path if isinstance(source_path, str) else None,
         created_at=str(record.get("created_at", "")),
     )
 
@@ -82,7 +86,7 @@ def create_bucket(
 ) -> RagBucket:
     """Cria um bucket novo (nunca reaproveita `bucket_id`) e o retorna."""
     bucket_id = uuid.uuid4().hex
-    record = {
+    record: JsonObject = {
         "workspace_id": workspace_id,
         "name": name,
         "description_md": description_md,
@@ -91,7 +95,7 @@ def create_bucket(
     }
     buckets = _load_buckets(rs)
     buckets[bucket_id] = record
-    rs.set(_BUCKETS_KEY, buckets)
+    rs.set(_BUCKETS_KEY, {**buckets})
     return _to_bucket(bucket_id, record)
 
 
@@ -118,7 +122,7 @@ def mark_pending_purge(
     """Persist the workspace that is authorized to retry a failed purge."""
     pending = _load_pending_purges(rs)
     pending[bucket_id] = workspace_id
-    rs.set(_PENDING_PURGES_KEY, pending)
+    rs.set(_PENDING_PURGES_KEY, {**pending})
 
 
 def get_pending_purge_workspace(rs: RuntimeSettings, bucket_id: str) -> str | None:
@@ -134,7 +138,7 @@ def clear_pending_purge(
     if pending.get(bucket_id) != workspace_id:
         return False
     pending.pop(bucket_id, None)
-    rs.set(_PENDING_PURGES_KEY, pending)
+    rs.set(_PENDING_PURGES_KEY, {**pending})
     return True
 
 
@@ -150,7 +154,7 @@ def delete_bucket(
     if workspace_id is not None and bucket.get("workspace_id") != workspace_id:
         return False
     buckets.pop(bucket_id, None)
-    rs.set(_BUCKETS_KEY, buckets)
+    rs.set(_BUCKETS_KEY, {**buckets})
 
     active = _load_active(rs)
     changed = False
@@ -159,7 +163,7 @@ def delete_bucket(
             active[active_workspace_id] = [i for i in ids if i != bucket_id]
             changed = True
     if changed:
-        rs.set(_ACTIVE_KEY, active)
+        rs.set(_ACTIVE_KEY, {key: [*ids] for key, ids in active.items()})
     return True
 
 
@@ -181,7 +185,7 @@ def set_active(
     else:
         current.discard(bucket_id)
     active_map[workspace_id] = sorted(current)
-    rs.set(_ACTIVE_KEY, active_map)
+    rs.set(_ACTIVE_KEY, {key: [*ids] for key, ids in active_map.items()})
 
 
 def get_active_bucket_ids(rs: RuntimeSettings, workspace_id: str) -> list[str]:

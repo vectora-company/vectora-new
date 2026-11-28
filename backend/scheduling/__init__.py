@@ -12,6 +12,8 @@ puxar croniter/Redis no import do pacote quando só um submódulo específico
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 __all__ = [
     "create_task",
     "get_mq",
@@ -19,7 +21,11 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> object:
+if TYPE_CHECKING:
+    from types import FunctionType
+
+
+def __getattr__(name: str) -> FunctionType:
     if name in ("create_task", "run_task"):
         from backend.scheduling import background_tasks
 

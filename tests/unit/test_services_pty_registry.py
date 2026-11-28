@@ -27,7 +27,7 @@ class _FakeSession:
         self.closed = True
 
 
-def test_add_and_get():
+def test_add_and_get() -> None:
     reg = PtyRegistry()
     s = _FakeSession("a")
     reg.add(s)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
@@ -35,7 +35,7 @@ def test_add_and_get():
     assert reg.get("nao") is None
 
 
-def test_close_pops_and_closes():
+def test_close_pops_and_closes() -> None:
     reg = PtyRegistry()
     s = _FakeSession("a")
     reg.add(s)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
@@ -44,12 +44,12 @@ def test_close_pops_and_closes():
     assert reg.get("a") is None
 
 
-def test_close_unknown_returns_false():
+def test_close_unknown_returns_false() -> None:
     reg = PtyRegistry()
     assert reg.close("nao") is False
 
 
-def test_list_for_context_filters_user_thread_and_workspace():
+def test_list_for_context_filters_user_thread_and_workspace() -> None:
     reg = PtyRegistry()
     reg.add(_FakeSession("a", thread_id="t1"))  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
     reg.add(_FakeSession("b", thread_id="t1"))  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
@@ -72,7 +72,7 @@ def test_list_for_user_workspace_prioriza_anexo_mais_recente() -> None:
     assert [session.terminal_id for session in sessions] == ["newer", "older"]
 
 
-def test_resolve_for_context_requires_thread_and_workspace():
+def test_resolve_for_context_requires_thread_and_workspace() -> None:
     reg = PtyRegistry()
     session = _FakeSession("a", thread_id="t1", workspace_id="ws1")
     reg.add(session)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
@@ -94,7 +94,7 @@ def test_resolve_for_context_requires_thread_and_workspace():
     )
 
 
-def test_close_all_clears():
+def test_close_all_clears() -> None:
     reg = PtyRegistry()
     a, b = _FakeSession("a"), _FakeSession("b")
     reg.add(a)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]

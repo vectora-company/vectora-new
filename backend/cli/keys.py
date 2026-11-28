@@ -21,7 +21,7 @@ import getpass
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from rich.console import Console
 from rich.panel import Panel
@@ -29,6 +29,9 @@ from rich.rule import Rule
 from rich.table import Table
 
 from backend.settings import settings
+
+if TYPE_CHECKING:
+    from backend.llm.base import ChatClient
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +135,19 @@ def _save_provider_to_settings(provider_id: str, model: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _load_llm_for_test(provider_id: str, model: str, api_key: str | None) -> Any:
+class _LlmReply(Protocol):
+    @property
+    def content(self) -> str: ...
+
+
+@runtime_checkable
+class _InvokableLlm(Protocol):
+    """Modelo com a interface ``ainvoke``, diferente do ``ChatClient`` nativo."""
+
+    async def ainvoke(self, prompt: str) -> _LlmReply: ...
+
+
+def _load_llm_for_test(provider_id: str, model: str, api_key: str | None) -> ChatClient:
     """Instancia o LLM correto para o teste de conexão."""
     if provider_id == "google-genai":
         from backend.llm.google.chat_client import GoogleChatClient
@@ -186,7 +201,7 @@ async def _test_connection(
         with console.status(
             "[bold cyan]Conectando ao LLM...[/bold cyan]", spinner="dots"
         ):
-            if hasattr(llm, "ainvoke"):
+            if isinstance(llm, _InvokableLlm):
                 response = await llm.ainvoke("Say 'Connected!' in one word.")
                 resposta_texto = response.content
             else:

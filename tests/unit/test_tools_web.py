@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
+from types import TracebackType
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from backend.tools.web import _fetch_via_http, fetch_url, web_search
@@ -12,7 +15,9 @@ from backend.tools.web import _fetch_via_http, fetch_url, web_search
 
 @pytest.mark.asyncio
 class TestWebSearchFallback:
-    async def test_sem_tavily_api_key_usa_fallback_via_chromium(self, monkeypatch):
+    async def test_sem_tavily_api_key_usa_fallback_via_chromium(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Sem chave nenhuma o roteador elege o DuckDuckGo. O patch vai em
         `backend.settings.settings`, a fonte que o roteador lê: mockar só o
         alias do módulo da tool deixaria o roteador vendo a chave real do
@@ -33,8 +38,8 @@ class TestWebSearchFallback:
         assert data == [{"title": "t", "content": "c", "url": "u"}]
 
     async def test_sem_tavily_e_fallback_tambem_falha_retorna_erro_textual(
-        self, monkeypatch
-    ):
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Par de erro: nem Tavily nem o fallback disponíveis — a tool nunca
         # propaga a exceção, sempre devolve JSON de erro pro agente.
         from backend.settings import settings as _s
@@ -54,7 +59,9 @@ class TestWebSearchFallback:
         data = json.loads(result)
         assert data["status"] == "error"
 
-    async def test_tavily_configurado_nao_usa_fallback(self, monkeypatch):
+    async def test_tavily_configurado_nao_usa_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Com key válida a busca vai pelo cliente nativo, e o contrato de
         saída (`json.dumps(results)`) continua o mesmo — é o contrato com o
         LLM, não muda com a troca de backend."""
@@ -81,7 +88,7 @@ class TestWebSearchFallback:
 
 @pytest.mark.asyncio
 class TestFetchUrlFallback:
-    async def test_sem_tavily_api_key_usa_fallback_via_chromium(self):
+    async def test_sem_tavily_api_key_usa_fallback_via_chromium(self) -> None:
         with (
             patch("backend.tools.web.settings") as ms,
             patch(
@@ -160,7 +167,9 @@ class TestFetchUrlFallback:
         extract.assert_not_called()
         fallback.assert_not_awaited()
 
-    async def test_sem_tavily_e_fallback_tambem_falha_retorna_erro_textual(self):
+    async def test_sem_tavily_e_fallback_tambem_falha_retorna_erro_textual(
+        self,
+    ) -> None:
         with (
             patch("backend.tools.web.settings") as ms,
             patch(
@@ -183,7 +192,9 @@ class TestFetchUrlSsrfGuard:
     """fetch_url recusa URLs que resolvem pra IP privado/loopback/link-local/
     metadata, antes de tentar Tavily ou o fallback Chromium."""
 
-    async def test_refuses_metadata_url_without_calling_tavily_or_fallback(self):
+    async def test_refuses_metadata_url_without_calling_tavily_or_fallback(
+        self,
+    ) -> None:
         with (
             patch("backend.tools.web.settings") as ms,
             patch("backend.browser.ssrf_guard.is_url_ssrf_safe", return_value=False),
@@ -197,7 +208,7 @@ class TestFetchUrlSsrfGuard:
         mock_extract.assert_not_called()
         mock_fallback.assert_not_called()
 
-    async def test_allows_public_url_with_tavily_configured(self):
+    async def test_allows_public_url_with_tavily_configured(self) -> None:
         mock_client = MagicMock()
         with (
             patch("backend.tools.web.settings") as ms,
@@ -273,29 +284,41 @@ class TestFetchUrlSsrfGuard:
             def raise_for_status(self) -> None:
                 return None
 
-            async def aiter_bytes(self):
+            async def aiter_bytes(self) -> AsyncIterator[bytes]:
                 yield b"conteudo"
 
         class _Stream:
             async def __aenter__(self) -> _Response:
                 return _Response()
 
-            async def __aexit__(self, *args: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 return None
 
-        transports: list[object] = []
+        transports: list[httpx.AsyncBaseTransport] = []
 
         class _Client:
-            def __init__(self, *, transport: object, **_: object) -> None:
+            def __init__(
+                self, *, transport: httpx.AsyncBaseTransport, **_: float
+            ) -> None:
                 transports.append(transport)
 
             async def __aenter__(self) -> _Client:
                 return self
 
-            async def __aexit__(self, *args: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 return None
 
-            def stream(self, *_args: object, **_kwargs: object) -> _Stream:
+            def stream[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> _Stream:
                 return _Stream()
 
         with (
@@ -321,7 +344,7 @@ class TestCrawlEMapExigemKey:
     """`web_crawl`/`web_map` não têm fallback: varredura de site não dá pra
     fazer com a API JSON do DuckDuckGo nem com uma sessão de browser."""
 
-    async def test_crawl_sem_key_devolve_erro_claro(self):
+    async def test_crawl_sem_key_devolve_erro_claro(self) -> None:
         from backend.tools.web import web_crawl
 
         with (
@@ -335,7 +358,7 @@ class TestCrawlEMapExigemKey:
 
         assert "TAVILY_API_KEY" in resultado["error"]
 
-    async def test_crawl_com_url_invalida_nem_chega_a_checar_a_key(self):
+    async def test_crawl_com_url_invalida_nem_chega_a_checar_a_key(self) -> None:
         """Erro/borda: validar a URL antes evita mensagem enganosa sobre
         credencial quando o problema é o argumento."""
         from backend.tools.web import web_crawl
@@ -346,7 +369,7 @@ class TestCrawlEMapExigemKey:
 
         assert "http" in resultado["error"]
 
-    async def test_map_com_key_chama_o_cliente(self):
+    async def test_map_com_key_chama_o_cliente(self) -> None:
         from backend.tools.web import web_map
 
         mock_client = MagicMock()
@@ -363,7 +386,7 @@ class TestCrawlEMapExigemKey:
 
         assert resultado == ["/a", "/b"]
 
-    async def test_crawl_recusa_dns_privado_antes_de_chamar_tavily(self):
+    async def test_crawl_recusa_dns_privado_antes_de_chamar_tavily(self) -> None:
         from backend.tools.web import web_crawl
 
         client = MagicMock()
@@ -381,7 +404,7 @@ class TestCrawlEMapExigemKey:
         assert "política de egress" in resultado["error"]
         client.crawl.assert_not_called()
 
-    async def test_map_recusa_dns_privado_antes_de_chamar_tavily(self):
+    async def test_map_recusa_dns_privado_antes_de_chamar_tavily(self) -> None:
         from backend.tools.web import web_map
 
         client = MagicMock()

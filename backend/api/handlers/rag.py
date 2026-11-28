@@ -15,10 +15,18 @@ lidos pelo build do reranker/embeddings (``backend/tools/rag.py``).
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
+
+from backend.vtypes.api import (
+    CollectionCount,
+    CollectionList,
+    DeletedCollection,
+    RagSearchResults,
+)
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.services import RagSettings
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +42,14 @@ class RagSettingsBody(BaseModel):
 
 
 @router.get("/settings")
-async def get_rag_settings() -> dict[str, Any]:
+async def get_rag_settings() -> RagSettings:
     from backend.workspace.runtime_settings import runtime_settings
 
-    return dict(runtime_settings.rag_settings)
+    return runtime_settings.rag_settings
 
 
 @router.patch("/settings")
-async def patch_rag_settings(body: RagSettingsBody) -> dict[str, Any]:
+async def patch_rag_settings(body: RagSettingsBody) -> RagSettings:
     from backend.workspace.runtime_settings import runtime_settings
 
     runtime_settings.set_rag_settings(**body.model_dump())
@@ -49,19 +57,21 @@ async def patch_rag_settings(body: RagSettingsBody) -> dict[str, Any]:
 
 
 @router.get("/collections")
-async def list_collections() -> dict[str, Any]:
+async def list_collections() -> CollectionList:
     from backend.storage.factory import get_vector_store_backend
 
     backend = await get_vector_store_backend()
     names = await backend.list_collections()
-    collections = [{"name": name, "count": await backend.count(name)} for name in names]
+    collections: list[CollectionCount] = [
+        {"name": name, "count": await backend.count(name)} for name in names
+    ]
     return {"collections": collections}
 
 
 @router.get("/workspace-summary")
 async def get_workspace_rag_summary(
     request: Request, workspace_id: str
-) -> dict[str, Any]:
+) -> CollectionList:
     """O que já está indexado NESTE workspace, por coleção.
 
     RAG é escopo de workspace (persiste no LanceDB entre sessões), não de
@@ -80,7 +90,7 @@ async def get_workspace_rag_summary(
     backend = await get_vector_store_backend()
     names = await backend.list_collections()
 
-    summary: list[dict[str, Any]] = []
+    summary: list[CollectionCount] = []
     for name in names:
         try:
             rows = await backend.list_rows(name)
@@ -100,6 +110,15 @@ async def get_workspace_rag_summary(
     return {"collections": summary}
 
 
+def _ranking_score(result: JsonObject) -> float:
+    """Relevância do reranking; sem ela, a distância vetorial invertida."""
+    relevance = result.get("relevance_score")
+    if isinstance(relevance, int | float) and relevance:
+        return relevance
+    score = result.get("score", 0)
+    return -score if isinstance(score, int | float) else 0.0
+
+
 class RagSearchBody(BaseModel):
     query: str
     workspace_id: str | None = None
@@ -108,7 +127,7 @@ class RagSearchBody(BaseModel):
 
 
 @router.post("/search")
-async def search_rag(request: Request, body: RagSearchBody) -> dict[str, Any]:
+async def search_rag(request: Request, body: RagSearchBody) -> RagSearchResults:
     """Busca direta do usuário na base RAG — mesma `vector_search` que o agente usa.
 
     Sem `collection`, busca em toda coleção indexada com o `workspace_id`
@@ -132,7 +151,7 @@ async def search_rag(request: Request, body: RagSearchBody) -> dict[str, Any]:
     if not collections:
         return {"results": []}
 
-    all_results: list[dict[str, Any]] = []
+    all_results: list[JsonObject] = []
     ctx = ToolContext(workspace_id=body.workspace_id or "")
     for collection in collections:
         raw = await vector_search(
@@ -142,18 +161,17 @@ async def search_rag(request: Request, body: RagSearchBody) -> dict[str, Any]:
             parsed = _json.loads(raw)
         except ValueError:
             continue
-        for r in parsed.get("results", []):
+        found = parsed.get("results", [])
+        for r in found:
             r["collection"] = collection
             all_results.append(r)
 
-    all_results.sort(
-        key=lambda r: r.get("relevance_score") or -r.get("score", 0), reverse=True
-    )
+    all_results.sort(key=_ranking_score, reverse=True)
     return {"results": all_results[: body.limit], "query": body.query}
 
 
 @router.delete("/collections/{name}")
-async def delete_collection(name: str) -> dict[str, Any]:
+async def delete_collection(name: str) -> DeletedCollection:
     from backend.storage.factory import _embedding_meta_db, get_vector_store_backend
 
     backend = await get_vector_store_backend()

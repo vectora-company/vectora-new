@@ -14,11 +14,14 @@ import hashlib
 import hmac
 import json
 import time
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiosqlite
 import pytest
 from fastapi.testclient import TestClient
+from httpx2 import Response
 
 from backend.api.handlers.webhooks import (
     CHANNEL_SSE,
@@ -498,7 +501,7 @@ class TestObservabilityWebhookEndpoint:
     webhook de saída pra cá."""
 
     @pytest.fixture
-    def obs_db(self, tmp_path, monkeypatch):
+    def obs_db(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
         import asyncio
         from pathlib import Path
 
@@ -517,11 +520,9 @@ class TestObservabilityWebhookEndpoint:
         )
         db_path = str(tmp_path / "obs.db")
 
-        async def _connect() -> Any:
-            conn: Any = await aiosqlite.connect(db_path)
-            conn.row_factory = lambda c, r: dict(
-                zip([col[0] for col in c.description], r, strict=False)
-            )
+        async def _connect() -> aiosqlite.Connection:
+            conn = await aiosqlite.connect(db_path)
+            conn.row_factory = aiosqlite.Row
             return conn
 
         async def _setup() -> None:
@@ -535,7 +536,9 @@ class TestObservabilityWebhookEndpoint:
         monkeypatch.setattr(kanban, "_get_db", _connect)
         return db_path
 
-    def _post(self, client: TestClient, payload: dict, secret: str | None = "s3cr3t"):
+    def _post(
+        self, client: TestClient, payload: dict, secret: str | None = "s3cr3t"
+    ) -> Response:
         headers = {"content-type": "application/json"}
         if secret is not None:
             headers["x-webhook-secret"] = secret

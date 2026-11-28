@@ -5,13 +5,17 @@ pty_registry."""
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from types import SimpleNamespace
+from typing import NoReturn
+from unittest.mock import MagicMock
 
 import pytest
 
 from backend.services.pty_registry import pty_registry
 from backend.tools.context import ToolContext
 from backend.tools.terminal_sessions import (
+    PtySession,
     attach_terminal,
     close_terminal,
     list_terminals,
@@ -19,6 +23,7 @@ from backend.tools.terminal_sessions import (
     read_terminal,
     write_terminal,
 )
+from backend.vtypes.contracts import JsonObject
 
 
 def _fake_session(
@@ -27,8 +32,9 @@ def _fake_session(
     workspace_id: str,
     alive: bool = True,
     user_id: str = "local",
-):
-    return SimpleNamespace(
+) -> MagicMock:
+    session = MagicMock(spec=PtySession)
+    session.configure_mock(
         terminal_id=terminal_id,
         thread_id=thread_id,
         workspace_id=workspace_id,
@@ -40,10 +46,11 @@ def _fake_session(
             "terminal_id": terminal_id,
         },
     )
+    return session
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     pty_registry._sessions.clear()
     yield
     pty_registry._sessions.clear()
@@ -52,7 +59,7 @@ def _clean_registry():
 class TestListTerminals:
     @pytest.mark.asyncio
     async def test_open_registra_pty_do_agente_para_a_workbench(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         workspace = SimpleNamespace(cwd="C:/workspace", trusted=True)
         monkeypatch.setattr(
@@ -119,7 +126,7 @@ class TestListTerminals:
             def consume_rate_limit(self) -> float | None:
                 return None
 
-            def write_input(self, data, request_id):
+            def write_input(self, data: bytes, request_id: str) -> dict[str, str]:
                 assert data == b"gh pr view 319\n"
                 assert request_id.startswith("agent-write-")
                 return {"status": "accepted", "terminal_id": self.terminal_id}
@@ -194,7 +201,7 @@ class TestInteractiveTerminalTools:
             def consume_rate_limit(self) -> float | None:
                 return None
 
-            def read_since(self, cursor, max_bytes):
+            def read_since(self, cursor, max_bytes: int):
                 return {
                     "data": b"prompt: ",
                     "cursor": 8,
@@ -203,7 +210,7 @@ class TestInteractiveTerminalTools:
                     "has_more": False,
                 }
 
-            def write_input(self, data, request_id):
+            def write_input(self, data: bytes, request_id: str) -> dict[str, str]:
                 return {"status": "accepted", "terminal_id": "t1"}
 
         pty_registry.add(Session())  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
@@ -225,13 +232,13 @@ class TestInteractiveTerminalTools:
             thread_id = "thr-1"
             workspace_id = "ws-1"
 
-            def consume_rate_limit(self):
+            def consume_rate_limit(self) -> None:
                 return None
 
-            def read_since(self, cursor, max_bytes):
+            def read_since(self, cursor, max_bytes) -> NoReturn:
                 raise AssertionError("usuário não autorizado não deve ler")
 
-            def write_input(self, data, request_id):
+            def write_input(self, data, request_id) -> NoReturn:
                 raise AssertionError("usuário não autorizado não deve escrever")
 
         pty_registry.add(OwnedSession())  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
@@ -264,7 +271,9 @@ class TestInteractiveTerminalTools:
         session = pty_registry.get("t1")
         assert session is not None
 
-        def read_since(_cursor: int, _limit: int) -> dict[str, object]:
+        def read_since(
+            _cursor: int, _limit: int
+        ) -> dict[str, bytes | int | bool | None]:
             return {
                 "data": b"ok",
                 "cursor": 2,

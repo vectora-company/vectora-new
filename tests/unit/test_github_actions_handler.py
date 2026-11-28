@@ -4,22 +4,29 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
 
 from backend.api.handlers import github
+from tests.fake_requests import fake_request
 
 
-def _request(user_id: str | None = "alice"):
+def _request(user_id: str | None = "alice") -> MagicMock:
     user = SimpleNamespace(id=user_id) if user_id else None
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    return fake_request(state=SimpleNamespace(user=user))
 
 
-def _fake_gh(monkeypatch, result: dict):
+def _fake_gh(monkeypatch: pytest.MonkeyPatch, result: dict):
     calls: list[list[str]] = []
 
-    async def fake(args, cwd=None, input_data=None, user_id=None):
+    async def fake(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         calls.append(args)
         return result
 
@@ -73,7 +80,7 @@ JOB = {
 }
 
 
-async def test_run_list_maps_fields(monkeypatch) -> None:
+async def test_run_list_maps_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _fake_gh(monkeypatch, {"status": "ok", "output": json.dumps([RUN])})
 
     response = await github.list_runs(_request(), None, None, None, "ws1")
@@ -96,7 +103,9 @@ async def test_run_list_maps_fields(monkeypatch) -> None:
     assert "--branch" not in calls[0]
 
 
-async def test_run_list_passes_filters_as_gh_flags(monkeypatch) -> None:
+async def test_run_list_passes_filters_as_gh_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = _fake_gh(monkeypatch, {"status": "ok", "output": "[]"})
 
     await github.list_runs(_request(), "failure", "feat/x", "PR Gate", None)
@@ -108,7 +117,7 @@ async def test_run_list_passes_filters_as_gh_flags(monkeypatch) -> None:
 
 
 async def test_run_list_rejects_an_unknown_status_before_calling_gh(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = _fake_gh(monkeypatch, {"status": "ok", "output": "[]"})
 
@@ -137,7 +146,9 @@ def test_branch_and_workflow_pattern_accepts_normal_names(value: str) -> None:
     assert re.match(github._REF_PATTERN, value) is not None
 
 
-async def test_run_list_skips_items_without_an_id(monkeypatch) -> None:
+async def test_run_list_skips_items_without_an_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _fake_gh(
         monkeypatch,
         {"status": "ok", "output": json.dumps([RUN, {"displayTitle": "sem id"}, 3])},
@@ -148,7 +159,9 @@ async def test_run_list_skips_items_without_an_id(monkeypatch) -> None:
     assert [r.id for r in response.runs] == [987654321]
 
 
-async def test_run_list_reports_gh_unavailable_not_an_empty_list(monkeypatch) -> None:
+async def test_run_list_reports_gh_unavailable_not_an_empty_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _fake_gh(monkeypatch, {"status": "error", "message": "gh not found in PATH"})
 
     response = await github.list_runs(_request(), None, None, None, None)
@@ -158,7 +171,9 @@ async def test_run_list_reports_gh_unavailable_not_an_empty_list(monkeypatch) ->
 
 
 @pytest.mark.parametrize("output", ["", "nope", "{}", '"texto"'])
-async def test_run_list_rejects_invalid_payloads(monkeypatch, output) -> None:
+async def test_run_list_rejects_invalid_payloads(
+    monkeypatch: pytest.MonkeyPatch, output: str
+) -> None:
     _fake_gh(monkeypatch, {"status": "ok", "output": output})
 
     response = await github.list_runs(_request(), None, None, None, None)
@@ -166,7 +181,9 @@ async def test_run_list_rejects_invalid_payloads(monkeypatch, output) -> None:
     assert response.status == "error"
 
 
-async def test_run_list_requires_an_authenticated_user(monkeypatch) -> None:
+async def test_run_list_requires_an_authenticated_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _fake_gh(monkeypatch, {"status": "ok", "output": "[]"})
 
     with pytest.raises(HTTPException) as error:
@@ -175,7 +192,9 @@ async def test_run_list_requires_an_authenticated_user(monkeypatch) -> None:
     assert error.value.status_code == 401
 
 
-async def test_run_detail_returns_jobs_and_steps(monkeypatch) -> None:
+async def test_run_detail_returns_jobs_and_steps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = _fake_gh(
         monkeypatch,
         {"status": "ok", "output": json.dumps({**RUN, "jobs": [JOB, {"name": "x"}]})},
@@ -195,7 +214,9 @@ async def test_run_detail_returns_jobs_and_steps(monkeypatch) -> None:
     assert job.url.endswith("/job/111")
 
 
-async def test_run_detail_while_running_has_empty_conclusion(monkeypatch) -> None:
+async def test_run_detail_while_running_has_empty_conclusion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     running = {**RUN, "status": "in_progress", "conclusion": None, "jobs": []}
     _fake_gh(monkeypatch, {"status": "ok", "output": json.dumps(running)})
 
@@ -206,7 +227,9 @@ async def test_run_detail_while_running_has_empty_conclusion(monkeypatch) -> Non
 
 
 @pytest.mark.parametrize("output", ["", "nope", "[]", '{"displayTitle": "sem id"}'])
-async def test_run_detail_rejects_invalid_payloads(monkeypatch, output) -> None:
+async def test_run_detail_rejects_invalid_payloads(
+    monkeypatch: pytest.MonkeyPatch, output: str
+) -> None:
     _fake_gh(monkeypatch, {"status": "ok", "output": output})
 
     response = await github.get_run(_request(), 1, None)
@@ -215,7 +238,7 @@ async def test_run_detail_rejects_invalid_payloads(monkeypatch, output) -> None:
     assert response.run is None
 
 
-async def test_run_detail_reports_errors(monkeypatch) -> None:
+async def test_run_detail_reports_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_gh(monkeypatch, {"status": "error", "message": "could not find run"})
 
     response = await github.get_run(_request(), 1, None)
@@ -224,7 +247,7 @@ async def test_run_detail_reports_errors(monkeypatch) -> None:
     assert "could not find run" in response.message
 
 
-async def test_job_log_returns_the_text(monkeypatch) -> None:
+async def test_job_log_returns_the_text(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _fake_gh(monkeypatch, {"status": "ok", "output": "linha 1\nlinha 2"})
 
     response = await github.get_job_log(_request(), 10, 20, "ws1")
@@ -237,7 +260,9 @@ async def test_job_log_returns_the_text(monkeypatch) -> None:
     )
 
 
-async def test_job_log_keeps_the_end_when_truncating(monkeypatch) -> None:
+async def test_job_log_keeps_the_end_when_truncating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     big = "inicio\n" + "x" * github._MAX_LOG_CHARS + "\nfim com a falha"
     _fake_gh(monkeypatch, {"status": "ok", "output": big})
 
@@ -250,7 +275,7 @@ async def test_job_log_keeps_the_end_when_truncating(monkeypatch) -> None:
 
 
 async def test_job_log_of_a_running_job_is_an_error_not_an_empty_log(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _fake_gh(monkeypatch, {"status": "error", "message": "job is still in progress"})
 
@@ -260,7 +285,7 @@ async def test_job_log_of_a_running_job_is_an_error_not_an_empty_log(
     assert response.log == ""
 
 
-async def test_workflows_are_listed(monkeypatch) -> None:
+async def test_workflows_are_listed(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _fake_gh(
         monkeypatch,
         {
@@ -283,7 +308,7 @@ async def test_workflows_are_listed(monkeypatch) -> None:
     ]
 
 
-async def test_workflows_report_gh_unavailable(monkeypatch) -> None:
+async def test_workflows_report_gh_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_gh(monkeypatch, {"status": "error", "message": "gh not found in PATH"})
 
     response = await github.list_workflows(_request(), None)

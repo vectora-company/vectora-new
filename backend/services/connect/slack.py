@@ -10,10 +10,17 @@ from __future__ import annotations
 
 import importlib.util
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from backend.services.connect.runner import process_incoming
 from backend.services.gateway.messaging import IncomingMessage
+
+if TYPE_CHECKING:
+    from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+    from slack_bolt.async_app import AsyncApp
+
+    from backend.vtypes.connect import SlackSay
+    from backend.vtypes.contracts import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +30,7 @@ PLATFORM = "slack"
 SLACK_AVAILABLE = importlib.util.find_spec("slack_bolt") is not None
 
 
-def to_incoming(event: dict[str, Any]) -> IncomingMessage | None:
+def to_incoming(event: JsonValue) -> IncomingMessage | None:
     """Traduz um evento `message` do Socket Mode pro formato comum.
 
     `None` para eventos com `bot_id` (resposta do próprio app — evita laço),
@@ -49,7 +56,7 @@ def to_incoming(event: dict[str, Any]) -> IncomingMessage | None:
     )
 
 
-async def handle_event(event: dict[str, Any], say: Any) -> None:
+async def handle_event(event: JsonObject, say: SlackSay) -> None:
     """Defensivo: exceção propagada faria o bolt marcar o evento como não
     processado e o Slack reentregaria o mesmo evento em loop."""
     try:
@@ -62,7 +69,7 @@ async def handle_event(event: dict[str, Any], say: Any) -> None:
         logger.exception("connect.slack: falha ao tratar evento")
 
 
-def build_app(bot_token: str) -> Any:
+def build_app(bot_token: str) -> AsyncApp:
     if not SLACK_AVAILABLE:
         msg = "pacote 'slack_bolt' não instalado — integração Slack indisponível"
         raise RuntimeError(msg)
@@ -71,13 +78,13 @@ def build_app(bot_token: str) -> Any:
     app = AsyncApp(token=bot_token)
 
     @app.event("message")
-    async def _on_message(event: dict[str, Any], say: Any) -> None:  # pragma: no cover
+    async def _on_message(event: JsonObject, say: SlackSay) -> None:  # pragma: no cover
         await handle_event(event, say)
 
     return app
 
 
-async def start(bot_token: str, app_token: str) -> Any:
+async def start(bot_token: str, app_token: str) -> AsyncSocketModeHandler:
     """Abre a conexão Socket Mode e devolve o handler para o manager parar.
 
     Os dois tokens são obrigatórios e têm papéis distintos: o `xoxb-`
@@ -95,7 +102,7 @@ async def start(bot_token: str, app_token: str) -> Any:
     return handler
 
 
-async def stop(handler: Any) -> None:
+async def stop(handler: AsyncSocketModeHandler | None) -> None:
     """Parada idempotente."""
     if handler is None:
         return

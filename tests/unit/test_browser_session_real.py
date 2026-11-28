@@ -10,6 +10,7 @@ from __future__ import annotations
 import http.server
 import os
 import threading
+from collections.abc import AsyncIterator, Iterator
 
 import httpx
 import pytest
@@ -24,12 +25,12 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"<html><body>ok</body></html>")
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+    def log_message[**P](self, format: str, *args: P.args, **_kwargs: P.kwargs) -> None:  # noqa: A002
         pass  # silencia o log padrão do BaseHTTPRequestHandler nos testes
 
 
 @pytest.fixture
-def local_http_server():
+def local_http_server() -> Iterator[str]:
     server = http.server.HTTPServer(("127.0.0.1", 0), _EchoHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -79,7 +80,7 @@ pytestmark = [
 
 
 @pytest.fixture(autouse=True)
-async def _clean_sessions():
+async def _clean_sessions() -> AsyncIterator[None]:
     """Garante nenhuma sessão de browser sobrando de um teste anterior."""
     await browser_session.close_all_browser_sessions()
     yield
@@ -114,7 +115,9 @@ async def test_browser_navega_github_publico_real_sem_login() -> None:
 
 
 @pytest.mark.asyncio
-async def test_close_browser_session_encerra_processo_real_e_recria_ao_reabrir():
+async def test_close_browser_session_encerra_processo_real_e_recria_ao_reabrir() -> (
+    None
+):
     first_page = await browser_session.get_browser_page("ws-real-2")
     await first_page.goto("about:blank")
 
@@ -127,7 +130,7 @@ async def test_close_browser_session_encerra_processo_real_e_recria_ao_reabrir()
 
 
 @pytest.mark.asyncio
-async def test_close_all_browser_sessions_fecha_multiplos_workspaces_reais():
+async def test_close_all_browser_sessions_fecha_multiplos_workspaces_reais() -> None:
     for ws_id in ("ws-multi-a", "ws-multi-b", "ws-multi-c"):
         page = await browser_session.get_browser_page(ws_id)
         await page.goto("about:blank")
@@ -138,13 +141,13 @@ async def test_close_all_browser_sessions_fecha_multiplos_workspaces_reais():
 
 
 @pytest.mark.asyncio
-async def test_close_browser_session_workspace_inexistente_e_noop():
+async def test_close_browser_session_workspace_inexistente_e_noop() -> None:
     # Nenhuma sessão aberta pra esse workspace — não deve lançar.
     await browser_session.close_browser_session("workspace-que-nunca-existiu")
 
 
 @pytest.mark.asyncio
-async def test_new_tab_cria_segunda_aba_com_cdp_session_propria():
+async def test_new_tab_cria_segunda_aba_com_cdp_session_propria() -> None:
     first_page = await browser_session.get_browser_page("ws-tabs-1")
     await first_page.goto("about:blank")
 
@@ -166,7 +169,7 @@ async def test_new_tab_cria_segunda_aba_com_cdp_session_propria():
 
 
 @pytest.mark.asyncio
-async def test_select_tab_troca_a_aba_ativa():
+async def test_select_tab_troca_a_aba_ativa() -> None:
     first_page = await browser_session.get_browser_page("ws-tabs-2")
     await first_page.goto("about:blank")
     first_tab_id = (await browser_session.list_tabs("ws-tabs-2"))[0]["tab_id"]
@@ -185,14 +188,14 @@ async def test_select_tab_troca_a_aba_ativa():
 
 
 @pytest.mark.asyncio
-async def test_select_tab_inexistente_retorna_false():
+async def test_select_tab_inexistente_retorna_false() -> None:
     await browser_session.get_browser_page("ws-tabs-3")
 
     assert await browser_session.select_tab("ws-tabs-3", "nao-existe") is False
 
 
 @pytest.mark.asyncio
-async def test_close_tab_fechando_a_ultima_abre_uma_aba_em_branco_no_lugar():
+async def test_close_tab_fechando_a_ultima_abre_uma_aba_em_branco_no_lugar() -> None:
     page = await browser_session.get_browser_page("ws-tabs-4")
     await page.goto("about:blank")
     only_tab_id = (await browser_session.list_tabs("ws-tabs-4"))[0]["tab_id"]
@@ -206,7 +209,7 @@ async def test_close_tab_fechando_a_ultima_abre_uma_aba_em_branco_no_lugar():
 
 
 @pytest.mark.asyncio
-async def test_close_tab_nao_ativa_promove_outra_aba_a_ativa():
+async def test_close_tab_nao_ativa_promove_outra_aba_a_ativa() -> None:
     first_page = await browser_session.get_browser_page("ws-tabs-5")
     await first_page.goto("about:blank")
     first_tab_id = (await browser_session.list_tabs("ws-tabs-5"))[0]["tab_id"]
@@ -225,14 +228,14 @@ async def test_close_tab_nao_ativa_promove_outra_aba_a_ativa():
 
 
 @pytest.mark.asyncio
-async def test_close_tab_id_inexistente_retorna_false():
+async def test_close_tab_id_inexistente_retorna_false() -> None:
     await browser_session.get_browser_page("ws-tabs-6")
 
     assert await browser_session.close_tab("ws-tabs-6", "nao-existe") is False
 
 
 @pytest.mark.asyncio
-async def test_console_log_captura_mensagens_reais_da_pagina():
+async def test_console_log_captura_mensagens_reais_da_pagina() -> None:
     page = await browser_session.get_browser_page("ws-console-1")
     tab = browser_session.get_tab_state("ws-console-1")
     await page.goto("about:blank")
@@ -244,7 +247,7 @@ async def test_console_log_captura_mensagens_reais_da_pagina():
 
 
 @pytest.mark.asyncio
-async def test_dialog_policy_accept_evita_travamento_em_alert_real():
+async def test_dialog_policy_accept_evita_travamento_em_alert_real() -> None:
     page = await browser_session.get_browser_page("ws-dialog-1")
     await page.goto("about:blank")
     ok = browser_session.set_dialog_policy("ws-dialog-1", "accept")
@@ -258,12 +261,12 @@ async def test_dialog_policy_accept_evita_travamento_em_alert_real():
 
 
 @pytest.mark.asyncio
-async def test_dialog_policy_sem_sessao_retorna_false():
+async def test_dialog_policy_sem_sessao_retorna_false() -> None:
     assert browser_session.set_dialog_policy("workspace-sem-sessao", "accept") is False
 
 
 @pytest.mark.asyncio
-async def test_cdp_session_permite_emular_viewport_mobile_real():
+async def test_cdp_session_permite_emular_viewport_mobile_real() -> None:
     page = await browser_session.get_browser_page("ws-emulate-1")
     await page.goto("about:blank")
 
@@ -274,7 +277,7 @@ async def test_cdp_session_permite_emular_viewport_mobile_real():
 
 
 @pytest.mark.asyncio
-async def test_network_log_captura_navegacao_real(local_http_server):
+async def test_network_log_captura_navegacao_real(local_http_server: str) -> None:
     page = await browser_session.get_browser_page("ws-network-1")
     tab = browser_session.get_tab_state("ws-network-1")
     await page.goto(local_http_server, wait_until="domcontentloaded")

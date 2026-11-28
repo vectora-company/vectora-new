@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import TracebackType
+from typing import NoReturn
 from unittest.mock import patch
 
 import pytest
@@ -160,10 +162,15 @@ class TestBrokerTransaction:
             async def __aenter__(self) -> FailingClient:
                 return self
 
-            async def __aexit__(self, *_args: object) -> None:
+            async def __aexit__(
+                self,
+                _exc_type: type[BaseException] | None,
+                _exc: BaseException | None,
+                _traceback: TracebackType | None,
+            ) -> None:
                 return None
 
-            async def get(self, *_args: object, **_kwargs: object) -> None:
+            async def get[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
                 raise httpx.ConnectError("broker offline")
 
         monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: FailingClient())

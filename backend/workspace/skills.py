@@ -31,7 +31,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlsplit, urlunsplit
 
 import yaml
@@ -41,6 +41,11 @@ from pydantic import BaseModel
 from backend.services import extension_trust
 from backend.vtypes.skill import Skill, SkillCatalogEntry
 from backend.workspace import skills_lock
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonObject
+    from backend.vtypes.yaml import YamlKey, YamlValue
+    from backend.workspace.skills_lock import SkillCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +58,9 @@ _PINNED_SOURCE_RE = re.compile(
 
 def _strict_mapping(
     loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False
-) -> dict[object, object]:
+) -> dict[YamlKey, YamlValue]:
     """Rejeita chaves YAML duplicadas antes de construir o mapa."""
-    mapping: dict[object, object] = {}
+    mapping: dict[YamlKey, YamlValue] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
         if key in mapping:
@@ -201,7 +206,7 @@ def _save_index(
 # ---------------------------------------------------------------------------
 
 
-def _parse_frontmatter(text: str) -> dict[str, object]:
+def _parse_frontmatter(text: str) -> dict[str, YamlValue]:
     """Lê o frontmatter YAML do SKILL.md.
 
     Implementa apenas o subset ``key: value`` por linha (suficiente para
@@ -222,7 +227,7 @@ def _parse_frontmatter(text: str) -> dict[str, object]:
     requirements = loaded.get("requires_skills")
     if isinstance(requirements, str):
         raise ValueError("requires_skills deve ser um mapa ou lista YAML")
-    return dict(loaded)
+    return {str(key): value for key, value in loaded.items()}
 
 
 def _read_skill_metadata(skill_root: Path) -> tuple[str, str]:
@@ -247,7 +252,7 @@ def _read_skill_metadata(skill_root: Path) -> tuple[str, str]:
     return name, description
 
 
-def _skill_lock_entry(skill: Skill) -> dict[str, object]:
+def _skill_lock_entry(skill: Skill) -> JsonObject:
     """Converte uma skill instalada em uma entrada sem conteúdo executável."""
     frontmatter = _parse_frontmatter(
         (Path(skill.path) / "SKILL.md").read_text(encoding="utf-8")
@@ -311,8 +316,22 @@ def _skill_lock_entry(skill: Skill) -> dict[str, object]:
         or hashlib.sha256((Path(skill.path) / "SKILL.md").read_bytes()).hexdigest(),
         "integrity": skill.trust.digest
         or hashlib.sha256((Path(skill.path) / "SKILL.md").read_bytes()).hexdigest(),
-        "requires_skills": requirements,
+        "requires_skills": {**requirements},
     }
+
+
+def _candidates(entries: dict[str, JsonObject]) -> dict[str, SkillCandidate]:
+    """Versão e dependências de cada entrada, para a resolução."""
+    candidates: dict[str, SkillCandidate] = {}
+    for skill_id, entry in entries.items():
+        requirements = entry["requires_skills"]
+        candidates[skill_id] = (
+            str(entry["version"]),
+            {name: str(constraint) for name, constraint in requirements.items()}
+            if isinstance(requirements, dict)
+            else {},
+        )
+    return candidates
 
 
 def _write_scope_lock(
@@ -325,17 +344,13 @@ def _write_scope_lock(
     lock_path = _scope_lock_path(user_id, scope, target)
     if lock_path.exists():
         skills_lock.read_lockfile(lock_path)
-    entries: dict[str, dict[str, object]] = {}
+    entries: dict[str, JsonObject] = {}
     for skill in skills:
         skill_id = skill.id.strip()
         if not skill_id or skill_id in entries:
             raise ValueError(f"ids de skills duplicados após normalização: {skill.id}")
         entries[skill_id] = _skill_lock_entry(skill)
-    candidates: dict[str, object] = {
-        skill_id: (str(entry["version"]), entry["requires_skills"])
-        for skill_id, entry in entries.items()
-    }
-    skills_lock.resolve_dependencies(candidates)
+    skills_lock.resolve_dependencies(_candidates(entries))
     selected_versions = {
         skill_id: str(entry["version"]) for skill_id, entry in entries.items()
     }
@@ -378,17 +393,13 @@ def _restore_file(path: Path, snapshot: bytes | None) -> None:
 
 def _validate_scope_lock(skills: list[Skill]) -> None:
     """Valida uma composição antes de persistir índice ou lockfile."""
-    entries: dict[str, dict[str, object]] = {}
+    entries: dict[str, JsonObject] = {}
     for skill in skills:
         skill_id = skill.id.strip()
         if not skill_id or skill_id in entries:
             raise ValueError(f"ids de skills duplicados após normalização: {skill.id}")
         entries[skill_id] = _skill_lock_entry(skill)
-    candidates: dict[str, object] = {
-        skill_id: (str(entry["version"]), entry["requires_skills"])
-        for skill_id, entry in entries.items()
-    }
-    skills_lock.resolve_dependencies(candidates)
+    skills_lock.resolve_dependencies(_candidates(entries))
 
 
 # ---------------------------------------------------------------------------

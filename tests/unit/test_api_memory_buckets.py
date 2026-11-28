@@ -27,7 +27,9 @@ from backend.services.memory_buckets import (
 
 
 @pytest.mark.asyncio
-async def test_get_catalog_returns_entries_from_service(monkeypatch):
+async def test_get_catalog_returns_entries_from_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import memory_buckets
 
     monkeypatch.setattr(
@@ -42,7 +44,9 @@ async def test_get_catalog_returns_entries_from_service(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_catalog_returns_503_on_service_unavailable(monkeypatch):
+async def test_get_catalog_returns_503_on_service_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import memory_buckets
 
     monkeypatch.setattr(
@@ -57,7 +61,9 @@ async def test_get_catalog_returns_503_on_service_unavailable(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_catalog_repassa_q_pro_service(monkeypatch):
+async def test_get_catalog_repassa_q_pro_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`?q=` chega no handler e é repassado pro service — não fica órfão."""
     from backend.api.handlers import memory_buckets
 
@@ -71,7 +77,9 @@ async def test_get_catalog_repassa_q_pro_service(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_post_install_returns_collection_on_success(monkeypatch):
+async def test_post_install_returns_collection_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import memory_buckets
 
     monkeypatch.setattr(
@@ -86,7 +94,9 @@ async def test_post_install_returns_collection_on_success(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_post_install_preserva_escopo_do_workspace_no_download(monkeypatch):
+async def test_post_install_preserva_escopo_do_workspace_no_download(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """O escopo autenticado não pode ser descartado antes de instalar."""
     from backend.api.handlers import memory_buckets
 
@@ -107,8 +117,8 @@ async def test_post_install_preserva_escopo_do_workspace_no_download(monkeypatch
 
 @pytest.mark.asyncio
 async def test_post_install_incompatible_embed_model_returns_error_not_exception(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.api.handlers import memory_buckets
 
     monkeypatch.setattr(
@@ -140,7 +150,9 @@ def _request() -> Request:
 
 
 @pytest.mark.asyncio
-async def test_post_publish_returns_bucket_id_on_success(monkeypatch):
+async def test_post_publish_returns_bucket_id_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import license
 
     monkeypatch.setattr(license, "_get_token", lambda: "tok-123")
@@ -167,8 +179,8 @@ async def test_post_publish_returns_bucket_id_on_success(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_post_publish_sem_vectora_token_retorna_erro_sem_tentar_publicar(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Erro/borda: sem VECTORA_TOKEN (nenhuma conta company conectada), o
     endpoint devolve erro claro e nem chama publish_memory_bucket."""
     from backend.services import license
@@ -195,7 +207,9 @@ async def test_post_publish_sem_vectora_token_retorna_erro_sem_tentar_publicar(
 
 
 @pytest.mark.asyncio
-async def test_post_publish_falha_do_service_vira_status_error(monkeypatch):
+async def test_post_publish_falha_do_service_vira_status_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from backend.services import license
 
     monkeypatch.setattr(license, "_get_token", lambda: "tok-123")
@@ -222,7 +236,9 @@ async def test_post_publish_falha_do_service_vira_status_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_install_workspace_inexistente_e_bloqueado_antes_do_download(monkeypatch):
+async def test_install_workspace_inexistente_e_bloqueado_antes_do_download(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A scope inválida não pode disparar download nem escrever no disco."""
     from backend.api.handlers import memory_buckets
 
@@ -243,7 +259,9 @@ async def test_install_workspace_inexistente_e_bloqueado_antes_do_download(monke
 
 
 @pytest.mark.asyncio
-async def test_publish_workspace_sem_acesso_nao_envia_upload(monkeypatch):
+async def test_publish_workspace_sem_acesso_nao_envia_upload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Falha de ownership deve ocorrer antes de ler a coleção ou o token."""
     from backend.api.handlers import memory_buckets
     from backend.services import license
@@ -272,7 +290,9 @@ async def test_publish_workspace_sem_acesso_nao_envia_upload(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_publish_sem_workspace_rejeita_antes_de_ler_token(monkeypatch) -> None:
+async def test_publish_sem_workspace_rejeita_antes_de_ler_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A publicação sem escopo não pode usar um bucket global."""
     from backend.api.handlers import memory_buckets
     from backend.services import license
@@ -291,7 +311,9 @@ async def test_publish_sem_workspace_rejeita_antes_de_ler_token(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_publish_bucket_de_outro_workspace_rejeita_upload(monkeypatch) -> None:
+async def test_publish_bucket_de_outro_workspace_rejeita_upload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """O bucket precisa pertencer ao workspace autorizado, não apenas o token."""
     from backend.api.handlers import memory_buckets
 

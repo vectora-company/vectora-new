@@ -16,7 +16,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from backend.api.schemas import Thread
+from backend.api.schemas import GetThreadRequest, Thread
 from backend.vtypes.history import ThreadHistoryEntry
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage
 
@@ -46,7 +46,9 @@ async def test_history_paginated_propaga_attachments(
     do histórico nunca chegavam no frontend, mesmo já persistidos."""
     from backend.api.handlers import threads as threads_mod
 
-    async def _fake_get_thread(request: Any, **_kwargs: object) -> Thread:
+    async def _fake_get_thread[**P](
+        request: GetThreadRequest, *_args: P.args, **_kwargs: P.kwargs
+    ) -> Thread:
         return Thread(id=request.thread_id, created_at="", updated_at="")
 
     monkeypatch.setattr(threads_mod, "get_thread", _fake_get_thread)
@@ -86,7 +88,9 @@ async def test_history_paginated_mensagem_sem_attachments_fica_vazia(
 ) -> None:
     from backend.api.handlers import threads as threads_mod
 
-    async def _fake_get_thread(request: Any, **_kwargs: object) -> Thread:
+    async def _fake_get_thread[**P](
+        request: GetThreadRequest, *_args: P.args, **_kwargs: P.kwargs
+    ) -> Thread:
         return Thread(id=request.thread_id, created_at="", updated_at="")
 
     monkeypatch.setattr(threads_mod, "get_thread", _fake_get_thread)

@@ -15,14 +15,17 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.secrets.base import SecretsProvider
 
 logger = logging.getLogger(__name__)
 
 _PROVIDER_ENV = os.getenv("VECTORA_SECRETS_PROVIDER", "keepass").lower()
 
 
-def get_secrets_provider() -> Any:
+def get_secrets_provider() -> SecretsProvider:
     """Retorna o provider de secrets configurado.
 
     Ordem de resolução:

@@ -31,11 +31,23 @@ import uuid
 from collections.abc import AsyncGenerator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
+
+from backend.vtypes.contracts import JsonObject, as_int
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    import aiosqlite
+
+    from backend.persistence.native.session_store import SessionStore
+    from backend.vtypes.history import ThreadHistoryEntry
+    from backend.vtypes.sql import SqlValue
 
 
 def _read_relative_nofollow(root: Path, parts: list[str]) -> bytes:
@@ -146,7 +158,7 @@ async def revoke_current_device(
 # Lazy DB loader
 # ---------------------------------------------------------------------------
 
-_db_conn: Any = None
+_db_conn: aiosqlite.Connection | None = None
 _db_conn_lock: asyncio.Lock = asyncio.Lock()
 _db_write_lock: asyncio.Lock = asyncio.Lock()
 
@@ -163,7 +175,7 @@ _db_write_lock: asyncio.Lock = asyncio.Lock()
 _reconcile_delete_lock: asyncio.Lock = asyncio.Lock()
 
 
-async def _ensure_schema(db: Any) -> None:
+async def _ensure_schema(db: aiosqlite.Connection) -> None:
     """Cria as tabelas do banco de checkpoints/sessões se não existirem.
 
     Idempotente. Exportada para que o ``_lifespan`` do server possa chamar
@@ -245,7 +257,7 @@ async def _ensure_schema(db: Any) -> None:
     await db.commit()
 
 
-async def _migrate_mode_column(db: Any) -> None:
+async def _migrate_mode_column(db: aiosqlite.Connection) -> None:
     """Promove ``mode`` de ``extra`` JSON para coluna de 1ª classe (idempotente).
 
     Em bancos antigos a coluna não existe: adiciona via ALTER TABLE e faz backfill
@@ -276,7 +288,7 @@ async def _migrate_mode_column(db: Any) -> None:
     await db.commit()
 
 
-async def _migrate_pinned_column(db: Any) -> None:
+async def _migrate_pinned_column(db: aiosqlite.Connection) -> None:
     """Adiciona a coluna ``pinned`` (0/1) se ausente — idempotente, mesmo
     padrão de ``_migrate_mode_column``. Sem backfill: não havia equivalente
     em ``extra`` antes desta feature."""
@@ -289,7 +301,7 @@ async def _migrate_pinned_column(db: Any) -> None:
         await db.commit()
 
 
-async def _get_db() -> Any:
+async def _get_db() -> aiosqlite.Connection:
     """Executa a operação get db."""
     from backend.services.maintenance import wait_until_available
 
@@ -342,7 +354,7 @@ async def close_db() -> None:
             await connection.close()
 
 
-async def _get_session_store() -> Any:
+async def _get_session_store() -> SessionStore:
     """``SessionStore`` do motor nativo — fonte de verdade sobre EXISTÊNCIA
     e DONO (``user_id``) de uma thread. ``vectora_sessions`` (acima) guarda
     só metadados de UI (título, contagem de mensagens, fixação); nunca decide
@@ -384,7 +396,7 @@ def _normalize_mode(mode: str | None) -> str:
     return "code"
 
 
-def _row_to_thread(row: tuple) -> Thread:
+def _row_to_thread(row: aiosqlite.Row | tuple[SqlValue, ...]) -> Thread:
     """Converte uma linha da tabela vectora_sessions em Thread.
 
     A linha traz até 8 colunas (``mode`` e ``pinned`` de 1ª classe nas duas
@@ -398,16 +410,17 @@ def _row_to_thread(row: tuple) -> Thread:
     title = ""
     workspace_id = ""
     try:
-        extra = json.loads(extra_json or "{}")
+        extra = json.loads(str(extra_json or "{}"))
         title = extra.get("title", "")
         workspace_id = extra.get("workspace_id", "")
     except Exception:
         extra = {}
-    mode = _normalize_mode(mode_col if mode_col is not None else extra.get("mode"))
+    stored_mode = mode_col if mode_col is not None else extra.get("mode")
+    mode = _normalize_mode(None if stored_mode is None else str(stored_mode))
     return Thread(
         id=str(thread_id),
-        created_at=created_at,
-        updated_at=last_activity,
+        created_at=str(created_at),
+        updated_at=str(last_activity),
         title=title,
         workspace_id=workspace_id,
         mode=mode,
@@ -432,14 +445,10 @@ async def _unread_count(thread_id: str, user_id: str) -> int:
                 (thread_id, user_id),
             ) as cur:
                 cursor_row = await cur.fetchone()
-            return max(
-                0,
-                int(
-                    await session_store.count_assistant_messages_after(
-                        thread_id, int(cursor_row[0] or 0) if cursor_row else 0
-                    )
-                ),
+            unread = await session_store.count_assistant_messages_after(
+                thread_id, int(cursor_row[0] or 0) if cursor_row else 0
             )
+            return max(0, int(unread or 0))
         except sqlite3.OperationalError:
             # Test doubles and legacy deployments may not have the cursor
             # column yet; preserve the count-based behavior during migration.
@@ -503,7 +512,7 @@ async def _upsert_session(
         (thread_id,),
     ) as cur:
         row = await cur.fetchone()
-    extra: dict[str, Any] = {}
+    extra: JsonObject = {}
     if row:
         try:
             extra = json.loads(row[0] or "{}")
@@ -517,7 +526,8 @@ async def _upsert_session(
         extra["mode"] = mode
     extra_json = json.dumps(extra)
     # Coluna mode é 1ª classe; mantém extra["mode"] em sincronia por retrocompat.
-    mode_col = _normalize_mode(extra.get("mode"))
+    stored_mode = extra.get("mode")
+    mode_col = _normalize_mode(stored_mode if isinstance(stored_mode, str) else None)
 
     # ON CONFLICT preserva created_at original; atualiza last_activity, extra e mode.
     await db.execute(
@@ -597,13 +607,13 @@ async def _set_session_pins(thread_id: str, pins: list[str]) -> list[str]:
         "SELECT extra FROM vectora_sessions WHERE thread_id = ?", (thread_id,)
     ) as cur:
         row = await cur.fetchone()
-    extra: dict[str, Any] = {}
+    extra: JsonObject = {}
     if row:
         try:
             extra = json.loads(row[0] or "{}")
         except Exception:
             extra = {}
-    extra["pins"] = clean
+    extra["pins"] = [*clean]
     extra_json = json.dumps(extra)
 
     await db.execute(
@@ -627,7 +637,9 @@ async def _set_session_pins(thread_id: str, pins: list[str]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-async def _mutate_session_extra(thread_id: str, mutate: Any) -> dict:
+async def _mutate_session_extra(
+    thread_id: str, mutate: Callable[[JsonObject], JsonObject]
+) -> JsonObject:
     """Lê o ``extra`` atual da sessão, aplica ``mutate(extra) -> extra`` e
     persiste (UPSERT) — helper comum aos mutadores de ``extra`` (pins,
     contador do Remember). Devolve o ``extra`` resultante."""
@@ -638,7 +650,7 @@ async def _mutate_session_extra(thread_id: str, mutate: Any) -> dict:
         "SELECT extra FROM vectora_sessions WHERE thread_id = ?", (thread_id,)
     ) as cur:
         row = await cur.fetchone()
-    extra: dict[str, Any] = {}
+    extra: JsonObject = {}
     if row:
         try:
             extra = json.loads(row[0] or "{}")
@@ -666,9 +678,9 @@ async def increment_remember_turn_count(thread_id: str) -> int:
     """Incrementa ``extra["remember_turn_count"]`` e devolve o novo valor."""
     count_holder: dict[str, int] = {}
 
-    def _mutate(extra: dict) -> dict:
+    def _mutate(extra: JsonObject) -> JsonObject:
         """Executa a operação mutate."""
-        count = int(extra.get("remember_turn_count", 0)) + 1
+        count = as_int(extra.get("remember_turn_count", 0)) + 1
         extra["remember_turn_count"] = count
         count_holder["count"] = count
         return extra
@@ -697,7 +709,7 @@ async def get_remember_pending(thread_id: str) -> bool:
 async def set_remember_pending(thread_id: str, pending: bool) -> None:
     """Marca (ou limpa) a proposta pendente do Remember para a thread."""
 
-    def _mutate(extra: dict) -> dict:
+    def _mutate(extra: JsonObject) -> JsonObject:
         """Executa a operação mutate."""
         extra["remember_pending"] = pending
         return extra
@@ -710,7 +722,7 @@ _PIN_CONTENT_CAP = 4000  # chars por arquivo fixado injetados no contexto
 
 async def build_pinned_context(
     thread_id: str,
-    workspace_cwd: str | Any | None,
+    workspace_cwd: str | Path | None,
     *,
     cap: int = _PIN_CONTENT_CAP,
 ) -> str:
@@ -1029,7 +1041,7 @@ async def _eligible_thread_rows(
     mode: str,
     include_empty: bool,
     http_request: Request | None,
-) -> tuple[list[tuple], Any]:
+) -> tuple[list[tuple[SqlValue, ...]], SessionStore]:
     """Todas as threads visíveis ao usuário, na ordem estável da lista.
 
     A ordem é fixada por ``(pinned DESC, last_activity DESC, thread_id ASC)``: o
@@ -1051,7 +1063,7 @@ async def _eligible_thread_rows(
         "SELECT thread_id, user_type, created_at, last_activity, message_count, "
         "extra, mode, pinned FROM vectora_sessions WHERE mode != 'subagent'"
     )
-    params: list[Any] = []
+    params: list[str] = []
     mode_filter = _normalize_mode(mode) if mode else ""
     if mode_filter:
         query += " AND mode = ?"
@@ -1159,11 +1171,11 @@ async def list_threads(
         else None
     )
     remote_activity = (
-        await get_remote_activity(user_id, [r[0] for r in rows], current_device_id)
+        await get_remote_activity(user_id, [str(r[0]) for r in rows], current_device_id)
         if current_device_id
         else {}
     )
-    thread_ids = [r[0] for r in rows]
+    thread_ids = [str(r[0]) for r in rows]
     summaries_by_id: dict[str, ThreadSummary] = {}
     if hasattr(session_store, "get_thread_summaries"):
         if hasattr(session_store, "_pool") and thread_ids:
@@ -1725,7 +1737,7 @@ async def get_history(
         # history read must not make the response claim a sequence newer than
         # the messages it contains; the next replay will deliver that event.
         summary = None
-        store: object | None = None
+        store: SessionStore | None = None
         try:
             store = await _get_session_store()
             summary_user_id = (
@@ -2258,9 +2270,9 @@ MESSAGES_CAP = 200
 
 
 async def _safe_history_cursor(
-    store: object | None,
+    store: SessionStore | None,
     thread_id: str,
-    entries: Sequence[object],
+    entries: Sequence[ThreadHistoryEntry],
     fallback: int,
 ) -> int:
     """Limit the returned cursor to events represented by response messages.
@@ -2311,7 +2323,7 @@ async def get_thread_history_paginated(
     await _assert_owns_thread(thread_id, request)
 
     summary = None
-    store: object | None = None
+    store: SessionStore | None = None
     try:
         from backend.services import agent_factory
 
@@ -2705,7 +2717,7 @@ class SmartApprovalAllowlistRequest(BaseModel):
     interrupt_id: str
     run_id: str
     tool_name: str
-    args: dict[str, Any] = Field(default_factory=dict)
+    args: JsonObject = Field(default_factory=dict)
 
 
 class SmartApprovalAllowlistRemoveRequest(BaseModel):

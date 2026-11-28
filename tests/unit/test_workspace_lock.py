@@ -18,7 +18,7 @@ from backend.workspace.workspace import (
 
 
 @pytest.mark.asyncio
-async def test_acquires_and_releases_lock():
+async def test_acquires_and_releases_lock() -> None:
     wsid, tid = "ws-acquire", "thread-1"
     assert is_workspace_locked(wsid, tid) is False
 
@@ -29,7 +29,7 @@ async def test_acquires_and_releases_lock():
 
 
 @pytest.mark.asyncio
-async def test_serializes_concurrent_access_to_same_key():
+async def test_serializes_concurrent_access_to_same_key() -> None:
     wsid, tid = "ws-serialize", "thread-1"
     order: list[str] = []
 
@@ -46,7 +46,7 @@ async def test_serializes_concurrent_access_to_same_key():
 
 
 @pytest.mark.asyncio
-async def test_independent_keys_do_not_block_each_other():
+async def test_independent_keys_do_not_block_each_other() -> None:
     order: list[str] = []
 
     async def task(wsid: str, name: str, hold: float) -> None:
@@ -63,7 +63,7 @@ async def test_independent_keys_do_not_block_each_other():
 
 
 @pytest.mark.asyncio
-async def test_raises_timeout_when_lock_held_too_long():
+async def test_raises_timeout_when_lock_held_too_long() -> None:
     wsid, tid = "ws-timeout", "thread-1"
 
     async with acquire_workspace_lock(wsid, tid):
@@ -77,7 +77,7 @@ async def test_raises_timeout_when_lock_held_too_long():
 
 
 @pytest.mark.asyncio
-async def test_releases_lock_on_exception_inside_block():
+async def test_releases_lock_on_exception_inside_block() -> None:
     wsid, tid = "ws-exception", "thread-1"
 
     with pytest.raises(RuntimeError):

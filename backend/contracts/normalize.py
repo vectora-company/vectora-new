@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+
+from backend.vtypes.contracts import JsonValue
 
 
-def normalize_json(obj: Any) -> Any:
+def normalize_json(obj: JsonValue) -> JsonValue:
     """Normaliza recursivamente estruturas ordenando chaves de dicionários."""
     if isinstance(obj, dict):
         return {k: normalize_json(obj[k]) for k in sorted(obj.keys())}
@@ -15,7 +16,7 @@ def normalize_json(obj: Any) -> Any:
     return obj
 
 
-def dumps_normalized(obj: Any) -> str:
+def dumps_normalized(obj: JsonValue) -> str:
     """Serializa objeto JSON com ordenação de chaves e indentação consistente."""
     normalized = normalize_json(obj)
     return json.dumps(normalized, indent=2, ensure_ascii=False) + "\n"

@@ -64,16 +64,23 @@ from backend.workspace.skills import skills_version
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    import asyncpg
+
     from backend.engine.hitl import ApprovalGate
     from backend.engine.subagents import SubagentSpec
     from backend.persistence.native.session_store import SessionStore
+    from backend.storage.sqlite.pool import AsyncConnectionPool
+    from backend.tools.context import ToolContext
     from backend.tools.registry import ToolSpec
+    from backend.vtypes.contracts import JsonObject, JsonValue
     from backend.vtypes.history import (
         HistoryPart,
         HistoryVerification,
         ThreadHistoryEntry,
     )
     from backend.vtypes.message import VMessage
+    from backend.vtypes.services import PendingInterrupt
+    from backend.vtypes.store import AgentStore
 from backend.tools.registry import ToolRegistry
 from backend.workspace.skills import list_skill_paths
 
@@ -468,15 +475,15 @@ def _build_session_system_prompt(
 # Singleton da infra de persistência (store nativo)
 # ---------------------------------------------------------------------------
 
-_store: Any = None
-_store_ctx: Any = None  # context manager do store Postgres (complete mode)
+_store: AgentStore | None = None
+_store_ctx: asyncpg.Pool | None = None  # pool do store Postgres (complete mode)
 _lock = asyncio.Lock()
 
 # ---------------------------------------------------------------------------
 # Infra do motor nativo — SessionStore/ApprovalGate compartilhados
 # ---------------------------------------------------------------------------
 
-_session_store_pool: Any = None
+_session_store_pool: AsyncConnectionPool | None = None
 """``AsyncConnectionPool`` dedicado a ``sessions.db`` (histórico de
 mensagens/aprovações pendentes do motor nativo) — sempre SQLite local,
 independente de ``storage_mode``: ``SessionStore`` ainda não tem backend
@@ -634,7 +641,7 @@ async def get_approval_gate() -> ApprovalGate:
     return _approval_gate
 
 
-async def get_store() -> Any:
+async def get_store() -> AgentStore:
     """Retorna o store compartilhado (mesmo usado pelo agente).
 
     Getter direto da instância — para uso em handlers HTTP fora do ciclo
@@ -642,6 +649,9 @@ async def get_store() -> Any:
     memory tools do agente.
     """
     await _ensure_infra()
+    if _store is None:
+        msg = "_ensure_infra não inicializou o store"
+        raise RuntimeError(msg)
     return _store
 
 
@@ -713,7 +723,9 @@ def _recusa_amend(spec: ToolSpec) -> ToolSpec:
     modelo chame a tool direto, sem depender de instrução no prompt."""
     handler = spec.handler
 
-    async def sem_amend(*args: Any, **kwargs: Any) -> str:
+    async def sem_amend(
+        *args: ToolContext | JsonValue, **kwargs: ToolContext | JsonValue
+    ) -> str:
         if kwargs.get("amend"):
             return "Error: amend reescreve histórico e não é permitido nesta SOUL."
         return await handler(*args, **kwargs)
@@ -836,7 +848,7 @@ async def get_native_agent(
 async def aget_thread_messages(
     thread_id: str,
     workspace_id: str | None = None,
-) -> list[tuple[str, str, str, list[dict[str, Any]]]]:
+) -> list[tuple[str, str, str, list[JsonObject]]]:
     """Mensagens persistidas de uma thread como ``(role, text, checkpoint_id,
     attachments_meta)``.
 
@@ -861,7 +873,7 @@ def _history_pairs_from_messages(
     pares: list[tuple[int, VMessage]],
     *,
     keep_tool_only: bool = False,
-) -> list[tuple[str, str, str, list[dict[str, Any]]]]:
+) -> list[tuple[str, str, str, list[JsonObject]]]:
     """Converte um snapshot de mensagens em pares de histórico.
 
     O chamador fornece o snapshot para que a resposta e suas flags sejam
@@ -870,12 +882,12 @@ def _history_pairs_from_messages(
     """
     from backend.vtypes.message import MessageRole
 
-    out: list[tuple[str, str, str, list[dict[str, Any]]]] = []
+    out: list[tuple[str, str, str, list[JsonObject]]] = []
     for msg_id, msg in pares:
         if msg.role in (MessageRole.TOOL, MessageRole.SYSTEM):
             continue
         role = "human" if msg.role == MessageRole.USER else "assistant"
-        attachments = [
+        attachments: list[JsonObject] = [
             {
                 "kind": "image",
                 "name": block.attachment_name or block.asset_id or "image",
@@ -1131,7 +1143,7 @@ async def aget_thread_todos(
 
 async def aget_thread_pending_interrupt(
     thread_id: str, workspace_id: str | None = None
-) -> dict[str, Any] | None:
+) -> PendingInterrupt | None:
     """Devolve o interrupt pendente da thread (se houver), pra reidratar o
     HITLPanel após um reload de página.
 

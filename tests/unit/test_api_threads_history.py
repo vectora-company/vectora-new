@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from types import SimpleNamespace
 from typing import Any, Literal, cast
-from unittest.mock import AsyncMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, _patch, call, patch
 
 import pytest
 from fastapi import FastAPI
@@ -16,24 +16,28 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from backend.api.handlers import threads as threads_handlers
+from backend.api.schemas import Thread
 from backend.persistence.native.agent_run import AgentRun, AgentRunTimelineEntry
+from backend.vtypes.contracts import JsonObject
+from backend.vtypes.history import ThreadHistoryEntry
+from backend.vtypes.message import VMessage
 
 os.environ.setdefault("VECTORA_AUTH_REQUIRED", "false")
 
 
-def _make_app() -> Any:
+def _make_app() -> FastAPI:
     from backend.api.server import create_app
 
     return create_app()
 
 
-def _fake_thread():
+def _fake_thread() -> Thread:
     from backend.api.schemas import Thread
 
     return Thread(id="t1", created_at="", updated_at="", workspace_id="")
 
 
-def _patch_get_thread():
+def _patch_get_thread() -> _patch:
     return patch(
         "backend.api.handlers.threads.get_thread",
         new_callable=AsyncMock,
@@ -52,7 +56,7 @@ def _pairs(n: int, start: int = 0) -> list[tuple[str, str, str, list]]:
 
 def _history_entries(
     pairs: list[tuple[str, str, str, list]],
-) -> list[object]:
+) -> list[ThreadHistoryEntry]:
     """Converte fixtures legadas no contrato atual de histórico com arquivos."""
     from backend.vtypes.history import ThreadHistoryEntry
 
@@ -337,7 +341,7 @@ async def test_history_interleaving_preserva_evento_para_replay_sse() -> None:
     from backend.api.schemas import GetHistoryRequest
     from backend.vtypes.history import ThreadHistoryEntry
 
-    replayed: list[dict[str, object]] = []
+    replayed: list[JsonObject] = []
     store = SimpleNamespace(
         get_thread_summaries=AsyncMock(
             return_value=[SimpleNamespace(status="running", last_seq=1)]
@@ -355,11 +359,13 @@ async def test_history_interleaving_preserva_evento_para_replay_sse() -> None:
         )
     ]
 
-    async def _read_messages(*_args: object, **_kwargs: object) -> list[object]:
+    async def _read_messages[**P](
+        *_args: P.args, **_kwargs: P.kwargs
+    ) -> list[ThreadHistoryEntry]:
         # This models a commit that occurs after the summary snapshot but
         # before the message query.  The new event has no message in this page.
         replayed.extend(await store.list_events("t1", after_seq=1))
-        return cast("list[object]", messages)
+        return messages
 
     with (
         patch(
@@ -956,13 +962,11 @@ async def test_safe_history_cursor_uses_latest_available_sequence(
     """Skip missing IDs and sequences, stopping at the first represented event."""
     from backend.api.handlers.threads import _safe_history_cursor
 
-    store = SimpleNamespace(
-        get_event_seq_by_message_id=AsyncMock(side_effect=sequences)
-    )
+    store = MagicMock(get_event_seq_by_message_id=AsyncMock(side_effect=sequences))
     entries = [
-        SimpleNamespace(message_id=1),
-        SimpleNamespace(message_id=2),
-        SimpleNamespace(message_id=None),
+        MagicMock(message_id=1),
+        MagicMock(message_id=2),
+        MagicMock(message_id=None),
     ]
     assert await _safe_history_cursor(store, "t1", entries, 99) == expected_cursor
     assert store.get_event_seq_by_message_id.await_args_list == [
@@ -974,8 +978,8 @@ async def test_safe_history_cursor_without_message_ids_or_lookup() -> None:
     """An empty page returns zero; old stores retain the provided fallback."""
     from backend.api.handlers.threads import _safe_history_cursor
 
-    store = SimpleNamespace(get_event_seq_by_message_id=AsyncMock())
-    assert await _safe_history_cursor(store, "t1", [SimpleNamespace()], 99) == 0
+    store = MagicMock(get_event_seq_by_message_id=AsyncMock())
+    assert await _safe_history_cursor(store, "t1", [MagicMock(spec=[])], 99) == 0
     store.get_event_seq_by_message_id.assert_not_awaited()
     assert await _safe_history_cursor(None, "t1", [], 99) == 99
 
@@ -985,7 +989,7 @@ async def test_safe_history_cursor_without_message_ids_or_lookup() -> None:
 
 class _TimelineStore:
     def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
+        self.calls: list[JsonObject] = []
 
     async def get_agent_run(self, run_id: str) -> AgentRun:
         return AgentRun(run_id=run_id, thread_id="t1")
@@ -1006,7 +1010,7 @@ def timeline_client_and_store(
     async def _get_store() -> _TimelineStore:
         return store
 
-    async def _owns(thread_id: str, request: object) -> None:
+    async def _owns(thread_id: str, request: Request) -> None:
         return None
 
     monkeypatch.setattr(threads_handlers, "_get_session_store", _get_store)

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, TypedDict
 
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage
 
@@ -22,7 +22,17 @@ if TYPE_CHECKING:
     from backend.persistence.native.store import Item, SearchItem
     from backend.storage.protocols import HealthResult
     from backend.tools.registry import ToolSpec
+    from backend.vtypes.contracts import JsonObject
     from backend.vtypes.message import VMessageChunk
+    from backend.vtypes.store import EmbeddingIndex
+
+
+class FakeChatCall(TypedDict):
+    """Chamada recebida pelo ``FakeChatClient``."""
+
+    kind: str
+    messages: list[VMessage]
+    tools: list[ToolSpec] | None
 
 
 class FakeChatClient:
@@ -39,7 +49,7 @@ class FakeChatClient:
         self._responses = responses or []
         self.stream_calls = 0
         self.generate_calls = 0
-        self.calls: list[dict[str, object]] = []
+        self.calls: list[FakeChatCall] = []
 
     async def astream(
         self,
@@ -117,7 +127,7 @@ class NativeInMemoryStore:
     `index`), consistente com `VectoraStore`.
     """
 
-    def __init__(self, *, index: dict[str, Any] | None = None) -> None:
+    def __init__(self, *, index: EmbeddingIndex | None = None) -> None:
         self._index = index
         self._data: dict[tuple[str, ...], dict[str, Item]] = {}
 
@@ -125,7 +135,7 @@ class NativeInMemoryStore:
         return self._data.get(namespace, {}).get(key)
 
     async def aput(
-        self, namespace: tuple[str, ...], key: str, value: dict[str, Any]
+        self, namespace: tuple[str, ...], key: str, value: JsonObject
     ) -> None:
         from backend.persistence.native.store import Item
 
@@ -149,9 +159,12 @@ class NativeInMemoryStore:
         *,
         query: str | None = None,
         limit: int = 10,
-        filter: dict[str, Any] | None = None,  # noqa: A002 — mesmo nome do protocolo
+        filter: JsonObject | None = None,  # noqa: A002 — mesmo nome do protocolo
         offset: int = 0,
+        include_expired: bool = False,
     ) -> list[SearchItem]:
+        # O fake não expira itens, então o resultado é o mesmo com ou sem eles.
+        del include_expired
         from backend.persistence.native.store import (
             SearchItem,
             _cosine_similarity,
@@ -177,7 +190,7 @@ class NativeInMemoryStore:
         for item in items:
             score: float | None = None
             if query_vector is not None and index is not None:
-                fields = index["fields"]
+                fields = index.get("fields", [])
                 texts: list[str] = []
                 for field in fields:
                     texts.extend(get_text_at_path(item.value, field))

@@ -17,6 +17,11 @@ Configurações (``backend/config/fields.py``), todas opcionais:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.vtypes.contracts import JsonValue
+    from backend.vtypes.services import LimitSetting
 
 DEFAULT_PDF_PAGES = 20
 DEFAULT_VIDEO_FRAMES = 12
@@ -43,7 +48,7 @@ class MediaLimits:
     max_images: int = DEFAULT_MAX_IMAGES
 
 
-def clamp(value: object, bounds: tuple[int, int], default: int) -> int:
+def clamp(value: JsonValue, bounds: tuple[int, int], default: int) -> int:
     """Número dentro dos limites; valor ausente ou inválido usa ``default``."""
     low, high = bounds
     try:
@@ -53,7 +58,7 @@ def clamp(value: object, bounds: tuple[int, int], default: int) -> int:
     return max(low, min(high, number))
 
 
-def _setting(key: str) -> object:
+def _setting(key: str) -> JsonValue:
     try:
         from backend.workspace.runtime_settings import runtime_settings
 
@@ -96,7 +101,7 @@ LIMIT_FIELDS: dict[str, tuple[str, int, tuple[int, int]]] = {
 }
 
 
-def limits_settings() -> dict[str, object]:
+def limits_settings() -> dict[str, LimitSetting]:
     """Valores efetivos, padrões e faixas aceitas, para a interface."""
     effective = media_limits()
     return {
@@ -110,7 +115,7 @@ def limits_settings() -> dict[str, object]:
     }
 
 
-def validate_limit(name: str, value: object) -> int:
+def validate_limit(name: str, value: JsonValue) -> int:
     """Número inteiro dentro da faixa do limite; do contrário, ``ValueError``."""
     _field, _default, (low, high) = LIMIT_FIELDS[name]
     if isinstance(value, bool) or not isinstance(value, int):

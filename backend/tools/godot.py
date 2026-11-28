@@ -17,6 +17,7 @@ from pydantic import Field
 from backend.tools.context import ToolContext
 from backend.tools.fs import _confine, _require_local, _require_trust
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject
 
 _VERSION_RE = re.compile(r"\b(?:v)?(\d+)\.(\d+)(?:\.(\d+))?")
 _FEATURES_RE = re.compile(r"config/features\s*=\s*PackedStringArray\(([^)]*)\)")
@@ -279,7 +280,7 @@ async def validate_godot_project(
             ensure_ascii=False,
         )
 
-    stages: list[dict[str, object]] = []
+    stages: list[JsonObject] = []
     for stage_name, arguments in (
         ("import", ["--headless", "--editor", "--path", str(project_dir), "--quit"]),
         (
@@ -290,7 +291,7 @@ async def validate_godot_project(
         code, output, timed_out = await _run_engine(
             executable, arguments, project_dir, timeout_seconds
         )
-        stage: dict[str, object] = {
+        stage: JsonObject = {
             "stage": stage_name,
             "exit_code": code,
             "timed_out": timed_out,

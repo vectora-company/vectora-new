@@ -18,14 +18,17 @@ from __future__ import annotations
 import hashlib
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pykeepass import PyKeePass
 
 logger = logging.getLogger(__name__)
 
 _SECRETS_DIR = Path.home() / ".vectora" / "secrets" / "users"
 
 # Handles abertos em memória: user_id → pykeepass.PyKeePass
-_open_vaults: dict[str, object] = {}
+_open_vaults: dict[str, PyKeePass] = {}
 
 
 def _derive_master_password(user_id: str, login_password: str) -> str:
@@ -48,7 +51,7 @@ def _db_path(user_id: str) -> Path:
     return _SECRETS_DIR / f"{user_id}.kdbx"
 
 
-def _get_vault(user_id: str) -> Any:
+def _get_vault(user_id: str) -> PyKeePass:
     """Retorna o vault aberto para o usuário, ou levanta RuntimeError."""
     vault = _open_vaults.get(user_id)
     if vault is None:
@@ -74,7 +77,7 @@ class KeePassSecretsProvider:
         mp = _derive_master_password(user_id, master_password)
         path = _db_path(user_id)
 
-        def _open() -> object:
+        def _open() -> PyKeePass:
             if not path.exists():
                 logger.info("secrets/keepass: criando vault para user_id=%s", user_id)
                 kp = create_database(str(path), password=mp)

@@ -36,7 +36,7 @@ def test_all_tools_is_union() -> None:
     assert len(ALL_TOOLS) >= len(MEMORY_TOOLS)
 
 
-def test_native_views_espelham_all_tools():
+def test_native_views_espelham_all_tools() -> None:
     """ALL_TOOL_NAMES/ALL_TOOL_SPECS são a visão nativa do MESMO toolset de
     ALL_TOOLS — nomes idênticos. Garante que a migração dos consumidores
     leves não muda o conjunto exposto."""

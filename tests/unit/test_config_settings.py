@@ -15,36 +15,36 @@ from backend.settings import Settings
 # ---------------------------------------------------------------------------
 
 
-def test_settings_loads():
+def test_settings_loads() -> None:
     s = Settings()
     assert s is not None
 
 
-def test_settings_derived_paths():
+def test_settings_derived_paths() -> None:
     s = Settings()
     assert s.lancedb_dir is not None
     assert str(s.lancedb_dir).endswith("lancedb")
 
 
-def test_settings_embedding_queue_dsn():
+def test_settings_embedding_queue_dsn() -> None:
     s = Settings()
     assert s.embedding_queue_dsn is not None
     assert "sqlite" in s.embedding_queue_dsn
 
 
-def test_settings_defaults():
+def test_settings_defaults() -> None:
     s = Settings()
     assert isinstance(s.max_context_tokens, int)
     assert s.max_context_tokens > 0
 
 
-def test_settings_get_cohere_api_key_returns_none_or_str():
+def test_settings_get_cohere_api_key_returns_none_or_str() -> None:
     s = Settings()
     key = s.get_cohere_api_key()
     assert key is None or isinstance(key, str)
 
 
-def test_settings_gets_nine_router_model_and_api_key():
+def test_settings_gets_nine_router_model_and_api_key() -> None:
     s = Settings()
     s.llm_provider = "nine_router"
     s.nine_router_default_model = "cx/gpt-5.6-luna"
@@ -53,19 +53,19 @@ def test_settings_gets_nine_router_model_and_api_key():
     assert s.get_llm_api_key() == "test-key"
 
 
-def test_settings_set_model_updates_nine_router_default():
+def test_settings_set_model_updates_nine_router_default() -> None:
     s = Settings()
     s.set_model("nine_router", "cx/gpt-5.6-luna")
     assert s.nine_router_default_model == "cx/gpt-5.6-luna"
 
 
-def test_settings_set_model_updates_llamacpp_model():
+def test_settings_set_model_updates_llamacpp_model() -> None:
     s = Settings()
     s.set_model("llamacpp", "local-model")
     assert s.llamacpp_model == "local-model"
 
 
-def test_defaults_env_nao_embute_nenhum_secret():
+def test_defaults_env_nao_embute_nenhum_secret() -> None:
     """Nenhuma variável de segredo de `defaults.env` carrega valor de produção."""
     defaults = Path(__file__).resolve().parents[2] / "backend" / "defaults.env"
     secrets = {}
@@ -86,13 +86,13 @@ def test_defaults_env_nao_embute_nenhum_secret():
 # ---------------------------------------------------------------------------
 
 
-def test_settings_ssl_defaults_none():
+def test_settings_ssl_defaults_none() -> None:
     s = Settings()
     assert s.ssl_certfile is None
     assert s.ssl_keyfile is None
 
 
-def test_settings_ssl_from_env(monkeypatch):
+def test_settings_ssl_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SSL_CERTFILE", "/certs/fullchain.pem")
     monkeypatch.setenv("SSL_KEYFILE", "/certs/key.pem")
     s = Settings()
@@ -100,7 +100,7 @@ def test_settings_ssl_from_env(monkeypatch):
     assert s.ssl_keyfile == "/certs/key.pem"
 
 
-def test_cli_parser_accepts_ssl_flags():
+def test_cli_parser_accepts_ssl_flags() -> None:
     from backend.main import _build_parser
 
     parser = _build_parser()
@@ -117,7 +117,7 @@ def test_cli_parser_accepts_ssl_flags():
     assert args.ssl_keyfile == "key.pem"
 
 
-def test_cli_parser_ssl_flags_default_none():
+def test_cli_parser_ssl_flags_default_none() -> None:
     from backend.main import _build_parser
 
     parser = _build_parser()
@@ -131,12 +131,14 @@ def test_cli_parser_ssl_flags_default_none():
 # ---------------------------------------------------------------------------
 
 
-def test_cohere_chat_model_default():
+def test_cohere_chat_model_default() -> None:
     s = Settings()
     assert s.cohere_chat_model == "command-a-03-2025"
 
 
-def test_cohere_in_get_llm_model_when_provider_set(monkeypatch):
+def test_cohere_in_get_llm_model_when_provider_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "cohere")
     s = Settings()
     # Sem chave configurada, get_llm_model ainda retorna o campo correto
@@ -144,14 +146,14 @@ def test_cohere_in_get_llm_model_when_provider_set(monkeypatch):
     assert isinstance(s.cohere_chat_model, str)
 
 
-def test_cohere_available_when_api_key_set(monkeypatch):
+def test_cohere_available_when_api_key_set(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("COHERE_API_KEY", "cohere_test_key_fake")
     s = Settings()
     providers = s.get_available_providers()
     assert "cohere" in providers
 
 
-def test_cohere_not_available_without_api_key(monkeypatch):
+def test_cohere_not_available_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("COHERE_API_KEY", raising=False)
     s = Settings()
     # Só aparece se a chave estiver configurada
@@ -174,13 +176,13 @@ def test_available_providers_includes_configured_local_runtimes() -> None:
     assert {"ollama", "llamacpp", "dmr", "nine_router"}.issubset(providers)
 
 
-def test_set_model_cohere():
+def test_set_model_cohere() -> None:
     s = Settings()
     s.set_model("cohere", "command-r-plus-08-2024")
     assert s.cohere_chat_model == "command-r-plus-08-2024"
 
 
-def test_set_model_cohere_default_model():
+def test_set_model_cohere_default_model() -> None:
     s = Settings()
     s.set_model("cohere", "command-a-03-2025")
     assert s.cohere_chat_model == "command-a-03-2025"
@@ -191,7 +193,7 @@ def test_set_model_cohere_default_model():
 # ---------------------------------------------------------------------------
 
 
-def test_openai_model_default_is_valid():
+def test_openai_model_default_is_valid() -> None:
     s = Settings()
     invalid_models = {"gpt-5.5", "gpt-5", "gpt-4.5"}
     assert s.openai_model not in invalid_models, (
@@ -199,7 +201,7 @@ def test_openai_model_default_is_valid():
     )
 
 
-def test_openai_model_default_is_gpt4o():
+def test_openai_model_default_is_gpt4o() -> None:
     s = Settings()
     assert s.openai_model == "gpt-4o"
 
@@ -209,21 +211,21 @@ def test_openai_model_default_is_gpt4o():
 # ---------------------------------------------------------------------------
 
 
-def test_get_llm_model_google():
+def test_get_llm_model_google() -> None:
     # Testa a lógica de get_llm_model() diretamente, sem depender da hierarquia de env
     s = Settings()
     s.llm_provider = "google-genai"
     assert s.get_llm_model() == s.google_model
 
 
-def test_get_llm_model_openai():
+def test_get_llm_model_openai() -> None:
     s = Settings()
     s.llm_provider = "openai"
     # openai_model padrão é "gpt-4o" (corrigido em fix/critical-bugs)
     assert s.get_llm_model() == s.openai_model
 
 
-def test_get_llm_model_cohere():
+def test_get_llm_model_cohere() -> None:
     # Testa que get_llm_model() retorna cohere_chat_model quando provider=cohere
     s = Settings()
     s.llm_provider = "cohere"
@@ -235,7 +237,7 @@ def test_get_llm_model_cohere():
 # ---------------------------------------------------------------------------
 
 
-def test_llm_provider_literal_accepts_cohere():
+def test_llm_provider_literal_accepts_cohere() -> None:
     # Testa que o campo llm_provider aceita "cohere" como valor válido
     s = Settings()
     s.llm_provider = "cohere"  # type: ignore[assignment]
@@ -247,41 +249,41 @@ def test_llm_provider_literal_accepts_cohere():
 # ---------------------------------------------------------------------------
 
 
-def test_voyage_api_key_default_none(monkeypatch):
+def test_voyage_api_key_default_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
     s = Settings()
     assert s.voyage_api_key is None
 
 
-def test_voyage_embedding_model_default():
+def test_voyage_embedding_model_default() -> None:
     s = Settings()
     assert s.voyage_embedding_model == "voyage-3"
 
 
-def test_voyage_rerank_model_default():
+def test_voyage_rerank_model_default() -> None:
     s = Settings()
     assert s.voyage_rerank_model == "rerank-2"
 
 
-def test_voyage_api_key_from_env(monkeypatch):
+def test_voyage_api_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VOYAGE_API_KEY", "voy-secret-123")
     s = Settings()
     assert s.voyage_api_key == "voy-secret-123"
 
 
-def test_voyage_embedding_model_from_env(monkeypatch):
+def test_voyage_embedding_model_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VOYAGE_EMBEDDING_MODEL", "voyage-3-large")
     s = Settings()
     assert s.voyage_embedding_model == "voyage-3-large"
 
 
-def test_voyage_rerank_model_from_env(monkeypatch):
+def test_voyage_rerank_model_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VOYAGE_RERANK_MODEL", "rerank-2-lite")
     s = Settings()
     assert s.voyage_rerank_model == "rerank-2-lite"
 
 
-def test_voyage_key_independent_from_cohere(monkeypatch):
+def test_voyage_key_independent_from_cohere(monkeypatch: pytest.MonkeyPatch) -> None:
     # voyage_api_key e cohere_api_key são campos separados — setar um não muda o outro.
     monkeypatch.setenv("VOYAGE_API_KEY", "voy-1")
     s = Settings()
@@ -293,7 +295,9 @@ class TestConfiguredLlmProviders:
     """configured_llm_providers: só providers com credencial (model selector)."""
 
     @pytest.fixture(autouse=True)
-    def isolate_local_provider_environment(self, monkeypatch):
+    def isolate_local_provider_environment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Não deixe runtimes locais do host vazarem para estes contratos."""
         for key in (
             "LLAMACPP_BASE_URL",
@@ -306,7 +310,7 @@ class TestConfiguredLlmProviders:
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("LLAMACPP_MODE", "external")
 
-    def test_only_configured_providers_listed(self):
+    def test_only_configured_providers_listed(self) -> None:
         s = Settings()
         s.google_api_key = "g-key"
         s.openai_api_key = None
@@ -318,7 +322,7 @@ class TestConfiguredLlmProviders:
         s.dmr_base_url = None
         assert s.configured_llm_providers() == ["google-genai", "cohere"]
 
-    def test_no_keys_returns_empty(self):
+    def test_no_keys_returns_empty(self) -> None:
         s = Settings()
         s.google_api_key = None
         s.openai_api_key = None
@@ -338,7 +342,7 @@ class TestConfiguredLlmProviders:
             if prev is not None:
                 _os.environ["COHERE_API_KEY"] = prev
 
-    def test_openai_and_anthropic_when_keyed(self):
+    def test_openai_and_anthropic_when_keyed(self) -> None:
         s = Settings()
         s.google_api_key = None
         s.openai_api_key = "o-key"
@@ -357,7 +361,7 @@ class TestConfiguredLlmProviders:
             if prev is not None:
                 _os.environ["COHERE_API_KEY"] = prev
 
-    def test_ollama_listed_when_base_url_set(self):
+    def test_ollama_listed_when_base_url_set(self) -> None:
         s = Settings()
         s.google_api_key = None
         s.openai_api_key = None
@@ -387,8 +391,11 @@ class TestConfiguredLlmProviders:
 
 class TestLlmKeyPrecedence:
     def test_user_env_llm_key_wins_over_project_env(
-        self, monkeypatch, tmp_path, caplog
-    ):
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         home_dir = tmp_path / "home"
         project_dir = tmp_path / "project"
         (home_dir / ".vectora").mkdir(parents=True)
@@ -418,8 +425,11 @@ class TestLlmKeyPrecedence:
         assert any("GOOGLE_API_KEY" in record.message for record in caplog.records)
 
     def test_no_warning_when_project_env_agrees_with_user_env(
-        self, monkeypatch, tmp_path, caplog
-    ):
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         home_dir = tmp_path / "home"
         project_dir = tmp_path / "project"
         (home_dir / ".vectora").mkdir(parents=True)

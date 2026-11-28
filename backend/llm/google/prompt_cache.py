@@ -15,6 +15,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from backend.vtypes.contracts import JsonObject
+
 logger = logging.getLogger(__name__)
 
 # A API recusa prefixos pequenos (mínimo de 1.024 a 4.096 tokens conforme o
@@ -49,34 +51,34 @@ def reset_state() -> None:
     _entries.clear()
 
 
-def _prefix(payload: dict[str, Any]) -> dict[str, Any]:
+def _prefix(payload: JsonObject) -> JsonObject:
     return {
         key: payload[key] for key in ("systemInstruction", "tools") if key in payload
     }
 
 
-def _key(model: str, prefix: dict[str, Any]) -> str:
+def _key(model: str, prefix: JsonObject) -> str:
     raw = json.dumps(prefix, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(f"{model}\0{raw}".encode()).hexdigest()
 
 
-def prefix_tokens(payload: dict[str, Any]) -> int:
+def prefix_tokens(payload: JsonObject) -> int:
     """Estimativa do tamanho do prefixo cacheável (system + tools)."""
     raw = json.dumps(_prefix(payload), ensure_ascii=False, default=str)
     return len(raw) // _CHARS_PER_TOKEN
 
 
-def invalidate(payload: dict[str, Any], model: str) -> None:
+def invalidate(payload: JsonObject, model: str) -> None:
     _entries.pop(_key(model, _prefix(payload)), None)
 
 
 async def apply_cached_content(
     client: CacheClient,
     model: str,
-    payload: dict[str, Any],
+    payload: JsonObject,
     *,
     now: float | None = None,
-) -> tuple[dict[str, Any], bool]:
+) -> tuple[JsonObject, bool]:
     """Devolve ``(payload, usou_cache)``.
 
     Com cache, ``systemInstruction`` e ``tools`` saem do corpo e entra
@@ -106,7 +108,7 @@ async def apply_cached_content(
 async def _create(
     client: CacheClient,
     model: str,
-    prefix: dict[str, Any],
+    prefix: JsonObject,
     key: str,
     moment: float,
 ) -> _Entry:
