@@ -458,7 +458,7 @@ function clampMonacoFontSize(v: number): number {
 // ---------------------------------------------------------------------------
 
 const DEFAULTS = {
-  showToolCalls: true,
+  showToolCalls: false,
   theme: "system" as Theme,
   themePreset: "default" as ThemePreset,
   customThemeColors: null as BaseThemeColors | null,
@@ -743,14 +743,18 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: getStorageKey(), // Chave default; re-hidratada ao chamar loadUserSettings()
-      version: 9, // v9: Solarized removido dos temas; v8: ações do agente visíveis; v7: rota de transcrição
+      version: 10, // v10: tool calls ocultas por padrão; v9: Solarized removido dos temas
       // v4: clampa sidebarWidth/chatSidebarWidth pros limites atuais mesmo fora do default legado exato (teto do chat caiu de 800→480)
       migrate: (persistedState, version) => {
         const s = persistedState as Record<string, unknown>;
         if (s && typeof s === "object") {
           // Antes da v8 o chat ignorava esta preferência; o valor salvo não
-          // refletia uma escolha que tivesse efeito, então volta ao padrão.
+          // refletia uma escolha que tivesse efeito.
           if (version < 8) s.showToolCalls = true;
+          // A v9 gravava `true` como padrão, sem distinguir isso de uma
+          // escolha explícita. O padrão passa a ser oculto; o usuário pode
+          // reativar a opção nas configurações após esta migração.
+          if (version < 10) s.showToolCalls = false;
           if (
             s.transcriptionMode !== "local" &&
             s.transcriptionMode !== "remote"

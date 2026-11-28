@@ -1513,7 +1513,9 @@ export const MessageItem = memo(
                           <ToolCallRenderer
                             key={tool.id}
                             tool={tool}
-                            isStreaming={message.isThinking}
+                            isStreaming={
+                              message.isThinking && tool.output === undefined
+                            }
                           />
                         ))}
                       </div>

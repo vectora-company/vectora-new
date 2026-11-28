@@ -159,7 +159,6 @@ def _run(
 #: `confirmModulesPurge=false` ele aborta com
 #: ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY em vez de reinstalar.
 PNPM_INSTALL = ["install", "--frozen-lockfile", "--config.confirmModulesPurge=false"]
-PNPM_CI = ["ci", "--config.confirmModulesPurge=false"]
 
 
 def _open_log(name: str):
@@ -338,8 +337,8 @@ def _sign_binary(binary: str) -> None:
 def _action_install_desktop(target, source, env):
     """Prepara o ambiente Python/Node e os sidecars usados no desenvolvimento."""
     _run([_find_bin("uv"), "sync", "--locked", "--all-groups"])
-    # `pnpm ci` limpa node_modules e instala exatamente o lockfile do workspace.
-    _run([PNPM, "--dir", "frontend", *PNPM_CI])
+    # Sincroniza com o lockfile sem purgar node_modules e binários nativos.
+    _run([PNPM, "--dir", "frontend", *PNPM_INSTALL])
     _ensure_electron_binary()
 
 
@@ -537,9 +536,9 @@ def _action_install(target, source, env):
     )
     step(
         3,
-        "Dependências do frontend (pnpm ci)",
-        lambda: _run([PNPM, "--dir", "frontend", *PNPM_CI]),
-        "pnpm --dir frontend ci",
+        "Dependências do frontend (pnpm install --frozen-lockfile)",
+        lambda: _run([PNPM, "--dir", "frontend", *PNPM_INSTALL]),
+        "pnpm --dir frontend install --frozen-lockfile",
     )
     step(4, "Electron (binário nativo)", _ensure_electron_binary, "scons install")
     step(
@@ -1029,7 +1028,7 @@ def _action_help(target, source, env):
     scons build-python     gera o bundle executável Python → Electron
                            para o fluxo alternativo
     scons install          prepara tudo: detecta o sistema e a arquitetura (e a distro no
-                           Linux), sincroniza Python, pnpm ci, Electron, NATS, FFmpeg e,
+                           Linux), sincroniza Python, pnpm install, Electron, NATS, FFmpeg e,
                            só no macOS, o helper de fala; termina com a lista do instalado
     scons docker           sobe infraestrutura (PostgreSQL, Redis, Qdrant)
 
