@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture(scope="module")
-def headless_app():
+def headless_app() -> FastAPI:
     """App FastAPI em modo headless (sem static files).
 
     Auth é desabilitada via env var para que os testes unitários não
@@ -36,7 +36,7 @@ def headless_app():
 
 
 @pytest.fixture(scope="module")
-def client(headless_app) -> TestClient:
+def client(headless_app: FastAPI) -> TestClient:
     """Executa a operação client."""
     return TestClient(headless_app, raise_server_exceptions=False)
 
@@ -53,7 +53,7 @@ class TestLifespan:
     """
 
     def test_lifespan_starts_embedding_worker(
-        self, headless_app, monkeypatch: pytest.MonkeyPatch
+        self, headless_app: FastAPI, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de lifespan starts embedding worker."""
         import backend.embedding.background as bg
@@ -84,7 +84,7 @@ class TestLifespan:
         )
 
     def test_lifespan_runs_thread_cleanup_immediately_at_boot(
-        self, headless_app, monkeypatch: pytest.MonkeyPatch
+        self, headless_app: FastAPI, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """`cleanup_empty_threads` roda imediatamente no boot, sem esperar
         o primeiro `asyncio.sleep` do loop de limpeza — threads vazias de
@@ -208,21 +208,21 @@ def _collect_route_paths(routes) -> list[str]:
 
 
 class TestRoutes:
-    def _route_paths(self, app) -> list[str]:
+    def _route_paths(self, app: FastAPI) -> list[str]:
         """Executa a operação route paths."""
         return _collect_route_paths(app.routes)
 
-    def test_stream_chat_route_exists(self, headless_app) -> None:
+    def test_stream_chat_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de stream chat route exists."""
         paths = self._route_paths(headless_app)
         assert "/vectora.chat.v1.ChatService/StreamChat" in paths
 
-    def test_resume_chat_route_exists(self, headless_app) -> None:
+    def test_resume_chat_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de resume chat route exists."""
         paths = self._route_paths(headless_app)
         assert "/vectora.chat.v1.ChatService/ResumeChat" in paths
 
-    def test_get_tools_route_exists(self, headless_app) -> None:
+    def test_get_tools_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de get tools route exists."""
         paths = self._route_paths(headless_app)
         assert "/vectora.chat.v1.ChatService/GetTools" in paths
@@ -237,7 +237,7 @@ class TestRoutes:
         assert "X-Vectora-Chat-Persisted" in cors.kwargs["expose_headers"]
         assert "X-Vectora-Device-Id" in cors.kwargs["allow_headers"]
 
-    def test_workspaces_active_route_exists(self, headless_app) -> None:
+    def test_workspaces_active_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de workspaces active route exists."""
         paths = self._route_paths(headless_app)
         assert "/workspaces/active" in paths, (
@@ -246,7 +246,7 @@ class TestRoutes:
             "e falha com 502."
         )
 
-    def test_thread_routes_exist(self, headless_app) -> None:
+    def test_thread_routes_exist(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de thread routes exist."""
         paths = self._route_paths(headless_app)
         for route in (
@@ -258,7 +258,7 @@ class TestRoutes:
         ):
             assert route in paths, f"Rota ausente: {route}"
 
-    def test_share_routes_exist(self, headless_app) -> None:
+    def test_share_routes_exist(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de share routes exist."""
         paths = self._route_paths(headless_app)
         assert "/threads/share" in paths
@@ -299,7 +299,7 @@ class TestWorkspacesActive:
 
 
 class TestApiToolsSchema:
-    def test_api_tools_schema_route_exists(self, headless_app) -> None:
+    def test_api_tools_schema_route_exists(self, headless_app: FastAPI) -> None:
         """Verifica o comportamento de api tools schema route exists."""
         paths = _collect_route_paths(headless_app.routes)
         assert "/api/tools/schema" in paths

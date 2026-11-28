@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
 from backend.llm.openrouter.stt import transcribe_bytes
@@ -29,7 +30,7 @@ def _client(handler) -> OpenRouterClient:
 class TestTranscricao:
     @pytest.mark.asyncio
     async def test_audio_curto_devolve_o_texto(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"text": "  olá mundo  "})
 
         texto = await transcribe_bytes(
@@ -89,7 +90,7 @@ class TestTranscricao:
         """Erro/borda: sem este corte a transcrição vira string vazia e o
         usuário acha que o áudio estava mudo, em vez de saber que falhou."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"task": "transcribe"})
 
         with pytest.raises(OpenRouterResponseError, match="text"):
@@ -103,7 +104,7 @@ class TestTranscricao:
 
     @pytest.mark.asyncio
     async def test_text_vazio_tambem_falha(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"text": "   "})
 
         with pytest.raises(OpenRouterResponseError):
@@ -140,7 +141,7 @@ class TestTranscricao:
     async def test_402_vira_erro_de_credito_e_nao_transcricao_vazia(self) -> None:
         from backend.llm.openrouter.client import OpenRouterCreditError
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(402, json={"error": {"message": "no credits"}})
 
         with pytest.raises(OpenRouterCreditError):
@@ -174,7 +175,7 @@ class TestCadeiaDeTranscricao:
             "backend.settings.configured_gateway_model", configured_model
         )
 
-        async def _fake(_client, **kwargs) -> str:
+        async def _fake(_client, **kwargs: bytes | str | None) -> str:
             assert kwargs["model"] == "whisper"
             return "transcrito via openrouter"
 
@@ -237,7 +238,7 @@ class TestCadeiaDeTranscricao:
             "backend.settings.configured_gateway_model", configured_model
         )
 
-        async def _fake(_client, **kwargs) -> str:
+        async def _fake(_client, **kwargs: bytes | str | None) -> str:
             assert kwargs["model"] == "whisper"
             return "transcrito"
 

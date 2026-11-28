@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.sandbox import runner
+from backend.sandbox import SandboxPolicy, SandboxResult, runner
 from backend.sandbox.policy import trusted_policy_path
 
 
@@ -362,7 +362,9 @@ async def test_quota_de_execucoes_batch_rejeita_acima_do_limite(
     limite = runner.MAX_CONCURRENT_BATCH_RUNS_PER_WORKSPACE
     todos_dentro = asyncio.Event()
 
-    async def _backend_lento(_cmd, _dir, _policy, *, timeout_s):
+    async def _backend_lento(
+        _cmd: list[str], _dir: str, _policy: SandboxPolicy, *, timeout_s: float
+    ) -> SandboxResult:
         if runner._active_batch_runs.get(ws, 0) >= limite:
             todos_dentro.set()
         await solta.wait()
@@ -403,7 +405,9 @@ async def test_quota_e_por_workspace_e_nao_atinge_backends_nao_batch(
     b_entrou = asyncio.Event()
     contagem_vista_por_b: dict[str, int] = {}
 
-    async def _backend_lento(_cmd, workspace_dir, _policy, *, timeout_s):
+    async def _backend_lento(
+        _cmd: list[str], workspace_dir: str, _policy: SandboxPolicy, *, timeout_s: float
+    ) -> SandboxResult:
         if workspace_dir == ws_b:
             contagem_vista_por_b.update(runner._active_batch_runs)
             b_entrou.set()
@@ -439,7 +443,9 @@ async def test_quota_e_por_workspace_e_nao_atinge_backends_nao_batch(
     )
     chamou: dict[str, dict[str, int] | None] = {"contagem_durante": None}
 
-    async def _backend_local(_cmd, _dir, _policy, *, timeout_s):
+    async def _backend_local(
+        _cmd: list[str], _dir: str, _policy: SandboxPolicy, *, timeout_s: float
+    ) -> SandboxResult:
         chamou["contagem_durante"] = dict(runner._active_batch_runs)
         return runner.SandboxResult(stdout="", stderr="", exit_code=0)
 

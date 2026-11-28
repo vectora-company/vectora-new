@@ -65,14 +65,14 @@ def _resposta_ok(texto: str = "ok") -> VMessage:
     )
 
 
-async def _async_value(value):
+async def _async_value(value: list[str]) -> list[str]:
     return value
 
 
 def _make_client(
     monkeypatch: pytest.MonkeyPatch,
     *,
-    fallback_chain,
+    fallback_chain: list[str],
     clients_por_modelo,
     on_model_switch=None,
 ) -> FallbackChatClient:
@@ -130,7 +130,7 @@ class TestAgenerate:
     ) -> None:
         trocas: list[tuple[str, str]] = []
 
-        async def registrar(de, para) -> None:
+        async def registrar(de: str, para: str) -> None:
             trocas.append((de, para))
 
         cliente = _make_client(

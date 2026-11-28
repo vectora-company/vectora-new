@@ -49,7 +49,7 @@ def _isolated_env_hierarchy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 class TestTavilyKeyPrecedence:
     def test_nine_router_key_user_env_wins_over_project_env(
-        self, _isolated_env_hierarchy
+        self, _isolated_env_hierarchy: tuple[Path, Path]
     ) -> None:
         vectora_home, project_dir = _isolated_env_hierarchy
         (vectora_home / ".env").write_text(
@@ -89,7 +89,7 @@ class TestTavilyKeyPrecedence:
         assert os.environ["NINE_ROUTER_MODEL"] == "cx/gpt-5.6-luna"
 
     def test_env_de_projeto_nao_vence_env_do_usuario(
-        self, _isolated_env_hierarchy
+        self, _isolated_env_hierarchy: tuple[Path, Path]
     ) -> None:
         vectora_home, project_dir = _isolated_env_hierarchy
         (vectora_home / ".env").write_text("TAVILY_API_KEY=tvly-user-value\n")
@@ -100,7 +100,7 @@ class TestTavilyKeyPrecedence:
         assert os.environ["TAVILY_API_KEY"] == "tvly-user-value"
 
     def test_regressao_google_api_key_continua_restaurada(
-        self, _isolated_env_hierarchy
+        self, _isolated_env_hierarchy: tuple[Path, Path]
     ) -> None:
         vectora_home, project_dir = _isolated_env_hierarchy
         (vectora_home / ".env").write_text("GOOGLE_API_KEY=AIza-user-value\n")
@@ -111,7 +111,7 @@ class TestTavilyKeyPrecedence:
         assert os.environ["GOOGLE_API_KEY"] == "AIza-user-value"
 
     def test_sem_env_de_usuario_projeto_prevalece_borda(
-        self, _isolated_env_hierarchy
+        self, _isolated_env_hierarchy: tuple[Path, Path]
     ) -> None:
         _vectora_home, project_dir = _isolated_env_hierarchy
         (project_dir / ".env").write_text("TAVILY_API_KEY=tvly-only-project\n")

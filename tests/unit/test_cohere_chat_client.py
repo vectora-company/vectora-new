@@ -11,6 +11,7 @@ import json
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.cohere.chat_client import CohereChatClient
 from backend.llm.cohere.client import CohereClient, CohereResponseError
@@ -47,7 +48,7 @@ def _resposta_ok(texto: str = "Olá", **extra) -> dict:
 
 class TestAgenerate:
     async def test_prompt_simples_devolve_conteudo(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json=_resposta_ok("Olá do Cohere"))
 
         resultado = await _client(handler).agenerate(
@@ -58,7 +59,7 @@ class TestAgenerate:
         assert resultado.role == MessageRole.ASSISTANT
 
     async def test_resposta_sem_message_vira_erro_tipado(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"id": "chat_1"})
 
         with pytest.raises(CohereResponseError, match="message"):
@@ -189,7 +190,7 @@ class TestToolCalling:
         assert tool["function"]["name"] == "buscar"
 
     async def test_tool_call_nao_streaming_volta_montada(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -220,7 +221,7 @@ class TestToolCalling:
         assert resultado.finish_reason == "tool_calls"
 
     async def test_arguments_invalido_nao_derruba_a_resposta(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -260,7 +261,7 @@ class TestStreaming:
             b'data: {"type":"message-end","delta":{"finish_reason":"COMPLETE"}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -276,7 +277,7 @@ class TestStreaming:
         assert texto == "Oi mundo"
 
     async def test_stream_sem_nenhum_chunk_util_nao_trava(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 content=b'data: {"type":"message-end","delta":{}}\n\n',
@@ -306,7 +307,7 @@ class TestStreamingToolCallsEUsage:
             b'data: {"type":"message-end","delta":{"finish_reason":"TOOL_CALL"}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -333,7 +334,7 @@ class TestStreamingToolCallsEUsage:
             b'"usage":{"tokens":{"input_tokens":10,"output_tokens":3}}}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )

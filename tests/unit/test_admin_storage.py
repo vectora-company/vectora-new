@@ -14,6 +14,8 @@ import pytest
 from fastapi import Request
 from httpx import AsyncClient
 
+from backend.workspace.runtime_settings import RuntimeSettings
+
 
 @pytest.fixture
 async def admin_client(
@@ -136,7 +138,7 @@ class TestAdminStoragePatch:
         loop_thread = threading.get_ident()
         writers: list[int] = []
 
-        def fake_set(self, key, value) -> None:
+        def fake_set(self, key: str, value: str) -> None:
             writers.append(threading.get_ident())
 
         monkeypatch.setattr(RuntimeSettings, "set", fake_set)
@@ -221,7 +223,9 @@ class TestStorageHealthUnit:
 class TestImageFallbackModelEndpoint:
     """GET/PATCH /admin/model/image-fallback."""
 
-    def _fresh_runtime(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def _fresh_runtime(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> RuntimeSettings:
         import backend.workspace.runtime_settings as rt_mod
         from backend.workspace.runtime_settings import RuntimeSettings
 

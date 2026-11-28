@@ -25,7 +25,7 @@ def _isolated_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_fetch_catalog_success_writes_cache_and_returns_entries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         return httpx.Response(
             200,
             json={"entries": [{"id": "filesystem"}]},
@@ -65,7 +65,7 @@ async def test_fetch_catalog_network_error_falls_back_to_existing_cache(
 async def test_fetch_catalog_no_network_no_cache_returns_empty_list_not_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, **kwargs) -> NoReturn:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -90,7 +90,7 @@ async def test_fetch_catalog_cache_within_offline_ttl_but_past_online_ttl_is_ser
         json.dumps(stale_but_usable), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, **kwargs) -> NoReturn:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -113,7 +113,7 @@ async def test_fetch_catalog_cache_expired_beyond_offline_ttl_is_not_used(
     registry_client._cache_path("mcp").parent.mkdir(parents=True, exist_ok=True)
     registry_client._cache_path("mcp").write_text(json.dumps(expired), encoding="utf-8")
 
-    async def _fake_get(self, url, **kwargs) -> NoReturn:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -189,7 +189,7 @@ async def test_fetch_official_mcp_registry_maps_npm_stdio_servers(
         [_npm_stdio_server("com.example/foo", "foo-mcp-server", ["FOO_API_KEY"])]
     )
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url: str, params: dict[str, str] | None = None, **kwargs):
         return httpx.Response(200, json=page, request=httpx.Request("GET", url))
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -217,7 +217,7 @@ async def test_fetch_official_mcp_registry_skips_remote_only_servers(
         ]
     )
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url: str, params: dict[str, str] | None = None, **kwargs):
         return httpx.Response(200, json=page, request=httpx.Request("GET", url))
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -239,7 +239,7 @@ async def test_fetch_official_mcp_registry_paginates_via_cursor(
     )
     calls: list[dict] = []
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url: str, params: dict[str, str] | None = None, **kwargs):
         calls.append(dict(params or {}))
         page = page1 if len(calls) == 1 else page2
         return httpx.Response(200, json=page, request=httpx.Request("GET", url))
@@ -284,7 +284,9 @@ async def test_fetch_official_mcp_registry_expired_cache_returns_empty_list(
         json.dumps(expired), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, params=None, **kwargs) -> NoReturn:
+    async def _fake_get(
+        self, url: str, params: dict[str, str] | None = None, **kwargs
+    ) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -309,7 +311,7 @@ async def test_fetch_official_mcp_registry_duplicate_id_across_pages_not_duplica
     )
     calls: list[dict] = []
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url: str, params: dict[str, str] | None = None, **kwargs):
         calls.append(dict(params or {}))
         page = page1 if len(calls) == 1 else page2
         return httpx.Response(200, json=page, request=httpx.Request("GET", url))
@@ -327,7 +329,9 @@ async def test_fetch_official_mcp_registry_duplicate_id_across_pages_not_duplica
 async def test_fetch_official_mcp_registry_no_network_no_cache_returns_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, params=None, **kwargs) -> NoReturn:
+    async def _fake_get(
+        self, url: str, params: dict[str, str] | None = None, **kwargs
+    ) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -346,7 +350,7 @@ async def test_fetch_catalog_corrupted_cache_file_is_ignored_not_raised(
     registry_client._cache_path("mcp").parent.mkdir(parents=True, exist_ok=True)
     registry_client._cache_path("mcp").write_text("{not valid json", encoding="utf-8")
 
-    async def _fake_get(self, url, **kwargs) -> NoReturn:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -371,7 +375,7 @@ async def test_fetch_catalog_empty_entries_from_remote_overwrites_cache(
         json.dumps(stale), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         return httpx.Response(
             200, json={"entries": []}, request=httpx.Request("GET", url)
         )
@@ -467,7 +471,7 @@ async def test_fetch_catalog_pro_required_does_not_serve_cached_entries(
         json.dumps(stale_cache), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         return httpx.Response(
             403, json={"error": "pro_required"}, request=httpx.Request("GET", url)
         )
@@ -535,7 +539,7 @@ async def test_fetch_catalog_le_a_library_e_normaliza_as_entradas(
     `catalog_source` e `stars_count`."""
     calls: list[str] = []
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         calls.append(url)
         return httpx.Response(
             200,
@@ -578,7 +582,7 @@ async def test_fetch_catalog_status_usa_a_rota_de_status_da_library(
 ) -> None:
     calls: list[str] = []
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]):
         calls.append(url)
         return httpx.Response(
             200,

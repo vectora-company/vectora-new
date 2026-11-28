@@ -19,6 +19,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from backend.llm.openrouter import OpenRouterClient
+from backend.tools.tavily import TavilyClient
+
 
 @pytest.fixture(autouse=True)
 def _sem_credenciais(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
@@ -81,7 +84,7 @@ class TestAgregador:
 
         monkeypatch.setattr(_s, "openrouter_api_key", "sk-or-test", raising=False)
 
-        async def _get_json(_self, path: str):
+        async def _get_json(_self: OpenRouterClient, path: str):
             if path.endswith("/credits"):
                 return {"data": {"total_credits": 50.0, "total_usage": 12.5}}
             return {"data": {"limit": 100, "limit_remaining": 87.5}}
@@ -127,7 +130,7 @@ class TestAgregador:
         monkeypatch.setattr(_s, "tavily_api_key", "tvly-test", raising=False)
         monkeypatch.setattr(_s, "openrouter_api_key", "sk-or-test", raising=False)
 
-        async def _get_json(_self, path: str):
+        async def _get_json(_self: OpenRouterClient, path: str):
             if path.endswith("/credits"):
                 return {"data": {"total_credits": 10.0, "total_usage": 1.0}}
             return {"data": {}}
@@ -164,7 +167,7 @@ class TestCache:
 
         chamadas = 0
 
-        async def _usage(_self):
+        async def _usage(_self: TavilyClient) -> dict[str, dict[str, int]]:
             nonlocal chamadas
             chamadas += 1
             return {"key": {"usage": 1, "limit": 10}}
@@ -189,7 +192,7 @@ class TestCache:
 
         chamadas = 0
 
-        async def _usage(_self) -> NoReturn:
+        async def _usage(_self: TavilyClient) -> NoReturn:
             nonlocal chamadas
             chamadas += 1
             raise RuntimeError("instável")

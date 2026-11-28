@@ -133,7 +133,9 @@ class TestSearchMemoryTool:
         live = _FakeStoreItem("live", "válida", score=0.5)
         store = AsyncMock()
 
-        async def paged_search(_namespace, *, query, limit):
+        async def paged_search(
+            _namespace: tuple[str, str, str], *, query: str, limit: int
+        ):
             """Executa a operação paged search."""
             assert query == "x"
             return [*expired, live][:limit]

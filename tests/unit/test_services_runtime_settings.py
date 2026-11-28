@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from pathlib import Path
+from sqlite3 import Cursor
 from typing import cast
 
 import pytest
@@ -191,7 +192,9 @@ class TestPersistence:
                 self._delegate = delegate
                 self._failed = False
 
-            def execute(self, sql: str, parameters: tuple[str | int | None, ...] = ()):
+            def execute(
+                self, sql: str, parameters: tuple[str | int | None, ...] = ()
+            ) -> Cursor:
                 # O wrapper é um dublê local apenas para injetar a falha de commit.
                 return self._delegate.execute(sql, parameters)
 
@@ -226,7 +229,9 @@ class TestPersistence:
                 self._connection = connection
                 self._locked = True
 
-            def execute(self, sql: str, parameters: tuple[str | int | None, ...] = ()):
+            def execute(
+                self, sql: str, parameters: tuple[str | int | None, ...] = ()
+            ) -> Cursor:
                 if self._locked:
                     self._locked = False
                     raise sqlite3.OperationalError("database is locked")
@@ -407,7 +412,7 @@ class TestFrontendPrefs:
         connection = first._conn
 
         class FailingConnection:
-            def execute(self, query, parameters=()):
+            def execute(self, query: str, parameters=()) -> Cursor:
                 if failure == "write" and query.startswith("INSERT"):
                     raise sqlite3.OperationalError("write failed")
                 return connection.execute(query, parameters)

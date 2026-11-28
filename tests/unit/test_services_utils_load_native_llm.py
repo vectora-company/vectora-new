@@ -12,7 +12,7 @@ levanta erro claro quando nada foi configurado.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, _patch, patch
 
 import pytest
 
@@ -32,7 +32,7 @@ def _isolated_runtime_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
 
 
-def _mock_load_chat_client():
+def _mock_load_chat_client() -> _patch:
     return patch(
         "backend.llm.fallback_chat_client.load_chat_client",
         return_value=MagicMock(),

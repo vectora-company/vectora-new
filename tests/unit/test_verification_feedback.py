@@ -145,7 +145,9 @@ async def test_next_turn_sends_the_failure_to_the_model(
         "thread-f", text_message(MessageRole.USER, "continue")
     )
 
-    async def fake_verification(*_args, **_kwargs) -> VerificationResult:
+    async def fake_verification(
+        *_args: str | None, **_kwargs: str | None
+    ) -> VerificationResult:
         return VerificationResult(
             passed=True, status="passed", snapshot_sha256="x", outcome="passed"
         )

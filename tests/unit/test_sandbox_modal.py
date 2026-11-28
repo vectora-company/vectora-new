@@ -117,7 +117,7 @@ async def test_timeout_no_modal_cloud_devolve_timed_out(
 
     import backend.sandbox.modal as sandbox_modal
 
-    async def _raise_timeout(*_a, **_kw) -> NoReturn:
+    async def _raise_timeout(*_a, **_kw: float) -> NoReturn:
         raise TimeoutError
 
     monkeypatch.setattr(sandbox_modal.asyncio, "wait_for", _raise_timeout)
@@ -302,7 +302,7 @@ async def test_timeout_returns_clear_error_without_raising(
 
     import backend.sandbox.modal as sandbox_modal
 
-    async def _raise_timeout(*_a, **_kw) -> NoReturn:
+    async def _raise_timeout(*_a, **_kw: float) -> NoReturn:
         raise TimeoutError
 
     monkeypatch.setattr(sandbox_modal.asyncio, "wait_for", _raise_timeout)

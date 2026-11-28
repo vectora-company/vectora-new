@@ -51,7 +51,7 @@ async def test_exec_nonzero_exit_code_propagated(
 async def test_exec_command_not_found_returns_error_not_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _raise(*_args, **_kwargs) -> NoReturn:
+    async def _raise(*_args: str, **_kwargs: int | None) -> NoReturn:
         raise FileNotFoundError("nope")
 
     monkeypatch.setattr(worker.asyncio, "create_subprocess_exec", _raise)

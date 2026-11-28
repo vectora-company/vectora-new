@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from git import Repo
 from starlette.requests import Request
 
 from backend.services import git_people as gp
@@ -172,7 +173,7 @@ class TestFilter:
 
 
 @pytest.fixture
-def ws_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def ws_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
     import git
 
     from backend.vtypes import Workspace

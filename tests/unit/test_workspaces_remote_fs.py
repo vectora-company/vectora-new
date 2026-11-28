@@ -13,11 +13,13 @@ from backend.transport.base import DirEntry, RunResult
 
 
 @pytest.fixture
-def remote(monkeypatch: pytest.MonkeyPatch):
+def remote(monkeypatch: pytest.MonkeyPatch) -> tuple[SimpleNamespace, AsyncMock]:
     ws = SimpleNamespace(transport="codespace", remote_path="/workspaces/project")
     transport = AsyncMock()
 
-    async def resolve(_workspace_id: str, path: str):
+    async def resolve(
+        _workspace_id: str, path: str
+    ) -> tuple[SimpleNamespace, AsyncMock, str]:
         target = f"/workspaces/project/{path}" if path else "/workspaces/project"
         return ws, transport, target
 
@@ -30,7 +32,7 @@ def remote(monkeypatch: pytest.MonkeyPatch):
 
 
 async def test_remote_tree_lists_workspace_entries(
-    remote, monkeypatch: pytest.MonkeyPatch
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _ws, transport = remote
     monkeypatch.setattr(
@@ -52,7 +54,7 @@ async def test_remote_tree_lists_workspace_entries(
 
 
 async def test_remote_file_preview_and_hash(
-    remote, monkeypatch: pytest.MonkeyPatch
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _ws, transport = remote
     content = b"remote"
@@ -70,7 +72,7 @@ async def test_remote_file_preview_and_hash(
 
 
 async def test_remote_update_uses_optimistic_hash(
-    remote, monkeypatch: pytest.MonkeyPatch
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _ws, transport = remote
     current = b"old"
@@ -93,7 +95,7 @@ async def test_remote_update_uses_optimistic_hash(
 
 
 async def test_remote_create_file_uses_transport(
-    remote, monkeypatch: pytest.MonkeyPatch
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _ws, transport = remote
     monkeypatch.setattr(
@@ -113,7 +115,7 @@ async def test_remote_create_file_uses_transport(
 
 
 async def test_remote_create_directory_uses_confined_path(
-    remote, monkeypatch: pytest.MonkeyPatch
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ws, transport = remote
     run = AsyncMock()
@@ -132,7 +134,9 @@ async def test_remote_create_directory_uses_confined_path(
     )
 
 
-async def test_remote_delete_requires_explicit_permanent_confirmation(remote) -> None:
+async def test_remote_delete_requires_explicit_permanent_confirmation(
+    remote: tuple[SimpleNamespace, AsyncMock],
+) -> None:
     _ws, transport = remote
 
     result = await workspaces.delete_fs_node("ws", path="src/a.txt", permanent=False)
@@ -143,7 +147,7 @@ async def test_remote_delete_requires_explicit_permanent_confirmation(remote) ->
 
 
 async def test_remote_move_checks_conflicts_and_runs_rename(
-    remote, monkeypatch: pytest.MonkeyPatch
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ws, transport = remote
     monkeypatch.setattr(
@@ -169,7 +173,7 @@ async def test_remote_move_checks_conflicts_and_runs_rename(
 
 
 async def test_remote_update_writes_new_content_after_hash_check(
-    remote, monkeypatch: pytest.MonkeyPatch
+    remote: tuple[SimpleNamespace, AsyncMock], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _ws, transport = remote
     current = b"old"
@@ -196,7 +200,9 @@ async def test_remote_update_writes_new_content_after_hash_check(
     )
 
 
-async def test_remote_search_returns_relative_matches(remote) -> None:
+async def test_remote_search_returns_relative_matches(
+    remote: tuple[SimpleNamespace, AsyncMock],
+) -> None:
     _ws, transport = remote
     transport.run.return_value = RunResult(
         0,

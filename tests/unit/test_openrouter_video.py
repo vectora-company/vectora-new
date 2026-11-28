@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
 from backend.llm.openrouter.video import (
@@ -28,14 +29,14 @@ def _client(handler) -> OpenRouterClient:
     )
 
 
-def _resposta_status(status: str, **extra) -> dict:
+def _resposta_status(status: str, **extra: dict[str, str] | str) -> dict:
     return {"id": "vid-1", "status": status, **extra}
 
 
 class TestInicio:
     @pytest.mark.asyncio
     async def test_202_devolve_id_e_polling_url(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 202,
                 json={
@@ -58,7 +59,7 @@ class TestInicio:
         """Erro/borda: sem `id` não há como consultar o progresso — o job
         estaria perdido, rodando e cobrando sem ninguém buscar o resultado."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(202, json={"status": "pending"})
 
         with pytest.raises(OpenRouterResponseError, match="id"):

@@ -221,7 +221,9 @@ async def test_criacao_concorrente_de_dois_worktrees_para_tasks_diferentes_nao_c
         "task-b": "/home/user/.vectora/worktrees/ws1/task-b",
     }
 
-    def _fake_worktree_impl(_repo, _workspace_id, _action, *, name):
+    def _fake_worktree_impl(
+        _repo: MagicMock, _workspace_id: str, _action: str, *, name: str
+    ) -> dict[str, str]:
         return {"status": "ok", "action": "add", "path": call_paths[name]}
 
     with (

@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from backend.vtypes.contracts import JsonObject
+
 # ---------------------------------------------------------------------------
 # Fixture helpers
 # ---------------------------------------------------------------------------
@@ -37,7 +39,7 @@ def _write_graph(tmp_path: Path, data: dict) -> Path:
     return d
 
 
-def _write_status(graph_dir: Path, status: str, **extra) -> None:
+def _write_status(graph_dir: Path, status: str, **extra: int | list[str] | str) -> None:
     payload = {"status": status, "built_at": "2026-01-01T00:00:00Z", **extra}
     (graph_dir / "build_status.json").write_text(json.dumps(payload), encoding="utf-8")
 
@@ -708,7 +710,7 @@ class TestPostBuild:
 
         registry, _ = _make_registry(tmp_path)
 
-        async def pipeline_ok(*_a, resume: bool = False, **_k) -> MagicMock:
+        async def pipeline_ok(*_a: str, resume: bool = False, **_k) -> MagicMock:
             return MagicMock(error=None, node_count=0, edge_count=0)
 
         mock_pipeline = AsyncMock(side_effect=pipeline_ok)
@@ -732,7 +734,7 @@ class TestPostBuild:
 
         registry, _ = _make_registry(tmp_path)
 
-        async def pipeline_ok(*_a, **_k) -> MagicMock:
+        async def pipeline_ok(*_a: str, **_k) -> MagicMock:
             return MagicMock(error=None, node_count=0, edge_count=0)
 
         mock_pipeline = AsyncMock(side_effect=pipeline_ok)
@@ -827,7 +829,7 @@ class TestRunBuildStatus:
     async def test_quota_exhausted_writes_paused(self, tmp_path: Path) -> None:
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        async def boom(*a, **k) -> NoReturn:
+        async def boom(*a: str, **k) -> NoReturn:
             raise QuotaExhaustedError("todos os providers esgotaram a quota")
 
         s = await self._run(tmp_path, boom)
@@ -837,7 +839,7 @@ class TestRunBuildStatus:
 
     @pytest.mark.asyncio
     async def test_generic_error_writes_error(self, tmp_path: Path) -> None:
-        async def boom(*a, **k) -> NoReturn:
+        async def boom(*a: str, **k) -> NoReturn:
             raise ValueError("pipeline quebrou")
 
         s = await self._run(tmp_path, boom)
@@ -848,7 +850,7 @@ class TestRunBuildStatus:
     async def test_quota_not_classified_as_error(self, tmp_path: Path) -> None:
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        async def boom(*a, **k) -> NoReturn:
+        async def boom(*a: str, **k) -> NoReturn:
             raise QuotaExhaustedError("quota")
 
         s = await self._run(tmp_path, boom)
@@ -862,7 +864,7 @@ class TestRunBuildStatus:
         result.node_count = 7
         result.edge_count = 9
 
-        async def ok(*a, **k):
+        async def ok(*a: str, **k) -> MagicMock:
             return result
 
         s = await self._run(tmp_path, ok)
@@ -876,7 +878,7 @@ class TestRunBuildStatus:
         result = MagicMock()
         result.error = "extração falhou"
 
-        async def err(*a, **k):
+        async def err(*a: str, **k) -> MagicMock:
             return result
 
         s = await self._run(tmp_path, err)
@@ -895,7 +897,9 @@ class TestRunBuildStatus:
 
         registry, _ = _make_registry(tmp_path)
 
-        async def boom_after_progress(*a, on_progress=None, **k) -> NoReturn:
+        async def boom_after_progress(
+            *a: str, on_progress=None, **k: bool | str | None
+        ) -> NoReturn:
             if on_progress:
                 on_progress(3, 9, "Análise semântica", 5, 10)
             raise QuotaExhaustedError("quota")
@@ -923,7 +927,7 @@ class TestRunBuildStatus:
         """Se quota estoura antes de qualquer on_progress, step deve ser None."""
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        async def boom_imediato(*a, **k) -> NoReturn:
+        async def boom_imediato(*a: str, **k) -> NoReturn:
             raise QuotaExhaustedError("quota imediata")
 
         s = await self._run(tmp_path, boom_imediato)
@@ -1310,10 +1314,10 @@ class TestFalkorDBDestination:
         queries = []
 
         class FakeSSLConnection:
-            def __init__(self, **kwargs) -> None:
+            def __init__(self, **kwargs: int | str | None) -> None:
                 self.__dict__.update(kwargs)
 
-            def _wrap_socket_with_ssl(self, sock):
+            def _wrap_socket_with_ssl(self, sock: str) -> tuple[str, str]:
                 host = self.__dict__["host"]
                 connections["tls_hostname"] = host
                 return (sock, host)
@@ -1323,14 +1327,14 @@ class TestFalkorDBDestination:
                 connections["pool"] = kwargs
 
         class FakeGraph:
-            def query(self, query, params) -> None:
+            def query(self, query: str, params: JsonObject) -> None:
                 queries.append((query, params))
 
         class FakeFalkorDB:
             def __init__(self, *, connection_pool) -> None:
                 self.connection_pool = connection_pool
 
-            def select_graph(self, _name):
+            def select_graph(self, _name: str):
                 return FakeGraph()
 
             def close(self) -> None:

@@ -97,7 +97,9 @@ class TestListArtifacts:
         request.state.user = SimpleNamespace(id="owner")
 
         class SessionStore:
-            async def get_session(self, thread_id, *, user_id=None):
+            async def get_session(
+                self, thread_id: str, *, user_id: str | None = None
+            ) -> dict[str, str]:
                 assert thread_id == "thread-with-workspace"
                 return {"workspace_id": "workspace-1", "user_id": "owner"}
 
@@ -151,7 +153,7 @@ class TestListArtifacts:
         )
         assert opened.artifact_type == "workspace_plan"
 
-        def deny_workspace_access(workspace_id, request) -> NoReturn:
+        def deny_workspace_access(workspace_id: str, request) -> NoReturn:
             raise HTTPException(status_code=403, detail="Sem acesso")
 
         monkeypatch.setattr(
@@ -189,7 +191,9 @@ class TestListArtifacts:
         request.state.user = SimpleNamespace(id="owner")
 
         class SessionStore:
-            async def get_session(self, thread_id, *, user_id=None):
+            async def get_session(
+                self, thread_id: str, *, user_id: str | None = None
+            ) -> dict[str, str]:
                 return {"workspace_id": "workspace-remote", "user_id": "owner"}
 
         async def get_session_store():
@@ -495,7 +499,7 @@ class TestGetArtifact:
         path = _write_artifact(fake_home, "unreadable", "plan", "# Existing plan")
         original_read_text = Path.read_text
 
-        def fail_for_artifact(file_path: Path, *args, **kwargs):
+        def fail_for_artifact(file_path: Path, *args, **kwargs: str):
             if file_path == path:
                 raise PermissionError("storage unavailable")
             return original_read_text(file_path, *args, **kwargs)
@@ -642,7 +646,7 @@ class TestMediaNaListagem:
         (base / "guia.md").write_text("# Guia", encoding="utf-8")
         monkeypatch.setattr(mod, "_artifact_dirs", lambda _s: (base,))
 
-        def _explode(_self) -> NoReturn:
+        def _explode(_self: Path) -> NoReturn:
             """Executa a operação  explode."""
             raise OSError("sem permissão")
 

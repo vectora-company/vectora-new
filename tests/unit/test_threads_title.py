@@ -13,6 +13,7 @@ from typing import NoReturn
 import pytest
 
 from backend.api.handlers import threads as threads_mod
+from backend.vtypes import VMessage
 from backend.vtypes.message import MessageRole, text_message
 
 
@@ -20,7 +21,7 @@ class _FakeLLM:
     def __init__(self, content: str) -> None:
         self._content = content
 
-    async def agenerate(self, _messages, **_kwargs):
+    async def agenerate(self, _messages: list[VMessage], **_kwargs) -> VMessage:
         return text_message(MessageRole.ASSISTANT, self._content)
 
 

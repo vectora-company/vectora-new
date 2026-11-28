@@ -36,6 +36,7 @@ from backend.tools.registry import (
     _result_is_error,
     vtool,
 )
+from backend.vtypes import VectoraContext
 from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import ToolCall
 
@@ -834,7 +835,7 @@ class TestDespachoParaleloSequencial:
             if phase == "callback":
                 current_preferences["decisionModelsEnabled"] = False
 
-        async def billing(context):
+        async def billing(context: VectoraContext) -> VectoraContext:
             assert phase == "billing"
             current_preferences["decisionModelsEnabled"] = False
             return context
@@ -1281,7 +1282,9 @@ async def test_policy_is_rechecked_after_last_pre_execute_hook(
 
     calls = []
 
-    def hook(call, context, snapshot):
+    def hook(
+        call, context: VectoraContext, snapshot: PolicySnapshot
+    ) -> tuple[bool, str]:
         context._extra.setdefault("systemone_decisions", {})["unused"] = {}
         context._extra["tool_policy_version"] = "changed"
         calls.append(call.name)
@@ -1326,7 +1329,7 @@ async def test_policy_is_rechecked_after_last_pre_execute_hook(
     ],
 )
 async def test_invalid_decision_contract_blocks_handler(
-    ctx: ToolContext, record
+    ctx: ToolContext, record: JsonObject
 ) -> None:
     from backend.engine.hitl import _risk_assessment_key
 

@@ -43,7 +43,7 @@ async def sidecar_url():
 
 
 @pytest.mark.asyncio
-async def test_nats_mq_enqueue_returns_nonempty_string_id(sidecar_url) -> None:
+async def test_nats_mq_enqueue_returns_nonempty_string_id(sidecar_url: str) -> None:
     mq = NatsMQ(sidecar_url)
     try:
         msg_id = await mq.enqueue("test-stream-real", {"a": 1})
@@ -54,7 +54,7 @@ async def test_nats_mq_enqueue_returns_nonempty_string_id(sidecar_url) -> None:
 
 
 @pytest.mark.asyncio
-async def test_nats_mq_consume_delivers_stream_message_shape(sidecar_url) -> None:
+async def test_nats_mq_consume_delivers_stream_message_shape(sidecar_url: str) -> None:
     mq = NatsMQ(sidecar_url)
     received: list[StreamMessage] = []
     stop = asyncio.Event()
@@ -81,7 +81,7 @@ async def test_nats_mq_consume_delivers_stream_message_shape(sidecar_url) -> Non
 
 
 @pytest.mark.asyncio
-async def test_nats_kv_get_set_delete_round_trip_real(sidecar_url) -> None:
+async def test_nats_kv_get_set_delete_round_trip_real(sidecar_url: str) -> None:
     kv = NatsKV(sidecar_url)
     try:
         await kv.set("real-key", "real-value")
@@ -96,7 +96,7 @@ async def test_nats_kv_get_set_delete_round_trip_real(sidecar_url) -> None:
 
 
 @pytest.mark.asyncio
-async def test_nats_kv_get_missing_key_returns_none_type(sidecar_url) -> None:
+async def test_nats_kv_get_missing_key_returns_none_type(sidecar_url: str) -> None:
     kv = NatsKV(sidecar_url)
     try:
         value = await kv.get("chave-que-nunca-existiu")

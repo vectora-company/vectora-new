@@ -126,7 +126,7 @@ class TestVectoraMCPClientReal:
                 return None
 
         @asynccontextmanager
-        async def fake_stdio(params):
+        async def fake_stdio(params: StdioServerParameters):
             captured.append(params)
             yield object(), object()
 

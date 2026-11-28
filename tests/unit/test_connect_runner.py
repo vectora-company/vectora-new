@@ -24,6 +24,7 @@ from backend.services.connect import runner
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
 from backend.tools.registry import ToolRegistry
+from backend.vtypes import VectoraContext
 from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import ToolCallChunk, VMessageChunk
 from tests.chat_fakes import (
@@ -217,7 +218,9 @@ class TestRunAgentForThread:
 
         original_ctx_from_config = runner.ctx_from_config
 
-        def _ctx_with_connector_decisions(config):
+        def _ctx_with_connector_decisions(
+            config: dict[str, dict[str, str]],
+        ) -> VectoraContext:
             ctx = original_ctx_from_config(config)
             ctx._extra["decision_model_preferences"] = {
                 "enabled": True,
@@ -226,7 +229,14 @@ class TestRunAgentForThread:
             }
             return ctx
 
-        async def _require_human(_harness, *, tool_name, ctx, args, **_kwargs) -> bool:
+        async def _require_human(
+            _harness,
+            *,
+            tool_name: str,
+            ctx: VectoraContext,
+            args,
+            **_kwargs: tuple[str, str],
+        ) -> bool:
             key = _risk_assessment_key(tool_name, args)
             ctx._extra.setdefault("systemone_decisions", {})[key] = {
                 "decision": "requires_human",

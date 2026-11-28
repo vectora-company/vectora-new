@@ -131,7 +131,7 @@ async def test_generate_video_provider_sem_suporte_avisa_sem_chamar_sdk(
 async def test_generate_video_grava_mp4_e_prompt_vazio_e_recusado(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    async def _fake(*_a, **_k) -> bytes:
+    async def _fake(*_a: str | None, **_k) -> bytes:
         return b"\x00\x00\x00\x18ftypmp42"
 
     monkeypatch.setattr(media, "_generate_video_bytes", _fake)
@@ -167,7 +167,7 @@ async def test_generate_video_vazio_nao_grava_arquivo_de_zero_byte(
     """Erro/borda: gravar 0 byte criaria um artifact que a UI mostra como
     vídeo e nenhum player consegue abrir."""
 
-    async def _vazio(*_a, **_k) -> bytes:
+    async def _vazio(*_a: str | None, **_k) -> bytes:
         return b""
 
     monkeypatch.setattr(media, "_generate_video_bytes", _vazio)
@@ -190,7 +190,7 @@ async def test_generate_video_timeout_vira_erro_legivel(
     """O job pode continuar rodando no provider — a mensagem precisa dizer
     isso, senão o usuário regera (e paga) achando que falhou."""
 
-    async def _estourou(*_a, **_k) -> NoReturn:
+    async def _estourou(*_a: str | None, **_k) -> NoReturn:
         raise media.VideoGenerationTimeoutError(
             "geração não concluiu em 900s — o job pode seguir rodando"
         )
@@ -244,7 +244,7 @@ class _ClienteVeoFake:
         cliente = self
 
         class _Models:
-            async def generate_videos(self, **_kw):
+            async def generate_videos(self, **_kw: str):
                 return cliente.operacao
 
         class _Ops:
@@ -336,7 +336,7 @@ async def test_analyze_video_responde_e_arquivo_inexistente_e_recusado(
 
     monkeypatch.setattr(settings, "vectora_home", tmp_path)
 
-    async def _fake(_provider, _model, path, question) -> str:
+    async def _fake(_provider: str, _model: str, path: str, question: str) -> str:
         return f"vi {Path(path).name} e você perguntou: {question}"
 
     monkeypatch.setattr(media, "_analyze_video_text", _fake)
@@ -373,7 +373,7 @@ async def test_analyze_video_falha_do_sdk_vira_erro_tipado(
 
     monkeypatch.setattr(settings, "vectora_home", tmp_path)
 
-    async def _explode(*_a, **_k) -> NoReturn:
+    async def _explode(*_a: str, **_k) -> NoReturn:
         raise RuntimeError("quota estourada")
 
     monkeypatch.setattr(media, "_analyze_video_text", _explode)

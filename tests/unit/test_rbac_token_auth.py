@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from aiosqlite import Connection
 
 from backend.rbac import token_auth
 
@@ -42,7 +43,7 @@ async def db(tmp_path: Path):
 
 class TestCreateAndVerify:
     @pytest.mark.asyncio
-    async def test_token_criado_verifica_com_sucesso(self, db) -> None:
+    async def test_token_criado_verifica_com_sucesso(self, db: Connection) -> None:
         token_obj, raw_token = await token_auth.create_service_token(
             db, "ci-bot", ["webhook:trigger"]
         )
@@ -57,7 +58,7 @@ class TestCreateAndVerify:
 
     @pytest.mark.asyncio
     async def test_token_invalido_ou_ausente_nunca_autentica_sem_lancar(
-        self, db
+        self, db: Connection
     ) -> None:
         """Erro/borda: token desconhecido, vazio, e um token real revogado
         — os três devolvem None, nunca lançam."""
@@ -71,7 +72,7 @@ class TestCreateAndVerify:
 
 class TestRevoke:
     @pytest.mark.asyncio
-    async def test_revoga_e_segunda_chamada_e_idempotente(self, db) -> None:
+    async def test_revoga_e_segunda_chamada_e_idempotente(self, db: Connection) -> None:
         token_obj, _ = await token_auth.create_service_token(db, "x", [])
 
         assert await token_auth.revoke_service_token(db, token_obj.id) is True
@@ -79,13 +80,15 @@ class TestRevoke:
         assert await token_auth.revoke_service_token(db, token_obj.id) is False
 
     @pytest.mark.asyncio
-    async def test_revogar_id_inexistente_retorna_false_sem_lancar(self, db) -> None:
+    async def test_revogar_id_inexistente_retorna_false_sem_lancar(
+        self, db: Connection
+    ) -> None:
         assert await token_auth.revoke_service_token(db, "id-inexistente") is False
 
 
 class TestListServiceTokens:
     @pytest.mark.asyncio
-    async def test_lista_inclui_revogados_sem_token_cru(self, db) -> None:
+    async def test_lista_inclui_revogados_sem_token_cru(self, db: Connection) -> None:
         t1, _ = await token_auth.create_service_token(db, "ativo", [])
         t2, _ = await token_auth.create_service_token(db, "revogado", [])
         await token_auth.revoke_service_token(db, t2.id)
@@ -100,7 +103,9 @@ class TestListServiceTokens:
             assert not hasattr(t, "token_hash")
 
     @pytest.mark.asyncio
-    async def test_banco_vazio_retorna_lista_vazia_sem_erro(self, db) -> None:
+    async def test_banco_vazio_retorna_lista_vazia_sem_erro(
+        self, db: Connection
+    ) -> None:
         assert await token_auth.list_service_tokens(db) == []
 
 

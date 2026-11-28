@@ -14,12 +14,15 @@ listar/ler.
 from __future__ import annotations
 
 import hashlib
+from builtins import frozenset
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from git import Repo
 from starlette.requests import Request
 
+from backend.services.memory_index import MemoryIndexHit
 from backend.vtypes import Workspace
 from backend.workspace.runtime_settings import RuntimeSettings
 
@@ -29,7 +32,7 @@ from backend.workspace.runtime_settings import RuntimeSettings
 
 
 @pytest.fixture
-def trusted_ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def trusted_ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[str, Path]:
     """Registra um workspace confiável em tmp_path no registry.
 
     Devolve uma tupla ``(workspace_id, tmp_path)`` para os testes montarem
@@ -59,7 +62,9 @@ def trusted_ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 class TestWorkspaceTree:
     @pytest.mark.asyncio
-    async def test_lists_root_when_path_empty(self, trusted_ws) -> None:
+    async def test_lists_root_when_path_empty(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import workspace_tree
 
         wsid, root = trusted_ws
@@ -72,7 +77,7 @@ class TestWorkspaceTree:
         assert "sub" in names
 
     @pytest.mark.asyncio
-    async def test_lists_subdir(self, trusted_ws) -> None:
+    async def test_lists_subdir(self, trusted_ws: tuple[str, Path]) -> None:
         from backend.api.handlers.workspaces import workspace_tree
 
         wsid, root = trusted_ws
@@ -84,7 +89,7 @@ class TestWorkspaceTree:
         assert "inside.txt" in names
 
     @pytest.mark.asyncio
-    async def test_filters_noisy_dirs(self, trusted_ws) -> None:
+    async def test_filters_noisy_dirs(self, trusted_ws: tuple[str, Path]) -> None:
         """`.git`, `node_modules`, `.venv`, `__pycache__` não aparecem."""
         from backend.api.handlers.workspaces import workspace_tree
 
@@ -100,7 +105,7 @@ class TestWorkspaceTree:
             assert noisy not in names
 
     @pytest.mark.asyncio
-    async def test_marks_dirs_and_files(self, trusted_ws) -> None:
+    async def test_marks_dirs_and_files(self, trusted_ws: tuple[str, Path]) -> None:
         from backend.api.handlers.workspaces import workspace_tree
 
         wsid, root = trusted_ws
@@ -113,7 +118,9 @@ class TestWorkspaceTree:
         assert kinds["x.md"] == "file"
 
     @pytest.mark.asyncio
-    async def test_returns_empty_for_traversal_attempt(self, trusted_ws) -> None:
+    async def test_returns_empty_for_traversal_attempt(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         """`..` resolve fora do workspace → guard rail bloqueia."""
         from backend.api.handlers.workspaces import workspace_tree
 
@@ -123,7 +130,7 @@ class TestWorkspaceTree:
 
     @pytest.mark.asyncio
     async def test_returns_empty_for_symlink_outside_workspace(
-        self, trusted_ws
+        self, trusted_ws: tuple[str, Path]
     ) -> None:
         from backend.api.handlers.workspaces import workspace_tree
 
@@ -142,7 +149,9 @@ class TestWorkspaceTree:
         assert resp.entries == []
 
     @pytest.mark.asyncio
-    async def test_returns_empty_for_unknown_workspace(self, trusted_ws) -> None:
+    async def test_returns_empty_for_unknown_workspace(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import workspace_tree
 
         # Fixture só registra "vws" — mantém workspace_registry.get("nope")
@@ -223,7 +232,7 @@ class TestWorkspaceTree:
 
 class TestWorkspaceFile:
     @pytest.mark.asyncio
-    async def test_reads_text_file(self, trusted_ws) -> None:
+    async def test_reads_text_file(self, trusted_ws: tuple[str, Path]) -> None:
         from backend.api.handlers.workspaces import workspace_file
 
         wsid, root = trusted_ws
@@ -241,7 +250,7 @@ class TestWorkspaceFile:
         assert resp.sha256 == hashlib.sha256(raw).hexdigest()
 
     @pytest.mark.asyncio
-    async def test_detects_binary_file(self, trusted_ws) -> None:
+    async def test_detects_binary_file(self, trusted_ws: tuple[str, Path]) -> None:
         """Byte nulo nos primeiros 8 kB → kind=binary, sem conteúdo."""
         from backend.api.handlers.workspaces import workspace_file
 
@@ -254,7 +263,7 @@ class TestWorkspaceFile:
         assert resp.size > 0
 
     @pytest.mark.asyncio
-    async def test_truncates_large_text(self, trusted_ws) -> None:
+    async def test_truncates_large_text(self, trusted_ws: tuple[str, Path]) -> None:
         """Arquivos acima de 256 kB são truncados (campo `truncated=True`)."""
         from backend.api.handlers.workspaces import workspace_file
 
@@ -271,7 +280,9 @@ class TestWorkspaceFile:
         assert resp.sha256 is None
 
     @pytest.mark.asyncio
-    async def test_returns_empty_for_missing_file(self, trusted_ws) -> None:
+    async def test_returns_empty_for_missing_file(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import workspace_file
 
         wsid, _ = trusted_ws
@@ -280,7 +291,7 @@ class TestWorkspaceFile:
         assert resp.size == 0
 
     @pytest.mark.asyncio
-    async def test_blocks_traversal(self, trusted_ws) -> None:
+    async def test_blocks_traversal(self, trusted_ws: tuple[str, Path]) -> None:
         """Path `..` ou absoluto fora do workspace é bloqueado."""
         from backend.api.handlers.workspaces import workspace_file
 
@@ -302,7 +313,9 @@ class TestWorkspaceFile:
 
 class TestUpdateFsFile:
     @pytest.mark.asyncio
-    async def test_writes_with_matching_sha256(self, trusted_ws) -> None:
+    async def test_writes_with_matching_sha256(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import UpdateFsFileRequest, update_fs_file
 
         wsid, root = trusted_ws
@@ -320,7 +333,9 @@ class TestUpdateFsFile:
         assert (root / "hello.txt").read_text(encoding="utf-8") == "mundo\n"
 
     @pytest.mark.asyncio
-    async def test_writes_without_expected_sha256(self, trusted_ws) -> None:
+    async def test_writes_without_expected_sha256(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         """`expected_sha256=None` pula a checagem de conflito (sobrescreve sempre)."""
         from backend.api.handlers.workspaces import UpdateFsFileRequest, update_fs_file
 
@@ -336,7 +351,7 @@ class TestUpdateFsFile:
         assert (root / "hello.txt").read_text(encoding="utf-8") == "b\n"
 
     @pytest.mark.asyncio
-    async def test_conflict_returns_412(self, trusted_ws) -> None:
+    async def test_conflict_returns_412(self, trusted_ws: tuple[str, Path]) -> None:
         """sha256 divergente → 412, sem escrever no disco."""
         from fastapi import HTTPException
 
@@ -355,7 +370,9 @@ class TestUpdateFsFile:
         assert (root / "hello.txt").read_text(encoding="utf-8") == "original\n"
 
     @pytest.mark.asyncio
-    async def test_missing_file_returns_error(self, trusted_ws) -> None:
+    async def test_missing_file_returns_error(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import UpdateFsFileRequest, update_fs_file
 
         wsid, _ = trusted_ws
@@ -367,7 +384,7 @@ class TestUpdateFsFile:
         assert resp.status == "error"
 
     @pytest.mark.asyncio
-    async def test_blocks_traversal(self, trusted_ws) -> None:
+    async def test_blocks_traversal(self, trusted_ws: tuple[str, Path]) -> None:
         from backend.api.handlers.workspaces import UpdateFsFileRequest, update_fs_file
 
         wsid, root = trusted_ws
@@ -383,7 +400,9 @@ class TestUpdateFsFile:
         assert outside.read_text(encoding="utf-8") == "segredo"
 
     @pytest.mark.asyncio
-    async def test_rejects_oversized_content(self, trusted_ws) -> None:
+    async def test_rejects_oversized_content(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import UpdateFsFileRequest, update_fs_file
 
         wsid, root = trusted_ws
@@ -407,7 +426,9 @@ class TestUpdateFsFile:
 
 class TestWorkspaceGitDiff:
     @pytest.mark.asyncio
-    async def test_returns_empty_for_non_git_workspace(self, trusted_ws) -> None:
+    async def test_returns_empty_for_non_git_workspace(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from fastapi import Response
 
         from backend.api.handlers.workspaces import workspace_git_diff
@@ -420,7 +441,7 @@ class TestWorkspaceGitDiff:
         assert resp.total_deletions == 0
 
     @pytest.mark.asyncio
-    async def test_sets_diff_schema_header(self, trusted_ws) -> None:
+    async def test_sets_diff_schema_header(self, trusted_ws: tuple[str, Path]) -> None:
         from fastapi import Response
 
         from backend.api.handlers.workspaces import workspace_git_diff
@@ -431,7 +452,9 @@ class TestWorkspaceGitDiff:
         assert response.headers["X-Vectora-Diff-Schema"] == "2"
 
     @pytest.mark.asyncio
-    async def test_returns_empty_for_unknown_workspace(self, trusted_ws) -> None:
+    async def test_returns_empty_for_unknown_workspace(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from fastapi import Response
 
         from backend.api.handlers.workspaces import workspace_git_diff
@@ -446,7 +469,9 @@ class TestWorkspaceGitDiff:
 
 class TestWorkspaceGitDiffFile:
     @pytest.mark.asyncio
-    async def test_returns_empty_hunks_for_non_git_workspace(self, trusted_ws) -> None:
+    async def test_returns_empty_hunks_for_non_git_workspace(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import workspace_git_diff_file
 
         wsid, _ = trusted_ws
@@ -454,7 +479,9 @@ class TestWorkspaceGitDiffFile:
         assert resp.hunks == []
 
     @pytest.mark.asyncio
-    async def test_returns_empty_for_unknown_workspace(self, trusted_ws) -> None:
+    async def test_returns_empty_for_unknown_workspace(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import workspace_git_diff_file
 
         # Fixture só registra "vws" — mantém workspace_registry.get("nope")
@@ -526,7 +553,7 @@ class TestParseUnifiedDiff:
 # ---------------------------------------------------------------------------
 
 
-def _init_repo(root):
+def _init_repo(root: Path) -> Repo:
     """Inicializa um repo git em ``root`` com 1 commit; devolve o Repo."""
     import git
 
@@ -542,7 +569,7 @@ def _init_repo(root):
 
 class TestGitStatusBranches:
     @pytest.mark.asyncio
-    async def test_status_non_git(self, trusted_ws) -> None:
+    async def test_status_non_git(self, trusted_ws: tuple[str, Path]) -> None:
         from backend.api.handlers.workspaces import git_status
 
         wsid, _ = trusted_ws
@@ -550,7 +577,7 @@ class TestGitStatusBranches:
         assert resp.is_git_repo is False
 
     @pytest.mark.asyncio
-    async def test_status_git_repo(self, trusted_ws) -> None:
+    async def test_status_git_repo(self, trusted_ws: tuple[str, Path]) -> None:
         from backend.api.handlers.workspaces import git_status
 
         wsid, root = trusted_ws
@@ -561,7 +588,7 @@ class TestGitStatusBranches:
         assert resp.clean is True
 
     @pytest.mark.asyncio
-    async def test_branches_lists_current(self, trusted_ws) -> None:
+    async def test_branches_lists_current(self, trusted_ws: tuple[str, Path]) -> None:
         from backend.api.handlers.workspaces import git_branches
 
         wsid, root = trusted_ws
@@ -572,7 +599,9 @@ class TestGitStatusBranches:
         assert resp.current
 
     @pytest.mark.asyncio
-    async def test_checkout_creates_and_switches(self, trusted_ws) -> None:
+    async def test_checkout_creates_and_switches(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import (
             GitCheckoutRequest,
             git_checkout,
@@ -591,7 +620,9 @@ class TestGitStatusBranches:
 
 class TestGitCompareMerge:
     @pytest.mark.asyncio
-    async def test_compare_lists_changed_files(self, trusted_ws) -> None:
+    async def test_compare_lists_changed_files(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import git_compare_refs
 
         wsid, root = trusted_ws
@@ -607,7 +638,7 @@ class TestGitCompareMerge:
         assert resp.ahead >= 1
 
     @pytest.mark.asyncio
-    async def test_merge_clean(self, trusted_ws) -> None:
+    async def test_merge_clean(self, trusted_ws: tuple[str, Path]) -> None:
         from backend.api.handlers.workspaces import GitMergeRequest, git_merge
 
         wsid, root = trusted_ws
@@ -630,7 +661,9 @@ class TestGitLogPagination:
     commits já vistos."""
 
     @pytest.mark.asyncio
-    async def test_has_more_true_when_more_commits_than_page(self, trusted_ws) -> None:
+    async def test_has_more_true_when_more_commits_than_page(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import git_log
 
         wsid, root = trusted_ws
@@ -645,7 +678,9 @@ class TestGitLogPagination:
         assert resp.has_more is True
 
     @pytest.mark.asyncio
-    async def test_has_more_false_on_last_page(self, trusted_ws) -> None:
+    async def test_has_more_false_on_last_page(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import git_log
 
         wsid, root = trusted_ws
@@ -655,7 +690,9 @@ class TestGitLogPagination:
         assert resp.has_more is False
 
     @pytest.mark.asyncio
-    async def test_offset_skips_already_seen_commits(self, trusted_ws) -> None:
+    async def test_offset_skips_already_seen_commits(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import git_log
 
         wsid, root = trusted_ws
@@ -675,7 +712,7 @@ class TestGitLogPagination:
 class TestPrEndpoints:
     @pytest.mark.asyncio
     async def test_pr_list_unavailable_when_gh_fails(
-        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
+        self, trusted_ws: tuple[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from unittest.mock import AsyncMock
 
@@ -704,7 +741,7 @@ class TestListRagBuckets:
     @pytest.fixture(autouse=True)
     def _isolated_runtime_settings(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> RuntimeSettings:
         from backend.workspace import runtime_settings as rs_mod
 
         isolated = rs_mod.RuntimeSettings(path=tmp_path / "checkpoints.db")
@@ -713,7 +750,7 @@ class TestListRagBuckets:
 
     @pytest.mark.asyncio
     async def test_lista_buckets_do_workspace_com_flag_active(
-        self, trusted_ws, _isolated_runtime_settings
+        self, trusted_ws: tuple[str, Path], _isolated_runtime_settings: RuntimeSettings
     ) -> None:
         from backend.api.handlers.workspaces import list_rag_buckets
         from backend.services import rag_buckets
@@ -738,7 +775,7 @@ class TestListRagBuckets:
 
     @pytest.mark.asyncio
     async def test_workspace_sem_buckets_retorna_lista_vazia(
-        self, trusted_ws, _isolated_runtime_settings
+        self, trusted_ws: tuple[str, Path], _isolated_runtime_settings: RuntimeSettings
     ) -> None:
         from backend.api.handlers.workspaces import list_rag_buckets
 
@@ -750,7 +787,7 @@ class TestListRagBuckets:
 
     @pytest.mark.asyncio
     async def test_nao_mistura_buckets_de_outro_workspace(
-        self, trusted_ws, _isolated_runtime_settings
+        self, trusted_ws: tuple[str, Path], _isolated_runtime_settings: RuntimeSettings
     ) -> None:
         from backend.api.handlers.workspaces import list_rag_buckets
         from backend.services import rag_buckets
@@ -775,7 +812,7 @@ class TestToggleAndDeleteRagBucket:
     @pytest.fixture(autouse=True)
     def _isolated_runtime_settings(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> RuntimeSettings:
         from backend.workspace import runtime_settings as rs_mod
 
         isolated = rs_mod.RuntimeSettings(path=tmp_path / "checkpoints.db")
@@ -784,7 +821,7 @@ class TestToggleAndDeleteRagBucket:
 
     @pytest.mark.asyncio
     async def test_toggle_desativa_bucket(
-        self, trusted_ws, _isolated_runtime_settings
+        self, trusted_ws: tuple[str, Path], _isolated_runtime_settings: RuntimeSettings
     ) -> None:
         from backend.api.handlers.workspaces import (
             RagBucketToggleRequest,
@@ -815,7 +852,7 @@ class TestToggleAndDeleteRagBucket:
 
     @pytest.mark.asyncio
     async def test_toggle_bucket_inexistente_nao_lanca(
-        self, trusted_ws, _isolated_runtime_settings
+        self, trusted_ws: tuple[str, Path], _isolated_runtime_settings: RuntimeSettings
     ) -> None:
         from backend.api.handlers.workspaces import (
             RagBucketToggleRequest,
@@ -834,7 +871,7 @@ class TestToggleAndDeleteRagBucket:
 
     @pytest.mark.asyncio
     async def test_delete_remove_do_catalogo(
-        self, trusted_ws, _isolated_runtime_settings
+        self, trusted_ws: tuple[str, Path], _isolated_runtime_settings: RuntimeSettings
     ) -> None:
         from backend.api.handlers.workspaces import delete_rag_bucket, list_rag_buckets
         from backend.services import rag_buckets
@@ -929,7 +966,7 @@ class TestToggleAndDeleteRagBucket:
 
     @pytest.mark.asyncio
     async def test_delete_idempotente_bucket_ja_ausente(
-        self, trusted_ws, _isolated_runtime_settings
+        self, trusted_ws: tuple[str, Path], _isolated_runtime_settings: RuntimeSettings
     ) -> None:
         from backend.api.handlers.workspaces import delete_rag_bucket
 
@@ -941,7 +978,10 @@ class TestToggleAndDeleteRagBucket:
 
     @pytest.mark.asyncio
     async def test_delete_purga_a_tabela_vetorial_orfa(
-        self, trusted_ws, _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
+        self,
+        trusted_ws: tuple[str, Path],
+        _isolated_runtime_settings: RuntimeSettings,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Regressão: apagar o bucket só removia o registro do catálogo — a
         tabela LanceDB (`bucket_{id}`) ficava órfã com todos os itens,
@@ -969,7 +1009,10 @@ class TestToggleAndDeleteRagBucket:
 
     @pytest.mark.asyncio
     async def test_delete_falha_no_purge_nao_impede_remocao_do_catalogo(
-        self, trusted_ws, _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
+        self,
+        trusted_ws: tuple[str, Path],
+        _isolated_runtime_settings: RuntimeSettings,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Erro/borda: storage indisponível (ou tabela nunca criada — bucket
         criado mas nunca ingerido) durante o purge não pode deixar o bucket
@@ -1004,7 +1047,9 @@ class TestSandboxStatus:
     um `diagnostic` acionável quando desabilitado."""
 
     @pytest.mark.asyncio
-    async def test_enabled_true_when_sandbox_configured(self, trusted_ws) -> None:
+    async def test_enabled_true_when_sandbox_configured(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import workspace_sandbox_status
 
         wsid, root = trusted_ws
@@ -1020,7 +1065,7 @@ class TestSandboxStatus:
     @pytest.mark.usefixtures("sem_bwrap_automatico")
     @pytest.mark.asyncio
     async def test_enabled_false_without_vectora_toml_e_wsl2_disponivel(
-        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
+        self, trusted_ws: tuple[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers import workspaces as ws_mod
 
@@ -1038,7 +1083,7 @@ class TestSandboxStatus:
     @pytest.mark.usefixtures("sem_bwrap_automatico")
     @pytest.mark.asyncio
     async def test_enabled_false_without_vectora_toml_e_sem_wsl2(
-        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
+        self, trusted_ws: tuple[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import backend.sandbox.policy as policy_mod
         from backend.api.handlers import workspaces as ws_mod
@@ -1056,7 +1101,7 @@ class TestSandboxStatus:
 
     @pytest.mark.asyncio
     async def test_enabled_false_when_sandbox_disabled_explicitly(
-        self, trusted_ws
+        self, trusted_ws: tuple[str, Path]
     ) -> None:
         from backend.api.handlers.workspaces import workspace_sandbox_status
 
@@ -1081,7 +1126,7 @@ class TestSandboxStatus:
 
 
 def _async_return(value: str | None):
-    async def _fn(*_args, **_kwargs):
+    async def _fn(*_args, **_kwargs) -> str | None:
         return value
 
     return _fn
@@ -1092,7 +1137,9 @@ class TestSandboxInit:
     habilitado, nunca sobrescrevendo um arquivo já existente."""
 
     @pytest.mark.asyncio
-    async def test_cria_vectora_toml_com_sandbox_habilitado(self, trusted_ws) -> None:
+    async def test_cria_vectora_toml_com_sandbox_habilitado(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from backend.api.handlers.workspaces import workspace_sandbox_init
 
         wsid, root = trusted_ws
@@ -1106,7 +1153,9 @@ class TestSandboxInit:
         assert "enabled = true" in toml_path.read_text(encoding="utf-8")
 
     @pytest.mark.asyncio
-    async def test_nao_sobrescreve_vectora_toml_ja_existente(self, trusted_ws) -> None:
+    async def test_nao_sobrescreve_vectora_toml_ja_existente(
+        self, trusted_ws: tuple[str, Path]
+    ) -> None:
         from fastapi import HTTPException
 
         from backend.api.handlers.workspaces import workspace_sandbox_init
@@ -1317,14 +1366,16 @@ class TestMemorySearchUnified:
 
     @pytest.mark.asyncio
     async def test_combina_os_tres_tipos(
-        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
+        self, trusted_ws: tuple[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers.workspaces import search_memory_unified
         from backend.services.memory_index import MemoryIndexHit
 
         wsid, _root = trusted_ws
 
-        async def _fake_search(query, *, user_id, workspace_id, types, limit):
+        async def _fake_search(
+            query: str, *, user_id: str, workspace_id: str, types, limit: int
+        ) -> list[MemoryIndexHit]:
             return [
                 MemoryIndexHit(
                     type="fact", id="f1", title="f1", snippet="conteúdo do fato"
@@ -1362,7 +1413,7 @@ class TestMemorySearchUnified:
 
     @pytest.mark.asyncio
     async def test_types_invalido_e_normalizado_sem_quebrar(
-        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
+        self, trusted_ws: tuple[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """`types=invalid` não deve derrubar a query — vira None (busca todos)."""
         from backend.api.handlers.workspaces import search_memory_unified
@@ -1370,7 +1421,9 @@ class TestMemorySearchUnified:
         wsid, _root = trusted_ws
         captured: dict = {}
 
-        async def _fake_search(query, *, user_id, workspace_id, types, limit):
+        async def _fake_search(
+            query: str, *, user_id: str, workspace_id: str, types, limit: int
+        ):
             captured["types"] = types
             return []
 
@@ -1390,14 +1443,16 @@ class TestMemorySearchUnified:
 
     @pytest.mark.asyncio
     async def test_types_valido_e_repassado_como_frozenset(
-        self, trusted_ws, monkeypatch: pytest.MonkeyPatch
+        self, trusted_ws: tuple[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from backend.api.handlers.workspaces import search_memory_unified
 
         wsid, _root = trusted_ws
         captured: dict = {}
 
-        async def _fake_search(query, *, user_id, workspace_id, types, limit):
+        async def _fake_search(
+            query: str, *, user_id: str, workspace_id: str, types: frozenset, limit: int
+        ):
             captured["types"] = types
             return []
 

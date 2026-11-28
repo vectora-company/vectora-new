@@ -135,7 +135,7 @@ class TestGetTranscript:
         download de vídeo."""
         import backend.tools.youtube as mod
 
-        def _sem_captions(video_id, languages) -> NoReturn:
+        def _sem_captions(video_id: str, languages: list[str]) -> NoReturn:
             raise RuntimeError("TranscriptsDisabled")
 
         monkeypatch.setattr(mod, "_fetch_captions_sync", _sem_captions)
@@ -222,7 +222,9 @@ class TestYoutubeFrameAt:
         clip_path.write_bytes(b"fake-clip")
         monkeypatch.setattr(mod, "_download_clip_sync", lambda *_a: str(clip_path))
 
-        async def _fake_extract(_ffmpeg, video_path, _ts, out_path):
+        async def _fake_extract(
+            _ffmpeg: str, video_path: str, _ts: float, out_path: str
+        ) -> tuple[bool, str]:
             assert video_path == str(
                 clip_path
             )  # extrai do CLIPE, não do vídeo original
@@ -238,7 +240,7 @@ class TestYoutubeFrameAt:
 
         persisted = {}
 
-        def _fake_persist(session_id, data, suffix):
+        def _fake_persist(session_id: str, data: bytes, suffix: str) -> Path:
             path = tmp_path / f"{session_id}{suffix}"
             path.write_bytes(data)
             persisted["session_id"] = session_id
@@ -275,7 +277,9 @@ class TestYoutubeFrameAt:
         clip_path.write_bytes(b"fake-clip")
         monkeypatch.setattr(mod, "_download_clip_sync", lambda *_a: str(clip_path))
 
-        async def _fake_extract(_ffmpeg, video_path, _ts, out_path):
+        async def _fake_extract(
+            _ffmpeg: str, video_path: str, _ts: float, out_path: str
+        ) -> tuple[bool, str]:
             assert video_path == str(clip_path)
             Path(out_path).write_bytes(b"\x89PNG-fake-frame")
             return True, ""
@@ -308,7 +312,7 @@ class TestYoutubeFrameAt:
         traceback cru."""
         import backend.tools.youtube as mod
 
-        def _falha(*_a) -> NoReturn:
+        def _falha(*_a: float | str) -> NoReturn:
             raise RuntimeError("vídeo indisponível")
 
         monkeypatch.setattr(mod, "_download_clip_sync", _falha)

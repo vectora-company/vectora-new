@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 
 from backend.persistence.native.agent_run import AgentRun
 from backend.scheduling import dag_runner
@@ -35,10 +36,10 @@ async def test_dag_dispatches_only_dependency_ready_stage_then_advances(
     )
     await db.close()
 
-    async def connect_db():
+    async def connect_db() -> Connection:
         return await aiosqlite.connect(db_path)
 
-    async def create_task(**kwargs) -> SimpleNamespace:
+    async def create_task(**kwargs: dict[str, str] | str) -> SimpleNamespace:
         scheduled.append(kwargs)
         return SimpleNamespace(id="task")
 
@@ -95,7 +96,7 @@ async def test_cancel_stops_a_claimed_stage_before_its_worker_starts(
     await store.cancel_execution(execution.execution_id, requested_by="owner")
     await db.close()
 
-    async def connect_db():
+    async def connect_db() -> Connection:
         return await aiosqlite.connect(db_path)
 
     monkeypatch.setattr("backend.scheduling.background_tasks._get_db", connect_db)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import os
 import sqlite3
@@ -161,7 +163,7 @@ async def test_finalize_postgres_preserva_falha_para_retry(
         "remote-1", "u1", "2026-10", "generate_image", 1, backend="postgres"
     )
 
-    async def unavailable(*_args) -> NoReturn:
+    async def unavailable(*_args: str) -> NoReturn:
         raise ConnectionError("offline")
 
     monkeypatch.setattr(quota, "_finalize_postgres", unavailable)

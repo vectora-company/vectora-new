@@ -26,7 +26,7 @@ def _conversa() -> list[VMessage]:
 
 
 def _planner_quebrado(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _falha(*_args, **_kwargs) -> NoReturn:
+    def _falha(*_args, **_kwargs: bool | int | None) -> NoReturn:
         raise RuntimeError("memória indisponível")
 
     monkeypatch.setattr(context_planner, "plan_context", _falha)
@@ -106,7 +106,7 @@ def test_reserva_com_historico_curto_devolve_tudo(
 def test_erro_de_programacao_no_planejador_tambem_cai_na_reserva(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _falha(*_a, **_k) -> NoReturn:
+    def _falha(*_a, **_k: bool | int | None) -> NoReturn:
         raise KeyError("campo")
 
     monkeypatch.setattr(context_planner, "plan_context", _falha)

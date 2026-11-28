@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
 from backend.llm.openrouter.embeddings import OpenRouterEmbeddings
@@ -28,7 +29,7 @@ def _client(handler) -> OpenRouterClient:
 class TestEmbeddings:
     @pytest.mark.asyncio
     async def test_devolve_um_vetor_por_documento_na_ordem(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -53,7 +54,7 @@ class TestEmbeddings:
         de chegada associa o vetor ao chunk errado — corrupção silenciosa do
         índice, que só aparece como busca ruim muito depois."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -72,7 +73,7 @@ class TestEmbeddings:
         """Erro/borda: devolver `[]` gravaria vetores nulos no índice do RAG.
         Melhor falhar a ingestão do que corromper a busca em silêncio."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"data": []})
 
         emb = OpenRouterEmbeddings(model="m", client=_client(handler))
@@ -81,7 +82,7 @@ class TestEmbeddings:
 
     @pytest.mark.asyncio
     async def test_item_sem_embedding_tambem_falha(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"data": [{"index": 0}]})
 
         emb = OpenRouterEmbeddings(model="m", client=_client(handler))
@@ -170,7 +171,7 @@ class TestRerank:
         """Erro/borda: zerar os resultados é pior que não reordenar — o
         usuário perderia respostas que a busca já tinha encontrado."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"results": []})
 
         rr = OpenRouterRerank(model="m", client=_client(handler), top_n=3)
@@ -183,7 +184,7 @@ class TestRerank:
         """Erro/borda: `index` além da lista enviada estouraria IndexError e
         derrubaria a busca inteira."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={

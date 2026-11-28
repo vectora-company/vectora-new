@@ -23,6 +23,7 @@ from backend.scheduling.memory_consolidation import (
     split_by_category,
 )
 from backend.settings import Settings
+from backend.vtypes import VMessage
 
 # ---------------------------------------------------------------------------
 # _build_consolidation_prompt
@@ -194,7 +195,7 @@ class TestApplyConsolidationSections:
 # ---------------------------------------------------------------------------
 
 
-def _fake_llm_response(content: str):
+def _fake_llm_response(content: str) -> VMessage:
     from backend.vtypes.message import MessageRole, text_message
 
     return text_message(MessageRole.ASSISTANT, content)

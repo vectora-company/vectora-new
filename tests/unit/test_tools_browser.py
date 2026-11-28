@@ -18,6 +18,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from backend.api.handlers.workspaces import (
+    BrowserStartRequest,
+    BrowserStopRequest,
+    LaunchJsonModel,
+    StatusResponse,
+)
 from backend.services.egress_policy import EgressPolicy
 from backend.services.policy_compiler import PolicySnapshot
 from backend.tools import browser as browser_tools
@@ -580,7 +586,7 @@ async def test_browser_scroll_accepts_down_up_and_rejects_invalid_direction(
 # ---------------------------------------------------------------------------
 
 
-def _launch_json(names: list[str]):
+def _launch_json(names: list[str]) -> LaunchJsonModel:
     import backend.api.handlers.workspaces as ws_mod
 
     return ws_mod.LaunchJsonModel(
@@ -732,11 +738,15 @@ class TestPreviewStartStopRestartTools:
         )
         calls: list[str] = []
 
-        async def _fake_stop(workspace_id, req):
+        async def _fake_stop(
+            workspace_id: str, req: BrowserStopRequest
+        ) -> StatusResponse:
             calls.append("stop")
             return ws_mod.StatusResponse(status="ok", message="parado")
 
-        async def _fake_start(workspace_id, req):
+        async def _fake_start(
+            workspace_id: str, req: BrowserStartRequest
+        ) -> StatusResponse:
             calls.append("start")
             return ws_mod.StatusResponse(status="ok", message="rodando")
 
@@ -966,7 +976,7 @@ class TestBrowserFillForm:
             AsyncMock(return_value="http://localhost:5173"),
         )
 
-        async def _fill(selector, value, **_kwargs) -> None:
+        async def _fill(selector: str, value: str, **_kwargs: int) -> None:
             if selector == "#missing":
                 raise TimeoutError("not found")
 

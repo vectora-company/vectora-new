@@ -16,6 +16,7 @@ from typing import NoReturn
 
 import httpx
 import pytest
+from httpx import Response
 
 from backend.services.memory_buckets import (
     DEFAULT_MEMORY_BUCKETS_URL,
@@ -89,7 +90,9 @@ def _make_tar_gz(files: dict[str, bytes]) -> bytes:
 async def test_download_incompatible_embed_model_raises_before_touching_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _fake_get(self, url, **kwargs) -> httpx.Response:
+    async def _fake_get(
+        self, url: str, **kwargs: dict[str, str] | None
+    ) -> httpx.Response:
         assert "download" not in url  # nunca chega a baixar o arquivo
         return _catalog_response(
             [{"id": "b1", "embed_model": "voyage-3", "name": "Bucket 1"}]
@@ -110,7 +113,9 @@ async def test_download_incompatible_embed_model_raises_before_touching_files(
 async def test_download_bucket_not_found_raises_clear_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    async def _fake_get(self, url, **kwargs) -> httpx.Response:
+    async def _fake_get(
+        self, url: str, **kwargs: dict[str, str] | None
+    ) -> httpx.Response:
         return _catalog_response([])
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -123,7 +128,7 @@ async def test_download_bucket_not_found_raises_clear_error(
 async def test_download_distingue_catalogo_indisponivel_de_catalogo_vazio(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    async def _fake_get(self, url, **kwargs) -> NoReturn:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -141,7 +146,7 @@ async def test_download_compatible_bucket_extracts_into_isolated_collection(
     archive = _make_tar_gz({"data.lance": b"fake lance content"})
     call_log: list[str] = []
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         call_log.append(url)
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
@@ -174,7 +179,7 @@ async def test_download_workspace_scope_avoids_cross_workspace_collision(
     """O mesmo bucket público recebe coleções distintas por workspace."""
     archive = _make_tar_gz({"data.lance": b"workspace scoped"})
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
                 [{"id": "b1", "embed_model": "embed-multilingual-v3.0"}]
@@ -214,7 +219,7 @@ async def test_download_rejects_symlink_archive_entry(
         tar.addfile(link)
     archive = archive_buf.getvalue()
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         """Return the prepared archive or catalog response for this test."""
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
@@ -238,7 +243,7 @@ async def test_download_does_not_overwrite_existing_collection(
     """Keep an existing collection intact when a download collides with it."""
     archive = _make_tar_gz({"new": b"new"})
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         """Return the prepared archive or catalog response for this test."""
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
@@ -330,7 +335,7 @@ async def test_publish_success_returns_bucket_slug(
 
     captured: dict = {}
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url: str, **kwargs) -> Response:
         captured["headers"] = kwargs.get("headers")
         captured["data"] = kwargs.get("data")
         return httpx.Response(
@@ -367,7 +372,7 @@ async def test_publish_network_failure_raises_memory_buckets_error(
     bucket_dir.mkdir()
     (bucket_dir / "table.lance").write_bytes(b"data")
 
-    async def _fake_post(self, url, **kwargs) -> NoReturn:
+    async def _fake_post(self, url: str, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "post", _fake_post)
@@ -388,7 +393,7 @@ async def test_publish_network_failure_raises_memory_buckets_error(
 async def test_list_catalog_falha_de_rede_preserva_indisponibilidade(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, **kwargs) -> NoReturn:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -403,7 +408,9 @@ async def test_list_catalog_consulta_a_rota_memory_buckets(
 ) -> None:
     calls: list[str] = []
 
-    async def _fake_get(self, url, **kwargs) -> httpx.Response:
+    async def _fake_get(
+        self, url: str, **kwargs: dict[str, str] | None
+    ) -> httpx.Response:
         calls.append(url)
         return _catalog_response([{"id": "legacy", "name": "Legado"}])
 
@@ -417,7 +424,9 @@ async def test_list_catalog_consulta_a_rota_memory_buckets(
 async def test_list_catalog_vazio_do_servidor_e_estado_valido(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, **kwargs) -> httpx.Response:
+    async def _fake_get(
+        self, url: str, **kwargs: dict[str, str] | None
+    ) -> httpx.Response:
         return _catalog_response([])
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -435,7 +444,7 @@ async def test_list_catalog_repassa_q_como_query_param(
     parâmetro fica órfão e a busca sempre devolve o catálogo inteiro."""
     captured: dict = {}
 
-    async def _fake_get(self, url, **kwargs) -> httpx.Response:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str]) -> httpx.Response:
         captured["params"] = kwargs.get("params")
         return _catalog_response([])
 
@@ -452,7 +461,9 @@ async def test_list_catalog_sem_q_nao_manda_param_vazio(
 ) -> None:
     captured: dict = {}
 
-    async def _fake_get(self, url, **kwargs) -> httpx.Response:
+    async def _fake_get(
+        self, url: str, **kwargs: dict[str, str] | None
+    ) -> httpx.Response:
         captured["params"] = kwargs.get("params")
         return _catalog_response([])
 
@@ -472,7 +483,7 @@ async def test_download_com_embed_model_ausente_no_bucket_nao_bloqueia(
     # por uma comparação com None.
     archive = _make_tar_gz({"data.lance": b"conteudo"})
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response([{"id": "legacy", "name": "Legado"}])
         return httpx.Response(200, content=archive, request=httpx.Request("GET", url))
@@ -496,7 +507,9 @@ async def test_download_catalogo_com_ids_duplicados_usa_a_primeira_ocorrencia(
     # catálogo remoto) — _fetch_bucket_metadata não deve travar, usa o
     # primeiro que encontrar (comportamento determinístico, documentado
     # pelo teste em vez de implícito).
-    async def _fake_get(self, url, **kwargs) -> httpx.Response:
+    async def _fake_get(
+        self, url: str, **kwargs: dict[str, str] | None
+    ) -> httpx.Response:
         return _catalog_response(
             [
                 {"id": "dup", "embed_model": "modelo-a", "name": "primeiro"},
@@ -518,7 +531,7 @@ async def test_download_arquivo_corrompido_levanta_erro_tipado_sem_deixar_lixo_p
     # Payload malformado: bytes que não são um tar.gz válido (download
     # truncado/corrompido na rede) — MemoryBucketsError, nunca uma exceção
     # crua de tarfile propagando pro caller.
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
                 [{"id": "b1", "embed_model": "embed-multilingual-v3.0"}]
@@ -543,7 +556,7 @@ async def test_download_http_404_na_rota_de_download_levanta_erro_claro(
 ) -> None:
     # Bucket existe no catálogo mas o binário sumiu do storage (R2) —
     # raise_for_status() dispara HTTPStatusError, capturado genericamente.
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
                 [{"id": "b1", "embed_model": "embed-multilingual-v3.0"}]
@@ -569,7 +582,9 @@ async def test_download_embed_model_case_sensitive_nao_normaliza(
     # Erro/borda: comparação de embed_model é exata (==) — variação de
     # caixa não é tolerada silenciosamente (evita falso-positivo de
     # compatibilidade entre modelos com nomes parecidos).
-    async def _fake_get(self, url, **kwargs) -> httpx.Response:
+    async def _fake_get(
+        self, url: str, **kwargs: dict[str, str] | None
+    ) -> httpx.Response:
         return _catalog_response(
             [{"id": "b1", "embed_model": "Embed-Multilingual-V3.0"}]
         )
@@ -593,7 +608,7 @@ async def test_publish_resposta_sem_id_levanta_erro_claro(
     bucket_dir.mkdir()
     (bucket_dir / "table.lance").write_bytes(b"data")
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url: str, **kwargs) -> Response:
         return httpx.Response(
             200, json={"ok": True}, request=httpx.Request("POST", url)
         )
@@ -624,7 +639,7 @@ async def test_publish_workspace_com_pasta_vazia_ainda_empacota_sem_erro(
     bucket_dir = tmp_path / "bucket_b-vazio.lance"
     bucket_dir.mkdir()
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url: str, **kwargs) -> Response:
         return httpx.Response(
             200, json={"slug": "bucket-vazio"}, request=httpx.Request("POST", url)
         )
@@ -655,7 +670,7 @@ async def test_publish_http_401_por_session_token_invalido_levanta_erro_claro(
     bucket_dir.mkdir()
     (bucket_dir / "table.lance").write_bytes(b"data")
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url: str, **kwargs) -> Response:
         return httpx.Response(
             401, content=b"invalid token", request=httpx.Request("POST", url)
         )
@@ -683,7 +698,7 @@ async def test_download_truncated_archive_raises_clear_error_not_generic_excepti
 ) -> None:
     # Erro/borda: resposta HTTP incompleta (tar.gz truncado) — extractall
     # levanta exceção de tarfile, deve virar MemoryBucketsError tipado.
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
                 [{"id": "b1", "embed_model": "embed-multilingual-v3.0", "name": "b1"}]
@@ -707,7 +722,7 @@ async def test_download_truncated_archive_raises_clear_error_not_generic_excepti
 async def test_download_empty_response_body_raises_clear_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
                 [{"id": "b1", "embed_model": "embed-multilingual-v3.0", "name": "b1"}]
@@ -728,7 +743,7 @@ async def test_download_empty_response_body_raises_clear_error(
 async def test_download_http_error_status_raises_memory_buckets_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
                 [{"id": "b1", "embed_model": "embed-multilingual-v3.0", "name": "b1"}]
@@ -755,7 +770,7 @@ async def test_download_bucket_without_embed_model_skips_compatibility_check(
     # deve bloquear o download — só bloqueia quando há valor conflitante.
     archive = _make_tar_gz({"data.lance": b"conteudo"})
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response([{"id": "b1", "name": "b1"}])
         return httpx.Response(200, content=archive, request=httpx.Request("GET", url))
@@ -775,7 +790,9 @@ async def test_download_bucket_without_embed_model_skips_compatibility_check(
 async def test_download_network_error_during_fetch_raises_memory_buckets_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _fake_get(self, url, **kwargs) -> httpx.Response:
+    async def _fake_get(
+        self, url: str, **kwargs: dict[str, str] | None
+    ) -> httpx.Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
                 [{"id": "b1", "embed_model": "embed-multilingual-v3.0", "name": "b1"}]
@@ -796,7 +813,7 @@ async def test_download_network_error_during_fetch_raises_memory_buckets_error(
 async def test_list_catalog_network_error_returns_unavailable_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, **kwargs) -> NoReturn:
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -815,7 +832,7 @@ async def test_publish_http_error_status_includes_status_code_in_message(
     bucket_dir.mkdir()
     (bucket_dir / "table.lance").write_bytes(b"data")
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url: str, **kwargs) -> Response:
         return httpx.Response(
             403, json={"error": "forbidden"}, request=httpx.Request("POST", url)
         )
@@ -847,7 +864,7 @@ async def test_publish_response_without_id_raises_clear_error(
     bucket_dir.mkdir()
     (bucket_dir / "table.lance").write_bytes(b"data")
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url: str, **kwargs) -> Response:
         return httpx.Response(
             200, json={"ok": True}, request=httpx.Request("POST", url)
         )
@@ -878,7 +895,7 @@ async def test_publish_empty_workspace_dir_still_packages_empty_archive(
     bucket_dir = tmp_path / "bucket_b-empty.lance"
     bucket_dir.mkdir()
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url: str, **kwargs) -> Response:
         return httpx.Response(
             200,
             json={"slug": "empty-bucket-id"},
@@ -916,7 +933,7 @@ async def test_publish_exige_bucket_do_workspace_antes_de_empacotar(
     (bucket_dir / "table.lance").write_bytes(b"data")
     posts: list[str] = []
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url: str, **kwargs) -> Response:
         posts.append(url)
         return httpx.Response(
             200, json={"ok": True, "slug": "remote"}, request=httpx.Request("POST", url)
@@ -977,7 +994,7 @@ async def test_download_usa_a_rota_da_library_com_slug(
     archive = _make_tar_gz({"table.lance/data": b"x"})
     calls: list[tuple[str, dict | None]] = []
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url: str, **kwargs: dict[str, str] | None) -> Response:
         calls.append((url, kwargs.get("params")))
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(

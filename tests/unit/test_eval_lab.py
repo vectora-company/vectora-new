@@ -769,7 +769,9 @@ def test_fixture_replay_reports_failed_case_and_continues_later_cases() -> None:
     ],
 )
 def test_fixture_replay_requires_a_complete_human_approval_audit(
-    approval_events, expected_status: str, expected_reason: str | None
+    approval_events: list[dict[str, str]],
+    expected_status: str,
+    expected_reason: str | None,
 ) -> None:
     from backend.evaluation.verification import replay_cassette
 

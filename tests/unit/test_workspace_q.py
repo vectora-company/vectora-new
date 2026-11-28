@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 
 import git
 import pytest
+from git import Repo
 
 from backend.workspace.workspace import WorkspaceRegistry
 from tests.fake_requests import fake_request
@@ -155,7 +156,7 @@ class TestGitInit:
 
 
 @pytest.fixture
-def repo_with_commit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def repo_with_commit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
     """Repo git temporário com um commit + worktrees redirecionadas a tmp_path."""
     repo = git.Repo.init(tmp_path)
     cw = repo.config_writer()
@@ -174,7 +175,7 @@ def repo_with_commit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 class TestWorktree:
-    def test_add_creates_worktree(self, repo_with_commit) -> None:
+    def test_add_creates_worktree(self, repo_with_commit: Repo) -> None:
         from backend.tools.git import _git_worktree_impl
 
         result = _git_worktree_impl(
@@ -183,7 +184,7 @@ class TestWorktree:
         assert result["status"] == "ok"
         assert result["name"] == "feat-x"
 
-    def test_list_includes_added_worktree(self, repo_with_commit) -> None:
+    def test_list_includes_added_worktree(self, repo_with_commit: Repo) -> None:
         from backend.tools.git import _git_worktree_impl
 
         _git_worktree_impl(
@@ -196,13 +197,13 @@ class TestWorktree:
         )
         assert "feat-y" in paths
 
-    def test_add_without_name_errors(self, repo_with_commit) -> None:
+    def test_add_without_name_errors(self, repo_with_commit: Repo) -> None:
         from backend.tools.git import _git_worktree_impl
 
         result = _git_worktree_impl(repo_with_commit, "ws1", action="add")
         assert result["status"] == "error"
 
-    def test_unknown_action_errors(self, repo_with_commit) -> None:
+    def test_unknown_action_errors(self, repo_with_commit: Repo) -> None:
         from backend.tools.git import _git_worktree_impl
 
         result = _git_worktree_impl(repo_with_commit, "ws1", action="bogus")
@@ -368,7 +369,7 @@ class TestWorkspaceHandlers:
         selected.write_text("private", encoding="utf-8")
 
         class Registry:
-            def is_under_safe_root(self, _path) -> None:
+            def is_under_safe_root(self, _path: str) -> None:
                 return None
 
         monkeypatch.setattr("backend.rbac.safe_roots.get_safe_root_registry", Registry)
@@ -391,7 +392,7 @@ class TestWorkspaceHandlers:
         from backend.rbac.safe_roots import SafeRootRegistry
 
         class Registry:
-            def is_under_safe_root(self, _path) -> None:
+            def is_under_safe_root(self, _path: str) -> None:
                 return None
 
         filesystem_probes = []
@@ -424,7 +425,7 @@ class TestWorkspaceHandlers:
         from backend.rbac.safe_roots import SafeRootRegistry
 
         class Registry:
-            def is_under_safe_root(self, _path) -> SimpleNamespace:
+            def is_under_safe_root(self, _path: str) -> SimpleNamespace:
                 return SimpleNamespace(id="safe-root", path=str(tmp_path))
 
         result, root_id = await _resolve_and_authorize_dir(

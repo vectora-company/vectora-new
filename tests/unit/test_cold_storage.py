@@ -1,9 +1,15 @@
+from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 
-from backend.services.cold_storage import export_cold_archive, read_cold_archive
+from backend.services.cold_storage import (
+    ColdArchive,
+    export_cold_archive,
+    read_cold_archive,
+)
 
 
 def test_cold_archive_round_trip_is_hashed_and_rehydratable(tmp_path: Path) -> None:
@@ -56,7 +62,7 @@ def test_cold_archive_concurrent_exports_do_not_share_staging_files(
 ) -> None:
     """Exports concorrentes publicam arquivos íntegros, sem staging compartilhado."""
 
-    def export(index: int):
+    def export(index: int) -> ColdArchive:
         return export_cold_archive(
             tmp_path,
             "same-thread",

@@ -202,7 +202,7 @@ async def test_permission_denied_returns_clear_error_not_exception(
         lambda name: "/usr/bin/singularity" if name == "singularity" else None,
     )
 
-    async def _raise_permission_denied(*_args, **_kwargs) -> NoReturn:
+    async def _raise_permission_denied(*_args: str, **_kwargs: int) -> NoReturn:
         raise PermissionError("Permission denied: singularity")
 
     monkeypatch.setattr(

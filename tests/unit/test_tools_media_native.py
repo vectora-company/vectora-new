@@ -79,7 +79,7 @@ class TestProbeMedia:
         ],
     )
     async def test_formatos_variados_sao_reconhecidos_sem_erro(
-        self, tmp_path: Path, filename: str, expected_codec_types
+        self, tmp_path: Path, filename: str, expected_codec_types: set[str]
     ) -> None:
         """Diversidade de container/codec que o ffmpeg embutido precisa
         suportar na prática — não só o mp4/wav já cobertos acima."""
@@ -208,7 +208,7 @@ class TestTranscribeLocal:
 
         real_import = builtins.__import__
 
-        def _fake_import(name, *args, **kwargs):
+        def _fake_import(name: str, *args, **kwargs):
             if name == "faster_whisper":
                 raise ImportError("no module named faster_whisper")
             return real_import(name, *args, **kwargs)

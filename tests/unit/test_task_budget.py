@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from typing import NoReturn
 
 import pytest
+from aiosqlite import Connection
 
 
 @pytest.fixture
@@ -60,7 +61,7 @@ async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     )
     await conn.commit()
 
-    async def _get_db():
+    async def _get_db() -> Connection:
         return conn
 
     monkeypatch.setattr(budget, "_get_db", _get_db)
@@ -72,7 +73,7 @@ async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 async def _task(
-    conn,
+    conn: Connection,
     task_id: str,
     budget_cents: int | None = None,
     agent_profile_id: str | None = None,
@@ -88,7 +89,9 @@ async def _task(
     await conn.commit()
 
 
-async def _run(conn, task_id: str, run_id: str, custo: float | None) -> None:
+async def _run(
+    conn: Connection, task_id: str, run_id: str, custo: float | None
+) -> None:
     await conn.execute(
         "INSERT INTO vectora_background_runs "
         "(id, task_id, session_id, trigger_source, status, estimated_cost_cents) "
@@ -185,7 +188,7 @@ class TestRastreioDeCusto:
 
 class TestCorteAutomatico:
     @pytest.mark.asyncio
-    async def test_task_sem_budget_nunca_e_barrada(self, db) -> None:
+    async def test_task_sem_budget_nunca_e_barrada(self, db: Connection) -> None:
         """O corte é opt-in: task com `budget_cents = NULL` nunca é
         barrada, não importa o custo acumulado."""
         from backend.scheduling.budget import check_budget
@@ -197,7 +200,7 @@ class TestCorteAutomatico:
 
     @pytest.mark.asyncio
     async def test_task_sem_budget_herda_do_perfil(
-        self, db, monkeypatch: pytest.MonkeyPatch
+        self, db: Connection, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Task sem budget próprio, mas com agent_profile_id, herda o teto
         do perfil — nunca sobrescreve um budget que a task já definiu
@@ -209,7 +212,7 @@ class TestCorteAutomatico:
         await _task(db, "t1", budget_cents=None, agent_profile_id="prof-1")
         await _run(db, "t1", "r1", custo=150.0)
 
-        async def _fake_get_profile(profile_id) -> SimpleNamespace:
+        async def _fake_get_profile(profile_id: str) -> SimpleNamespace:
             assert profile_id == "prof-1"
             return SimpleNamespace(budget_cents=100)
 
@@ -221,7 +224,7 @@ class TestCorteAutomatico:
 
     @pytest.mark.asyncio
     async def test_budget_proprio_da_task_nao_e_sobrescrito_pelo_perfil(
-        self, db, monkeypatch: pytest.MonkeyPatch
+        self, db: Connection, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from types import SimpleNamespace
 
@@ -242,7 +245,7 @@ class TestCorteAutomatico:
 
     @pytest.mark.asyncio
     async def test_falha_ao_carregar_perfil_degrada_para_sem_limite(
-        self, db, monkeypatch: pytest.MonkeyPatch
+        self, db: Connection, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Erro/borda: perfil apagado ou DB indisponível não pode impedir a
         run de rodar — degrada pro comportamento padrão (sem limite)."""
@@ -251,7 +254,7 @@ class TestCorteAutomatico:
         await _task(db, "t1", budget_cents=None, agent_profile_id="prof-sumiu")
         await _run(db, "t1", "r1", custo=9999.0)
 
-        async def _fake_get_profile(profile_id) -> NoReturn:
+        async def _fake_get_profile(profile_id: str) -> NoReturn:
             raise RuntimeError("perfil não encontrado")
 
         monkeypatch.setattr(
@@ -261,7 +264,7 @@ class TestCorteAutomatico:
         assert await check_budget("t1") is True
 
     @pytest.mark.asyncio
-    async def test_dentro_do_budget_libera(self, db) -> None:
+    async def test_dentro_do_budget_libera(self, db: Connection) -> None:
         from backend.scheduling.budget import check_budget
 
         await _task(db, "t1", budget_cents=100)
@@ -271,7 +274,7 @@ class TestCorteAutomatico:
         assert await check_budget("t1") is True
 
     @pytest.mark.asyncio
-    async def test_budget_estourado_barra_a_proxima_run(self, db) -> None:
+    async def test_budget_estourado_barra_a_proxima_run(self, db: Connection) -> None:
         from backend.scheduling.budget import check_budget
 
         await _task(db, "t1", budget_cents=100)
@@ -281,7 +284,9 @@ class TestCorteAutomatico:
         assert await check_budget("t1") is False
 
     @pytest.mark.asyncio
-    async def test_task_barrada_vira_blocked_com_capability(self, db) -> None:
+    async def test_task_barrada_vira_blocked_com_capability(
+        self, db: Connection
+    ) -> None:
         """O motivo aparece no card: `block_kind="capability"` sinaliza que
         a tarefa não pode continuar rodando como está configurada."""
         from backend.scheduling.budget import check_budget
@@ -298,7 +303,9 @@ class TestCorteAutomatico:
         assert "budget" in str(estado["block_reason"] or "").lower()
 
     @pytest.mark.asyncio
-    async def test_run_sem_custo_conhecido_nao_conta_como_zero(self, db) -> None:
+    async def test_run_sem_custo_conhecido_nao_conta_como_zero(
+        self, db: Connection
+    ) -> None:
         """Erro/borda: runs com custo desconhecido (provider sem usage) não
         podem ser somadas como 0 — o budget nunca estouraria."""
         from backend.scheduling.budget import accumulated_cents
@@ -312,7 +319,7 @@ class TestCorteAutomatico:
         assert desconhecidas == 1
 
     @pytest.mark.asyncio
-    async def test_budget_zero_barra_de_cara(self, db) -> None:
+    async def test_budget_zero_barra_de_cara(self, db: Connection) -> None:
         """Erro/borda: `budget_cents=0` é "não gaste nada", não "sem limite" —
         confundir os dois com `None` liberaria a tarefa."""
         from backend.scheduling.budget import check_budget
@@ -327,7 +334,9 @@ class TestWarnPercent:
     bloquear a task — só o hard-stop (`budget_cents` estourado) bloqueia."""
 
     @pytest.mark.asyncio
-    async def test_cruzar_warn_percent_nao_bloqueia_mas_sinaliza(self, db) -> None:
+    async def test_cruzar_warn_percent_nao_bloqueia_mas_sinaliza(
+        self, db: Connection
+    ) -> None:
         from backend.scheduling.budget import budget_status, check_budget
 
         await _task(db, "t1", budget_cents=100, budget_warn_percent=80)
@@ -339,7 +348,9 @@ class TestWarnPercent:
         assert status["over"] is False
 
     @pytest.mark.asyncio
-    async def test_sem_warn_percent_configurado_nao_quebra(self, db) -> None:
+    async def test_sem_warn_percent_configurado_nao_quebra(
+        self, db: Connection
+    ) -> None:
         """Erro/borda: task com budget_cents mas sem budget_warn_percent
         (None) nunca marca `warn=True` — não é um bug, é o opt-in de
         sempre (mesmo espírito do próprio budget_cents)."""
@@ -353,7 +364,9 @@ class TestWarnPercent:
         assert status["warn"] is False
 
     @pytest.mark.asyncio
-    async def test_estourar_o_teto_marca_warn_e_over_juntos(self, db) -> None:
+    async def test_estourar_o_teto_marca_warn_e_over_juntos(
+        self, db: Connection
+    ) -> None:
         from backend.scheduling.budget import budget_status
 
         await _task(db, "t1", budget_cents=100, budget_warn_percent=80)
@@ -364,7 +377,7 @@ class TestWarnPercent:
         assert status["over"] is True
 
     @pytest.mark.asyncio
-    async def test_task_inexistente_devolve_status_neutro(self, db) -> None:
+    async def test_task_inexistente_devolve_status_neutro(self, db: Connection) -> None:
         """Bad path: task_id desconhecido não lança — devolve o status
         'sem limite algum', mesmo contrato de `check_budget` pra task
         ausente."""

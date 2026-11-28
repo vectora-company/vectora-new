@@ -13,17 +13,20 @@ mockando só a fronteira de rede (`httpx`/JWKS), nunca o handler em si.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aiosqlite import Connection
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture
-def app_and_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def app_and_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[FastAPI]:
     db_file = str(tmp_path / "test_api_oidc.db")
     os.environ["VECTORA_AUTH_REQUIRED"] = "true"
 
@@ -34,7 +37,7 @@ def app_and_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     auth_mod._db_conn = None
     monkeypatch.setattr(auth_mod, "_get_secret", lambda: "oidc-api-test-secret-xxxxx")
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)
@@ -63,7 +66,7 @@ def app_and_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture
-def client(app_and_db) -> TestClient:
+def client(app_and_db: FastAPI) -> TestClient:
     return TestClient(app_and_db, raise_server_exceptions=False)
 
 

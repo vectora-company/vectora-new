@@ -72,8 +72,8 @@ async def _run_with_verification(
     session_store: SessionStore,
     monkeypatch: pytest.MonkeyPatch,
     result: VerificationResult,
-):
-    async def fake_run_verification(*_args, **_kwargs):
+) -> list[VerificationFinished]:
+    async def fake_run_verification(*_args: str | None, **_kwargs: str | None):
         return result
 
     monkeypatch.setattr(
@@ -141,10 +141,12 @@ async def test_history_verification_goes_on_the_turns_last_answer() -> None:
     plain_run = SimpleNamespace(run_id="r2", detail="", evidence=[])
 
     class _Store:
-        async def list_agent_runs(self, thread_id: str, *, limit: int = 50):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int = 50
+        ) -> list[SimpleNamespace]:
             return [run, plain_run]
 
-        async def latest_assistant_message_id(self, thread_id: str, run_id: str):
+        async def latest_assistant_message_id(self, thread_id: str, run_id: str) -> int:
             return {"r1": 42, "r2": 43}[run_id]
 
     verifications = await _history_verifications(_Store(), "t")  # ty: ignore[invalid-argument-type]
@@ -177,7 +179,9 @@ async def test_history_hides_not_verified_on_a_plain_chat_turn() -> None:
     )
 
     class _Store:
-        async def list_agent_runs(self, thread_id: str, *, limit: int = 50):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int = 50
+        ) -> list[SimpleNamespace]:
             return [chat_run]
 
         async def latest_assistant_message_id(self, thread_id: str, run_id: str) -> int:
@@ -197,7 +201,9 @@ async def test_history_keeps_not_verified_when_the_turn_touched_files() -> None:
     )
 
     class _Store:
-        async def list_agent_runs(self, thread_id: str, *, limit: int = 50):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int = 50
+        ) -> list[SimpleNamespace]:
             return [edit_run]
 
         async def latest_assistant_message_id(self, thread_id: str, run_id: str) -> int:

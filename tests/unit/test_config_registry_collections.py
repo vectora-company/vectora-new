@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from aiosqlite import Connection
 
 from backend.config import collections as collections_mod
 from backend.config import registry as registry_mod
@@ -118,7 +119,7 @@ class TestRegisteredModelsTableAdapter:
 
         db_path = tmp_path / "provider.db"
 
-        async def _fake_get_db():
+        async def _fake_get_db() -> Connection:
             return await aiosqlite.connect(db_path)
 
         monkeypatch.setattr(
@@ -145,7 +146,7 @@ class TestRegisteredModelsTableAdapter:
 
         db_path = tmp_path / "provider.db"
 
-        async def _fake_get_db():
+        async def _fake_get_db() -> Connection:
             return await aiosqlite.connect(db_path)
 
         monkeypatch.setattr(

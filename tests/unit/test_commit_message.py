@@ -7,8 +7,10 @@ from types import SimpleNamespace
 from typing import NoReturn
 
 import pytest
+from git import Repo
 
 from backend.services import commit_message as cm
+from backend.services.commit_message import ChangeContext, ChangedFile
 from backend.vtypes.message import VMessage
 
 
@@ -77,7 +79,7 @@ class TestCollect:
 
         assert {f.path for f in ctx.files} == {"src/app.py", "README.md"}
 
-    def test_keeps_recent_commit_subjects(self, repo) -> None:
+    def test_keeps_recent_commit_subjects(self, repo: Repo) -> None:
         ctx = cm.collect_change_context(repo)
 
         assert ctx.recent_subjects == ["fix: ajusta algo", "feat: primeira versão"]
@@ -102,7 +104,7 @@ class TestCollect:
         assert [f.path for f in ctx.files] == ["a.py"]
 
 
-def _file(path: str, status: str = "M", add: int = 3, rem: int = 1):
+def _file(path: str, status: str = "M", add: int = 3, rem: int = 1) -> ChangedFile:
     return cm.ChangedFile(path=path, status=status, additions=add, deletions=rem)
 
 
@@ -237,7 +239,7 @@ class _FakeLLM:
 
 @pytest.mark.asyncio
 class TestGenerate:
-    def _ctx(self):
+    def _ctx(self) -> ChangeContext:
         return cm.ChangeContext(
             files=[
                 cm.ChangedFile(

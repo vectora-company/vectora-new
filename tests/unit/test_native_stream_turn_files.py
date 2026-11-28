@@ -19,7 +19,7 @@ async def test_slow_scan_is_abandoned_at_deadline(
 ) -> None:
     monkeypatch.setattr(native_stream, "_TURN_FILES_TIMEOUT_SECONDS", 0.05)
 
-    def slow_scan(_snapshot):
+    def slow_scan(_snapshot) -> list[TurnFileChange]:
         time.sleep(0.3)
         return [_CHANGE]
 
@@ -43,7 +43,9 @@ async def test_file_persistence_runs_in_background(
     called = asyncio.Event()
 
     class _Store:
-        async def attach_edited_files(self, thread_id, run_id, files) -> None:
+        async def attach_edited_files(
+            self, thread_id: str, run_id: str, files: list[dict[str, str]]
+        ) -> None:
             called.set()
 
     async def _get_store():

@@ -12,6 +12,7 @@ import json
 
 import httpx
 import pytest
+from httpx import Request, Response
 from pydantic import BaseModel
 
 from backend.llm.google.chat_client import GoogleChatClient
@@ -61,7 +62,7 @@ def _resposta_ok(texto: str = "Olá", **extra) -> dict:
 
 class TestAgenerate:
     async def test_prompt_simples_devolve_conteudo(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json=_resposta_ok("Olá do Gemini"))
 
         resultado = await _client(handler).agenerate(
@@ -72,7 +73,7 @@ class TestAgenerate:
         assert resultado.role == MessageRole.ASSISTANT
 
     async def test_resposta_sem_candidates_vira_erro_tipado(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, json={"promptFeedback": {"blockReason": "SAFETY"}}
             )
@@ -273,7 +274,7 @@ class TestToolCalling:
         assert item_schema["properties"]["qtd"]["type"] == "integer"
 
     async def test_function_call_nao_streaming_volta_montada(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -311,7 +312,7 @@ class TestStreaming:
             b'data: {"candidates":[{"content":{"parts":[{"text":" mundo"}]}}]}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -331,7 +332,7 @@ class TestStreaming:
     ) -> None:
         corpo = b'data: {"promptFeedback":{"blockReason":"SAFETY"}}\n\n'
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -345,7 +346,7 @@ class TestStreaming:
             ]
 
     async def test_stream_sem_nenhum_chunk_util_nao_trava(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 content=b"",
@@ -373,7 +374,7 @@ class TestStreamingToolCallsEUsage:
             b'{"name":"file_read","args":{"path":"a.py"}}}]}}]}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )
@@ -399,7 +400,7 @@ class TestStreamingToolCallsEUsage:
             b'"totalTokenCount":13}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "text/event-stream"}
             )

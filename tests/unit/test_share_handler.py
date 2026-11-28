@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
@@ -102,7 +103,7 @@ class TestShareCreate:
                 return None
 
         class FakeStore:
-            async def get_session(self, _thread_id):
+            async def get_session(self, _thread_id: str) -> dict[str, str]:
                 return {"user_id": "owner"}
 
         request = __import__("starlette.requests", fromlist=["Request"]).Request(
@@ -147,7 +148,7 @@ class TestShareCreate:
                 return None
 
         class FakeStore:
-            async def get_session(self, _thread_id):
+            async def get_session(self, _thread_id: str) -> dict[str, str]:
                 return {"user_id": "owner"}
 
         request = __import__("starlette.requests", fromlist=["Request"]).Request(
@@ -179,7 +180,7 @@ class TestShareCreate:
 
 
 class TestShareDelete:
-    async def _database(self, token: str = "share-token"):
+    async def _database(self, token: str = "share-token") -> Connection:
         import aiosqlite
 
         db = await aiosqlite.connect(":memory:")
@@ -312,11 +313,11 @@ async def _resolved(value):
     return value
 
 
-async def _noop(*_args, **_kwargs) -> None:
+async def _noop(*_args, **_kwargs: str) -> None:
     return None
 
 
-async def _audit_failure(*_args, **_kwargs) -> NoReturn:
+async def _audit_failure(*_args: str, **_kwargs: str) -> NoReturn:
     raise RuntimeError("audit indisponível")
 
 
@@ -389,9 +390,11 @@ class TestShareList:
         return request
 
     @staticmethod
-    def _wire(monkeypatch: pytest.MonkeyPatch, db, owner: str | None = "owner") -> None:
+    def _wire(
+        monkeypatch: pytest.MonkeyPatch, db: Connection, owner: str | None = "owner"
+    ) -> None:
         class FakeStore:
-            async def get_session(self, _thread_id):
+            async def get_session(self, _thread_id: str) -> dict[str, str] | None:
                 return None if owner is None else {"user_id": owner}
 
         monkeypatch.setattr(share_handler, "_get_db", lambda: _resolved(db))

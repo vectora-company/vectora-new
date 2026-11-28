@@ -19,7 +19,9 @@ from typing import NoReturn
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.middleware.base import _StreamingResponse
 
+from backend.persistence.native.store import Item
 from backend.testing.mocks import NativeInMemoryStore
 from tests.json_values import dig
 
@@ -39,7 +41,7 @@ def client(
     """TestClient com o `store` acima injetado no lugar do store real."""
     os.environ["VECTORA_AUTH_REQUIRED"] = "false"
 
-    async def _fake_get_store():
+    async def _fake_get_store() -> NativeInMemoryStore:
         """Executa a operação  fake get store."""
         return store
 
@@ -387,7 +389,7 @@ class TestJourney:
     ) -> None:
         """Verifica o comportamento de falha ao listar skills nao derruba o painel."""
 
-        def _explode(_u) -> NoReturn:
+        def _explode(_u: str) -> NoReturn:
             """Executa a operação  explode."""
             raise OSError("índice de skills corrompido")
 
@@ -442,13 +444,13 @@ async def test_scoped_dashboard_reads_and_deletes_legacy_memories(
     app.include_router(memory.router)
 
     @app.middleware("http")
-    async def scope_request(request: Request, call_next):
+    async def scope_request(request: Request, call_next) -> _StreamingResponse:
         request.state.user = SimpleNamespace(id="alice")
         request.state.org_id = org_id
         request.state.workspace_id = workspace_id
         return await call_next(request)
 
-    async def get_store():
+    async def get_store() -> NativeInMemoryStore:
         return store
 
     monkeypatch.setattr(memory, "_store", get_store)
@@ -479,7 +481,7 @@ async def test_scoped_dashboard_reads_and_deletes_legacy_memories(
     await store.aput(legacy, "hidden-copy", {"content": "legacy fallback"})
     raw_get = store.aget
 
-    async def unexpired_get(namespace, key):
+    async def unexpired_get(namespace, key: str) -> Item | None:
         # Native stores hide expired records from aget, unlike the test store.
         item = await raw_get(namespace, key)
         return (
@@ -535,12 +537,12 @@ async def test_scoped_dashboard_can_edit_legacy_memory_without_changing_other_sc
     app.include_router(memory.router)
 
     @app.middleware("http")
-    async def scope_request(request: Request, call_next):
+    async def scope_request(request: Request, call_next) -> _StreamingResponse:
         request.state.user = SimpleNamespace(id="alice")
         request.state.workspace_id = "ws-1"
         return await call_next(request)
 
-    async def get_store():
+    async def get_store() -> NativeInMemoryStore:
         return store
 
     monkeypatch.setattr(memory, "_store", get_store)
@@ -590,12 +592,12 @@ async def test_scoped_dashboard_update_keeps_scoped_copy_ahead_of_legacy(
     app.include_router(memory.router)
 
     @app.middleware("http")
-    async def scope_request(request: Request, call_next):
+    async def scope_request(request: Request, call_next) -> _StreamingResponse:
         request.state.user = SimpleNamespace(id="alice")
         request.state.workspace_id = "ws-1"
         return await call_next(request)
 
-    async def get_store():
+    async def get_store() -> NativeInMemoryStore:
         return store
 
     monkeypatch.setattr(memory, "_store", get_store)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.tools.tavily.client import (
     TavilyAuthError,
@@ -53,10 +54,10 @@ class TestAuth:
         """Chave inválida e cota estourada exigem ações diferentes do
         usuário, e hoje viram a mesma mensagem genérica."""
 
-        def handler_401(_req):
+        def handler_401(_req: Request) -> Response:
             return httpx.Response(401, json={"detail": "unauthorized"})
 
-        def handler_429(_req):
+        def handler_429(_req: Request) -> Response:
             return httpx.Response(429, json={"detail": "rate limited"})
 
         async with _client(handler_401) as c:
@@ -71,7 +72,7 @@ class TestAuth:
 class TestSearch:
     @pytest.mark.asyncio
     async def test_resultados_saem_na_forma_esperada_pelas_tools(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -140,7 +141,7 @@ class TestSearch:
 
     @pytest.mark.asyncio
     async def test_busca_sem_resultado_devolve_lista_vazia_sem_lancar(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"results": []})
 
         async with _client(handler) as c:
@@ -151,7 +152,7 @@ class TestSearch:
         """Erro/borda: `results` ausente é resposta malformada, diferente de
         `results: []` — confundir os dois esconde falha de contrato."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"query": "q"})
 
         async with _client(handler) as c:
@@ -162,7 +163,7 @@ class TestSearch:
 class TestExtract:
     @pytest.mark.asyncio
     async def test_extrai_conteudo_das_urls(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -181,7 +182,7 @@ class TestExtract:
         """Erro/borda: o Tavily separa `failed_results`. Ignorar faz o agente
         achar que a página estava vazia, em vez de saber que não foi lida."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -238,7 +239,7 @@ class TestUsage:
 
     @pytest.mark.asyncio
     async def test_usage_com_401_vira_erro_de_credencial(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(401, json={"detail": "bad key"})
 
         async with _client(handler) as c:

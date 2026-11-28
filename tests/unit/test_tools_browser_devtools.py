@@ -195,7 +195,9 @@ async def test_browser_select_tab_inexistente_retorna_erro(
 # ---------------------------------------------------------------------------
 
 
-def _fake_tab(console=None, network=None) -> SimpleNamespace:
+def _fake_tab(
+    console: list[dict[str, str]] | None = None, network=None
+) -> SimpleNamespace:
     return SimpleNamespace(
         console_log=list(console or []),
         network_log=list(network or []),
@@ -517,17 +519,17 @@ class _FakeCDPForTrace:
     def __init__(self) -> None:
         self._handlers: dict[str, list] = {}
 
-        async def _send(method, params=None) -> None:
+        async def _send(method: str, params: dict[str, str] | None = None) -> None:
             if method == "Tracing.end":
                 for h in self._handlers.get("Tracing.tracingComplete", []):
                     h({})
 
         self.send = AsyncMock(side_effect=_send)
 
-    def on(self, event, handler) -> None:
+    def on(self, event: str, handler) -> None:
         self._handlers.setdefault(event, []).append(handler)
 
-    def emit(self, event, params) -> None:
+    def emit(self, event: str, params: dict[str, list[dict[str, str]]]) -> None:
         for h in self._handlers.get(event, []):
             h(params)
 
@@ -657,7 +659,7 @@ def _fake_tab_for_heap(snapshot: dict) -> SimpleNamespace:
     cdp = SimpleNamespace()
     payload = json.dumps(snapshot)
 
-    async def _send(method, params=None) -> None:
+    async def _send(method: str, params: dict[str, bool] | None = None) -> None:
         if method == "HeapProfiler.takeHeapSnapshot":
             for h in cdp._handlers.get("HeapProfiler.addHeapSnapshotChunk", []):
                 h({"chunk": payload})
@@ -711,7 +713,7 @@ class _FakeLighthouseProc:
         self._stderr = stderr
         self.returncode = returncode
 
-    async def communicate(self):
+    async def communicate(self) -> tuple[bytes, bytes]:
         return self._stdout, self._stderr
 
 
@@ -800,7 +802,7 @@ async def test_browser_lighthouse_audit_sem_url_usa_url_da_aba_ativa(
 
     captured = {}
 
-    async def _fake_exec(*args, **kwargs) -> _FakeLighthouseProc:
+    async def _fake_exec(*args: str, **kwargs: int) -> _FakeLighthouseProc:
         captured["args"] = args
         return _FakeLighthouseProc(
             json.dumps({"categories": {}, "audits": {}}).encode()
@@ -1099,10 +1101,10 @@ class _FakeCDPForScreencast:
         self._handlers: dict[str, list] = {}
         self.send = AsyncMock()
 
-    def on(self, event, handler) -> None:
+    def on(self, event: str, handler) -> None:
         self._handlers.setdefault(event, []).append(handler)
 
-    def emit(self, event, params) -> None:
+    def emit(self, event: str, params: JsonObject) -> None:
         for h in self._handlers.get(event, []):
             h(params)
 

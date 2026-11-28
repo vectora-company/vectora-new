@@ -30,7 +30,7 @@ async def test_run_starts_codespace_before_running_command(
     ssh_process.returncode = 0
     ssh_process.communicate.return_value = (b"ready\n", b"")
 
-    async def create_process(*args, **kwargs):
+    async def create_process(*args: str, **kwargs: int) -> AsyncMock:
         calls.append(tuple(args))
         return start_process if len(calls) == 1 else ssh_process
 

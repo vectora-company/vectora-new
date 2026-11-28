@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.ollama.web_search import (
     OLLAMA_CLOUD_URL,
@@ -44,7 +45,7 @@ class TestDisponibilidade:
 class TestWebSearch:
     @pytest.mark.asyncio
     async def test_resultados_viram_lista_normalizada(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -120,7 +121,7 @@ class TestWebSearch:
         """Busca sem resultado é resposta válida, não falha — a tool degrada
         (CLAUDE.md regra 11)."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={})
 
         assert (
@@ -132,7 +133,7 @@ class TestWebSearch:
 
     @pytest.mark.asyncio
     async def test_401_vira_erro_de_credencial(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(401, json={"error": "invalid key"})
 
         with pytest.raises(RuntimeError, match="OLLAMA_API_KEY"):
@@ -144,7 +145,7 @@ class TestWebSearch:
 class TestWebFetch:
     @pytest.mark.asyncio
     async def test_devolve_titulo_conteudo_e_links(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -180,7 +181,7 @@ class TestWebFetch:
         """Erro/borda: página que o extrator não entendeu devolve estrutura
         vazia — o agente decide o que fazer, a tool não derruba o turno."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"title": "", "content": ""})
 
         pagina = await ollama_web_fetch(

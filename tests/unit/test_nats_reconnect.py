@@ -8,6 +8,8 @@ Garante que:
 - reset_mq() / reset_kv() são chamados no closed_cb para forçar fallback
 """
 
+from __future__ import annotations
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -87,7 +89,7 @@ class TestNatsMQResilience:
 
         closed_cb_ref = None
 
-        async def capture_connect(*args, **kwargs):
+        async def capture_connect(*args: str, **kwargs) -> AsyncMock:
             nonlocal closed_cb_ref
             closed_cb_ref = kwargs.get("closed_cb")
             return mock_nc
@@ -161,7 +163,7 @@ class TestNatsKVResilience:
 
         closed_cb_ref = None
 
-        async def capture_connect(*args, **kwargs):
+        async def capture_connect(*args: str, **kwargs) -> MagicMock:
             nonlocal closed_cb_ref
             closed_cb_ref = kwargs.get("closed_cb")
             return mock_nc

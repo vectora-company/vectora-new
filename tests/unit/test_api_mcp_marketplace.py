@@ -23,6 +23,7 @@ from backend.api.handlers.mcp_marketplace import (
     uninstall_mcp,
 )
 from backend.vtypes.contracts import JsonObject
+from backend.workspace.plugins import McpServer
 
 
 def _entry(
@@ -240,10 +241,10 @@ def test_req_user_id_extrai_do_request_state_ou_usa_fallback_local() -> None:
 async def test_install_uninstall_tratam_excecao_do_store(
     _functional_store: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def boom_add(*args, **kwargs) -> NoReturn:
+    def boom_add(*args: McpServer | str | None, **kwargs) -> NoReturn:
         raise RuntimeError("disco cheio")
 
-    def boom_remove(*args, **kwargs) -> NoReturn:
+    def boom_remove(*args: str | None, **kwargs) -> NoReturn:
         raise RuntimeError("arquivo corrompido")
 
     monkeypatch.setattr(_functional_store, "add_server", boom_add)

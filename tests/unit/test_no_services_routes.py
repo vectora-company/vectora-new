@@ -51,7 +51,7 @@ SEM_SERVICES = "Services desabilitado nesta execução"
     ],
 )
 def test_rota_do_services_responde_503_sem_tocar_a_rede(
-    client: TestClient, method: str, path: str, body
+    client: TestClient, method: str, path: str, body: dict[str, str] | None
 ) -> None:
     resposta = client.request(method, path, json=body)
 

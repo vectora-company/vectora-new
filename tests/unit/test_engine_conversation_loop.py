@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, Mock
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 from fastapi import Request
 
 from backend.engine.conversation_loop import (
@@ -47,12 +48,14 @@ from backend.engine.stream_events import (
     ToolResult,
     WorkbenchInvalidate,
 )
+from backend.persistence.native.agent_run import AgentRun
 from backend.persistence.native.session_store import SessionStore
 from backend.persistence.native.store import Item, SearchItem
 from backend.persistence.telemetry import telemetry
 from backend.scheduling.dag import DAGStore
 from backend.services.context_planner import compute_transcript_hash
 from backend.services.policy_compiler import PolicySnapshot, compile_policy_snapshot
+from backend.services.verification import VerificationResult
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools import media as _media_module
 from backend.tools import planning as _planning_module
@@ -64,6 +67,7 @@ from backend.tools.registry import (
     ToolSpec,
     vtool,
 )
+from backend.vtypes import VectoraContext
 from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.vtypes.message import (
     ContentBlock,
@@ -234,7 +238,7 @@ def test_decision_harness_uses_only_the_selected_provider(
         preferences, "selected_decision_model_provider", lambda _ctx: "clef-local"
     )
 
-    def build(provider):
+    def build(provider: str):
         calls.append(provider)
         return sentinel
 
@@ -878,14 +882,16 @@ class TestParadaNormal:
         statuses_seen: list[str] = []
         original_upsert = session_store.upsert_agent_run
 
-        async def record_upsert(run) -> None:
+        async def record_upsert(run: AgentRun) -> None:
             """Executa a operação record upsert."""
             statuses_seen.append(run.status)
             await original_upsert(run)
 
         monkeypatch.setattr(session_store, "upsert_agent_run", record_upsert)
 
-        async def fake_verification(*_args, **_kwargs):
+        async def fake_verification(
+            *_args: str | None, **_kwargs: str | None
+        ) -> VerificationResult:
             """Executa a operação fake verification."""
             return VerificationResult(
                 passed=True,
@@ -1409,7 +1415,9 @@ class TestHitl:
             ]
         )
 
-        def should_require_approval(nome: str, _ctx: ToolContext, _args, _history):
+        def should_require_approval(
+            nome: str, _ctx: ToolContext, _args, _history
+        ) -> bool:
             """Executa a operação should require approval."""
             return nome == "escrever_arquivo"
 
@@ -1931,7 +1939,7 @@ class TestTodosUpdated:
     ) -> None:
         database = tmp_path / "plan-dag.db"
 
-        async def get_db():
+        async def get_db() -> Connection:
             return await aiosqlite.connect(database)
 
         monkeypatch.setattr("backend.scheduling.background_tasks._get_db", get_db)
@@ -2167,7 +2175,9 @@ async def test_agent_receives_godot_errors_repairs_causal_files_and_revalidates(
     ctx.workspace_id = workspace.id
     ctx.permission_mode = "bypass"
 
-    async def run_engine(_executable, arguments, project_dir, _timeout):
+    async def run_engine(
+        _executable: str, arguments: list[str], project_dir: Path, _timeout: int
+    ) -> tuple[int, str, bool]:
         if arguments == ["--headless", "--version"]:
             return 0, "Godot Engine v4.6.3.stable.official", False
         if "--editor" in arguments:
@@ -3166,7 +3176,7 @@ async def test_plan_proposal_approval_and_stages_complete_through_harness(
         )
     )
 
-    async def get_db():
+    async def get_db() -> Connection:
         return await aiosqlite.connect(database)
 
     monkeypatch.setattr("backend.scheduling.background_tasks._get_db", get_db)
@@ -3210,10 +3220,10 @@ async def test_plan_proposal_approval_and_stages_complete_through_harness(
         config=LoopConfig(run_id=run_id),
     )
 
-    async def get_sessions():
+    async def get_sessions() -> SessionStore:
         return session_store
 
-    async def assert_thread(*_args, **_kwargs) -> None:
+    async def assert_thread(*_args, **_kwargs: bool) -> None:
         return None
 
     monkeypatch.setattr(dag_api, "_assert_owns_thread", assert_thread)
@@ -3325,7 +3335,7 @@ async def test_memories_stay_frozen_per_thread(monkeypatch: pytest.MonkeyPatch) 
     cl._frozen_memories.clear()
     reads = iter([["primeira"], ["segunda"]])
 
-    async def _ler(ctx):
+    async def _ler(ctx: VectoraContext) -> list[str]:
         return next(reads)
 
     monkeypatch.setattr(cl, "_read_persistent_context_memories", _ler)

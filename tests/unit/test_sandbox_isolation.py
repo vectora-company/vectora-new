@@ -9,7 +9,7 @@ import pytest
 from backend.sandbox import isolation, workspace_jail
 from backend.sandbox.audit import audit_log
 from backend.sandbox.dry_run import preview_bwrap_command
-from backend.sandbox.isolation import isolation_report
+from backend.sandbox.isolation import IsolationReport, isolation_report
 from backend.sandbox.policy import SandboxPolicy
 from tests.json_values import as_object
 from tests.unit.test_sandbox_hardening import _bwrap_works, _exec
@@ -21,7 +21,7 @@ real_bwrap = pytest.mark.skipif(
 _TUDO = {"seccomp": True, "landlock": True, "no_new_privs": True, "rlimits": True}
 
 
-def _estado(report, nome: str):
+def _estado(report: IsolationReport, nome: str) -> str:
     return next(d.state for d in report.dimensions if d.name == nome)
 
 

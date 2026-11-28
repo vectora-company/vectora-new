@@ -30,6 +30,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.vtypes import Workspace
+
 
 @pytest.fixture
 def gate_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
@@ -77,7 +79,7 @@ def _register_workspace(
     workspace_id: str,
     owner_id: str | None,
     tmp_path: Path,
-):
+) -> Workspace:
     from backend.vtypes import Workspace
     from backend.workspace import workspace as ws_mod
 

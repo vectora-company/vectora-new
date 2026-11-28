@@ -19,6 +19,7 @@ from unittest.mock import patch
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.tools import homeassistant as ha
 from tests.json_values import as_object
@@ -37,7 +38,7 @@ def _mocked_client(handler) -> Generator[None]:
     Usa `_RealAsyncClient` (capturada antes do patch) — chamar
     `httpx.AsyncClient(...)` aqui dentro recairia no próprio mock."""
 
-    def _new_client(*_args, **_kwargs):
+    def _new_client(*_args, **_kwargs: float):
         return _RealAsyncClient(transport=httpx.MockTransport(handler))
 
     with patch("httpx.AsyncClient", side_effect=_new_client):
@@ -83,7 +84,7 @@ class TestCredenciais:
         """Erro/borda: 401 do HA é token inválido/expirado — a mensagem
         precisa distinguir isso de instância fora do ar."""
 
-        def _handler(_req):
+        def _handler(_req: Request) -> Response:
             return httpx.Response(401, json={"message": "Unauthorized"})
 
         with _mocked_client(_handler):
@@ -96,7 +97,7 @@ class TestCredenciais:
 class TestListEntities:
     @pytest.mark.asyncio
     async def test_lista_e_filtra_por_dominio(self) -> None:
-        def _handler(req):
+        def _handler(req: Request) -> Response:
             assert req.url.path == "/api/states"
             assert req.headers["Authorization"] == "Bearer tok"
             return httpx.Response(200, json=_ESTADOS)
@@ -114,7 +115,7 @@ class TestListEntities:
         aviso precisa vir junto, senão o LLM conclui que a casa não tem luz
         quando na verdade o filtro estava errado."""
 
-        def _handler(_req):
+        def _handler(_req: Request) -> Response:
             return httpx.Response(200, json=_ESTADOS)
 
         with _mocked_client(_handler):
@@ -127,7 +128,7 @@ class TestListEntities:
 class TestGetState:
     @pytest.mark.asyncio
     async def test_estado_de_entidade_existente(self) -> None:
-        def _handler(req):
+        def _handler(req: Request) -> Response:
             assert req.url.path == "/api/states/light.sala"
             return httpx.Response(200, json=_ESTADOS[0])
 
@@ -140,7 +141,7 @@ class TestGetState:
     async def test_entidade_inexistente_nomeia_a_entidade(self) -> None:
         """Erro/borda: 404 genérico faria o LLM achar que o HA caiu."""
 
-        def _handler(_req):
+        def _handler(_req: Request) -> Response:
             return httpx.Response(404, json={"message": "Entity not found"})
 
         with _mocked_client(_handler):
@@ -152,7 +153,7 @@ class TestGetState:
 class TestListServices:
     @pytest.mark.asyncio
     async def test_servicos_do_dominio_pedido(self) -> None:
-        def _handler(_req):
+        def _handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json=[
@@ -171,7 +172,7 @@ class TestListServices:
         """Erro/borda: HA atrás de proxy devolvendo HTML. Sem tratamento o
         `.json()` estoura com JSONDecodeError cru dentro do grafo."""
 
-        def _handler(_req):
+        def _handler(_req: Request) -> Response:
             return httpx.Response(200, text="<html>login</html>")
 
         with _mocked_client(_handler):
@@ -183,7 +184,7 @@ class TestListServices:
 class TestCallService:
     @pytest.mark.asyncio
     async def test_chama_servico_e_devolve_o_que_mudou(self) -> None:
-        def _handler(req):
+        def _handler(req: Request) -> Response:
             assert req.url.path == "/api/services/light/turn_on"
             assert json.loads(req.content) == {
                 "entity_id": "light.sala",
@@ -208,7 +209,7 @@ class TestCallService:
         """Erro/borda: o HA responde 400 pra serviço desconhecido. Devolver
         `ok` faria o agente afirmar que apagou a luz sem ter apagado."""
 
-        def _handler(_req):
+        def _handler(_req: Request) -> Response:
             return httpx.Response(400, json={"message": "Service not found"})
 
         with _mocked_client(_handler):

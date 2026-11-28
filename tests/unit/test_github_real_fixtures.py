@@ -62,7 +62,12 @@ def gh_output(monkeypatch: pytest.MonkeyPatch):
     calls: list[list[str]] = []
     state = {"output": ""}
 
-    async def fake(args, cwd=None, input_data=None, user_id=None):
+    async def fake(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         calls.append(list(args))
         assert tuple(args[:2]) in READ_ONLY, f"operação fora da leitura: {args}"
         if args[:2] == ["api", "--include"]:
@@ -347,7 +352,12 @@ async def test_truncated_real_output_is_an_error_not_a_crash(
 ) -> None:
     broken = _raw("gh_run_view.json")[:200]
 
-    async def fake(args, cwd=None, input_data=None, user_id=None):
+    async def fake(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         return {"status": "ok", "output": broken}
 
     monkeypatch.setattr(github, "_gh_run", fake)
@@ -361,7 +371,12 @@ async def test_truncated_real_output_is_an_error_not_a_crash(
 async def test_a_run_list_payload_is_not_accepted_as_a_run_detail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake(args, cwd=None, input_data=None, user_id=None):
+    async def fake(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         return {"status": "ok", "output": _raw("gh_run_list.json")}
 
     monkeypatch.setattr(github, "_gh_run", fake)

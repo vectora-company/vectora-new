@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiosqlite
 import pytest
 from fastapi.testclient import TestClient
+from httpx2 import Response
 
 from backend.api.handlers.webhooks import (
     CHANNEL_SSE,
@@ -535,7 +536,9 @@ class TestObservabilityWebhookEndpoint:
         monkeypatch.setattr(kanban, "_get_db", _connect)
         return db_path
 
-    def _post(self, client: TestClient, payload: dict, secret: str | None = "s3cr3t"):
+    def _post(
+        self, client: TestClient, payload: dict, secret: str | None = "s3cr3t"
+    ) -> Response:
         headers = {"content-type": "application/json"}
         if secret is not None:
             headers["x-webhook-secret"] = secret

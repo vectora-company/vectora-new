@@ -85,17 +85,17 @@ class TestAssignJobObject:
                 calls["create"] = True
                 return 111
 
-            def SetInformationJobObject(self, job, cls, _info, size) -> None:
+            def SetInformationJobObject(self, job: int, cls, _info, size: int) -> None:
                 calls["set"] = (job, cls, size)
 
-            def OpenProcess(self, access, _inherit, pid) -> int:
+            def OpenProcess(self, access: int, _inherit: bool, pid: int) -> int:
                 calls["open"] = (access, pid)
                 return 222
 
-            def AssignProcessToJobObject(self, job, hproc) -> None:
+            def AssignProcessToJobObject(self, job: int, hproc: int) -> None:
                 calls["assign"] = (job, hproc)
 
-            def CloseHandle(self, h) -> None:
+            def CloseHandle(self, h: int) -> None:
                 closed_handles.append(h)
 
         class _FakeWindll:

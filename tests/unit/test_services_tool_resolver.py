@@ -48,7 +48,7 @@ async def test_filters_disabled_tools(
         lambda uid, name: name != "terminal",
     )
 
-    async def _no_mcp(_uid):
+    async def _no_mcp(_uid: str):
         return []
 
     monkeypatch.setattr(tool_resolver, "get_user_mcp_tools", _no_mcp)
@@ -66,7 +66,7 @@ async def test_appends_mcp_tools(
 ) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 
-    async def _mcp(_uid):
+    async def _mcp(_uid: str):
         return [_FakeTool("mcp_search")]
 
     monkeypatch.setattr(tool_resolver, "get_user_mcp_tools", _mcp)
@@ -85,7 +85,7 @@ async def test_mcp_failure_degrades_to_builtins(
 ) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 
-    async def _boom(_uid) -> NoReturn:
+    async def _boom(_uid: str) -> NoReturn:
         raise RuntimeError("mcp down")
 
     monkeypatch.setattr(tool_resolver, "get_user_mcp_tools", _boom)

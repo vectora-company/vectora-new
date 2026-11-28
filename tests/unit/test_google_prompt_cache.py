@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from backend.llm.google import prompt_cache as pc
+from backend.vtypes import VMessage
 from backend.vtypes.contracts import JsonObject
 from tests.json_values import dig
 
@@ -130,7 +131,7 @@ class _GeminiFake:
         yield {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
 
 
-def _large_messages():
+def _large_messages() -> list[VMessage]:
     from backend.vtypes.message import MessageRole, text_message
 
     return [

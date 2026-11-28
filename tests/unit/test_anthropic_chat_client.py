@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.anthropic.chat_client import AnthropicChatClient
 from backend.llm.anthropic.client import AnthropicClient, AnthropicResponseError
@@ -52,7 +53,7 @@ def _ok_response(text: str = "Olá", **extra) -> dict:
 
 class TestAgenerate:
     async def test_prompt_simples_devolve_conteudo(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json=_ok_response("Olá da Anthropic"))
 
         resultado = await _client(handler).agenerate(
@@ -63,7 +64,7 @@ class TestAgenerate:
         assert resultado.role == MessageRole.ASSISTANT
 
     async def test_resposta_sem_content_lista_vira_erro_tipado(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"id": "msg_1"})
 
         with pytest.raises(AnthropicResponseError, match="content"):
@@ -246,7 +247,7 @@ class TestToolCalling:
         assert "type" not in tool  # Anthropic não usa o envelope da OpenAI
 
     async def test_tool_use_nao_streaming_volta_montada(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -283,7 +284,7 @@ class TestStreaming:
             b'data: {"type":"message_stop"}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )
@@ -299,7 +300,7 @@ class TestStreaming:
         assert text == "Oi mundo"
 
     async def test_stream_sem_nenhum_chunk_util_nao_trava(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 content=b'data: {"type":"message_stop"}\n\n',
@@ -333,7 +334,7 @@ class TestStreamingToolCallsEUsage:
             b'data: {"type":"message_stop"}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )
@@ -369,7 +370,7 @@ class TestStreamingToolCallsEUsage:
             b'data: {"type":"message_stop"}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )

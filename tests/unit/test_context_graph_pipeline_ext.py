@@ -78,7 +78,7 @@ class TestBuildWorkspaceGraphNoFiles:
 
         registry = _make_registry(tmp_path)
 
-        def _fake_detect(workspace_path):
+        def _fake_detect(workspace_path: Path):
             return {"files": {}}
 
         with (

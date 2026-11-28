@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from types import SimpleNamespace
 from typing import Any, Literal, cast
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, _patch, call, patch
 
 import pytest
 from fastapi import FastAPI
@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from backend.api.handlers import threads as threads_handlers
+from backend.api.schemas import Thread
 from backend.persistence.native.agent_run import AgentRun, AgentRunTimelineEntry
 from backend.vtypes.contracts import JsonObject
 from backend.vtypes.history import ThreadHistoryEntry
@@ -30,13 +31,13 @@ def _make_app() -> FastAPI:
     return create_app()
 
 
-def _fake_thread():
+def _fake_thread() -> Thread:
     from backend.api.schemas import Thread
 
     return Thread(id="t1", created_at="", updated_at="", workspace_id="")
 
 
-def _patch_get_thread():
+def _patch_get_thread() -> _patch:
     return patch(
         "backend.api.handlers.threads.get_thread",
         new_callable=AsyncMock,

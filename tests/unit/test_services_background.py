@@ -16,8 +16,10 @@ from typing import Any, NoReturn
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aiosqlite import Connection
 
 import backend
+from backend.agents.souls import Soul
 from backend.engine.hitl import ApprovalGate
 from backend.engine.subagents import SubagentSpec
 from backend.persistence.native.session_store import SessionStore
@@ -460,7 +462,7 @@ async def test_tick_pula_interval_atrasada_mas_executa_once_atrasada(
 
     executed: list[str] = []
 
-    async def _fake_run_task(task, trigger, payload=None) -> None:
+    async def _fake_run_task(task: BackgroundTask, trigger: str, payload=None) -> None:
         executed.append(task.id)
 
     monkeypatch.setattr(bg, "run_task", _fake_run_task)
@@ -516,7 +518,9 @@ async def test_run_task_invokes_agent_registers_session_and_records_run(
 
     upserts: list[JsonObject] = []
 
-    async def _fake_upsert(thread_id, title=None, workspace_id=None) -> None:
+    async def _fake_upsert(
+        thread_id: str, title: str | None = None, workspace_id: str | None = None
+    ) -> None:
         upserts.append(
             {"thread_id": thread_id, "title": title, "workspace_id": workspace_id}
         )
@@ -734,7 +738,7 @@ async def test_run_task_subagent_type_usa_soul_tool_registry_com_o_usuario_da_ta
     chamadas: list[tuple[str, str | None]] = []
     original = bg._soul_tool_registry
 
-    def _spy(soul, user_id):
+    def _spy(soul: Soul, user_id: str) -> ToolRegistry:
         chamadas.append((soul.name, user_id))
         return original(soul, user_id)
 
@@ -885,10 +889,15 @@ async def test_run_task_incrementa_message_count_da_thread(
     upserts: list[str] = []
     increments: list[str] = []
 
-    async def _fake_upsert(thread_id, title=None, workspace_id=None, mode=None) -> None:
+    async def _fake_upsert(
+        thread_id: str,
+        title: str | None = None,
+        workspace_id: str | None = None,
+        mode=None,
+    ) -> None:
         upserts.append(thread_id)
 
-    async def _fake_increment(thread_id) -> None:
+    async def _fake_increment(thread_id: str) -> None:
         increments.append(thread_id)
 
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _fake_upsert)
@@ -955,7 +964,7 @@ async def test_run_task_reporta_conclusao_na_sessao_mae(
         chat_client=ScriptedChatClient([[texto_chunk("3 arquivos alterados")]]),
     )
 
-    async def _noop(*a, **k) -> None:
+    async def _noop(*a: str, **k: str | None) -> None:
         return None
 
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _noop)
@@ -1074,7 +1083,9 @@ async def test_run_task_interrupt_marks_awaiting_and_resume_completes(
         chat_client=[client1, client2],
     )
 
-    async def _fake_upsert(thread_id, title=None, workspace_id=None) -> None:
+    async def _fake_upsert(
+        thread_id: str, title: str | None = None, workspace_id: str | None = None
+    ) -> None:
         return None
 
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _fake_upsert)
@@ -1279,7 +1290,7 @@ async def test_resume_background_run_rejects_unknown_or_finished_run(
         chat_client=ScriptedChatClient([[texto_chunk("x")]]),
     )
 
-    async def _fake_upsert(*a, **k) -> None:
+    async def _fake_upsert(*a: str, **k: str | None) -> None:
         return None
 
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _fake_upsert)
@@ -2017,7 +2028,7 @@ async def test_scheduler_runs_due_and_skips_disabled(
     fired: list[str] = []
     from backend.scheduling import kanban
 
-    async def _fake_run(task, trigger_source, payload=None) -> str:
+    async def _fake_run(task: BackgroundTask, trigger_source: str, payload=None) -> str:
         fired.append(task.id)
         run_id = f"run-{task.id}"
         assert await kanban.claim_task(task.id, run_id)
@@ -2073,7 +2084,7 @@ async def test_scheduler_keeps_running_when_dag_recovery_fails(
     async def _fail_recovery() -> NoReturn:
         raise RuntimeError("dag database temporarily unavailable")
 
-    async def _fake_run(task, trigger_source, payload=None) -> str:
+    async def _fake_run(task: BackgroundTask, trigger_source: str, payload=None) -> str:
         fired.append(task.id)
         return "background-run"
 
@@ -2107,7 +2118,9 @@ async def test_dispatch_webhook_matches_provider_and_event(
 ) -> None:
     fired: list[tuple[str, str]] = []
 
-    async def _fake_run(task, trigger_source, payload=None) -> str:
+    async def _fake_run(
+        task: BackgroundTask, trigger_source: str, payload: dict[str, int] | None = None
+    ) -> str:
         fired.append((task.id, trigger_source))
         return "bg-x"
 
@@ -2563,7 +2576,7 @@ async def test_run_task_recorrente_volta_pra_ready_ao_concluir(
         chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
     )
 
-    async def _noop_upsert(*_a, **_k) -> None:
+    async def _noop_upsert(*_a: str, **_k: str | None) -> None:
         return None
 
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _noop_upsert)
@@ -2597,7 +2610,7 @@ async def test_run_task_unica_vira_done_ao_concluir(
         chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
     )
 
-    async def _noop_upsert(*_a, **_k) -> None:
+    async def _noop_upsert(*_a: str, **_k: str | None) -> None:
         return None
 
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _noop_upsert)
@@ -2748,7 +2761,7 @@ class TestRunTaskComPerfilDeAgente:
 
         from backend.services import agent_profiles
 
-        async def _connect_profiles():
+        async def _connect_profiles() -> Connection:
             conn = await aiosqlite.connect(db)
             conn.row_factory = aiosqlite.Row
             return conn
@@ -2768,7 +2781,7 @@ class TestRunTaskComPerfilDeAgente:
             chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
         )
 
-        async def _noop(*a, **k) -> None:
+        async def _noop(*a: str, **k: str | None) -> None:
             return None
 
         monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _noop)
@@ -2805,7 +2818,7 @@ class TestRunTaskComPerfilDeAgente:
             chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
         )
 
-        async def _noop(*a, **k) -> None:
+        async def _noop(*a: str, **k: str | None) -> None:
             return None
 
         monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _noop)
@@ -2837,7 +2850,7 @@ class TestRunTaskComPerfilDeAgente:
 
         from backend.services import agent_profiles
 
-        async def _connect_profiles():
+        async def _connect_profiles() -> Connection:
             conn = await aiosqlite.connect(db)
             conn.row_factory = aiosqlite.Row
             return conn
@@ -2851,7 +2864,7 @@ class TestRunTaskComPerfilDeAgente:
             chat_client=ScriptedChatClient([[texto_chunk("ok")]]),
         )
 
-        async def _noop(*a, **k) -> None:
+        async def _noop(*a: str, **k: str | None) -> None:
             return None
 
         monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _noop)

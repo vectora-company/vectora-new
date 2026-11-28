@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from aiosqlite import Connection
 from fastapi import HTTPException
 
 from backend.api.handlers.agent_profiles import (
@@ -57,7 +58,7 @@ async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     )
     await conn.commit()
 
-    async def _get_db():
+    async def _get_db() -> Connection:
         return conn
 
     monkeypatch.setattr(ap, "_get_db", _get_db)
@@ -66,7 +67,7 @@ async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 class TestGetAgentProfiles:
-    async def test_lista_perfis_do_usuario(self, db) -> None:
+    async def test_lista_perfis_do_usuario(self, db: Connection) -> None:
         await post_agent_profile(_req("user-1"), CreateAgentProfileRequest(name="A"))
         await post_agent_profile(_req("user-2"), CreateAgentProfileRequest(name="B"))
 
@@ -77,7 +78,7 @@ class TestGetAgentProfiles:
 
 
 class TestPostAgentProfile:
-    async def test_cria_perfil(self, db) -> None:
+    async def test_cria_perfil(self, db: Connection) -> None:
         created = await post_agent_profile(
             _req("user-1"), CreateAgentProfileRequest(name="QA Bot")
         )
@@ -85,7 +86,7 @@ class TestPostAgentProfile:
         assert created.name == "QA Bot"
         assert created.status == "active"
 
-    async def test_nome_invalido_vira_422(self, db) -> None:
+    async def test_nome_invalido_vira_422(self, db: Connection) -> None:
         with pytest.raises(HTTPException) as exc_info:
             await post_agent_profile(
                 _req("user-1"), CreateAgentProfileRequest(name=" ")
@@ -95,7 +96,7 @@ class TestPostAgentProfile:
 
 
 class TestPatchAgentProfile:
-    async def test_atualiza_perfil_proprio(self, db) -> None:
+    async def test_atualiza_perfil_proprio(self, db: Connection) -> None:
         created = await post_agent_profile(
             _req("user-1"), CreateAgentProfileRequest(name="X")
         )
@@ -106,7 +107,9 @@ class TestPatchAgentProfile:
 
         assert updated.name == "Y"
 
-    async def test_atualizar_perfil_de_outro_usuario_vira_404(self, db) -> None:
+    async def test_atualizar_perfil_de_outro_usuario_vira_404(
+        self, db: Connection
+    ) -> None:
         """Erro/borda: usuário B não pode nem enxergar (muito menos editar)
         um perfil de outro usuário."""
         created = await post_agent_profile(
@@ -122,7 +125,7 @@ class TestPatchAgentProfile:
 
 
 class TestDeleteAgentProfile:
-    async def test_apaga_perfil_proprio(self, db) -> None:
+    async def test_apaga_perfil_proprio(self, db: Connection) -> None:
         created = await post_agent_profile(
             _req("user-1"), CreateAgentProfileRequest(name="X")
         )
@@ -132,7 +135,9 @@ class TestDeleteAgentProfile:
         result = await get_agent_profiles(_req("user-1"))
         assert result == []
 
-    async def test_apagar_perfil_de_outro_usuario_vira_404(self, db) -> None:
+    async def test_apagar_perfil_de_outro_usuario_vira_404(
+        self, db: Connection
+    ) -> None:
         created = await post_agent_profile(
             _req("user-1"), CreateAgentProfileRequest(name="X")
         )

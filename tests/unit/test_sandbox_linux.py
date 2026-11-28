@@ -19,7 +19,7 @@ from backend.sandbox.policy import SandboxPolicy
 async def test_missing_bwrap_binary_returns_clear_error_not_exception(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _raise_not_found(*_args, **_kwargs) -> NoReturn:
+    async def _raise_not_found(*_args: str, **_kwargs: int) -> NoReturn:
         raise FileNotFoundError("bwrap")
 
     monkeypatch.setattr(
@@ -145,7 +145,7 @@ async def test_permission_denied_returns_clear_error_not_exception(
 ) -> None:
     # Erro/borda: bwrap presente mas sem permissão de execução —
     # PermissionError não é FileNotFoundError, precisa degradar igual.
-    async def _raise_permission_denied(*_args, **_kwargs) -> NoReturn:
+    async def _raise_permission_denied(*_args: str, **_kwargs: int) -> NoReturn:
         raise PermissionError("Permission denied: bwrap")
 
     monkeypatch.setattr(
@@ -347,7 +347,7 @@ async def test_duas_execucoes_concorrentes_nao_compartilham_estado(
 
     procs = iter([proc_a, proc_b])
 
-    async def _create(*_args, **_kwargs):
+    async def _create(*_args: str, **_kwargs: int) -> MagicMock:
         return next(procs)
 
     monkeypatch.setattr(sandbox_linux.asyncio, "create_subprocess_exec", _create)
@@ -372,11 +372,11 @@ class _FakeSeccompFilter:
     sem depender de libseccomp instalada (indisponível neste ambiente de
     dev Windows e no CI)."""
 
-    def __init__(self, defaction) -> None:
+    def __init__(self, defaction: str) -> None:
         self.defaction = defaction
         self.rules: list[tuple[int | str, str]] = []
 
-    def add_rule(self, action, name) -> None:
+    def add_rule(self, action: str, name: str) -> None:
         if name == "syscall_inexistente":
             raise OSError(f"syscall {name!r} desconhecida nesta arch")
         self.rules.append((action, name))
@@ -393,7 +393,7 @@ def _install_fake_seccomp_module(
 
     created: list[_FakeSeccompFilter] = []
 
-    def _syscall_filter(defaction) -> _FakeSeccompFilter:
+    def _syscall_filter(defaction: str) -> _FakeSeccompFilter:
         f = _FakeSeccompFilter(defaction)
         created.append(f)
         return f

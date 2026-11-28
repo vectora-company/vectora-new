@@ -8,6 +8,7 @@ Cobre:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -195,7 +196,9 @@ class TestWalkFilesPruning:
         visited: list[str] = []
         original_walk = os_module.walk
 
-        def spy_walk(top, *args, **kwargs):
+        def spy_walk(
+            top: Path, *args, **kwargs
+        ) -> Iterator[tuple[str, list[str], list[str]]]:
             for dirpath, dirnames, filenames in original_walk(top, *args, **kwargs):
                 visited.append(str(dirpath))
                 # yield das MESMAS listas para a poda in-place propagar
@@ -226,7 +229,9 @@ class TestWalkFilesPruning:
         visited: list[str] = []
         original_walk = os_module.walk
 
-        def spy_walk(top, *args, **kwargs):
+        def spy_walk(
+            top: Path, *args, **kwargs
+        ) -> Iterator[tuple[str, list[str], list[str]]]:
             for dirpath, dirnames, filenames in original_walk(top, *args, **kwargs):
                 visited.append(str(dirpath))
                 yield dirpath, dirnames, filenames
@@ -323,7 +328,7 @@ class TestVectoraStateDirExemption:
         visited: list[str] = []
         original_walk = os_module.walk
 
-        def spy_walk(top, *args, **kwargs):
+        def spy_walk(top: Path, *args, **kwargs):
             for dirpath, dirnames, filenames in original_walk(top, *args, **kwargs):
                 visited.append(str(dirpath))
                 yield dirpath, dirnames, filenames

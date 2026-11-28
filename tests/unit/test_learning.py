@@ -14,6 +14,7 @@ from backend.services.learning import (
     dedupe_skill_drafts,
     distill_transcript,
 )
+from backend.vtypes import VMessage
 from backend.vtypes.message import MessageRole, text_message
 
 
@@ -234,7 +235,7 @@ async def test_distill_transcript_truncates_input_beyond_20000_chars(
 
     llm = MagicMock()
 
-    async def _fake_agenerate(messages, **_kwargs):
+    async def _fake_agenerate(messages: list[VMessage], **_kwargs) -> VMessage:
         captured_messages.extend(messages)
         return text_message(MessageRole.ASSISTANT, _distill_json())
 

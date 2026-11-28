@@ -13,6 +13,7 @@ import base64
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
 from backend.llm.openrouter.media import generate_image_bytes, synthesize_speech_bytes
@@ -34,7 +35,7 @@ def _client(handler) -> OpenRouterClient:
 class TestImagem:
     @pytest.mark.asyncio
     async def test_b64_json_e_decodificado_antes_de_gravar(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={"data": [{"b64_json": base64.b64encode(_PNG).decode("ascii")}]},
@@ -79,7 +80,7 @@ class TestImagem:
         """Erro/borda: filtro do provider devolve `data` sem imagem. Sem este
         corte, grava um arquivo de 0 byte que aparece como artifact quebrado."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"data": [{"revised_prompt": "..."}]})
 
         with pytest.raises(OpenRouterResponseError):
@@ -87,7 +88,7 @@ class TestImagem:
 
     @pytest.mark.asyncio
     async def test_data_vazio_tambem_falha(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"data": []})
 
         with pytest.raises(OpenRouterResponseError):
@@ -97,7 +98,7 @@ class TestImagem:
     async def test_base64_corrompido_vira_erro_tipado(self) -> None:
         """Erro/borda: `b64decode` de lixo estoura `binascii.Error` cru."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"data": [{"b64_json": "!!!nao-e-base64"}]})
 
         with pytest.raises(OpenRouterResponseError):
@@ -107,7 +108,7 @@ class TestImagem:
 class TestTTS:
     @pytest.mark.asyncio
     async def test_bytestream_usado_direto_sem_b64decode(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=_MP3, headers={"content-type": "audio/mpeg"}
             )
@@ -143,7 +144,7 @@ class TestTTS:
 
     @pytest.mark.asyncio
     async def test_corpo_vazio_vira_erro_sem_gravar_audio_de_zero_byte(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, content=b"")
 
         with pytest.raises(OpenRouterResponseError):
@@ -157,7 +158,7 @@ class TestTTS:
         como se fosse áudio — arquivo que abre e não toca."""
         from backend.llm.openrouter.client import OpenRouterRateLimitError
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(429, json={"error": {"message": "slow down"}})
 
         with pytest.raises(OpenRouterRateLimitError):
@@ -176,13 +177,13 @@ class TestFormatosSaoOpostos:
     async def test_imagem_decodifica_e_audio_nao(self) -> None:
         conteudo_audio = base64.b64encode(b"nao-decodificar").decode("ascii").encode()
 
-        def handler_img(_req):
+        def handler_img(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={"data": [{"b64_json": base64.b64encode(_PNG).decode("ascii")}]},
             )
 
-        def handler_tts(_req):
+        def handler_tts(_req: Request) -> Response:
             return httpx.Response(200, content=conteudo_audio)
 
         img = await generate_image_bytes(_client(handler_img), model="m", prompt="p")

@@ -13,7 +13,7 @@ from typing import NoReturn
 import pytest
 
 from backend.api import server as server_mod
-from backend.services.license import LicenseError
+from backend.services.license import LicenseError, LicenseStatusInfo
 
 
 def _run_one_iteration(monkeypatch: pytest.MonkeyPatch, validate) -> list[str]:
@@ -41,7 +41,7 @@ def _run_one_iteration(monkeypatch: pytest.MonkeyPatch, validate) -> list[str]:
 def test_loop_sucesso_dorme_6h(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.services.license import LicenseStatusInfo
 
-    async def ok(**kw):
+    async def ok(**kw) -> LicenseStatusInfo:
         return LicenseStatusInfo(
             tier="pro",
             status="active",

@@ -123,7 +123,9 @@ async def test_tool_de_plugin_repassa_o_contexto(
         received.append((tool_name, arguments, ctx))
         return "ok"
 
-    async def fake_connect(self, connections, strict: bool = False) -> None:
+    async def fake_connect(
+        self, connections: dict[str, dict[str, str]], strict: bool = False
+    ) -> None:
         return None
 
     monkeypatch.setattr(plugins.VectoraMCPClient, "call_tool", fake_call)

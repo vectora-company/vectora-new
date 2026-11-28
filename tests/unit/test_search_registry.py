@@ -142,7 +142,7 @@ class TestExecucao:
     async def test_backend_do_duckduckgo_devolve_resultados(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        def _fake(query, max_results: int = 5):
+        def _fake(query: str, max_results: int = 5) -> list[dict[str, str]]:
             return [{"title": "r", "url": "https://x.test", "content": "c"}]
 
         monkeypatch.setattr("backend.browser.search_fallback.search_fallback", _fake)
@@ -159,7 +159,7 @@ class TestExecucao:
         """Erro/borda crítico: lista vazia faz o LLM concluir que não há
         resultados, que é diferente de a busca ter falhado."""
 
-        def _explode(query, max_results: int = 5) -> NoReturn:
+        def _explode(query: str, max_results: int = 5) -> NoReturn:
             raise RuntimeError("rede fora")
 
         monkeypatch.setattr("backend.browser.search_fallback.search_fallback", _explode)

@@ -21,7 +21,7 @@ from backend.tools import library
 async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _registry():
+    async def _registry() -> list[SimpleNamespace]:
         return [
             SimpleNamespace(
                 id="github", name="GitHub", description="Repos e PRs", env_vars=["T"]
@@ -60,14 +60,14 @@ async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(
 async def test_list_skills_catalog_happy_e_catalogo_vazio(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _catalog(_kind):
+    async def _catalog(_kind: str) -> list[dict[str, str]]:
         return [{"id": "revisar-pr", "name": "Revisar PR", "description": "Como"}]
 
     monkeypatch.setattr("backend.services.registry_client.fetch_catalog", _catalog)
     out = json.loads(await library.list_skills_catalog())
     assert [i["id"] for i in out["items"]] == ["revisar-pr"]
 
-    async def _vazio(_kind):
+    async def _vazio(_kind: str):
         return []
 
     monkeypatch.setattr("backend.services.registry_client.fetch_catalog", _vazio)
@@ -78,7 +78,7 @@ async def test_list_skills_catalog_happy_e_catalogo_vazio(
 async def test_list_memory_bucket_catalog_happy_e_falha(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _catalog():
+    async def _catalog() -> list[dict[str, str]]:
         return [{"id": "leis-br", "name": "Leis BR", "description": "Legislação"}]
 
     monkeypatch.setattr("backend.services.memory_buckets.list_catalog", _catalog)
@@ -101,7 +101,7 @@ async def test_catalogo_grande_e_truncado_com_total_real(
     # Regressão de contexto: o registry oficial tem centenas de entradas e
     # despejar tudo gastaria a janela do LLM. `total` continua o número real
     # pra o agente saber que há mais.
-    async def _registry():
+    async def _registry() -> list[SimpleNamespace]:
         return [
             SimpleNamespace(id=f"c{i}", name=f"C{i}", description="x", env_vars=[])
             for i in range(200)

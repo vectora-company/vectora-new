@@ -6,10 +6,13 @@ from __future__ import annotations
 import pytest
 
 from backend.testing.mocks import FakeChatClient, text_chunk, text_response
+from backend.vtypes import VMessage
 from backend.vtypes.message import MessageRole, ToolCall, ToolCallChunk, VMessageChunk
 
 
-async def _collect(client: FakeChatClient, messages, **kwargs) -> list[VMessageChunk]:
+async def _collect(
+    client: FakeChatClient, messages: list[VMessage], **kwargs
+) -> list[VMessageChunk]:
     return [chunk async for chunk in client.astream(messages, **kwargs)]
 
 

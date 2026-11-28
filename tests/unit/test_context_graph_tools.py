@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, _patch, patch
 
 import pytest
 
@@ -53,7 +53,7 @@ def _ctx(workspace_id: str = "") -> ToolContext:
     return ToolContext(workspace_id=workspace_id)
 
 
-def _patch_registry(ws_mock):
+def _patch_registry(ws_mock: MagicMock | None) -> _patch:
     registry = MagicMock()
     registry.get = MagicMock(return_value=ws_mock)
     return patch("backend.workspace.workspace.workspace_registry", registry)

@@ -167,7 +167,7 @@ async def test_permission_denied_returns_clear_error_not_exception(
         lambda name: "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None,
     )
 
-    async def _raise_permission_denied(*_args, **_kwargs) -> NoReturn:
+    async def _raise_permission_denied(*_args: str, **_kwargs: int | str) -> NoReturn:
         raise PermissionError("Permission denied: sandbox-exec")
 
     monkeypatch.setattr(

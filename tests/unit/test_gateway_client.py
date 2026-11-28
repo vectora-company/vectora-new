@@ -1,7 +1,10 @@
 """GatewayClient (backend/services/gateway/__init__.py)"""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
+from asyncio import Queue
 from pathlib import Path
 from types import TracebackType
 from typing import TYPE_CHECKING, cast
@@ -9,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
+from aiohttp import ClientTimeout, WSMsgType
 
 from backend.services.gateway import GatewayMessage, GatewayRequestItem
 from backend.vtypes.contracts import JsonObject, JsonValue
@@ -407,7 +411,7 @@ class _AsyncCtx:
 
 
 class TestGatewayClientConnectOnce:
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
@@ -543,7 +547,7 @@ class TestGatewayClientConnectOnce:
         client = self._client()
 
         class _FakeMsg:
-            def __init__(self, tp, data=None) -> None:
+            def __init__(self, tp: WSMsgType, data: JsonObject | None = None) -> None:
                 self.type = tp
                 self._data = data
 
@@ -598,7 +602,7 @@ class TestGatewayClientConnectOnce:
 
         created: list[MagicMock] = []
 
-        def session_factory(*_args, **_kwargs) -> _AsyncCtx:
+        def session_factory(*_args, **_kwargs: ClientTimeout) -> _AsyncCtx:
             value = ws_owner_session if len(created) == 0 else local_session_marker
             created.append(value)
             return _AsyncCtx(value)
@@ -620,14 +624,14 @@ class TestGatewayClientConnectOnce:
 
 
 class TestGatewayClientDispatch:
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
             gateway_url="wss://gateway.vectora.chat",
         )
 
-    def _queue(self):
+    def _queue(self) -> Queue:
         from backend.services.gateway import _MAX_CONCURRENT_FORWARDS
 
         return asyncio.Queue(maxsize=_MAX_CONCURRENT_FORWARDS)
@@ -754,7 +758,7 @@ class TestGatewayClientForward:
 
         assert client._local_url == "http://localhost:8080"
 
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
@@ -885,7 +889,7 @@ class TestGatewayClientForward:
 
 
 class TestGatewayClientForwardWorker:
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
@@ -985,7 +989,7 @@ class TestGatewayClientForwardWorker:
 
 
 class TestGatewayClientConcurrency:
-    def _client(self):
+    def _client(self) -> GatewayClient:
         from backend.services.gateway import GatewayClient
 
         return GatewayClient(
@@ -1096,7 +1100,7 @@ class TestGatewayClientConcurrency:
             status = 200
             headers: dict[str, str] = {}
 
-            async def __aenter__(self) -> "_FakeResp":
+            async def __aenter__(self) -> _FakeResp:
                 nonlocal in_flight, max_in_flight
                 in_flight += 1
                 max_in_flight = max(max_in_flight, in_flight)

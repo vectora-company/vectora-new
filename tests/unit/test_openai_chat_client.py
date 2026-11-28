@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.openai.chat_client import OpenAIChatClient
 from backend.llm.openai.client import OpenAIClient, OpenAIResponseError
@@ -43,7 +44,7 @@ def _ok_response(text: str = "Olá", **extra) -> dict:
 
 class TestAgenerate:
     async def test_prompt_simples_devolve_conteudo(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json=_ok_response("Olá da OpenAI"))
 
         resultado = await _client(handler).agenerate(
@@ -54,7 +55,7 @@ class TestAgenerate:
         assert resultado.role == MessageRole.ASSISTANT
 
     async def test_resposta_sem_output_vira_erro_tipado(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"id": "resp_1"})
 
         with pytest.raises(OpenAIResponseError, match="output"):
@@ -168,7 +169,7 @@ class TestToolCalling:
         assert set(tool["parameters"]["required"]) == {"query", "limit"}
 
     async def test_tool_call_nao_streaming_volta_montada(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -194,7 +195,7 @@ class TestToolCalling:
         assert resultado.finish_reason == "tool_calls"
 
     async def test_arguments_invalido_nao_derruba_a_resposta(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -226,7 +227,7 @@ class TestStreaming:
             b'data: {"type":"response.completed","response":{}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )
@@ -242,7 +243,7 @@ class TestStreaming:
         assert text == "Oi mundo"
 
     async def test_stream_sem_nenhum_chunk_util_nao_trava(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 content=b'data: {"type":"response.completed","response":{}}\n\n',
@@ -278,7 +279,7 @@ class TestStreamingToolCallsEUsage:
             b'data: {"type":"response.completed","response":{}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )
@@ -309,7 +310,7 @@ class TestStreamingToolCallsEUsage:
             b'data: {"type":"response.completed","response":{}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )
@@ -330,7 +331,7 @@ class TestStreamingToolCallsEUsage:
             b'{"usage":{"input_tokens":10,"output_tokens":3,"total_tokens":13}}}\n\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=body, headers={"content-type": "text/event-stream"}
             )

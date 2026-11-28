@@ -22,19 +22,19 @@ def reset_singleton() -> Iterator[None]:
 
 
 @pytest.fixture
-async def queue():
+async def queue() -> EmbeddingQueue:
     return await get_embedding_queue(_DSN)
 
 
 class TestEmbeddingQueue:
     @pytest.mark.asyncio
-    async def test_enqueue_returns_id(self, queue) -> None:
+    async def test_enqueue_returns_id(self, queue: EmbeddingQueue) -> None:
         qid = await queue.enqueue("texto", "articles", {})
         assert isinstance(qid, str)
         assert len(qid) > 0
 
     @pytest.mark.asyncio
-    async def test_get_pending_after_enqueue(self, queue) -> None:
+    async def test_get_pending_after_enqueue(self, queue: EmbeddingQueue) -> None:
         await queue.enqueue("texto pendente", "articles", {})
         items = await queue.get_pending(limit=10)
         assert len(items) >= 1
@@ -42,7 +42,7 @@ class TestEmbeddingQueue:
         assert "texto pendente" in texts
 
     @pytest.mark.asyncio
-    async def test_mark_processing_then_success(self, queue) -> None:
+    async def test_mark_processing_then_success(self, queue: EmbeddingQueue) -> None:
         qid = await queue.enqueue("texto done", "articles", {})
         await queue.mark_processing(qid)
         await queue.mark_success(qid)
@@ -51,7 +51,7 @@ class TestEmbeddingQueue:
         assert qid not in ids
 
     @pytest.mark.asyncio
-    async def test_mark_failed(self, queue) -> None:
+    async def test_mark_failed(self, queue: EmbeddingQueue) -> None:
         qid = await queue.enqueue("texto failed", "articles", {})
         await queue.mark_processing(qid)
         await queue.mark_failed(qid, "test error")
@@ -60,18 +60,18 @@ class TestEmbeddingQueue:
         assert qid not in ids
 
     @pytest.mark.asyncio
-    async def test_get_stats(self, queue) -> None:
+    async def test_get_stats(self, queue: EmbeddingQueue) -> None:
         stats = await queue.get_stats()
         assert isinstance(stats, dict)
 
     @pytest.mark.asyncio
-    async def test_count_pending(self, queue) -> None:
+    async def test_count_pending(self, queue: EmbeddingQueue) -> None:
         count = await queue.count_pending()
         assert isinstance(count, int)
         assert count >= 0
 
     @pytest.mark.asyncio
-    async def test_mark_dlq(self, queue) -> None:
+    async def test_mark_dlq(self, queue: EmbeddingQueue) -> None:
         qid = await queue.enqueue("dlq text", "articles", {})
         await queue.mark_processing(qid)
         await queue.mark_dlq(qid, "max retries exceeded")
@@ -80,7 +80,9 @@ class TestEmbeddingQueue:
         assert qid in q_ids
 
     @pytest.mark.asyncio
-    async def test_get_failed_returns_failed_and_dlq(self, queue) -> None:
+    async def test_get_failed_returns_failed_and_dlq(
+        self, queue: EmbeddingQueue
+    ) -> None:
         qid_f = await queue.enqueue("failed item", "articles", {})
         qid_d = await queue.enqueue("dlq item", "articles", {})
         await queue.mark_processing(qid_f)
@@ -93,7 +95,7 @@ class TestEmbeddingQueue:
         assert qid_d in q_ids
 
     @pytest.mark.asyncio
-    async def test_reconcile_runs_without_error(self, queue) -> None:
+    async def test_reconcile_runs_without_error(self, queue: EmbeddingQueue) -> None:
         # enqueue and mark processing — reconcile won't reset because it's recent
         qid = await queue.enqueue("reconcile text", "articles", {})
         await queue.mark_processing(qid)
@@ -103,19 +105,19 @@ class TestEmbeddingQueue:
         assert isinstance(pending, list)
 
     @pytest.mark.asyncio
-    async def test_close_disposes_engine(self, queue) -> None:
+    async def test_close_disposes_engine(self, queue: EmbeddingQueue) -> None:
         await queue.close()
         # after close engine should be disposed; calling close again is safe
         await queue.close()
 
     @pytest.mark.asyncio
-    async def test_get_stats_has_all_statuses(self, queue) -> None:
+    async def test_get_stats_has_all_statuses(self, queue: EmbeddingQueue) -> None:
         stats = await queue.get_stats()
         for key in ("pending", "processing", "success", "failed", "dlq"):
             assert key in stats
 
     @pytest.mark.asyncio
-    async def test_archive_pending_moves_to_dlq(self, queue) -> None:
+    async def test_archive_pending_moves_to_dlq(self, queue: EmbeddingQueue) -> None:
         """archive_pending arquiva pending + processing para DLQ de uma vez."""
         qid_pending = await queue.enqueue("a indexar", "articles", {})
         qid_processing = await queue.enqueue("em processamento", "articles", {})
@@ -132,7 +134,9 @@ class TestEmbeddingQueue:
         assert all(r.dlq_reason == "Cohere rate limit (429)" for r in failed)
 
     @pytest.mark.asyncio
-    async def test_archive_pending_empty_returns_zero(self, queue) -> None:
+    async def test_archive_pending_empty_returns_zero(
+        self, queue: EmbeddingQueue
+    ) -> None:
         assert await queue.archive_pending("motivo") == 0
 
     @pytest.mark.asyncio

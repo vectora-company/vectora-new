@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import NoReturn
 from unittest.mock import MagicMock
 
@@ -59,7 +61,7 @@ async def test_create_tab_state_assigns_cdp_target_id() -> None:
         def __init__(self) -> None:
             self.detached = False
 
-        async def send(self, method: str, *args, **kwargs):
+        async def send(self, method: str, *args, **kwargs) -> dict[str, dict[str, str]]:
             if method == "Target.getTargetInfo":
                 return {"targetInfo": {"targetId": "cdp-target-abc-123"}}
             return {}
@@ -85,7 +87,7 @@ async def test_create_tab_state_rejects_missing_or_empty_target_id() -> None:
         def __init__(self) -> None:
             self.detached = False
 
-        async def send(self, method: str, *args, **kwargs):
+        async def send(self, method: str, *args, **kwargs) -> dict[str, dict[str, str]]:
             return {"targetInfo": {"targetId": "   "}}
 
         async def detach(self) -> None:

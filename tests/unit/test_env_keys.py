@@ -8,12 +8,14 @@ provider (os.environ + settings), não só ficar persistida em disco/banco.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from backend.services import env_keys
+from backend.settings import Settings
 
 
 class TestKnownLlmEnvKeys:
@@ -46,7 +48,7 @@ class TestDefaultEnvFile:
 
 
 @pytest.fixture
-def _restore_settings():
+def _restore_settings() -> Iterator[Settings]:
     """`apply_llm_env_key` muta `settings` (singleton global) em runtime por
     design — restaura os atributos tocados nos testes pra não vazar estado
     entre testes do mesmo processo pytest."""
@@ -64,7 +66,10 @@ def _restore_settings():
 
 class TestApplyLlmEnvKey:
     def test_persists_env_and_updates_os_environ(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _restore_settings
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        _restore_settings: Settings,
     ) -> None:
         env_file = tmp_path / ".env"
         monkeypatch.setenv("GOOGLE_API_KEY", "placeholder")  # monkeypatch "adota" a key
@@ -77,7 +82,10 @@ class TestApplyLlmEnvKey:
         assert _restore_settings.google_api_key == "AIza-nova-key"
 
     def test_empty_value_clears_key(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _restore_settings
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        _restore_settings: Settings,
     ) -> None:
         """Erro/borda: valor vazio 'esquece' a key — mesmo comportamento
         de patch_api_keys (não é um erro, é uma limpeza intencional)."""

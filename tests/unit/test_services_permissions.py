@@ -23,7 +23,7 @@ from fastapi import HTTPException
 
 def make_user(role: str, uid: str = "u-1"):
     class _User:
-        def __init__(self, id_, role_) -> None:
+        def __init__(self, id_: str, role_: str) -> None:
             self.id = id_
             self.role = role_
 

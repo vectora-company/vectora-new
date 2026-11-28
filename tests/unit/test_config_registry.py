@@ -9,6 +9,7 @@ usa um `RuntimeSettings` apontando pra `tmp_path`, `ConfigTomlAdapter` usa
 
 from __future__ import annotations
 
+from argparse import Namespace
 from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
@@ -29,6 +30,7 @@ from backend.config.registry import (
     set_value,
     setting_field,
 )
+from backend.settings import Settings
 from backend.vtypes.contracts import JsonValue
 
 # ---------------------------------------------------------------------------
@@ -188,7 +190,7 @@ class TestFieldsRealmenteRegistrados:
 
 
 @pytest.fixture
-def _restore_settings():
+def _restore_settings() -> Iterator[Settings]:
     from backend.settings import settings
 
     original = {
@@ -202,7 +204,10 @@ def _restore_settings():
 
 class TestEnvAdapter:
     def test_set_delega_pra_apply_llm_env_key(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _restore_settings
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        _restore_settings: Settings,
     ) -> None:
         from backend.settings import settings
 
@@ -217,7 +222,7 @@ class TestEnvAdapter:
         assert _restore_settings.google_api_key == "AIza-nova"
 
     def test_get_le_do_settings_singleton(
-        self, monkeypatch: pytest.MonkeyPatch, _restore_settings
+        self, monkeypatch: pytest.MonkeyPatch, _restore_settings: Settings
     ) -> None:
         """`EnvAdapter.get` lê a fonte canônica em runtime: `os.environ`
         (que `apply_llm_env_key` seta na escrita). `settings` espelha no
@@ -262,7 +267,7 @@ class TestRuntimeSettingsAdapter:
 
 class TestConfigTomlAdapter:
     def test_set_chama_write_config_section_e_atualiza_settings(
-        self, monkeypatch: pytest.MonkeyPatch, _restore_settings
+        self, monkeypatch: pytest.MonkeyPatch, _restore_settings: Settings
     ) -> None:
         calls: list[tuple[str, dict]] = []
 
@@ -291,7 +296,7 @@ class TestConfigTomlAdapter:
 
 
 class TestCliCategoryCommand:
-    def _ns(self, **overrides):
+    def _ns(self, **overrides: list[str] | str) -> Namespace:
         import argparse
 
         base = {
@@ -387,7 +392,7 @@ class TestCliCollectionCommand:
     """`vectora config provider-routing|memory|account --list` — cobre a
     listagem das categorias de coleção pelo dispatcher de configuração da CLI."""
 
-    def _ns(self, **overrides):
+    def _ns(self, **overrides: bool | str) -> Namespace:
         import argparse
 
         base = {
@@ -417,7 +422,7 @@ class TestCliCollectionCommand:
         from backend.cli.config import run_config
         from backend.config.adapters import RegisteredModelsTableAdapter
 
-        async def _fake_list(self):
+        async def _fake_list(self) -> list[dict[str, str]]:
             return [{"id": "1", "tag": "llama3", "created_at": "2026-01-01"}]
 
         monkeypatch.setattr(RegisteredModelsTableAdapter, "list_items", _fake_list)
@@ -450,7 +455,7 @@ class TestCliCollectionCommand:
 
         seen_user_ids = []
 
-        async def _fake_list(self, user_id):
+        async def _fake_list(self, user_id: str) -> list[dict[str, str]]:
             seen_user_ids.append(user_id)
             return [{"key": "k1", "content": "prefere respostas curtas"}]
 
@@ -469,7 +474,7 @@ class TestCliCollectionCommand:
 
         seen_user_ids = []
 
-        async def _fake_list(self, user_id):
+        async def _fake_list(self, user_id: str) -> list[dict[str, str]]:
             seen_user_ids.append(user_id)
             return [{"id": user_id, "username": "bruno"}]
 

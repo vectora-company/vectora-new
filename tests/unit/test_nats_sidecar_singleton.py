@@ -29,7 +29,7 @@ def _sidecar_limpo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "vectora_home", tmp_path)
 
 
-def _registra(store_dir, pid: int, url: str = "") -> None:
+def _registra(store_dir: Path, pid: int, url: str = "") -> None:
     store_dir.mkdir(parents=True, exist_ok=True)
     payload: dict = {"pids": [pid]}
     if url:
@@ -92,7 +92,7 @@ async def test_pid_vivo_mas_mudo_e_descartado(
 
     monkeypatch.setattr(ns, "_kill_pid", _registra_morte)
 
-    async def _spawn_falha(*_a, **_k) -> NoReturn:
+    async def _spawn_falha(*_a: str, **_k: bool | int) -> NoReturn:
         raise OSError("sem binário de verdade neste teste")
 
     monkeypatch.setattr(ns.asyncio, "create_subprocess_exec", _spawn_falha)
@@ -123,7 +123,7 @@ async def test_pid_file_legado_sem_url_nao_reusa_as_cegas(
 
     monkeypatch.setattr(ns, "_kill_pid", _registra_morte)
 
-    async def _spawn_falha(*_a, **_k) -> NoReturn:
+    async def _spawn_falha(*_a: str, **_k: bool | int) -> NoReturn:
         raise OSError("sem binário de verdade neste teste")
 
     monkeypatch.setattr(ns.asyncio, "create_subprocess_exec", _spawn_falha)
@@ -165,15 +165,15 @@ async def test_consumo_para_quando_a_conexao_morre_de_vez() -> None:
     class _SubMorta:
         tentativas = 0
 
-        async def fetch(self, *_a, **_k) -> NoReturn:
+        async def fetch(self, *_a: int, **_k: float) -> NoReturn:
             type(self).tentativas += 1
             raise RuntimeError("nats: connection closed")
 
     class _JS:
-        async def add_stream(self, **_k) -> None:
+        async def add_stream(self, **_k: list[str] | str) -> None:
             return None
 
-        async def pull_subscribe(self, *_a, **_k):
+        async def pull_subscribe(self, *_a: str, **_k: str):
             return _SubMorta()
 
     async def _connect():

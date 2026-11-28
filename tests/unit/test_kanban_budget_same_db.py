@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from aiosqlite import Connection
 
 import backend
 
@@ -31,7 +32,7 @@ _SCHEMA = (
 
 
 @pytest.fixture
-async def db_real(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+async def db_real(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Aplica schema.sql no arquivo que `settings.db_dsn` aponta — igual
     `run_migrations` faz no boot real — sem tocar em `_get_db` de nenhum
     módulo do Kanban/budget."""
@@ -54,7 +55,9 @@ async def db_real(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
-async def test_kanban_e_budget_convergem_pro_banco_de_background_tasks(db_real) -> None:
+async def test_kanban_e_budget_convergem_pro_banco_de_background_tasks(
+    db_real: Path,
+) -> None:
     from backend.scheduling import background_tasks as bg
     from backend.scheduling import budget, kanban
 
@@ -92,7 +95,7 @@ async def test_kanban_no_checkpoints_db_falharia_com_tabela_ausente(
 
     checkpoints_like = tmp_path / "checkpoints.db"
 
-    async def _get_db_errado():
+    async def _get_db_errado() -> Connection:
         conn = await aiosqlite.connect(str(checkpoints_like))
         conn.row_factory = aiosqlite.Row
         return conn

@@ -261,7 +261,9 @@ class TestSearchFactsSubstringFallback:
                 self.score = score
 
         class _FakeScoredStore:
-            async def asearch(self, ns, *, query, limit):
+            async def asearch(
+                self, ns: tuple[str, str, str], *, query: str, limit: int
+            ):
                 return [
                     _ScoredItem("f1", {"content": "prefere respostas objetivas"}, 0.9)
                 ]

@@ -48,7 +48,7 @@ def _isolated(_no_thread_persistence: None) -> None:
 async def test_pre_approved_reflete_o_avaliador(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _sempre_true(*_a, **_k) -> bool:
+    async def _sempre_true(*_a: dict[str, str] | str, **_k) -> bool:
         return True
 
     monkeypatch.setattr("backend.api.native_stream._pre_approved", _sempre_true)

@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from aiosqlite import Connection
 from fastapi.testclient import TestClient
 
 
@@ -28,7 +29,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.setattr(auth_mod, "_db_conn", None)
     monkeypatch.setattr(auth_mod, "_get_secret", lambda: "api-username-test-secret-xx")
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)

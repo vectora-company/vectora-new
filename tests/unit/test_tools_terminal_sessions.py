@@ -126,7 +126,7 @@ class TestListTerminals:
             def consume_rate_limit(self) -> float | None:
                 return None
 
-            def write_input(self, data, request_id):
+            def write_input(self, data: bytes, request_id: str) -> dict[str, str]:
                 assert data == b"gh pr view 319\n"
                 assert request_id.startswith("agent-write-")
                 return {"status": "accepted", "terminal_id": self.terminal_id}
@@ -201,7 +201,7 @@ class TestInteractiveTerminalTools:
             def consume_rate_limit(self) -> float | None:
                 return None
 
-            def read_since(self, cursor, max_bytes):
+            def read_since(self, cursor, max_bytes: int):
                 return {
                     "data": b"prompt: ",
                     "cursor": 8,
@@ -210,7 +210,7 @@ class TestInteractiveTerminalTools:
                     "has_more": False,
                 }
 
-            def write_input(self, data, request_id):
+            def write_input(self, data: bytes, request_id: str) -> dict[str, str]:
                 return {"status": "accepted", "terminal_id": "t1"}
 
         pty_registry.add(Session())  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]

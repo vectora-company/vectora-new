@@ -15,6 +15,7 @@ from collections.abc import Callable
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.tools.tavily.client import TavilyClient, TavilyResponseError
 from backend.tools.tavily.research import ResearchTimeoutError, run_research
@@ -31,7 +32,7 @@ def _client(handler) -> TavilyClient:
 class TestCrawlEMap:
     @pytest.mark.asyncio
     async def test_crawl_devolve_as_paginas_varridas(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -72,7 +73,7 @@ class TestCrawlEMap:
 
     @pytest.mark.asyncio
     async def test_map_devolve_a_estrutura_de_links(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, json={"base_url": "https://x.test", "results": ["/a", "/b"]}
             )
@@ -138,7 +139,7 @@ class TestResearchAssincrono:
         """Erro/borda: sem id não há como acompanhar — o job rodaria e
         cobraria sem ninguém buscar o resultado."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(201, json={"status": "pending"})
 
         async with _client(handler) as c:

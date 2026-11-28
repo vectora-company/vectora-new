@@ -10,7 +10,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.api.handlers import github
-from backend.vtypes.contracts import JsonValue
+from backend.vtypes.contracts import JsonObject, JsonValue
 from tests.fake_requests import fake_request
 
 
@@ -171,7 +171,7 @@ async def test_rate_gate_stops_repeated_github_cli_reads(
 ) -> None:
     calls = 0
 
-    async def rate_limited(*_args, **_kwargs):
+    async def rate_limited(*_args: list[str], **_kwargs: str) -> JsonObject:
         nonlocal calls
         calls += 1
         return {
@@ -412,7 +412,12 @@ async def test_chamadas_simultaneas_iguais_compartilham_uma_execucao(
 
     started = 0
 
-    async def slow(args, cwd=None, input_data=None, user_id=None):
+    async def slow(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         nonlocal started
         started += 1
         await asyncio.sleep(0.01)
@@ -491,7 +496,7 @@ async def test_github_etag_cache_is_isolated_by_credential_epoch(
     epochs = iter(["first", "second"])
     calls: list[list[str]] = []
 
-    async def changing_epoch(_user_id):
+    async def changing_epoch(_user_id: str) -> str:
         return next(epochs)
 
     async def fake(args, cwd=None, input_data=None, user_id=None):
@@ -517,7 +522,7 @@ async def test_github_api_rate_gate_uses_reset_time(
 ) -> None:
     calls = 0
 
-    async def limited(*_args, **_kwargs):
+    async def limited(*_args: list[str], **_kwargs: str) -> JsonObject:
         nonlocal calls
         calls += 1
         return {

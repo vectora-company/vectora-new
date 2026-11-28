@@ -17,6 +17,7 @@ from typing import NoReturn
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.ollama.capabilities import (
     ModelCapabilities,
@@ -44,7 +45,7 @@ def _limpa_cache() -> Iterator[None]:
 class TestApiShow:
     @pytest.mark.asyncio
     async def test_capabilities_do_modelo_sao_lidas(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -63,7 +64,7 @@ class TestApiShow:
 
     @pytest.mark.asyncio
     async def test_modelo_de_embedding_e_reconhecido(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"capabilities": ["embedding"]})
 
         caps = await fetch_model_capabilities(_client(handler), "nomic-embed-text")
@@ -76,7 +77,7 @@ class TestApiShow:
         """Erro/borda: servidor anterior ao campo `capabilities` — o Hermes
         usa o mesmo fallback (`model_info.*.vision.block_count`)."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json={
@@ -97,7 +98,7 @@ class TestApiShow:
         """Erro/borda crítico: sem resposta, **nenhuma** capacidade é
         assumida. Falhar aberto faria a UI oferecer o que vai quebrar."""
 
-        def handler(_req) -> NoReturn:
+        def handler(_req: Request) -> NoReturn:
             raise httpx.ConnectError("connection refused")
 
         caps = await fetch_model_capabilities(_client(handler), "qualquer")
@@ -109,7 +110,7 @@ class TestApiShow:
     async def test_resultado_e_cacheado_por_modelo(self) -> None:
         chamadas = 0
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             nonlocal chamadas
             chamadas += 1
             return httpx.Response(200, json={"capabilities": ["vision"]})
@@ -142,7 +143,7 @@ class TestApiShow:
 class TestEmbeddings:
     @pytest.mark.asyncio
     async def test_devolve_um_vetor_por_documento(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"embeddings": [[0.1, 0.2], [0.3, 0.4]]})
 
         emb = OllamaEmbeddings(model="nomic-embed-text", client=_client(handler))
@@ -150,7 +151,7 @@ class TestEmbeddings:
 
     @pytest.mark.asyncio
     async def test_query_devolve_um_vetor_so(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"embeddings": [[0.5]]})
 
         emb = OllamaEmbeddings(model="m", client=_client(handler))
@@ -161,7 +162,7 @@ class TestEmbeddings:
         """Erro/borda: `[]` gravaria vetores nulos no índice do RAG — mesma
         trava do OpenRouter. Melhor falhar a ingestão."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"embeddings": []})
 
         emb = OllamaEmbeddings(model="m", client=_client(handler))
@@ -173,7 +174,7 @@ class TestEmbeddings:
         """Erro/borda: 2 textos e 1 vetor de volta significa que algum chunk
         ficaria sem embedding — associar na ordem corromperia o índice."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"embeddings": [[0.1]]})
 
         emb = OllamaEmbeddings(model="m", client=_client(handler))

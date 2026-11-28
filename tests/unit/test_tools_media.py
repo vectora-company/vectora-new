@@ -17,6 +17,7 @@ from uuid import uuid4
 
 import pytest
 
+from backend.llm.openrouter import OpenRouterClient
 from backend.services.media_quota import media_quota
 from backend.settings import provider_supports
 from backend.tools import media
@@ -270,7 +271,7 @@ async def test_generate_image_prompt_vazio_e_sdk_quebrado_viram_erro_tipado(
 
     # Erro/borda 2: SDK explodindo vira string de erro, não exceção
     # propagada (falha de tool não derruba o grafo).
-    def _explode(*_a) -> NoReturn:
+    def _explode(*_a: str | None) -> NoReturn:
         raise RuntimeError("cota estourada")
 
     monkeypatch.setattr(media, "_generate_image_bytes", _explode)
@@ -490,7 +491,9 @@ class TestOpenRouterLigadoNasTools:
             lambda _p, _c: "openai/gpt-image-1",
         )
 
-        async def _fake(_client, *, model, prompt, **_kw) -> bytes:
+        async def _fake(
+            _client: OpenRouterClient, *, model: str, prompt: str, **_kw
+        ) -> bytes:
             assert model == "openai/gpt-image-1"
             assert prompt == "um gato"
             return b"\x89PNG-fake"
@@ -511,7 +514,9 @@ class TestOpenRouterLigadoNasTools:
             lambda _p, _c: "openai/gpt-4o-mini-tts",
         )
 
-        async def _fake(_client, *, model, text, voice, **_kw) -> bytes:
+        async def _fake(
+            _client: OpenRouterClient, *, model: str, text: str, voice: str, **_kw
+        ) -> bytes:
             assert voice == "alloy"
             return b"audio-cru"
 

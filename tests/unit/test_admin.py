@@ -15,6 +15,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from aiosqlite import Connection
 from starlette.requests import Request
 
 from backend.vtypes.contracts import JsonValue
@@ -704,7 +705,7 @@ class TestServiceTokenEndpoints:
         auth_mod._db_conn = None
         db_file = str(tmp_path / "admin_service_tokens.db")
 
-        async def _patched_get_db():
+        async def _patched_get_db() -> Connection:
             if auth_mod._db_conn is not None:
                 return auth_mod._db_conn
             conn = await aiosqlite.connect(db_file)

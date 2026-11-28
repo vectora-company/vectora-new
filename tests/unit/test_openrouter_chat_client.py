@@ -15,6 +15,7 @@ import pytest
 from backend.llm.openrouter.chat_client import OpenRouterChatClient
 from backend.llm.openrouter.client import OpenRouterClient, OpenRouterResponseError
 from backend.tools.registry import ToolExtras, vtool
+from backend.vtypes.contracts import JsonObject
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -641,7 +642,7 @@ class TestPromptCache:
 
 
 class TestRouterCacheKey:
-    def _payload(self, origin: str):
+    def _payload(self, origin: str) -> JsonObject:
         from backend.llm.prompt_cache import prompt_cache_key
 
         client = TestPromptCache()._client("cc/claude-sonnet", origin)
@@ -674,7 +675,7 @@ class TestRouterSessionAndUsage:
     def _client(self, origin: str):
         return TestPromptCache()._client("modelo", origin)
 
-    def _with_key(self, origin: str):
+    def _with_key(self, origin: str) -> dict[str, str] | None:
         from backend.llm.prompt_cache import prompt_cache_key
 
         token = prompt_cache_key.set("thread-7")

@@ -8,7 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from backend.storage.vectorstore.base import VectorHit
 from backend.tools.context import ToolContext
+from backend.vtypes import Document
 from backend.vtypes.rerank import RagHit
 
 
@@ -142,7 +144,9 @@ class TestVectorSearch:
         )
 
         class _ReverseReranker:
-            async def acompress_documents(self, documents, query):
+            async def acompress_documents(
+                self, documents: list[Document], query: str
+            ) -> list[Document]:
                 """Executa a operação acompress documents."""
                 return list(reversed(documents))
 
@@ -458,7 +462,9 @@ class TestVectorSearchBucketFanout:
         LanceDBBackend/QdrantBackend implementam de verdade."""
         from backend.storage.vectorstore.base import VectorHit
 
-        async def _search(collection: str, query_vector, limit: int):
+        async def _search(
+            collection: str, query_vector: MagicMock, limit: int
+        ) -> list[VectorHit]:
             """Executa a operação  search."""
             if collection not in tables:
                 return []
@@ -987,7 +993,9 @@ class TestIngestDocs:
 
         capturado: list[str] = []
 
-        async def _fake_embedding(*, text, collection, metadata) -> str:
+        async def _fake_embedding(
+            *, text: str, collection: str, metadata: dict[str, str]
+        ) -> str:
             """Executa a operação  fake embedding."""
             capturado.append(text)
             return json.dumps({"status": "fire_and_forget", "queue_id": "q1"})

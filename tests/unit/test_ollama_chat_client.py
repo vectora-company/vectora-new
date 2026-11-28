@@ -11,6 +11,7 @@ import json
 
 import httpx
 import pytest
+from httpx import Request, Response
 
 from backend.llm.ollama.chat_client import (
     OllamaChatClient,
@@ -20,7 +21,7 @@ from backend.llm.ollama.chat_client import (
 )
 from backend.llm.ollama.client import OllamaClient, OllamaResponseError
 from backend.tools.registry import ToolExtras, vtool
-from backend.vtypes.contracts import JsonValue
+from backend.vtypes.contracts import JsonObject, JsonValue
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -37,7 +38,7 @@ def _client(handler, **kwargs) -> OllamaChatClient:
     return OllamaChatClient(model="llama3", client=http_client, **kwargs)
 
 
-def _resposta_ok(texto: str = "Olá", **extra) -> dict:
+def _resposta_ok(texto: str = "Olá", **extra: JsonObject) -> dict:
     return {
         "model": "llama3",
         "done": True,
@@ -54,7 +55,7 @@ class TestAgenerate:
     ) -> None:
         calls = 0
 
-        def handler(req: httpx.Request):
+        def handler(req: httpx.Request) -> Response:
             nonlocal calls
             calls += 1
             if calls == 1:
@@ -153,7 +154,7 @@ class TestAgenerate:
         assert [spec.name for spec in selecionadas] == ["browser_read_dom"]
 
     async def test_prompt_simples_devolve_conteudo(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json=_resposta_ok("Olá do Ollama"))
 
         resultado = await _client(handler).agenerate(
@@ -164,7 +165,7 @@ class TestAgenerate:
         assert resultado.role == MessageRole.ASSISTANT
 
     async def test_resposta_sem_message_vira_erro_tipado(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(200, json={"model": "llama3", "done": True})
 
         with pytest.raises(OllamaResponseError, match="message"):
@@ -341,7 +342,7 @@ class TestToolCalling:
         """Ollama antigo manda `arguments` como string JSON; o moderno já
         manda objeto — os dois precisam funcionar sem estourar."""
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 json=_resposta_ok(
@@ -378,7 +379,7 @@ class TestStreaming:
             b'"prompt_eval_count":10,"eval_count":3}\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "application/x-ndjson"}
             )
@@ -400,7 +401,7 @@ class TestStreaming:
             b'{"message":{"role":"assistant","content":"resposta"},"done":true}\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "application/x-ndjson"}
             )
@@ -418,7 +419,7 @@ class TestStreaming:
         assert raciocinio == "pensando..."
 
     async def test_stream_sem_nenhum_chunk_util_nao_trava(self) -> None:
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200,
                 content=b'{"message":{"role":"assistant","content":""},"done":true}\n',
@@ -454,7 +455,7 @@ class TestStreamingToolCallsEUsage:
             + "\n"
         ).encode()
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "application/x-ndjson"}
             )
@@ -483,7 +484,7 @@ class TestStreamingToolCallsEUsage:
             b'"prompt_eval_count":10,"eval_count":3}\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "application/x-ndjson"}
             )
@@ -507,7 +508,7 @@ class TestStreamingToolCallsEUsage:
             b'"prompt_eval_count":10,"eval_count":3}\n'
         )
 
-        def handler(_req):
+        def handler(_req: Request) -> Response:
             return httpx.Response(
                 200, content=corpo, headers={"content-type": "application/x-ndjson"}
             )

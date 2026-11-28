@@ -20,9 +20,13 @@ from typing import NoReturn
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.workspace.runtime_settings import RuntimeSettings
+
 
 @pytest.fixture
-def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def _isolated_runtime_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> RuntimeSettings:
     """Isola local_user_name de cada teste (nunca lê/escreve o ~/.vectora real)."""
     from backend.workspace import runtime_settings as rs_module
     from backend.workspace.runtime_settings import RuntimeSettings
@@ -33,7 +37,9 @@ def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch, _isolated_runtime_settings) -> TestClient:
+def client(
+    monkeypatch: pytest.MonkeyPatch, _isolated_runtime_settings: RuntimeSettings
+) -> TestClient:
     monkeypatch.setenv("VECTORA_AUTH_REQUIRED", "false")
     from backend.api.server import create_app
 
@@ -46,11 +52,11 @@ class TestGetFlags:
     def test_preferences_storage_failure_is_503(
         self,
         client: TestClient,
-        _isolated_runtime_settings,
+        _isolated_runtime_settings: RuntimeSettings,
         monkeypatch: pytest.MonkeyPatch,
         operation: str,
     ) -> None:
-        def unavailable(*_args, **_kwargs) -> NoReturn:
+        def unavailable(*_args: dict[str, bool] | str | None, **_kwargs) -> NoReturn:
             raise sqlite3.OperationalError("private database path")
 
         method = "get_frontend_prefs" if operation == "read" else "set_frontend_prefs"
@@ -94,7 +100,7 @@ class TestGetFlags:
 
 class TestLocalConfigured:
     def test_false_quando_wizard_nunca_rodou(
-        self, client: TestClient, _isolated_runtime_settings
+        self, client: TestClient, _isolated_runtime_settings: RuntimeSettings
     ) -> None:
         """auth_required=false sem local_user_name persistido (bug real:
         VECTORA_AUTH_REQUIRED=false esquecido num .env externo) — o guard do
@@ -103,7 +109,7 @@ class TestLocalConfigured:
         assert resp.json()["local_configured"] is False
 
     def test_true_apos_setup_local(
-        self, client: TestClient, _isolated_runtime_settings
+        self, client: TestClient, _isolated_runtime_settings: RuntimeSettings
     ) -> None:
         _isolated_runtime_settings.set_local_user("Bruno", "Vectora")
         resp = client.get("/settings/flags")

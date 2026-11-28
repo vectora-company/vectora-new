@@ -373,10 +373,10 @@ class TestPreviewStartPopulatesLogBuffer:
         launch_cfg.configurations = [cfg_entry]
 
         class _FakeStdout:
-            def __init__(self, lines) -> None:
+            def __init__(self, lines: list[bytes]) -> None:
                 self._lines = list(lines)
 
-            async def readline(self):
+            async def readline(self) -> bytes:
                 if not self._lines:
                     return b""
                 return self._lines.pop(0)

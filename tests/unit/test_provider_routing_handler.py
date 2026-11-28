@@ -28,11 +28,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from fastapi import HTTPException
+from aiosqlite import Connection
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from httpx import AsyncClient
 
 from backend.api.handlers.provider_routing import (
+    ConfirmLlamaCppModelRequest,
     LlamaCppRollbackRequest,
+    OllamaConnectionTestResponse,
     _confirmation_evidence_sha256,
     _extract_llamacpp_archive,
     get_decision_model_readiness,
@@ -224,7 +228,7 @@ async def test_decision_model_readiness_distinguishes_rejected_key_from_outage(
 
 
 @pytest.fixture(scope="module")
-def app(tmp_path_factory: pytest.TempPathFactory):
+def app(tmp_path_factory: pytest.TempPathFactory) -> Iterator[FastAPI]:
     """App FastAPI com banco de registro (Ollama/OpenRouter) isolado.
 
     ``provider_routing._get_db()`` reusa o MESMO singleton de
@@ -244,7 +248,7 @@ def app(tmp_path_factory: pytest.TempPathFactory):
     original_db_conn = threads_mod._db_conn
     threads_mod._db_conn = None
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         """Executa a operação  patched get db."""
         if threads_mod._db_conn is not None:
             return threads_mod._db_conn
@@ -279,7 +283,7 @@ def app(tmp_path_factory: pytest.TempPathFactory):
 
 
 @pytest.fixture(scope="module")
-def client(app) -> TestClient:
+def client(app: FastAPI) -> TestClient:
     """Executa a operação client."""
     return TestClient(app, raise_server_exceptions=False)
 
@@ -332,7 +336,9 @@ def test_ollama_test_endpoint_reports_model_catalog(
 ) -> None:
     from backend.api.handlers import provider_routing
 
-    async def fake_test(base_url=None, api_key=None):
+    async def fake_test(
+        base_url: str | None = None, api_key=None
+    ) -> OllamaConnectionTestResponse:
         return provider_routing.OllamaConnectionTestResponse(
             status="ok", models=[provider_routing.OllamaModelInfo(name="llama3")]
         )
@@ -619,7 +625,7 @@ class TestOllamaDiscovery:
         executable.write_bytes(b"stub")
         monkeypatch.setattr(provider_routing, "_ollama_executable", lambda: executable)
 
-        async def reachable():
+        async def reachable() -> tuple[bool, str]:
             """Executa a operação reachable."""
             return True, "0.1.0-test"
 
@@ -646,7 +652,7 @@ class TestOllamaDiscovery:
             provider_routing, "_install_ollama_native_release", installer
         )
 
-        async def reachable():
+        async def reachable() -> tuple[bool, str]:
             return True, "0.1.0-test"
 
         monkeypatch.setattr(provider_routing, "_ollama_http_status", reachable)
@@ -698,7 +704,7 @@ class TestOllamaDiscovery:
         monkeypatch.setattr(provider_routing, "_ollama_install_phase", "failed")
         monkeypatch.setattr(provider_routing, "_ollama_executable", lambda: None)
 
-        async def unreachable():
+        async def unreachable() -> tuple[bool, None]:
             """Executa a operação unreachable."""
             return False, None
 
@@ -776,7 +782,7 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def get(self, _url):
+            async def get(self, _url: str):
                 """Executa a operação get."""
                 return Response()
 
@@ -837,7 +843,7 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def aiter_bytes(self, _chunk_size):
+            async def aiter_bytes(self, _chunk_size: int):
                 """Executa a operação aiter bytes."""
                 yield content
 
@@ -850,11 +856,11 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def get(self, _url):
+            async def get(self, _url: str):
                 """Executa a operação get."""
                 return Response()
 
-            def stream(self, _method, _url, headers=None):
+            def stream(self, _method: str, _url: str, headers=None):
                 """Executa a operação stream."""
                 return Response()
 
@@ -910,7 +916,7 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def aiter_bytes(self, _chunk_size) -> AsyncIterator[bytes]:
+            async def aiter_bytes(self, _chunk_size: int) -> AsyncIterator[bytes]:
                 """Executa a operação aiter bytes."""
                 yield b"partial"
                 raise httpx.ReadError("connection dropped")
@@ -924,11 +930,11 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def get(self, _url):
+            async def get(self, _url: str):
                 """Executa a operação get."""
                 return Response()
 
-            def stream(self, _method, _url, headers=None):
+            def stream(self, _method: str, _url: str, headers=None):
                 """Executa a operação stream."""
                 return Response()
 
@@ -1015,11 +1021,13 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def get(self, _url):
+            async def get(self, _url: str):
                 """Executa a operação get."""
                 return Response()
 
-            def stream(self, _method, _url, headers=None):
+            def stream(
+                self, _method: str, _url: str, headers: dict[str, str] | None = None
+            ):
                 """Executa a operação stream."""
                 self.headers = headers
                 return Response()
@@ -1059,7 +1067,9 @@ class TestOllamaDiscovery:
             status_code = 200
             headers: dict[str, str] = {}
 
-            def __init__(self, payload=None, text: str = "") -> None:
+            def __init__(
+                self, payload: JsonObject | None = None, text: str = ""
+            ) -> None:
                 """Inicializa o estado da instância."""
                 self._payload = payload
                 self.text = text
@@ -1080,7 +1090,7 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def aiter_bytes(self, _chunk_size):
+            async def aiter_bytes(self, _chunk_size: int):
                 """Executa a operação aiter bytes."""
                 yield content
 
@@ -1093,7 +1103,7 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def get(self, url):
+            async def get(self, url: str):
                 """Executa a operação get."""
                 if url.endswith("sha256sum.txt"):
                     return Response(text=f"{digest} *OllamaSetup.exe\\n")
@@ -1115,14 +1125,14 @@ class TestOllamaDiscovery:
                     }
                 )
 
-            def stream(self, _method, _url, headers=None):
+            def stream(self, _method: str, _url: str, headers=None):
                 """Executa a operação stream."""
                 return Response()
 
         class Process:
             returncode = 0
 
-            async def communicate(self):
+            async def communicate(self) -> tuple[bytes, bytes]:
                 """Executa a operação communicate."""
                 return b"", b""
 
@@ -1849,7 +1859,7 @@ class TestLlamaCppAndHuggingFace:
         started: JsonObject = {}
         stop = AsyncMock()
 
-        async def fake_start(executable_arg, model_arg, **options) -> None:
+        async def fake_start(executable_arg: Path, model_arg: Path, **options) -> None:
             """Executa a operação fake start."""
             started.update(
                 executable=str(executable_arg),
@@ -1887,7 +1897,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_start_restores_configuration_when_confirmation_fails(
-        self, app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, app: FastAPI, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A falha de confirmação não deixa um endpoint falso como gerenciado."""
         from backend.api.handlers.provider_routing import (
@@ -1922,10 +1932,12 @@ class TestLlamaCppAndHuggingFace:
         monkeypatch.setenv("LLAMACPP_BASE_URL", "http://old.local/v1")
         monkeypatch.setenv("LLAMACPP_MODE", "external")
 
-        async def fake_start(*args, **kwargs) -> None:
+        async def fake_start(*args: Path, **kwargs) -> None:
             return None
 
-        async def fail_confirmation(*args, **kwargs) -> NoReturn:
+        async def fail_confirmation(
+            *args: ConfirmLlamaCppModelRequest | None, **kwargs
+        ) -> NoReturn:
             raise RuntimeError("probe failed")
 
         stop = AsyncMock()
@@ -1953,7 +1965,7 @@ class TestLlamaCppAndHuggingFace:
 
     @pytest.mark.asyncio
     async def test_huggingface_start_removes_new_env_when_confirmation_fails(
-        self, app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, app: FastAPI, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Falha sem .env prévio não deixa um arquivo vazio persistente."""
         from backend.api.handlers.provider_routing import (
@@ -1982,10 +1994,12 @@ class TestLlamaCppAndHuggingFace:
             encoding="utf-8",
         )
 
-        async def fake_start(*args, **kwargs) -> None:
+        async def fake_start(*args: Path, **kwargs) -> None:
             return None
 
-        async def fail_confirmation(*args, **kwargs) -> NoReturn:
+        async def fail_confirmation(
+            *args: ConfirmLlamaCppModelRequest | None, **kwargs
+        ) -> NoReturn:
             raise RuntimeError("probe failed")
 
         stop = AsyncMock()
@@ -2272,7 +2286,7 @@ class TestOpenRouterCatalog:
 
     @contextmanager
     def _mocked_http_client(
-        self, app, handler: Callable[[httpx.Request], httpx.Response]
+        self, app: FastAPI, handler: Callable[[httpx.Request], httpx.Response]
     ) -> Generator[None]:
         """Troca o client HTTP do endpoint via dependency override do
         FastAPI — mais correto/idiomático que `unittest.mock.patch
@@ -2297,7 +2311,7 @@ class TestOpenRouterCatalog:
         finally:
             app.dependency_overrides.pop(_get_http_client, None)
 
-    def test_catalog_returns_models(self, app, client: TestClient) -> None:
+    def test_catalog_returns_models(self, app: FastAPI, client: TestClient) -> None:
         """Verifica o comportamento de catalog returns models."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -2326,7 +2340,7 @@ class TestOpenRouterCatalog:
         ids = [m["id"] for m in resp.json()["models"]]
         assert ids == ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"]
 
-    def test_catalog_filters_by_q(self, app, client: TestClient) -> None:
+    def test_catalog_filters_by_q(self, app: FastAPI, client: TestClient) -> None:
         """Verifica o comportamento de catalog filters by q."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -2354,7 +2368,7 @@ class TestOpenRouterCatalog:
         assert ids == ["anthropic/claude-3.5-sonnet"]
 
     def test_catalog_network_error_cai_no_fallback_e_nao_500(
-        self, app, client: TestClient
+        self, app: FastAPI, client: TestClient
     ) -> None:
         """Erro de rede nunca vira 500 — e, desde o cliente nativo, também
         não vira lista vazia: cai na lista embutida (ver
@@ -2371,7 +2385,7 @@ class TestOpenRouterCatalog:
         assert resp.json()["models"], "catálogo vazio com a rede fora"
 
     def test_catalog_stale_sentinel_survives_low_monotonic_clock(
-        self, app, client: TestClient, monkeypatch: pytest.MonkeyPatch
+        self, app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Bug real reproduzido só em CI (Linux, VM efêmera recém-bootada),
         nunca localmente: `time.monotonic()` não conta a partir de zero —
@@ -2692,7 +2706,7 @@ class TestOpenRouterModelSupportsImage:
 
         self._reset_cache()
 
-        async def _fake_ensure(client) -> None:
+        async def _fake_ensure(client: AsyncClient) -> None:
             """Executa a operação  fake ensure."""
             pr._catalog_cache["models"] = [
                 pr.OpenRouterModelInfo(

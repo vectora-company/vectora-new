@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from aiosqlite import Connection
 from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 
@@ -19,8 +20,10 @@ from backend.api.handlers.threads import (
     get_smart_approval_allowlist,
     remove_smart_approval_allowlist,
 )
+from backend.persistence.native.session_store import SessionStore
 from backend.vtypes.contracts import JsonObject
 from backend.vtypes.workspace import Workspace
+from backend.workspace.runtime_settings import RuntimeSettings
 
 
 class _FakeRequestImpl:
@@ -86,7 +89,9 @@ def _install_pending(
 
 
 @pytest.fixture(autouse=True)
-def _runtime_settings_isolado(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def _runtime_settings_isolado(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> RuntimeSettings:
     from backend.workspace.runtime_settings import RuntimeSettings
 
     isolado = RuntimeSettings(tmp_path / "rt.db")
@@ -172,7 +177,7 @@ async def test_workspace_vazio_vira_400_nao_500(
 @pytest.mark.parametrize("operation", ["add", "remove"])
 @pytest.mark.parametrize("failure", ["write", "commit"])
 async def test_persistence_failure_returns_503_and_rolls_back(
-    _runtime_settings_isolado,
+    _runtime_settings_isolado: RuntimeSettings,
     monkeypatch: pytest.MonkeyPatch,
     operation: str,
     failure: str,
@@ -397,7 +402,7 @@ async def session_store(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_authenticated_http_grant_reaches_durable_executor_without_auth_bypass(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, session_store
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, session_store: SessionStore
 ) -> None:
     import aiosqlite
 
@@ -418,7 +423,7 @@ async def test_authenticated_http_grant_reaches_durable_executor_without_auth_by
         db.row_factory = aiosqlite.Row
         await auth._ensure_schema(db)
 
-        async def get_db():
+        async def get_db() -> Connection:
             return db
 
         monkeypatch.setattr(auth, "_get_db", get_db)
@@ -458,7 +463,7 @@ async def test_authenticated_http_grant_reaches_durable_executor_without_auth_by
             args=body.args,
         )
 
-        async def get_store():
+        async def get_store() -> SessionStore:
             return session_store
 
         monkeypatch.setattr(threads, "_get_session_store", get_store)

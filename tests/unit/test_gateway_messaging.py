@@ -20,7 +20,7 @@ from backend.services.gateway.messaging import (
 
 
 def _incoming(
-    platform: str = "telegram", platform_user_id: str = "123", text="oi"
+    platform: str = "telegram", platform_user_id: str = "123", text: str = "oi"
 ) -> IncomingMessage:
     return IncomingMessage(
         platform=platform, platform_user_id=platform_user_id, text=text
@@ -29,7 +29,7 @@ def _incoming(
 
 @pytest.mark.asyncio
 async def test_resolve_thread_id_reuses_existing_mapping() -> None:
-    async def lookup(platform, uid) -> str:
+    async def lookup(platform: str, uid: str) -> str:
         assert (platform, uid) == ("telegram", "123")
         return "thread-existing"
 
@@ -43,10 +43,10 @@ async def test_resolve_thread_id_reuses_existing_mapping() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_thread_id_creates_new_thread_on_first_message() -> None:
-    async def lookup(platform, uid) -> None:
+    async def lookup(platform: str, uid: str) -> None:
         return None
 
-    async def create(platform, uid) -> str:
+    async def create(platform: str, uid: str) -> str:
         return "thread-new"
 
     thread_id = await resolve_thread_id(_incoming(), lookup=lookup, create=create)
@@ -56,13 +56,13 @@ async def test_resolve_thread_id_creates_new_thread_on_first_message() -> None:
 
 @pytest.mark.asyncio
 async def test_handle_incoming_message_returns_agent_reply() -> None:
-    async def lookup(platform, uid) -> str:
+    async def lookup(platform: str, uid: str) -> str:
         return "thread-1"
 
     async def create(platform, uid) -> NoReturn:
         raise AssertionError("não deveria criar")
 
-    async def run_agent(thread_id, text) -> str:
+    async def run_agent(thread_id: str, text: str) -> str:
         assert thread_id == "thread-1"
         assert text == "oi"
         return "resposta do agente"
@@ -82,13 +82,13 @@ async def test_handle_incoming_message_agent_failure_returns_friendly_error_not_
 ):
     # Erro/borda: agente indisponível não pode deixar o usuário externo sem
     # resposta nenhuma (tools defensivas, CLAUDE.md regra 11).
-    async def lookup(platform, uid) -> str:
+    async def lookup(platform: str, uid: str) -> str:
         return "thread-1"
 
     async def create(platform, uid) -> str:
         return "thread-1"
 
-    async def run_agent(thread_id, text) -> NoReturn:
+    async def run_agent(thread_id: str, text: str) -> NoReturn:
         raise RuntimeError("LLM indisponível")
 
     result = await handle_incoming_message(
@@ -105,7 +105,7 @@ async def test_resolve_thread_id_string_vazia_e_tratada_como_existente_nao_none(
 ):
     # Borda: thread_id == "" é falsy em contexto booleano, mas o código
     # checa `is not None` explicitamente — "" conta como "já existe".
-    async def lookup(platform, uid) -> str:
+    async def lookup(platform: str, uid: str) -> str:
         return ""
 
     async def create(platform, uid) -> NoReturn:
@@ -121,7 +121,7 @@ async def test_resolve_thread_id_propaga_excecao_do_lookup_sem_mascarar() -> Non
     # resolve_thread_id em si não é a camada defensiva (é
     # handle_incoming_message que captura) — confirma que uma falha de
     # storage no lookup propaga normalmente pra quem chamar direto.
-    async def lookup(platform, uid) -> NoReturn:
+    async def lookup(platform: str, uid: str) -> NoReturn:
         raise ConnectionError("banco de mapeamento indisponível")
 
     async def create(platform, uid) -> NoReturn:
@@ -133,10 +133,10 @@ async def test_resolve_thread_id_propaga_excecao_do_lookup_sem_mascarar() -> Non
 
 @pytest.mark.asyncio
 async def test_resolve_thread_id_propaga_excecao_do_create() -> None:
-    async def lookup(platform, uid) -> None:
+    async def lookup(platform: str, uid: str) -> None:
         return None
 
-    async def create(platform, uid) -> NoReturn:
+    async def create(platform: str, uid: str) -> NoReturn:
         raise RuntimeError("falha ao gravar mapeamento novo")
 
     with pytest.raises(RuntimeError, match="falha ao gravar"):
@@ -150,7 +150,7 @@ async def test_handle_incoming_message_falha_no_lookup_tambem_gera_resposta_amig
     # A falha defensiva cobre TODO o fluxo (resolve_thread_id + run_agent),
     # não só o run_agent — usuário externo nunca fica sem resposta mesmo
     # se o storage de mapeamento cair.
-    async def lookup(platform, uid) -> NoReturn:
+    async def lookup(platform: str, uid: str) -> NoReturn:
         raise ConnectionError("banco indisponível")
 
     async def create(platform, uid) -> str:
@@ -172,7 +172,7 @@ async def test_handle_incoming_message_falha_no_lookup_tambem_gera_resposta_amig
 async def test_handle_incoming_message_com_texto_vazio_ainda_chama_o_agente() -> None:
     # Erro/borda: mensagem vazia (ex. usuário mandou só um sticker/foto sem
     # legenda) não é filtrada aqui — passa adiante pro agente decidir.
-    async def lookup(platform, uid) -> str:
+    async def lookup(platform: str, uid: str) -> str:
         return "thread-1"
 
     async def create(platform, uid) -> NoReturn:
@@ -180,7 +180,7 @@ async def test_handle_incoming_message_com_texto_vazio_ainda_chama_o_agente() ->
 
     calls = []
 
-    async def run_agent(thread_id, text) -> str:
+    async def run_agent(thread_id: str, text: str) -> str:
         calls.append(text)
         return "recebi algo sem texto"
 
@@ -197,13 +197,13 @@ async def test_handle_incoming_message_resposta_vazia_do_agente_e_preservada() -
     # Borda: run_agent pode legitimamente devolver string vazia (ex. agente
     # decidiu não responder nada) — handler não substitui por mensagem
     # padrão, só o caminho de exceção tem fallback amigável.
-    async def lookup(platform, uid) -> str:
+    async def lookup(platform: str, uid: str) -> str:
         return "thread-1"
 
     async def create(platform, uid) -> NoReturn:
         raise AssertionError("não deveria criar")
 
-    async def run_agent(thread_id, text) -> str:
+    async def run_agent(thread_id: str, text: str) -> str:
         return ""
 
     result = await handle_incoming_message(
@@ -239,10 +239,10 @@ async def test_resolucao_concorrente_de_dois_usuarios_diferentes_nao_colide() ->
     mapping = {"111": "thread-111", "222": None}
     created = {}
 
-    async def lookup(platform, uid):
+    async def lookup(platform: str, uid: str) -> str | None:
         return mapping.get(uid)
 
-    async def create(platform, uid) -> str:
+    async def create(platform: str, uid: str) -> str:
         thread_id = f"thread-new-{uid}"
         created[uid] = thread_id
         return thread_id
@@ -269,11 +269,11 @@ async def test_mesmo_platform_user_id_em_plataformas_diferentes_nao_compartilha_
     # par completo é a chave, não só o uid.
     calls = []
 
-    async def lookup(platform, uid):
+    async def lookup(platform: str, uid: str) -> str | None:
         calls.append((platform, uid))
         return "thread-telegram-123" if platform == "telegram" else None
 
-    async def create(platform, uid) -> str:
+    async def create(platform: str, uid: str) -> str:
         return f"thread-{platform}-{uid}"
 
     result_telegram = await resolve_thread_id(
@@ -298,10 +298,10 @@ async def test_handle_incoming_message_create_thread_failure_still_returns_frien
 ):
     # Erro/borda: falha ao CRIAR o mapeamento (não só ao rodar o agente)
     # também precisa do fallback amigável — usuário nunca vê exceção crua.
-    async def lookup(platform, uid) -> None:
+    async def lookup(platform: str, uid: str) -> None:
         return None
 
-    async def create(platform, uid) -> NoReturn:
+    async def create(platform: str, uid: str) -> NoReturn:
         raise RuntimeError("falha ao gravar mapeamento")
 
     async def run_agent(thread_id, text) -> NoReturn:
@@ -327,13 +327,13 @@ async def test_handle_incoming_message_com_attachments_preserva_no_retorno_via_i
         attachments=("a.jpg", "b.jpg"),
     )
 
-    async def lookup(platform, uid) -> str:
+    async def lookup(platform: str, uid: str) -> str:
         return "thread-1"
 
     async def create(platform, uid) -> NoReturn:
         raise AssertionError("não deveria criar")
 
-    async def run_agent(thread_id, text) -> str:
+    async def run_agent(thread_id: str, text: str) -> str:
         return "recebido"
 
     result = await handle_incoming_message(
@@ -360,7 +360,7 @@ async def test_handle_incoming_message_texto_muito_longo_ainda_e_repassado_intac
     # a camada de plataforma/run_agent, não este módulo de abstração.
     long_text = "a" * 10000
 
-    async def lookup(platform, uid) -> str:
+    async def lookup(platform: str, uid: str) -> str:
         return "thread-1"
 
     async def create(platform, uid) -> NoReturn:
@@ -368,7 +368,7 @@ async def test_handle_incoming_message_texto_muito_longo_ainda_e_repassado_intac
 
     captured = {}
 
-    async def run_agent(thread_id, text) -> str:
+    async def run_agent(thread_id: str, text: str) -> str:
         captured["len"] = len(text)
         return "ok"
 

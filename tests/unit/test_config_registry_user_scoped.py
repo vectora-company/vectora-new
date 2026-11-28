@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from backend.vtypes.contracts import JsonObject
+
 
 class TestUserProfileAdapter:
     """`account` — perfil do usuário por id (nome etc.), via rbac.auth."""
@@ -102,7 +104,13 @@ class TestMemoryAdapter:
                 self.score = None
 
         class _FakeStore:
-            async def asearch(self, ns, *, query=None, limit: int = 100):
+            async def asearch(
+                self,
+                ns: tuple[str, str, str],
+                *,
+                query: str | None = None,
+                limit: int = 100,
+            ):
                 return [_Item(key, val["content"]) for key, val in store_rows.items()]
 
         monkeypatch.setattr("backend.tools.memory._get_store", lambda ctx: _FakeStore())
@@ -121,7 +129,9 @@ class TestMemoryAdapter:
         calls: list[tuple] = []
 
         class _FakeStore:
-            async def aput(self, ns, key, value) -> None:
+            async def aput(
+                self, ns: tuple[str, str, str], key: str, value: JsonObject
+            ) -> None:
                 calls.append((ns, key, value))
 
         monkeypatch.setattr(mem_mod, "_get_store", lambda ctx: _FakeStore())

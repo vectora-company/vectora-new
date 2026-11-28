@@ -41,7 +41,7 @@ class _FakeTable:
         self._should_fail = False
 
     async def optimize(
-        self, *, cleanup_older_than=None, **_kwargs
+        self, *, cleanup_older_than: timedelta | None = None, **_kwargs
     ) -> _FakeOptimizeStats:
         self.optimize_calls.append({"cleanup_older_than": cleanup_older_than})
         if self._should_fail:

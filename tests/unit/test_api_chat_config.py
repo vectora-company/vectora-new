@@ -165,7 +165,7 @@ def test_resolve_reuses_active_workspace(monkeypatch: pytest.MonkeyPatch) -> Non
         id = "ws-ativo"
 
     class _FakeRegistry:
-        def get_active(self, user_id=None):
+        def get_active(self, user_id: str | None = None):
             calls["get_active"] = user_id
             return _ActiveWs()
 
@@ -201,16 +201,18 @@ def test_resolve_force_new_skips_active_workspace_reuse(
         id = "ws-novo-dedicado"
 
     class _FakeRegistry:
-        def get_active(self, user_id=None):
+        def get_active(self, user_id: str | None = None):
             calls.setdefault("get_active_calls", 0)
             calls["get_active_calls"] += 1
             return _ActiveWs()
 
-        def get_or_create_session_workspace(self, thread_id, user_id=None):
+        def get_or_create_session_workspace(
+            self, thread_id: str, user_id: str | None = None
+        ):
             calls["created_thread_id"] = thread_id
             return _NewWs()
 
-        def set_active(self, ws_id, user_id=None) -> bool:
+        def set_active(self, ws_id: str, user_id: str | None = None) -> bool:
             calls["set_active"] = (ws_id, user_id)
             return True
 
@@ -240,15 +242,17 @@ def test_resolve_creates_session_workspace_when_no_active(
         id = "sess-ws"
 
     class _FakeRegistry:
-        def get_active(self, *_args, **_kwargs) -> None:
+        def get_active(self, *_args: str, **_kwargs) -> None:
             return None
 
-        def get_or_create_session_workspace(self, thread_id, user_id=None):
+        def get_or_create_session_workspace(
+            self, thread_id: str, user_id: str | None = None
+        ):
             calls["thread_id"] = thread_id
             calls["user_id"] = user_id
             return _FakeWs()
 
-        def set_active(self, ws_id, user_id=None) -> bool:
+        def set_active(self, ws_id: str, user_id: str | None = None) -> bool:
             calls["active"] = (ws_id, user_id)
             return True
 

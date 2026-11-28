@@ -834,7 +834,9 @@ async def test_manual_run_creates_run_and_registers_thread(
 
     upserts: list[str] = []
 
-    async def _upsert(thread_id, title=None, workspace_id=None) -> None:
+    async def _upsert(
+        thread_id: str, title: str | None = None, workspace_id=None
+    ) -> None:
         upserts.append(thread_id)
 
     monkeypatch.setattr("backend.api.handlers.threads._upsert_session", _upsert)

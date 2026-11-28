@@ -18,6 +18,9 @@ from typing import NoReturn
 import pytest
 
 from backend.services.connect import discord, email, manager, slack, telegram
+from backend.services.connect.email import EmailConfig
+from backend.services.gateway.messaging import IncomingMessage
+from backend.workspace.runtime_settings import RuntimeSettings
 
 # ---------------------------------------------------------------------------
 # Telegram
@@ -57,7 +60,7 @@ async def test_telegram_handler_responde_e_nao_propaga_excecao(
     async def _reply(text: str) -> None:
         enviados.append(text)
 
-    async def _fake_process(incoming) -> SimpleNamespace:
+    async def _fake_process(incoming: IncomingMessage) -> SimpleNamespace:
         return SimpleNamespace(text=f"eco: {incoming.text}")
 
     monkeypatch.setattr(telegram, "process_incoming", _fake_process)
@@ -71,7 +74,7 @@ async def test_telegram_handler_responde_e_nao_propaga_excecao(
 
     # Erro/borda: falha no processamento não pode derrubar o loop de polling —
     # a integração ficaria muda até o próximo boot.
-    async def _explode(_incoming) -> NoReturn:
+    async def _explode(_incoming: IncomingMessage) -> NoReturn:
         raise RuntimeError("agente fora do ar")
 
     monkeypatch.setattr(telegram, "process_incoming", _explode)
@@ -187,14 +190,14 @@ async def test_email_poll_once_continua_apos_falha_numa_mensagem(
     ]
     monkeypatch.setattr(email, "fetch_unseen", lambda _c: raws)
 
-    async def _process(incoming) -> SimpleNamespace:
+    async def _process(incoming: IncomingMessage) -> SimpleNamespace:
         return SimpleNamespace(text=f"resposta para {incoming.platform_user_id}")
 
     monkeypatch.setattr(email, "process_incoming", _process)
 
     enviados: list[str] = []
 
-    def _send(_config, to_address, text) -> None:
+    def _send(_config: EmailConfig, to_address: str, text: str) -> None:
         # A primeira falha; a segunda precisa ser respondida mesmo assim —
         # um email problemático não pode travar a caixa inteira.
         if to_address == "a@example.com":
@@ -220,7 +223,7 @@ async def test_email_caixa_inacessivel_nao_derruba_o_loop(
         smtp_host="smtp.invalido",
     )
 
-    def _explode(_c) -> NoReturn:
+    def _explode(_c: EmailConfig) -> NoReturn:
         raise OSError("conexão recusada")
 
     monkeypatch.setattr(email, "fetch_unseen", _explode)
@@ -313,12 +316,12 @@ async def test_sync_adapters_desliga_tudo_no_downgrade_de_tier(
     monkeypatch.setenv("VECTORA_LICENSE_BYPASS", "1")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:abc")
 
-    async def _start(platform) -> str:
+    async def _start(platform: str) -> str:
         return f"handle-{platform}"
 
     parados: list[str] = []
 
-    async def _stop(platform, _handle) -> None:
+    async def _stop(platform: str, _handle: str) -> None:
         parados.append(platform)
 
     monkeypatch.setattr(manager, "_start_platform", _start)
@@ -341,7 +344,9 @@ async def test_sync_adapters_desliga_tudo_no_downgrade_de_tier(
 
 
 @pytest.fixture
-def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def _isolated_runtime_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> RuntimeSettings:
     """Isola cada teste com um RuntimeSettings próprio — sem isso, o
     override de `connect_enabled_platforms` de um teste vazaria pros
     seguintes (é um singleton de processo)."""
@@ -354,7 +359,7 @@ def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_is_enabled_antes_do_primeiro_toggle_espelha_credencial(
-    _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
+    _isolated_runtime_settings: RuntimeSettings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Achado ao vivo (2026-08-20): antes desta feature, credencial salva
     já ligava a plataforma pra sempre. Sem nenhum toggle usado ainda, o
@@ -368,7 +373,7 @@ def test_is_enabled_antes_do_primeiro_toggle_espelha_credencial(
 
 
 def test_configured_platforms_respeita_toggle_desligado(
-    _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
+    _isolated_runtime_settings: RuntimeSettings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """O caso do bug real: credencial presente, mas o usuário desligou o
     toggle — a plataforma não pode aparecer como configurada."""
@@ -386,7 +391,7 @@ def test_configured_platforms_respeita_toggle_desligado(
 
 
 def test_primeiro_toggle_preserva_outras_plataformas_ja_credenciadas(
-    _isolated_runtime_settings, monkeypatch: pytest.MonkeyPatch
+    _isolated_runtime_settings: RuntimeSettings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Desligar UMA plataforma pela primeira vez não pode desligar
     silenciosamente outra que já estava rodando de propósito."""
@@ -409,7 +414,7 @@ async def test_sync_adapters_falha_de_um_nao_impede_os_outros(
         manager, "configured_platforms", lambda: {"telegram", "discord"}
     )
 
-    async def _start(platform) -> str:
+    async def _start(platform: str) -> str:
         if platform == "telegram":
             raise RuntimeError("token inválido")
         return f"handle-{platform}"
@@ -431,16 +436,16 @@ async def test_sync_adapters_desliga_quem_perdeu_a_credencial(
 ) -> None:
     parados: list[str] = []
 
-    async def _stop(platform, _handle) -> None:
+    async def _stop(platform: str, _handle: str) -> None:
         parados.append(platform)
 
-    async def _start(platform) -> str:
+    async def _start(platform: str) -> str:
         return f"handle-{platform}"
 
     monkeypatch.setattr(manager, "_stop_platform", _stop)
     monkeypatch.setattr(manager, "_start_platform", _start)
 
-    def _so_telegram():
+    def _so_telegram() -> set[str]:
         return {"telegram"}
 
     monkeypatch.setattr(manager, "configured_platforms", _so_telegram)
@@ -464,7 +469,7 @@ async def test_sync_adapters_desliga_quem_perdeu_a_credencial(
 
 @pytest.mark.asyncio
 async def test_stop_all_e_idempotente(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _stop(_platform, _handle) -> None:
+    async def _stop(_platform: str, _handle) -> None:
         return None
 
     monkeypatch.setattr(manager, "_stop_platform", _stop)

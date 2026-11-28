@@ -19,6 +19,8 @@ from typing import NoReturn
 import git
 import pytest
 
+from backend.tools.registry import ToolExtras
+
 # ===========================================================================
 # Fixtures — repos temporários
 # ===========================================================================
@@ -70,7 +72,7 @@ def dirty_repo(tmp_path: Path) -> git.Repo:
 # ===========================================================================
 
 
-def _tool_extras(name: str):
+def _tool_extras(name: str) -> ToolExtras:
     import_module("backend.tools.git")
     from backend.tools.registry import TOOL_REGISTRY
 

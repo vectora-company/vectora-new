@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.middleware.base import _CachedRequest
 
 from backend.api.handlers.oauth import router
 
@@ -27,7 +28,7 @@ def client() -> TestClient:
     app = FastAPI()
     app.include_router(router)
 
-    def fake_user(request) -> None:
+    def fake_user(request: _CachedRequest) -> None:
         from types import SimpleNamespace
 
         request.state.user = SimpleNamespace(id="user-123")

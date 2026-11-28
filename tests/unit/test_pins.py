@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, patch
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 
 from backend.api.handlers import threads
 
@@ -57,18 +58,18 @@ async def _extra(db: aiosqlite.Connection, thread_id: str) -> dict:
 
 
 class TestSessionPinsPersistence:
-    async def test_set_then_get_roundtrip(self, fake_db) -> None:
+    async def test_set_then_get_roundtrip(self, fake_db: Connection) -> None:
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
             await threads._set_session_pins("t1", ["src/a.py", "README.md"])
             pins = await threads._get_session_pins("t1")
         assert pins == ["src/a.py", "README.md"]
 
-    async def test_get_missing_thread_is_empty(self, fake_db) -> None:
+    async def test_get_missing_thread_is_empty(self, fake_db: Connection) -> None:
         """Borda: thread sem registro → lista vazia, nunca erro."""
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
             assert await threads._get_session_pins("nao-existe") == []
 
-    async def test_set_preserves_other_extra_keys(self, fake_db) -> None:
+    async def test_set_preserves_other_extra_keys(self, fake_db: Connection) -> None:
         """Pins não podem apagar title/mode/workspace_id já gravados."""
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
             await threads._upsert_session(
@@ -81,7 +82,9 @@ class TestSessionPinsPersistence:
         assert extra["mode"] == "dev"
         assert extra["pins"] == ["a.py"]
 
-    async def test_normalizes_dedup_trim_slash_and_drops_empty(self, fake_db) -> None:
+    async def test_normalizes_dedup_trim_slash_and_drops_empty(
+        self, fake_db: Connection
+    ) -> None:
         """Erro/borda: entrada suja (duplicados, espaços, backslash, vazios)."""
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
             cleaned = await threads._set_session_pins(
@@ -90,7 +93,7 @@ class TestSessionPinsPersistence:
             )
         assert cleaned == ["src/a.py", "b.py"]
 
-    async def test_set_empty_clears(self, fake_db) -> None:
+    async def test_set_empty_clears(self, fake_db: Connection) -> None:
         """Borda: setar lista vazia zera os pins."""
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
             await threads._set_session_pins("t4", ["a.py"])
@@ -104,7 +107,7 @@ class TestSessionPinsPersistence:
 
 
 class TestThreadPinsEndpoints:
-    async def test_set_and_get_via_rpc(self, fake_db) -> None:
+    async def test_set_and_get_via_rpc(self, fake_db: Connection) -> None:
         from backend.api.schemas import GetThreadPinsRequest, SetThreadPinsRequest
 
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
@@ -118,7 +121,7 @@ class TestThreadPinsEndpoints:
         assert get_resp.thread_id == "t5"
         assert get_resp.pins == ["x.py"]
 
-    async def test_get_via_rpc_missing_thread(self, fake_db) -> None:
+    async def test_get_via_rpc_missing_thread(self, fake_db: Connection) -> None:
         from backend.api.schemas import GetThreadPinsRequest
 
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
@@ -126,7 +129,7 @@ class TestThreadPinsEndpoints:
         assert resp.pins == []
         assert resp.thread_id == "zzz"
 
-    async def test_set_via_rpc_normalizes_and_dedups(self, fake_db) -> None:
+    async def test_set_via_rpc_normalizes_and_dedups(self, fake_db: Connection) -> None:
         from backend.api.schemas import SetThreadPinsRequest
 
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
@@ -137,14 +140,14 @@ class TestThreadPinsEndpoints:
             )
         assert resp.pins == ["a/b.py"]
 
-    async def test_set_via_rpc_default_empty_pins(self, fake_db) -> None:
+    async def test_set_via_rpc_default_empty_pins(self, fake_db: Connection) -> None:
         from backend.api.schemas import SetThreadPinsRequest
 
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
             resp = await threads.set_thread_pins(SetThreadPinsRequest(thread_id="t7"))
         assert resp.pins == []
 
-    async def test_set_overwrites_previous(self, fake_db) -> None:
+    async def test_set_overwrites_previous(self, fake_db: Connection) -> None:
         from backend.api.schemas import SetThreadPinsRequest
 
         with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
@@ -202,18 +205,22 @@ class TestNormalizePins:
 # ---------------------------------------------------------------------------
 
 
-async def _set_pins(fake_db, thread_id: str, pins: list[str]) -> None:
+async def _set_pins(fake_db: Connection, thread_id: str, pins: list[str]) -> None:
     with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
         await threads._set_session_pins(thread_id, pins)
 
 
-async def _build(fake_db, thread_id: str, cwd: Path | str | None, **kw) -> str:
+async def _build(
+    fake_db: Connection, thread_id: str, cwd: Path | str | None, **kw: int
+) -> str:
     with patch.object(threads, "_get_db", AsyncMock(return_value=fake_db)):
         return await threads.build_pinned_context(thread_id, cwd, **kw)
 
 
 class TestBuildPinnedContext:
-    async def test_single_pin_includes_content(self, fake_db, tmp_path: Path) -> None:
+    async def test_single_pin_includes_content(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         (tmp_path / "a.py").write_text("print('oi')", encoding="utf-8")
         await _set_pins(fake_db, "t", ["a.py"])
         block = await _build(fake_db, "t", tmp_path)
@@ -222,7 +229,9 @@ class TestBuildPinnedContext:
         assert '<file path="a.py">' in block
         assert "print('oi')" in block
 
-    async def test_multiple_pins_in_order(self, fake_db, tmp_path: Path) -> None:
+    async def test_multiple_pins_in_order(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         (tmp_path / "a.py").write_text("AAA", encoding="utf-8")
         (tmp_path / "b.py").write_text("BBB", encoding="utf-8")
         await _set_pins(fake_db, "t", ["a.py", "b.py"])
@@ -230,23 +239,31 @@ class TestBuildPinnedContext:
         assert block.index('path="a.py"') < block.index('path="b.py"')
         assert "AAA" in block and "BBB" in block
 
-    async def test_no_pins_returns_empty(self, fake_db, tmp_path: Path) -> None:
+    async def test_no_pins_returns_empty(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         block = await _build(fake_db, "sem-pins", tmp_path)
         assert block == ""
 
-    async def test_no_workspace_returns_empty(self, fake_db, tmp_path: Path) -> None:
+    async def test_no_workspace_returns_empty(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         await _set_pins(fake_db, "t", ["a.py"])
         assert await _build(fake_db, "t", None) == ""
         assert await _build(fake_db, "t", "") == ""
 
-    async def test_missing_file_skipped(self, fake_db, tmp_path: Path) -> None:
+    async def test_missing_file_skipped(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         (tmp_path / "exists.py").write_text("HERE", encoding="utf-8")
         await _set_pins(fake_db, "t", ["exists.py", "ghost.py"])
         block = await _build(fake_db, "t", tmp_path)
         assert "HERE" in block
         assert "ghost.py" not in block
 
-    async def test_binary_file_skipped(self, fake_db, tmp_path: Path) -> None:
+    async def test_binary_file_skipped(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         (tmp_path / "bin.dat").write_bytes(b"\x00\x01\x02BINARY")
         (tmp_path / "ok.py").write_text("OK", encoding="utf-8")
         await _set_pins(fake_db, "t", ["bin.dat", "ok.py"])
@@ -254,14 +271,18 @@ class TestBuildPinnedContext:
         assert "OK" in block
         assert "bin.dat" not in block
 
-    async def test_large_file_truncated(self, fake_db, tmp_path: Path) -> None:
+    async def test_large_file_truncated(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         (tmp_path / "big.txt").write_text("x" * 5000, encoding="utf-8")
         await _set_pins(fake_db, "t", ["big.txt"])
         block = await _build(fake_db, "t", tmp_path, cap=100)
         assert "… (truncado)" in block
         assert block.count("x") <= 200
 
-    async def test_directory_pin_skipped(self, fake_db, tmp_path: Path) -> None:
+    async def test_directory_pin_skipped(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         (tmp_path / "sub").mkdir()
         (tmp_path / "f.py").write_text("F", encoding="utf-8")
         await _set_pins(fake_db, "t", ["sub", "f.py"])
@@ -269,14 +290,16 @@ class TestBuildPinnedContext:
         assert "F" in block
         assert 'path="sub"' not in block
 
-    async def test_nested_file_read(self, fake_db, tmp_path: Path) -> None:
+    async def test_nested_file_read(self, fake_db: Connection, tmp_path: Path) -> None:
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "deep.py").write_text("DEEP", encoding="utf-8")
         await _set_pins(fake_db, "t", ["src/deep.py"])
         block = await _build(fake_db, "t", tmp_path)
         assert "DEEP" in block
 
-    async def test_path_traversal_skipped(self, fake_db, tmp_path: Path) -> None:
+    async def test_path_traversal_skipped(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         outside = tmp_path.parent / "secret_pin_test.txt"
         outside.write_text("SECRET", encoding="utf-8")
         try:
@@ -287,19 +310,23 @@ class TestBuildPinnedContext:
         finally:
             outside.unlink(missing_ok=True)
 
-    async def test_unicode_preserved(self, fake_db, tmp_path: Path) -> None:
+    async def test_unicode_preserved(self, fake_db: Connection, tmp_path: Path) -> None:
         (tmp_path / "u.py").write_text("café ☕ 日本語", encoding="utf-8")
         await _set_pins(fake_db, "t", ["u.py"])
         block = await _build(fake_db, "t", tmp_path)
         assert "café ☕ 日本語" in block
 
-    async def test_empty_file_still_block(self, fake_db, tmp_path: Path) -> None:
+    async def test_empty_file_still_block(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         (tmp_path / "empty.py").write_text("", encoding="utf-8")
         await _set_pins(fake_db, "t", ["empty.py"])
         block = await _build(fake_db, "t", tmp_path)
         assert '<file path="empty.py">' in block
 
-    async def test_all_invalid_returns_empty(self, fake_db, tmp_path: Path) -> None:
+    async def test_all_invalid_returns_empty(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         await _set_pins(fake_db, "t", ["ghost1.py", "ghost2.py"])
         assert await _build(fake_db, "t", tmp_path) == ""
 
@@ -310,7 +337,9 @@ class TestBuildPinnedContext:
             block = await threads.build_pinned_context("t", tmp_path)
         assert block == ""
 
-    async def test_cap_default_applies(self, fake_db, tmp_path: Path) -> None:
+    async def test_cap_default_applies(
+        self, fake_db: Connection, tmp_path: Path
+    ) -> None:
         (tmp_path / "big.txt").write_text("y" * 9000, encoding="utf-8")
         await _set_pins(fake_db, "t", ["big.txt"])
         block = await _build(fake_db, "t", tmp_path)

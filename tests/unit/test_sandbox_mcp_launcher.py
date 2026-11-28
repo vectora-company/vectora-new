@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from mcp import StdioServerParameters
 
 from backend.sandbox import jail_exec, mcp_launcher
 from backend.sandbox.egress_proxy import egress_registry
@@ -321,7 +322,7 @@ async def test_cliente_passa_os_destinos_do_servidor_ao_jail(
         return mcp_launcher.JailedLaunch(sys.executable, [], None)
 
     @asynccontextmanager
-    async def stdio(_params):
+    async def stdio(_params: StdioServerParameters):
         yield object(), object()
 
     @asynccontextmanager

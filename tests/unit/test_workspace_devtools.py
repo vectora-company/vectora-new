@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import backend.api.handlers.workspaces as ws_mod
+from backend.vtypes.contracts import JsonObject
 
 
 class TestDevtoolsTabs:
@@ -18,7 +19,7 @@ class TestDevtoolsTabs:
     async def test_lista_abas_da_sessao_do_agente(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        async def _fake_list_tabs(workspace_id):
+        async def _fake_list_tabs(workspace_id: str) -> list[JsonObject]:
             assert workspace_id == "ws1"
             return [{"tab_id": "t1", "url": "http://localhost:3000", "active": True}]
 
@@ -34,7 +35,7 @@ class TestDevtoolsTabs:
     async def test_sem_sessao_devolve_lista_vazia(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        async def _fake_list_tabs(workspace_id):
+        async def _fake_list_tabs(workspace_id: str):
             return []
 
         monkeypatch.setattr("backend.browser.session.list_tabs", _fake_list_tabs)

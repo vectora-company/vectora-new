@@ -93,7 +93,7 @@ def test_todos_os_tres_limites_sao_configurados(
 # ── tamanho de arquivo e memória ────────────────────────────────────────────
 
 
-def _aplicar_em_subprocesso(**limites):
+def _aplicar_em_subprocesso(**limites: int) -> dict[str, int]:
     """Aplica os limites num processo filho e devolve o que ele enxerga depois."""
     import json
     import subprocess

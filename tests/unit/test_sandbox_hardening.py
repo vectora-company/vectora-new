@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.sandbox import dry_run, workspace_jail
+from backend.sandbox import JailedWorker, dry_run, workspace_jail
 from backend.sandbox.dry_run import (
     CLONE_NAMESPACE_FLAGS,
     DENIED_SYSCALLS,
@@ -303,7 +303,7 @@ real_bwrap = pytest.mark.skipif(
 )
 
 
-async def _exec(worker, command: str) -> dict:
+async def _exec(worker: JailedWorker, command: str) -> dict:
     return await worker.request("exec", timeout_s=30, command=["sh", "-c", command])
 
 

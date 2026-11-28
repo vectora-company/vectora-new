@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from aiosqlite import Connection
 
 
 @pytest.fixture(autouse=True)
@@ -26,7 +27,7 @@ def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None
 
     import aiosqlite
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)

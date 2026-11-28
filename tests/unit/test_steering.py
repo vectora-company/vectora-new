@@ -144,7 +144,7 @@ async def test_steer_endpoint_queues_only_when_a_run_is_active(
     from backend.api.handlers import chat as chat_handlers
     from backend.api.handlers import threads as thread_handlers
 
-    async def allow(*_args, **_kwargs) -> None:
+    async def allow(*_args: str | None, **_kwargs: bool) -> None:
         return None
 
     monkeypatch.setattr(thread_handlers, "_assert_owns_thread", allow)

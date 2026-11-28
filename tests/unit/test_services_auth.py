@@ -20,6 +20,9 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from aiosqlite import Connection
+
+from backend.workspace.runtime_settings import RuntimeSettings
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -46,7 +49,7 @@ def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None
 
     original_get_db = auth_mod._get_db
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)
@@ -627,7 +630,7 @@ class TestEnvOverridesLocalUser:
     @pytest.fixture(autouse=True)
     def _isolated_runtime_settings(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> RuntimeSettings:
         from backend.workspace import runtime_settings as rs_mod
 
         fresh = rs_mod.RuntimeSettings(path=tmp_path / "runtime.db")

@@ -16,6 +16,7 @@ from pathlib import Path
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 
 # ---------------------------------------------------------------------------
 # Fixture — banco isolado por teste (mesmo padrão de test_services_auth.py)
@@ -33,7 +34,7 @@ def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None
         auth_mod, "_get_secret", lambda: "test-secret-key-name-tests-abcdef"
     )
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)

@@ -25,6 +25,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from aiosqlite import Connection
 from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ def app_and_db(tmp_path_factory: pytest.TempPathFactory):
     # Patcha _get_secret como função para que o módulo todo use este secret
     auth_mod._get_secret = lambda: _TEST_SECRET  # type: ignore[assignment]  # ty: ignore[invalid-assignment]
 
-    async def _patched_get_db():
+    async def _patched_get_db() -> Connection:
         if auth_mod._db_conn is not None:
             return auth_mod._db_conn
         conn = await aiosqlite.connect(db_file)
@@ -93,7 +94,7 @@ def client(app_and_db) -> TestClient:
 
 
 @pytest.fixture(scope="module")
-def root_tokens(client: TestClient):
+def root_tokens(client: TestClient) -> tuple[str, str, str]:
     """Cria o primeiro usuário (root) e retorna seus tokens."""
     # Verifica se ainda não há usuários
     r = client.get("/auth/has-users")
@@ -151,7 +152,9 @@ class TestSignupEndpoint:
             assert "access_token" in data
             assert data["user"]["role"] == "root"
 
-    def test_signup_sets_cookies(self, client: TestClient, root_tokens) -> None:
+    def test_signup_sets_cookies(
+        self, client: TestClient, root_tokens: tuple[str, str, str]
+    ) -> None:
         # Após signup do root, tentar novo signup é bloqueado — verificamos cookies no signin
         access, _, _ = root_tokens
         r = client.get("/auth/me", headers={"Authorization": f"Bearer {access}"})
@@ -172,7 +175,9 @@ class TestSignupEndpoint:
 
 
 class TestSigninEndpoint:
-    def test_valid_signin_returns_tokens(self, client: TestClient, root_tokens) -> None:
+    def test_valid_signin_returns_tokens(
+        self, client: TestClient, root_tokens: tuple[str, str, str]
+    ) -> None:
         r = client.post(
             "/auth/signin",
             json={"email": "root@test.com", "password": "rootpassword1234"},
@@ -184,7 +189,7 @@ class TestSigninEndpoint:
         assert data["user"]["email"] == "root@test.com"
 
     def test_invalid_password_returns_401(
-        self, client: TestClient, root_tokens
+        self, client: TestClient, root_tokens: tuple[str, str, str]
     ) -> None:
         r = client.post(
             "/auth/signin",
@@ -200,7 +205,7 @@ class TestSigninEndpoint:
         assert r.status_code == 401
 
     def test_signin_sets_httponly_cookies(
-        self, client: TestClient, root_tokens
+        self, client: TestClient, root_tokens: tuple[str, str, str]
     ) -> None:
         r = client.post(
             "/auth/signin",
@@ -217,7 +222,9 @@ class TestSigninEndpoint:
 
 
 class TestMeEndpoint:
-    def test_me_with_valid_bearer_token(self, client: TestClient, root_tokens) -> None:
+    def test_me_with_valid_bearer_token(
+        self, client: TestClient, root_tokens: tuple[str, str, str]
+    ) -> None:
         access, _, _ = root_tokens
         r = client.get("/auth/me", headers={"Authorization": f"Bearer {access}"})
         assert r.status_code == 200
@@ -249,7 +256,7 @@ class TestMeEndpoint:
 
 class TestUpdateMeEndpoint:
     def test_patch_name_updates_and_returns_new_value(
-        self, client: TestClient, root_tokens
+        self, client: TestClient, root_tokens: tuple[str, str, str]
     ) -> None:
         access, _, _ = root_tokens
         r = client.patch(
@@ -261,7 +268,7 @@ class TestUpdateMeEndpoint:
         assert r.json()["name"] == "Bruno Soares"
 
     def test_patch_name_persists_visible_in_get_me(
-        self, client: TestClient, root_tokens
+        self, client: TestClient, root_tokens: tuple[str, str, str]
     ) -> None:
         """Após PATCH, GET /me devolve o name novo (não cache stale)."""
         access, _, _ = root_tokens
@@ -274,7 +281,9 @@ class TestUpdateMeEndpoint:
         assert r.status_code == 200
         assert r.json()["name"] == "Persistente"
 
-    def test_patch_name_accepts_utf8(self, client: TestClient, root_tokens) -> None:
+    def test_patch_name_accepts_utf8(
+        self, client: TestClient, root_tokens: tuple[str, str, str]
+    ) -> None:
         """UTF-8 livre — acentos, apóstrofo, espaços."""
         access, _, _ = root_tokens
         r = client.patch(
@@ -286,7 +295,7 @@ class TestUpdateMeEndpoint:
         assert r.json()["name"] == "João D'Ávila"
 
     def test_patch_name_sanitizes_whitespace(
-        self, client: TestClient, root_tokens
+        self, client: TestClient, root_tokens: tuple[str, str, str]
     ) -> None:
         """Trim e collapse de espaços internos via service layer."""
         access, _, _ = root_tokens
@@ -298,7 +307,9 @@ class TestUpdateMeEndpoint:
         assert r.status_code == 200
         assert r.json()["name"] == "Bruno de Souza"
 
-    def test_patch_name_caps_at_100(self, client: TestClient, root_tokens) -> None:
+    def test_patch_name_caps_at_100(
+        self, client: TestClient, root_tokens: tuple[str, str, str]
+    ) -> None:
         access, _, _ = root_tokens
         r = client.patch(
             "/auth/me",
@@ -309,7 +320,7 @@ class TestUpdateMeEndpoint:
         assert len(r.json()["name"]) == 100
 
     def test_patch_empty_body_does_nothing(
-        self, client: TestClient, root_tokens
+        self, client: TestClient, root_tokens: tuple[str, str, str]
     ) -> None:
         """Body sem 'name' (None) — endpoint não mexe e devolve user atual."""
         access, _, _ = root_tokens
@@ -342,7 +353,9 @@ class TestUpdateMeEndpoint:
 
 
 class TestUsageEndpoint:
-    def test_usage_with_valid_token(self, client: TestClient, root_tokens) -> None:
+    def test_usage_with_valid_token(
+        self, client: TestClient, root_tokens: tuple[str, str, str]
+    ) -> None:
         access, _, _ = root_tokens
         r = client.get("/auth/usage", headers={"Authorization": f"Bearer {access}"})
         assert r.status_code == 200
@@ -368,7 +381,7 @@ class TestToolsPolicy:
     def test_get_and_put_policy(
         self,
         client: TestClient,
-        root_tokens,
+        root_tokens: tuple[str, str, str],
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -396,7 +409,7 @@ class TestToolsPolicy:
     def test_put_unknown_tool_rejected(
         self,
         client: TestClient,
-        root_tokens,
+        root_tokens: tuple[str, str, str],
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -494,7 +507,9 @@ class TestSignoutEndpoint:
 
 
 class TestChangePasswordEndpoint:
-    def test_change_password_success(self, client: TestClient, root_tokens) -> None:
+    def test_change_password_success(
+        self, client: TestClient, root_tokens: tuple[str, str, str]
+    ) -> None:
         access, _, _ = root_tokens
         r = client.post(
             "/auth/change-password",
@@ -578,7 +593,7 @@ class TestPasswordResetEndpoints:
 
 class TestEnvOverridesEndpoints:
     @pytest.fixture(autouse=True)
-    def _setup_root(self, root_tokens) -> None:
+    def _setup_root(self, root_tokens: tuple[str, str, str]) -> None:
         """Garante que o usuário root existe e guarda o token cacheado."""
         self._cached_access, *_ = root_tokens
 
@@ -809,7 +824,7 @@ class TestEnvOverridesEndpoints:
 
 class TestAdminEndpoints:
     @pytest.fixture(autouse=True)
-    def _setup_root(self, root_tokens) -> None:
+    def _setup_root(self, root_tokens: tuple[str, str, str]) -> None:
         """Garante que o usuário root existe e guarda o token cacheado."""
         self._cached_access, *_ = root_tokens
 

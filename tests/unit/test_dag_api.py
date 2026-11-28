@@ -8,6 +8,7 @@ from typing import NoReturn
 
 import aiosqlite
 import pytest
+from aiosqlite import Connection
 from fastapi import HTTPException
 from starlette.requests import Request
 
@@ -29,13 +30,15 @@ async def test_approve_dag_checks_thread_and_dispatches_after_approval(
     await db.close()
 
     class Sessions:
-        async def list_agent_runs(self, thread_id: str, *, limit: int):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int
+        ) -> list[SimpleNamespace]:
             return [SimpleNamespace(run_id="run-owned")]
 
     async def get_sessions():
         return Sessions()
 
-    async def connect_db():
+    async def connect_db() -> Connection:
         return await aiosqlite.connect(db_path)
 
     dispatched: list[str] = []
@@ -77,13 +80,15 @@ async def test_plan_from_another_thread_is_not_visible(
     await db.close()
 
     class Sessions:
-        async def list_agent_runs(self, thread_id: str, *, limit: int):
+        async def list_agent_runs(
+            self, thread_id: str, *, limit: int
+        ) -> list[SimpleNamespace]:
             return [SimpleNamespace(run_id="run-owned")]
 
     async def get_sessions():
         return Sessions()
 
-    async def connect_db():
+    async def connect_db() -> Connection:
         return await aiosqlite.connect(db_path)
 
     monkeypatch.setattr(dag, "_assert_owns_thread", _async_noop)
@@ -100,7 +105,7 @@ async def test_plan_from_another_thread_is_not_visible(
 async def test_dag_operations_reject_a_thread_the_user_cannot_access(
     operation: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def denied(*_args, **_kwargs) -> NoReturn:
+    async def denied(*_args: Request | str, **_kwargs: bool) -> NoReturn:
         raise HTTPException(status_code=404, detail="Thread not found")
 
     async def unexpected(*_args, **_kwargs) -> NoReturn:
@@ -129,7 +134,7 @@ async def test_dag_operations_reject_a_thread_the_user_cannot_access(
     assert exc.value.status_code == 404
 
 
-async def _async_noop(*_args, **_kwargs) -> None:
+async def _async_noop(*_args: Request | str, **_kwargs: bool) -> None:
     return None
 
 

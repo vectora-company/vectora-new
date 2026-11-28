@@ -21,7 +21,12 @@ def _request(user_id: str | None = "alice") -> MagicMock:
 def _fake_gh(monkeypatch: pytest.MonkeyPatch, result: dict):
     calls: list[list[str]] = []
 
-    async def fake(args, cwd=None, input_data=None, user_id=None):
+    async def fake(
+        args: list[str],
+        cwd: str | None = None,
+        input_data=None,
+        user_id: str | None = None,
+    ) -> dict[str, str]:
         calls.append(args)
         return result
 

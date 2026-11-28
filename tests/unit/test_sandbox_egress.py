@@ -9,6 +9,7 @@ import shlex
 import socket
 import ssl
 import sys
+from asyncio import StreamReader, StreamWriter
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,7 @@ from backend.sandbox.policy import (
     resolve_policy,
     trusted_policy_path,
 )
+from backend.services.egress_policy import EgressPolicy
 from tests.unit.test_sandbox_hardening import _bwrap_works, _exec
 
 real_bwrap = pytest.mark.skipif(
@@ -333,7 +335,7 @@ async def test_so_aceita_connect_bem_formado(requisicao: bytes) -> None:
 async def test_destino_permitido_abre_o_tunel_ate_o_ip_validado(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def eco(reader, writer) -> None:
+    async def eco(reader: StreamReader, writer: StreamWriter) -> None:
         writer.write(b"eco:" + await reader.read(100))
         await writer.drain()
         writer.close()
@@ -341,7 +343,9 @@ async def test_destino_permitido_abre_o_tunel_ate_o_ip_validado(
     servidor = await asyncio.start_server(eco, "127.0.0.1", 0)
     porta = servidor.sockets[0].getsockname()[1]
 
-    async def liberado(url, policy=None):
+    async def liberado(
+        url: str, policy: EgressPolicy | None = None
+    ) -> tuple[bool, str, str]:
         # O proxy conecta ao IP que a validação devolveu, não ao nome.
         return True, "", "127.0.0.1"
 
@@ -377,7 +381,7 @@ async def test_credencial_so_e_injetada_no_host_vinculado(
     authority = WorkspaceTLSAuthority(tmp_path)
     upstream_seen: asyncio.Future[bytes] = asyncio.get_running_loop().create_future()
 
-    async def upstream(reader, writer) -> None:
+    async def upstream(reader: StreamReader, writer: StreamWriter) -> None:
         request = await reader.readuntil(b"\r\n\r\n")
         upstream_seen.set_result(request)
         writer.write(
@@ -392,7 +396,9 @@ async def test_credencial_so_e_injetada_no_host_vinculado(
     )
     port = upstream_server.sockets[0].getsockname()[1]
 
-    async def allow_local(url, policy=None):
+    async def allow_local(
+        url: str, policy: EgressPolicy | None = None
+    ) -> tuple[bool, str, str]:
         return True, "", "127.0.0.1"
 
     original_open_connection = asyncio.open_connection
@@ -403,7 +409,7 @@ async def test_credencial_so_e_injetada_no_host_vinculado(
         return await original_open_connection(host, port, *args, **kwargs)
 
     class Secrets:
-        async def get(self, user_id, key) -> str:
+        async def get(self, user_id: str, key: str) -> str:
             assert (user_id, key) == ("owner", "sandbox:ws:API_TOKEN")
             return "top-secret-value"
 
@@ -469,7 +475,7 @@ async def test_host_sem_binding_permanece_tunel_tls_sem_credencial(
     authority = WorkspaceTLSAuthority(tmp_path)
     upstream_seen = asyncio.get_running_loop().create_future()
 
-    async def upstream(reader, writer) -> None:
+    async def upstream(reader: StreamReader, writer: StreamWriter) -> None:
         upstream_seen.set_result(await reader.readuntil(b"\r\n\r\n"))
         writer.write(
             b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
@@ -488,7 +494,9 @@ async def test_host_sem_binding_permanece_tunel_tls_sem_credencial(
             port = upstream_port
         return await original_open_connection(host, port, *args, **kwargs)
 
-    async def allow_local(url, policy=None):
+    async def allow_local(
+        url: str, policy: EgressPolicy | None = None
+    ) -> tuple[bool, str, str]:
         return True, "", "127.0.0.1"
 
     monkeypatch.setattr(asyncio, "open_connection", connect_upstream)
@@ -710,7 +718,7 @@ def test_authority_de_connect() -> None:
 
 @pytest.mark.asyncio
 async def test_ponte_liga_o_loopback_ao_socket_unix(tmp_path: Path) -> None:
-    async def eco(reader, writer) -> None:
+    async def eco(reader: StreamReader, writer: StreamWriter) -> None:
         writer.write(b"unix:" + await reader.read(100))
         await writer.drain()
         writer.close()

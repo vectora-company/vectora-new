@@ -18,6 +18,7 @@ import pytest
 from backend.api.native_stream import stream_engine_events
 from backend.engine.stream_events import ToolCallStarted, ToolResult
 from backend.services.terminal_stream import emit_terminal_line
+from backend.vtypes.contracts import JsonObject
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +31,7 @@ def _parse(sse: str) -> dict:
     return json.loads(sse[len("data: ") :].strip())
 
 
-async def _collect(gen):
+async def _collect(gen) -> list[JsonObject]:
     return [_parse(s) async for s in gen]
 
 
