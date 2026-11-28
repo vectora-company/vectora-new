@@ -8,6 +8,8 @@ Cobre:
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -16,7 +18,7 @@ import pytest
 
 
 class TestGetClientIp:
-    def _make_request(self, headers=None, client_host="127.0.0.1"):
+    def _make_request(self, headers=None, client_host="127.0.0.1") -> MagicMock:
         from unittest.mock import MagicMock
 
         from fastapi import Request

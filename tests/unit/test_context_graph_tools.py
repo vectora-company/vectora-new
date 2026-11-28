@@ -630,7 +630,7 @@ async def test_graph_cancel_build_cancela_task_ativa(tmp_path: Path) -> None:
 async def test_graph_cancel_build_task_ja_concluida_nao_conta_como_ativa() -> None:
     from backend.tools.context_graph import graph_cancel_build
 
-    async def _noop():
+    async def _noop() -> None:
         return None
 
     task = None

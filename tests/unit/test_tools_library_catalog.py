@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import NoReturn
 
 import pytest
 
@@ -46,7 +47,7 @@ async def test_list_mcp_catalog_filtra_e_degrada_sem_lancar(
 
     # Erro/borda: registry fora do ar degrada com lista vazia + erro descrito,
     # nunca propaga.
-    async def _explode():
+    async def _explode() -> NoReturn:
         raise OSError("registry inacessível")
 
     monkeypatch.setattr("backend.api.handlers.mcp_marketplace.list_registry", _explode)
@@ -84,7 +85,7 @@ async def test_list_memory_bucket_catalog_happy_e_falha(
     out = json.loads(await library.list_memory_bucket_catalog())
     assert [i["id"] for i in out["items"]] == ["leis-br"]
 
-    async def _explode():
+    async def _explode() -> NoReturn:
         raise RuntimeError("library fora do ar")
 
     monkeypatch.setattr("backend.services.memory_buckets.list_catalog", _explode)

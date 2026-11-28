@@ -15,7 +15,7 @@ import pytest
 from backend.tools.github import github_fetch_pr_diff, github_post_pr_comment
 
 
-def _mock_httpx(response: MagicMock):
+def _mock_httpx(response: MagicMock) -> AsyncMock:
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
     mock_ctx.__aexit__ = AsyncMock(return_value=False)

@@ -46,7 +46,7 @@ class TestUserProfileAdapter:
         import backend.rbac.auth as auth_svc
         from backend.config.adapters import UserProfileAdapter
 
-        async def fake_get(user_id: str):
+        async def fake_get(user_id: str) -> None:
             return None
 
         monkeypatch.setattr(auth_svc, "get_user_by_id", fake_get)

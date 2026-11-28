@@ -6,6 +6,7 @@ configurado, garantindo que CI verde sem infra externa.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,7 @@ def storage_mode(request: pytest.FixtureRequest) -> str:
 
 
 @pytest.fixture(autouse=True)
-def reset_storage_singletons():
+def reset_storage_singletons() -> Iterator[None]:
     """Garante isolamento entre testes resetando singletons de factory."""
     import backend.storage.factory as _fac
 

@@ -10,7 +10,7 @@ import pytest
 from backend.sandbox import rlimits
 
 
-def _fake_resource_module():
+def _fake_resource_module() -> MagicMock:
     fake = MagicMock()
     fake.RLIMIT_NPROC = 1
     fake.RLIMIT_NOFILE = 2

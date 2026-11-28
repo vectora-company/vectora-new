@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 import backend.embedding.queue as _queue_mod
@@ -11,7 +13,7 @@ _DSN = "sqlite+aiosqlite:///:memory:"
 
 
 @pytest.fixture(autouse=True)
-def reset_singleton():
+def reset_singleton() -> Iterator[None]:
     """Reset the global queue singleton between tests."""
     original = _queue_mod._queue
     _queue_mod._queue = None

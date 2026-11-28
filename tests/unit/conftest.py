@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from unittest.mock import AsyncMock
 
 import pytest
@@ -60,7 +61,7 @@ def sem_bwrap_automatico(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _limpa_cache_de_leituras_do_gh():
+def _limpa_cache_de_leituras_do_gh() -> Iterator[None]:
     """O handler do GitHub guarda leituras por alguns segundos; sem limpar, um
     teste veria a resposta simulada do anterior."""
     from backend.api.handlers import github
@@ -77,7 +78,7 @@ def _limpa_cache_de_leituras_do_gh():
 
 
 @pytest.fixture(autouse=True)
-def _encerra_workers_do_jail():
+def _encerra_workers_do_jail() -> Iterator[None]:
     """Nenhum worker jailado sobrevive ao teste que o criou: o `jail_manager` é
     um singleton do processo, e um worker esquecido seguiria apontando para a
     pasta temporária de um teste anterior."""

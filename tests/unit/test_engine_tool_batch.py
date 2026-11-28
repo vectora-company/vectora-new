@@ -13,7 +13,7 @@ import asyncio
 import socket
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import NoReturn, cast
 from unittest.mock import AsyncMock
 
 import git
@@ -984,7 +984,7 @@ class TestDespachoParaleloSequencial:
         registry = ToolRegistry()
         _register(registry, "tool_resiliente")
 
-        async def falhar_ao_notificar(_call: ToolCall) -> None:
+        async def falhar_ao_notificar(_call: ToolCall) -> NoReturn:
             """Executa a operação falhar ao notificar."""
             raise RuntimeError("sink indisponível")
 

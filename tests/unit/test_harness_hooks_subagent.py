@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -41,7 +42,7 @@ def _resposta_final() -> list[VMessageChunk]:
 
 
 @pytest.fixture
-async def session_store(tmp_path: Path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "sub.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)

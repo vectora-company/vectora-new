@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,8 +15,8 @@ from backend.persistence.native.session_store import SessionStore
 from backend.services.verification.engine import VerificationResult
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
-from backend.tools.registry import ToolRegistry
-from backend.vtypes.message import MessageRole, VMessageChunk, text_message
+from backend.tools.registry import ToolRegistry, ToolSpec
+from backend.vtypes.message import MessageRole, VMessage, VMessageChunk, text_message
 
 
 def test_verification_event_becomes_sse_event() -> None:
@@ -33,17 +34,29 @@ def test_verification_event_becomes_sse_event() -> None:
 
 
 class _AnsweringClient:
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         yield VMessageChunk(delta_text="feito")
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         raise NotImplementedError
 
 
 @pytest.fixture
-async def session_store(tmp_path: Path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "verify.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -85,7 +98,7 @@ async def _run_with_verification(
 
 
 async def test_loop_emits_verification_when_a_gate_ran(
-    session_store, monkeypatch: pytest.MonkeyPatch
+    session_store: SessionStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     result = VerificationResult(
         passed=True, status="passed", snapshot_sha256="abc", outcome="passed"
@@ -97,7 +110,7 @@ async def test_loop_emits_verification_when_a_gate_ran(
 
 
 async def test_loop_stays_quiet_for_a_plain_chat_turn(
-    session_store, monkeypatch: pytest.MonkeyPatch
+    session_store: SessionStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     result = VerificationResult(
         passed=False, status="degraded", snapshot_sha256="abc", outcome="not_run"

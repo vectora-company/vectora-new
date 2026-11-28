@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable, Callable
-from typing import Any, Literal, cast
+from typing import Any, Literal, NoReturn, cast
 
 import pytest
 
@@ -902,7 +902,7 @@ async def test_disabled_hitl_surface_does_not_call_decision_provider() -> None:
     """A disabled surface is authoritative even when the model is enabled."""
 
     class MustNotRunHarness:
-        async def assess_tool_risk(self, **_kwargs):
+        async def assess_tool_risk(self, **_kwargs) -> NoReturn:
             raise AssertionError("disabled HITL surface called the provider")
 
     ctx = ToolContext(
@@ -1320,7 +1320,7 @@ async def test_kanban_decision_tool_respects_surface_preference(
     )
     unused = False
 
-    def fail_if_built(provider_override=None):
+    def fail_if_built(provider_override=None) -> NoReturn:
         nonlocal unused
         unused = True
         raise AssertionError("disabled Kanban surface must not construct a provider")

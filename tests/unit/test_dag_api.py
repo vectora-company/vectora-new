@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
 
 import aiosqlite
 import pytest
@@ -99,10 +100,10 @@ async def test_plan_from_another_thread_is_not_visible(
 async def test_dag_operations_reject_a_thread_the_user_cannot_access(
     operation: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def denied(*_args, **_kwargs) -> None:
+    async def denied(*_args, **_kwargs) -> NoReturn:
         raise HTTPException(status_code=404, detail="Thread not found")
 
-    async def unexpected(*_args, **_kwargs):
+    async def unexpected(*_args, **_kwargs) -> NoReturn:
         raise AssertionError("a operação não deve consultar nem alterar a DAG")
 
     monkeypatch.setattr(dag, "_assert_owns_thread", denied)

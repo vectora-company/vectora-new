@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from pathlib import Path
+from typing import NoReturn
 
 import git
 import pytest
@@ -162,7 +163,7 @@ async def test_history_limit_is_bounded_and_failure_is_retained(tmp_path: Path) 
     service = GitService()
     repo = make_repo(tmp_path / "repo")
 
-    def fail() -> None:
+    def fail() -> NoReturn:
         raise ValueError("https://TOKEN@host/repo")
 
     with pytest.raises(ValueError):

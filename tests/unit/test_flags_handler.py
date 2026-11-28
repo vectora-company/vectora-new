@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 from fastapi.testclient import TestClient
@@ -49,7 +50,7 @@ class TestGetFlags:
         monkeypatch: pytest.MonkeyPatch,
         operation: str,
     ) -> None:
-        def unavailable(*_args, **_kwargs):
+        def unavailable(*_args, **_kwargs) -> NoReturn:
             raise sqlite3.OperationalError("private database path")
 
         method = "get_frontend_prefs" if operation == "read" else "set_frontend_prefs"

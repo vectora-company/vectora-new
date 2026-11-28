@@ -46,7 +46,7 @@ _GRAPH_DATA = {
 _VEC3 = [[0.1] * 10, [0.2] * 10, [0.3] * 10]
 
 
-def _mock_lancedb():
+def _mock_lancedb() -> AsyncMock:
     """Mock do LanceDB para testes sem conexão real."""
     db = AsyncMock()
     table = AsyncMock()
@@ -65,7 +65,7 @@ def _df(rows: list[tuple[int, dict]]) -> MagicMock:
     return df
 
 
-def _search_table(db, df: MagicMock):
+def _search_table(db, df: MagicMock) -> MagicMock:
     # vector_search().limit().to_pandas() é encadeamento SÍNCRONO terminando num
     # await — table precisa ser MagicMock (não AsyncMock) com to_pandas async.
     table = MagicMock()

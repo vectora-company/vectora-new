@@ -14,6 +14,7 @@ import asyncio
 import logging
 import os
 import sys
+from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,7 +24,7 @@ from backend.services.subprocess_sidecar_utils import LazyLock
 
 
 @pytest.fixture(autouse=True)
-def _reset_sidecar_state(monkeypatch: pytest.MonkeyPatch):
+def _reset_sidecar_state(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # Job Object real (Windows) não deve rodar nos testes que não a testam
     # de verdade — `TestJobObjectIntegration` sobrescreve este patch
     # localmente pra testar o caminho de verdade.

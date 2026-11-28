@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from typing import cast
 
 import pytest
@@ -15,7 +16,7 @@ from backend.workspace import plugins
 
 
 @pytest.fixture(autouse=True)
-def _isolado(monkeypatch: pytest.MonkeyPatch, _no_nats_sidecar: None):
+def _isolado(monkeypatch: pytest.MonkeyPatch, _no_nats_sidecar: None) -> Iterator[None]:
     from backend.settings import settings
 
     monkeypatch.setattr(settings, "redis_url", None)

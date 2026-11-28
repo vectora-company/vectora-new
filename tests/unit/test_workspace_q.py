@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
+from unittest.mock import MagicMock
 
 import git
 import pytest
 
 from backend.workspace.workspace import WorkspaceRegistry
+from tests.fake_requests import fake_request
 from tests.json_values import as_list, as_object
 
 # ---------------------------------------------------------------------------
@@ -21,7 +24,7 @@ from tests.json_values import as_list, as_object
 
 
 @pytest.fixture
-def reg(monkeypatch: pytest.MonkeyPatch):
+def reg(monkeypatch: pytest.MonkeyPatch) -> WorkspaceRegistry:
     """Registry isolado: não toca ~/.vectora/workspaces.json."""
     r = WorkspaceRegistry()
     r._loaded = True
@@ -30,9 +33,9 @@ def reg(monkeypatch: pytest.MonkeyPatch):
     return r
 
 
-def _req(user=None):
+def _req(user=None) -> MagicMock:
     """Request fake com .state.user, suficiente para os handlers."""
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    return fake_request(state=SimpleNamespace(user=user))
 
 
 # ---------------------------------------------------------------------------
@@ -41,30 +44,33 @@ def _req(user=None):
 
 
 class TestTrust:
-    def test_added_folder_starts_untrusted(self, reg, tmp_path: Path) -> None:
+    def test_added_folder_starts_untrusted(
+        self, reg: WorkspaceRegistry, tmp_path: Path
+    ) -> None:
         # Pasta diferente do cwd do processo → não confiada por padrão
         sub = tmp_path / "sub"
         sub.mkdir()
         ws = reg.get_or_create(str(sub))
         assert ws.trusted is False
 
-    def test_trust_marks_trusted(self, reg, tmp_path: Path) -> None:
+    def test_trust_marks_trusted(self, reg: WorkspaceRegistry, tmp_path: Path) -> None:
         ws = reg.get_or_create(str(tmp_path))
         assert reg.trust(ws.id, "user1") is True
-        assert reg.get(ws.id).trusted is True
-        assert reg.get(ws.id).trusted_by == "user1"
-        assert reg.get(ws.id).trusted_at is not None
+        saved = reg.get(ws.id)
+        assert saved is not None and saved.trusted is True
+        assert saved.trusted_by == "user1"
+        assert saved.trusted_at is not None
 
-    def test_trust_unknown_returns_false(self, reg) -> None:
+    def test_trust_unknown_returns_false(self, reg: WorkspaceRegistry) -> None:
         assert reg.trust("naoexiste", "user1") is False
 
-    def test_is_trusted(self, reg, tmp_path: Path) -> None:
+    def test_is_trusted(self, reg: WorkspaceRegistry, tmp_path: Path) -> None:
         ws = reg.get_or_create(str(tmp_path))
         assert reg.is_trusted(ws.id) is False
         reg.trust(ws.id)
         assert reg.is_trusted(ws.id) is True
 
-    def test_create_with_trust(self, reg, tmp_path: Path) -> None:
+    def test_create_with_trust(self, reg: WorkspaceRegistry, tmp_path: Path) -> None:
         ws = reg.create(str(tmp_path), trust=True, user_id="u")
         assert ws.trusted is True
 
@@ -80,7 +86,7 @@ class TestSessionWorkspace:
         assert _session_workspaces_root() == configured.resolve()
 
     def test_registers_workspace_without_creating_folder(
-        self, reg, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, reg: WorkspaceRegistry, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Pasta não é criada no registro; apenas na primeira operação real."""
         monkeypatch.setattr(
@@ -94,7 +100,7 @@ class TestSessionWorkspace:
         assert not (tmp_path / "docs" / "thread123").exists()
 
     def test_session_workspace_is_trusted(
-        self, reg, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, reg: WorkspaceRegistry, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
             "backend.workspace.workspace._session_workspaces_root",
@@ -104,7 +110,7 @@ class TestSessionWorkspace:
         assert ws.trusted is True
 
     def test_session_workspace_is_idempotent(
-        self, reg, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, reg: WorkspaceRegistry, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
             "backend.workspace.workspace._session_workspaces_root",
@@ -210,7 +216,9 @@ class TestWorktree:
 
 class TestWorkspaceHandlers:
     @pytest.mark.asyncio
-    async def test_create_then_list(self, reg, tmp_path: Path) -> None:
+    async def test_create_then_list(
+        self, reg: WorkspaceRegistry, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.workspaces import (
             CreateWorkspaceRequest,
             create_workspace,
@@ -229,7 +237,9 @@ class TestWorkspaceHandlers:
         assert listing.active_id == created.workspace.id
 
     @pytest.mark.asyncio
-    async def test_create_nonexistent_path(self, reg, tmp_path: Path) -> None:
+    async def test_create_nonexistent_path(
+        self, reg: WorkspaceRegistry, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.workspaces import (
             CreateWorkspaceRequest,
             create_workspace,
@@ -240,7 +250,7 @@ class TestWorkspaceHandlers:
         assert result.status == "error"
 
     @pytest.mark.asyncio
-    async def test_trust_handler(self, reg, tmp_path: Path) -> None:
+    async def test_trust_handler(self, reg: WorkspaceRegistry, tmp_path: Path) -> None:
         from backend.api.handlers.workspaces import (
             TrustRequest,
             trust_workspace,
@@ -253,7 +263,7 @@ class TestWorkspaceHandlers:
         assert result.workspace.trusted is True
 
     @pytest.mark.asyncio
-    async def test_set_active_unknown(self, reg) -> None:
+    async def test_set_active_unknown(self, reg: WorkspaceRegistry) -> None:
         from backend.api.handlers.workspaces import (
             SetActiveRequest,
             set_active_workspace,
@@ -358,7 +368,7 @@ class TestWorkspaceHandlers:
         selected.write_text("private", encoding="utf-8")
 
         class Registry:
-            def is_under_safe_root(self, _path):
+            def is_under_safe_root(self, _path) -> None:
                 return None
 
         monkeypatch.setattr("backend.rbac.safe_roots.get_safe_root_registry", Registry)
@@ -381,12 +391,12 @@ class TestWorkspaceHandlers:
         from backend.rbac.safe_roots import SafeRootRegistry
 
         class Registry:
-            def is_under_safe_root(self, _path):
+            def is_under_safe_root(self, _path) -> None:
                 return None
 
         filesystem_probes = []
 
-        def unexpected_isdir(path):
+        def unexpected_isdir(path) -> NoReturn:
             filesystem_probes.append(path)
             raise AssertionError("caminho não autorizado não deve ser consultado")
 
@@ -414,7 +424,7 @@ class TestWorkspaceHandlers:
         from backend.rbac.safe_roots import SafeRootRegistry
 
         class Registry:
-            def is_under_safe_root(self, _path):
+            def is_under_safe_root(self, _path) -> SimpleNamespace:
                 return SimpleNamespace(id="safe-root", path=str(tmp_path))
 
         result, root_id = await _resolve_and_authorize_dir(
@@ -569,31 +579,39 @@ class TestWorkspaceHandlers:
 
 
 class TestWorkspaceOwnership:
-    def test_create_claims_ownership_for_first_user(self, reg, tmp_path: Path) -> None:
+    def test_create_claims_ownership_for_first_user(
+        self, reg: WorkspaceRegistry, tmp_path: Path
+    ) -> None:
         ws = reg.create(str(tmp_path), user_id="alice")
         assert ws.owner_id == "alice"
 
-    def test_create_does_not_reassign_existing_owner(self, reg, tmp_path: Path) -> None:
+    def test_create_does_not_reassign_existing_owner(
+        self, reg: WorkspaceRegistry, tmp_path: Path
+    ) -> None:
         reg.create(str(tmp_path), user_id="alice")
         ws = reg.create(str(tmp_path), user_id="bob")
         assert ws.owner_id == "alice"
 
     def test_legacy_workspace_without_owner_stays_open(
-        self, reg, tmp_path: Path
+        self, reg: WorkspaceRegistry, tmp_path: Path
     ) -> None:
         # get_or_create() puro (sem create()) nunca seta owner_id — simula
         # um workspace legado sem dono.
         ws = reg.get_or_create(str(tmp_path))
         assert ws.owner_id is None
 
-    def test_can_access_workspace_owner_allowed(self, reg, tmp_path: Path) -> None:
+    def test_can_access_workspace_owner_allowed(
+        self, reg: WorkspaceRegistry, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.workspaces import can_access_workspace
 
         ws = reg.create(str(tmp_path), user_id="alice")
         req = _req(SimpleNamespace(id="alice", role="member"))
         assert can_access_workspace(ws, req) is True
 
-    def test_can_access_workspace_other_user_denied(self, reg, tmp_path: Path) -> None:
+    def test_can_access_workspace_other_user_denied(
+        self, reg: WorkspaceRegistry, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.workspaces import can_access_workspace
 
         ws = reg.create(str(tmp_path), user_id="alice")
@@ -601,7 +619,7 @@ class TestWorkspaceOwnership:
         assert can_access_workspace(ws, req) is False
 
     def test_can_access_workspace_root_bypasses_ownership(
-        self, reg, tmp_path: Path
+        self, reg: WorkspaceRegistry, tmp_path: Path
     ) -> None:
         from backend.api.handlers.workspaces import can_access_workspace
 
@@ -610,7 +628,7 @@ class TestWorkspaceOwnership:
         assert can_access_workspace(ws, req) is True
 
     def test_can_access_workspace_no_owner_open_to_anyone(
-        self, reg, tmp_path: Path
+        self, reg: WorkspaceRegistry, tmp_path: Path
     ) -> None:
         from backend.api.handlers.workspaces import can_access_workspace
 
@@ -619,7 +637,7 @@ class TestWorkspaceOwnership:
         assert can_access_workspace(ws, req) is True
 
     def test_can_access_workspace_no_authenticated_user_treated_as_local_root(
-        self, reg, tmp_path: Path
+        self, reg: WorkspaceRegistry, tmp_path: Path
     ) -> None:
         from backend.api.handlers.workspaces import can_access_workspace
 
@@ -628,7 +646,7 @@ class TestWorkspaceOwnership:
         assert can_access_workspace(ws, _req(None)) is True
 
     def test_require_workspace_access_raises_403_for_other_user(
-        self, reg, tmp_path: Path
+        self, reg: WorkspaceRegistry, tmp_path: Path
     ) -> None:
         from fastapi import HTTPException
 
@@ -641,13 +659,15 @@ class TestWorkspaceOwnership:
         assert exc.value.status_code == 403
 
     def test_require_workspace_access_returns_none_for_unknown_workspace(
-        self, reg
+        self, reg: WorkspaceRegistry
     ) -> None:
         from backend.api.handlers.workspaces import require_workspace_access
 
         assert require_workspace_access("naoexiste", _req(None)) is None
 
-    def test_require_workspace_access_allows_owner(self, reg, tmp_path: Path) -> None:
+    def test_require_workspace_access_allows_owner(
+        self, reg: WorkspaceRegistry, tmp_path: Path
+    ) -> None:
         from backend.api.handlers.workspaces import require_workspace_access
 
         ws = reg.create(str(tmp_path), user_id="alice")
@@ -658,7 +678,7 @@ class TestWorkspaceOwnership:
 
     @pytest.mark.asyncio
     async def test_list_workspaces_filters_out_other_users_workspaces(
-        self, reg, tmp_path: Path
+        self, reg: WorkspaceRegistry, tmp_path: Path
     ) -> None:
         from backend.api.handlers.workspaces import list_workspaces
 
@@ -678,7 +698,7 @@ class TestWorkspaceOwnership:
 
     @pytest.mark.asyncio
     async def test_set_active_workspace_forbidden_for_other_user(
-        self, reg, tmp_path: Path
+        self, reg: WorkspaceRegistry, tmp_path: Path
     ) -> None:
         from backend.api.handlers.workspaces import (
             SetActiveRequest,

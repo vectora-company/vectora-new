@@ -9,6 +9,7 @@ thread.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -65,7 +66,7 @@ def _req(uid: str | None = _UUID) -> MagicMock:
 
 
 @pytest.fixture
-async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     db_path = str(tmp_path / "bg.db")
     up_sql = _SCHEMA.read_text(encoding="utf-8")
 
@@ -116,7 +117,7 @@ def _pro_tier_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-async def native_session_store(tmp_path: Path):
+async def native_session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     """``SessionStore`` real (sqlite à parte do banco de tasks/runs) — a
     mesma infraestrutura que ``agent_factory.get_session_store()`` devolve
     em produção, isolada por teste."""
@@ -132,7 +133,7 @@ async def native_session_store(tmp_path: Path):
         await pool.close()
 
 
-async def test_post_task_with_uuid_user_does_not_crash(db) -> None:
+async def test_post_task_with_uuid_user_does_not_crash(db: str) -> None:
     out = await post_task(
         _req(),
         "thread-1",
@@ -170,7 +171,9 @@ async def test_post_task_with_uuid_user_does_not_crash(db) -> None:
     assert bad_cron.value.status_code == 400
 
 
-async def test_post_task_aceita_agent_profile_id_do_formulario_de_criacao(db) -> None:
+async def test_post_task_aceita_agent_profile_id_do_formulario_de_criacao(
+    db: str,
+) -> None:
     """``create_task`` (backend/scheduling/background_tasks.py) já suporta
     ``agent_profile_id`` — só o schema HTTP não expõe o campo, então o
     formulário de nova tarefa (campo "assignee") não tinha
@@ -203,7 +206,7 @@ async def test_post_task_aceita_agent_profile_id_do_formulario_de_criacao(db) ->
     assert sem_assignee.agent_profile_id is None
 
 
-async def test_patch_and_delete_enforce_session_scope(db) -> None:
+async def test_patch_and_delete_enforce_session_scope(db: str) -> None:
     out = await post_task(
         _req(),
         "thread-A",
@@ -535,7 +538,9 @@ async def test_post_task_cannot_recreate_tombstoned_session(
     assert await native_session_store.get_session(thread_id) is None
 
 
-async def test_patch_task_agent_profile_id_atribui_e_desatribui_via_http(db) -> None:
+async def test_patch_task_agent_profile_id_atribui_e_desatribui_via_http(
+    db: str,
+) -> None:
     """O drawer edita assignee depois da criação, campo
     novo em UpdateTaskRequest. Omitir o campo no PATCH não pode apagar um
     assignee já setado — só um PATCH que INCLUI o campo (mesmo como null)
@@ -567,7 +572,7 @@ async def test_patch_task_agent_profile_id_atribui_e_desatribui_via_http(db) -> 
     assert desatribuida.agent_profile_id is None
 
 
-async def test_approve_review_endpoint_move_para_done(db) -> None:
+async def test_approve_review_endpoint_move_para_done(db: str) -> None:
     """Endpoint dedicado de aprovação, não a transição
     genérica de status (que recusa `review→done` de propósito)."""
     from backend.scheduling.kanban import set_status
@@ -598,7 +603,7 @@ async def test_approve_review_endpoint_move_para_done(db) -> None:
     assert wrong_session.value.status_code == 404
 
 
-async def test_links_endpoint_adiciona_e_remove_dependencia(db) -> None:
+async def test_links_endpoint_adiciona_e_remove_dependencia(db: str) -> None:
     """`add_dependency` só era chamada internamente
     pela tool `kanban_decompose` do agente, sem rota HTTP nenhuma."""
     pai = await post_task(
@@ -625,7 +630,7 @@ async def test_links_endpoint_adiciona_e_remove_dependencia(db) -> None:
     assert updated.dependencies == []
 
 
-async def test_links_endpoint_recusa_ciclo_com_409(db) -> None:
+async def test_links_endpoint_recusa_ciclo_com_409(db: str) -> None:
     """Erro/borda: fechar um ciclo pelo HTTP devolve 409 (conflito com o
     estado do grafo de dependências), não 500 nem um vínculo criado."""
     a = await post_task(
@@ -651,7 +656,7 @@ async def test_links_endpoint_recusa_ciclo_com_409(db) -> None:
     assert ciclo.value.status_code == 409
 
 
-async def test_links_endpoint_recusa_task_de_outra_session(db) -> None:
+async def test_links_endpoint_recusa_task_de_outra_session(db: str) -> None:
     """Erro/borda: linkar contra uma task de outra thread vazaria dado
     entre sessions — os dois lados do vínculo precisam pertencer à mesma."""
     out = await post_task(
@@ -676,7 +681,7 @@ async def test_links_endpoint_recusa_task_de_outra_session(db) -> None:
     assert wrong_session.value.status_code == 404
 
 
-async def test_task_out_expoe_progress_de_subtasks(db) -> None:
+async def test_task_out_expoe_progress_de_subtasks(db: str) -> None:
     """`TaskOut.progress` é `None` pra task folha e
     `{done, total}` real assim que ela ganha subtasks via links."""
     from backend.scheduling.kanban import set_status
@@ -710,7 +715,7 @@ async def test_task_out_expoe_progress_de_subtasks(db) -> None:
     assert tasks[sub.id].progress is None
 
 
-async def test_get_board_agrupa_por_coluna_na_ordem_canonica(db) -> None:
+async def test_get_board_agrupa_por_coluna_na_ordem_canonica(db: str) -> None:
     """Só existia `GET /tasks` (lista plana); agrupar
     por coluna e contar comentários/progress exigia N chamadas
     client-side. `GET /board` devolve tudo numa passada."""
@@ -743,7 +748,7 @@ async def test_get_board_agrupa_por_coluna_na_ordem_canonica(db) -> None:
     assert by_status["done"] == []
 
 
-async def test_get_board_expoe_tenants_e_assignees_distintos(db) -> None:
+async def test_get_board_expoe_tenants_e_assignees_distintos(db: str) -> None:
     """Erro/borda: tenants/assignees precisam ser distintos, não uma
     entrada por task — senão os dropdowns de filtro repetiriam o mesmo
     workspace/perfil uma vez por card."""
@@ -778,7 +783,9 @@ async def test_get_board_expoe_tenants_e_assignees_distintos(db) -> None:
     assert board.assignees == ["ap1", "ap2"]
 
 
-async def test_get_board_comment_count_e_progress_batelados_nao_por_card(db) -> None:
+async def test_get_board_comment_count_e_progress_batelados_nao_por_card(
+    db: str,
+) -> None:
     """Prova que os agregados vêm em lote — não é só sobre corretude do
     valor (já coberto em test_kanban_model.py), é sobre o board devolver
     o mesmo dado que `GET /tasks` devolveria um por um, só que agrupado."""
@@ -815,7 +822,7 @@ async def test_get_board_comment_count_e_progress_batelados_nao_por_card(db) -> 
 
 
 async def test_manual_run_creates_run_and_registers_thread(
-    db, monkeypatch: pytest.MonkeyPatch, native_session_store
+    db: str, monkeypatch: pytest.MonkeyPatch, native_session_store: SessionStore
 ) -> None:
     patch_native_engine(
         monkeypatch,
@@ -864,7 +871,7 @@ async def test_manual_run_creates_run_and_registers_thread(
 
 
 async def test_manual_run_com_subagent_type_roda_a_soul_ate_o_fim(
-    db, monkeypatch: pytest.MonkeyPatch, native_session_store
+    db: str, monkeypatch: pytest.MonkeyPatch, native_session_store: SessionStore
 ) -> None:
     """Gap real (revisão de 2026-08-30): nenhum teste de integração criava
     uma task com `trigger_config={"subagent_type": ...}` pelo endpoint REST
@@ -905,7 +912,7 @@ async def test_manual_run_com_subagent_type_roda_a_soul_ate_o_fim(
 
 
 async def test_resume_run_endpoint_cancel_and_approve(
-    db, monkeypatch: pytest.MonkeyPatch, native_session_store
+    db: str, monkeypatch: pytest.MonkeyPatch, native_session_store: SessionStore
 ) -> None:
     """POST /runs/{id}/resume: cancela sincronamente (decision='cancel') ou
     enfileira o resume (approve/reject) via BackgroundTasks — mesmo padrão do

@@ -9,7 +9,7 @@ Contrato:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NoReturn
 from unittest.mock import patch
 
 import pytest
@@ -299,7 +299,7 @@ class TestTryWithFallback:
         pf.drain_switches()
         calls = []
 
-        async def fn(mid):
+        async def fn(mid) -> NoReturn:
             calls.append(mid)
             raise Exception("429 RESOURCE_EXHAUSTED")
 
@@ -313,7 +313,7 @@ class TestTryWithFallback:
         assert pf.drain_switches() == []
 
     async def test_quota_error_preserves_selected_model(self) -> None:
-        async def fn(mid):
+        async def fn(mid) -> NoReturn:
             raise Exception("quota exceeded")
 
         with patch.object(
@@ -326,14 +326,14 @@ class TestTryWithFallback:
         assert error.value.model_id == "openai:gpt-4o"
 
     async def test_exhausts_raises_quota(self) -> None:
-        async def fn(mid):
+        async def fn(mid) -> NoReturn:
             raise Exception("429 quota")
 
         with pytest.raises(pf.QuotaExhaustedError):
             await pf.try_with_fallback(fn, "openai:gpt-4o")
 
     async def test_empty_chain_raises_quota(self) -> None:
-        async def fn(mid):
+        async def fn(mid) -> NoReturn:
             raise Exception("rate limit")
 
         with patch.object(pf, "get_fallback_chain", return_value=[]):
@@ -343,7 +343,7 @@ class TestTryWithFallback:
     async def test_non_quota_propagates_immediately(self) -> None:
         calls = []
 
-        async def fn(mid):
+        async def fn(mid) -> NoReturn:
             calls.append(mid)
             raise ValueError("boom")
 

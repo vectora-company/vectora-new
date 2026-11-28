@@ -14,15 +14,17 @@ Usa FastAPI TestClient com um ``NativeInMemoryStore`` real (mesmo Protocol
 from __future__ import annotations
 
 import os
+from typing import NoReturn
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.testing.mocks import NativeInMemoryStore
+from tests.json_values import dig
 
 
 @pytest.fixture
-def store():
+def store() -> NativeInMemoryStore:
     """``StoreBackend`` real (``NativeInMemoryStore``) compartilhado entre o
     TestClient e as memory tools do agente — instância única por teste
     (mesmo fixture node)."""
@@ -30,7 +32,7 @@ def store():
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch, store):
+def client(monkeypatch: pytest.MonkeyPatch, store: NativeInMemoryStore):
     """TestClient com o `store` acima injetado no lugar do store real."""
     os.environ["VECTORA_AUTH_REQUIRED"] = "false"
 
@@ -70,7 +72,7 @@ class TestMemoryList:
         assert len(data["memories"]) >= 1
         assert any(m["key"] == "test1" for m in data["memories"])
 
-    def test_list_hides_expired_items(self, client, store) -> None:
+    def test_list_hides_expired_items(self, client, store: NativeInMemoryStore) -> None:
         """Verifica o comportamento de list hides expired items."""
         import asyncio
 
@@ -85,7 +87,9 @@ class TestMemoryList:
         assert resp.status_code == 200
         assert resp.json()["total"] == 0
 
-    def test_get_expired_item_returns_not_found(self, client, store) -> None:
+    def test_get_expired_item_returns_not_found(
+        self, client, store: NativeInMemoryStore
+    ) -> None:
         """Verifica o comportamento de get expired item returns not found."""
         import asyncio
 
@@ -98,7 +102,9 @@ class TestMemoryList:
         )
         assert client.get("/memory/old").status_code == 404
 
-    def test_journey_hides_expired_fact(self, client, store) -> None:
+    def test_journey_hides_expired_fact(
+        self, client, store: NativeInMemoryStore
+    ) -> None:
         """Verifica o comportamento de journey hides expired fact."""
         import asyncio
 
@@ -208,7 +214,7 @@ class TestMemorySharedStoreWithAgent:
 
     @pytest.mark.asyncio
     async def test_memory_saved_via_agent_tool_appears_in_api(
-        self, client, store, monkeypatch: pytest.MonkeyPatch
+        self, client, store: NativeInMemoryStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de memory saved via agent tool appears in api."""
         from backend.tools.context import ToolContext
@@ -228,7 +234,7 @@ class TestMemorySharedStoreWithAgent:
 
     @pytest.mark.asyncio
     async def test_memory_saved_in_workspace_appears_in_panel_list(
-        self, client, store, monkeypatch: pytest.MonkeyPatch
+        self, client, store: NativeInMemoryStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Sem usuário autenticado, a tool grava sob ``workspace_<id>``; o
         painel, ao informar o workspace ativo, precisa listar essa memória
@@ -258,7 +264,7 @@ class TestMemorySharedStoreWithAgent:
 
     @pytest.mark.asyncio
     async def test_memory_created_via_api_is_visible_to_agent_tool(
-        self, client, store, monkeypatch: pytest.MonkeyPatch
+        self, client, store: NativeInMemoryStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verifica o comportamento de memory created via api is visible to agent tool."""
         from backend.tools.context import ToolContext
@@ -274,7 +280,7 @@ class TestMemorySharedStoreWithAgent:
 
     @pytest.mark.asyncio
     async def test_save_memory_untrusted_content_cannot_promote_trust(
-        self, store, monkeypatch: pytest.MonkeyPatch
+        self, store: NativeInMemoryStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Conteúdo marcado como não confiável permanece não confiável."""
         from backend.tools.context import ToolContext
@@ -291,7 +297,7 @@ class TestMemorySharedStoreWithAgent:
         assert '"status": "saved"' in result
         saved = await store.aget(("user", "local", "memories"), "untrusted")
         assert saved is not None
-        assert saved.value["metadata"]["trust_level"] == "untrusted"
+        assert dig(saved.value["metadata"], "trust_level") == "untrusted"
 
 
 class TestJourney:
@@ -367,7 +373,7 @@ class TestJourney:
     ) -> None:
         """Verifica o comportamento de falha ao listar skills nao derruba o painel."""
 
-        def _explode(_u):
+        def _explode(_u) -> NoReturn:
             """Executa a operação  explode."""
             raise OSError("índice de skills corrompido")
 
@@ -406,7 +412,7 @@ class TestJourney:
 @pytest.mark.parametrize("clear_all", [False, True])
 async def test_scoped_dashboard_reads_and_deletes_legacy_memories(
     monkeypatch: pytest.MonkeyPatch,
-    store,
+    store: NativeInMemoryStore,
     org_id: str | None,
     workspace_id: str | None,
     clear_all: bool,
@@ -502,7 +508,7 @@ async def test_scoped_dashboard_reads_and_deletes_legacy_memories(
 
 async def test_scoped_dashboard_can_edit_legacy_memory_without_changing_other_scopes(
     monkeypatch: pytest.MonkeyPatch,
-    store,
+    store: NativeInMemoryStore,
 ) -> None:
     """Editing a visible legacy fallback promotes it without mutating global data."""
     from types import SimpleNamespace
@@ -557,7 +563,7 @@ async def test_scoped_dashboard_can_edit_legacy_memory_without_changing_other_sc
 
 async def test_scoped_dashboard_update_keeps_scoped_copy_ahead_of_legacy(
     monkeypatch: pytest.MonkeyPatch,
-    store,
+    store: NativeInMemoryStore,
 ) -> None:
     """An existing scoped value wins over its legacy duplicate during updates."""
     from types import SimpleNamespace
@@ -588,5 +594,7 @@ async def test_scoped_dashboard_update_keeps_scoped_copy_ahead_of_legacy(
         response = client.put("/memory/duplicate", json={"content": "updated"})
 
     assert response.status_code == 200
-    assert (await store.aget(scoped, "duplicate")).value["content"] == "updated"
-    assert (await store.aget(legacy, "duplicate")).value["content"] == "global"
+    scoped_item = await store.aget(scoped, "duplicate")
+    assert scoped_item is not None and scoped_item.value["content"] == "updated"
+    legacy_item = await store.aget(legacy, "duplicate")
+    assert legacy_item is not None and legacy_item.value["content"] == "global"

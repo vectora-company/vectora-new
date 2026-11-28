@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import json
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -335,7 +336,7 @@ async def test_survives_false_positive_disconnect_reading() -> None:
 async def test_provider_error_midstream_becomes_clean_rate_limit() -> None:
     """429 no meio do stream vira ErrorEvent limpo (RATE_LIMIT), não JSON cru."""
 
-    async def run(on_event):
+    async def run(on_event) -> NoReturn:
         await on_event(MessageChunk(content="parcial", node="model"))
         raise RuntimeError(
             "Error calling model 'gemini-2.5-flash' (Too Many Requests): 429 "

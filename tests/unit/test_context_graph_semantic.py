@@ -435,7 +435,7 @@ class TestCallLlmAsyncQuota:
         from backend.context_graph import semantic
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        def loader(mid):
+        def loader(mid) -> MagicMock:
             assert mid == "google-genai:gemini-2.5-flash"
             llm = MagicMock()
             llm.agenerate = AsyncMock(side_effect=Exception("quota exceeded"))

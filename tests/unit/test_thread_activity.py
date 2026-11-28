@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import NoReturn, cast
 
 import aiosqlite
 import pytest
@@ -76,7 +76,7 @@ async def test_revoke_propagates_falha_de_persistencia(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FailingConnection:
-        async def execute[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> None:
+        async def execute[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
             raise RuntimeError("falha no banco")
 
         async def close(self) -> None:

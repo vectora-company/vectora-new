@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -74,7 +75,7 @@ async def test_reuses_same_worker_for_same_workspace(
 async def test_missing_bwrap_raises_clear_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _raise_not_found(*_args, **_kwargs):
+    async def _raise_not_found(*_args, **_kwargs) -> NoReturn:
         raise FileNotFoundError("bwrap")
 
     monkeypatch.setattr(wj.asyncio, "create_subprocess_exec", _raise_not_found)

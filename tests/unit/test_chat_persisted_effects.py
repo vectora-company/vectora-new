@@ -8,6 +8,7 @@ recebe, confere o que fica persistido depois do stream e que o retry do mesmo
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
@@ -17,14 +18,14 @@ from backend.engine.conversation_loop import LoopConfig, run_conversation
 from backend.persistence.native.session_store import SessionStore
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
-from backend.tools.registry import ToolRegistry
-from backend.vtypes.message import MessageRole, VMessageChunk, text_message
+from backend.tools.registry import ToolRegistry, ToolSpec
+from backend.vtypes.message import MessageRole, VMessage, VMessageChunk, text_message
 
 THREAD = "thread-efeitos"
 
 
 @pytest.fixture
-async def store(tmp_path: Path):
+async def store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "efeitos.db"), min_size=1, max_size=2)
     await pool.open()
     session_store = SessionStore(pool)
@@ -40,13 +41,25 @@ class _Client:
     def __init__(self, tokens: list[str]) -> None:
         self._tokens = tokens
 
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         for token in self._tokens:
             yield VMessageChunk(delta_text=token)
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         msg = "não usado (astream-only)"
         raise NotImplementedError(msg)
 

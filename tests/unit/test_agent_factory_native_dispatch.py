@@ -6,6 +6,7 @@ consome no dispatch de produção (StreamChat/ResumeChat).
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -24,14 +25,14 @@ from backend.vtypes.message import (
 
 
 @pytest.fixture(autouse=True)
-def _limpa_cache_native_agent():
+def _limpa_cache_native_agent() -> Iterator[None]:
     af._native_agents.clear()
     yield
     af._native_agents.clear()
 
 
 @pytest.fixture
-async def session_store(tmp_path: Path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "native.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)

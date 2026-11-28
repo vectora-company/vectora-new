@@ -8,6 +8,7 @@ Verifica:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -693,7 +694,9 @@ class TestServiceTokenEndpoints:
     """POST/GET/DELETE /admin/service-tokens — apenas root."""
 
     @pytest.fixture(autouse=True)
-    async def _isolate_db(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    async def _isolate_db(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> AsyncIterator[None]:
         import aiosqlite
 
         import backend.rbac.auth as auth_mod

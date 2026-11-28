@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, NoReturn
 from unittest.mock import AsyncMock, MagicMock
 
 import aiosqlite
@@ -95,10 +95,10 @@ class TestShareCreate:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         class FakeDb:
-            async def execute(self, *_args):
+            async def execute(self, *_args) -> None:
                 return None
 
-            async def commit(self):
+            async def commit(self) -> None:
                 return None
 
         class FakeStore:
@@ -140,10 +140,10 @@ class TestShareCreate:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         class FakeDb:
-            async def execute(self, *_args):
+            async def execute(self, *_args) -> None:
                 return None
 
-            async def commit(self):
+            async def commit(self) -> None:
                 return None
 
         class FakeStore:
@@ -312,11 +312,11 @@ async def _resolved(value):
     return value
 
 
-async def _noop(*_args, **_kwargs):
+async def _noop(*_args, **_kwargs) -> None:
     return None
 
 
-async def _audit_failure(*_args, **_kwargs):
+async def _audit_failure(*_args, **_kwargs) -> NoReturn:
     raise RuntimeError("audit indisponível")
 
 

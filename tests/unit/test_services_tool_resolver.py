@@ -6,6 +6,8 @@ Mocka tool_policy e plugins.get_user_mcp_tools para isolar a lógica.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 
 from backend.services import tool_resolver
@@ -83,7 +85,7 @@ async def test_mcp_failure_degrades_to_builtins(
 ) -> None:
     monkeypatch.setattr("backend.rbac.tool_policy.is_allowed", lambda uid, name: True)
 
-    async def _boom(_uid):
+    async def _boom(_uid) -> NoReturn:
         raise RuntimeError("mcp down")
 
     monkeypatch.setattr(tool_resolver, "get_user_mcp_tools", _boom)

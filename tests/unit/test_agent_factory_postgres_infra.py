@@ -10,6 +10,7 @@ de iniciar).
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,7 +20,7 @@ from backend.services import agent_factory
 
 
 @pytest.fixture(autouse=True)
-async def _reset_infra_singletons():
+async def _reset_infra_singletons() -> AsyncIterator[None]:
     agent_factory._store = None
     agent_factory._store_ctx = None
     agent_factory._session_store_pool = None

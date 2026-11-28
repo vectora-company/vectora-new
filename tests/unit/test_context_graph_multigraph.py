@@ -6,6 +6,8 @@ CapabilityCheck, MultigraphCapabilityResult.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 
 class TestCapabilityCheck:
     def test_ok_check(self) -> None:
@@ -96,7 +98,7 @@ class TestCheckHelper:
     def test_returns_fail_on_exception(self) -> None:
         from backend.context_graph.multigraph_compat import _check
 
-        def boom():
+        def boom() -> NoReturn:
             raise ValueError("oops")
 
         result = _check("name", boom)

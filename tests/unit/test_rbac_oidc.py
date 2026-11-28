@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -31,7 +32,7 @@ _DISCOVERY = oidc.OIDCDiscovery(
 
 
 @pytest.fixture(autouse=True)
-def _clean_pending_logins():
+def _clean_pending_logins() -> Iterator[None]:
     oidc._pending_logins.clear()
     yield
     oidc._pending_logins.clear()

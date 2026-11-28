@@ -598,7 +598,7 @@ class TestGatewayClientConnectOnce:
 
         created: list[MagicMock] = []
 
-        def session_factory(*_args, **_kwargs):
+        def session_factory(*_args, **_kwargs) -> _AsyncCtx:
             value = ws_owner_session if len(created) == 0 else local_session_marker
             created.append(value)
             return _AsyncCtx(value)

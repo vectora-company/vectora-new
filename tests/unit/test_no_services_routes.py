@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import socket
 from pathlib import Path
+from typing import NoReturn
 
 import aiohttp
 import httpx
@@ -25,7 +26,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("VECTORA_HOME", str(tmp_path))
     monkeypatch.delenv("VECTORA_OAUTH_BROKER_URL", raising=False)
 
-    def _proibido(*_args, **_kwargs):
+    def _proibido(*_args, **_kwargs) -> NoReturn:
         raise _NetworkTouchedError("acesso à rede com --no-services")
 
     monkeypatch.setattr(httpx.AsyncClient, "send", _proibido)

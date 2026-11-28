@@ -15,6 +15,7 @@ from __future__ import annotations
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -219,7 +220,7 @@ class TestEvaluateCommand:
         `evaluate_command` nunca lança, e o padrão seguro é `False`
         (continua pedindo aprovação sem o atalho visual)."""
 
-        async def _explode(_tool_name, _args):
+        async def _explode(_tool_name, _args) -> NoReturn:
             raise RuntimeError("provider fora do ar")
 
         resultado = await sa.evaluate_command(

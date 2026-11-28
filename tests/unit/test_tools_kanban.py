@@ -36,7 +36,7 @@ _SCHEMA = (
 
 
 @pytest.fixture
-async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Banco SQLite temporário com o schema real aplicado.
 
     `_get_db` abre uma conexão nova por chamada; todas apontam pro mesmo
@@ -69,7 +69,7 @@ def _ctx(session_id: str = "s1", user_id: str = "u1") -> ToolContext:
 
 class TestKanbanCreate:
     @pytest.mark.asyncio
-    async def test_cria_card_e_aparece_no_board(self, db) -> None:
+    async def test_cria_card_e_aparece_no_board(self, db: str) -> None:
         """Verifica o comportamento de cria card e aparece no board."""
         from backend.tools.kanban import kanban_create
 
@@ -90,7 +90,7 @@ class TestKanbanCreate:
 
     @pytest.mark.asyncio
     async def test_nome_ou_instrucao_vazios_retornam_erro_tipado_sem_lancar(
-        self, db
+        self, db: str
     ) -> None:
         """Erro/borda: parâmetro inválido não lança — vira erro tipado, e
         nenhuma linha é gravada no board."""
@@ -111,7 +111,7 @@ class TestKanbanCreate:
 
 class TestKanbanUpdateStatus:
     @pytest.mark.asyncio
-    async def test_move_card_para_status_valido(self, db) -> None:
+    async def test_move_card_para_status_valido(self, db: str) -> None:
         """Verifica o comportamento de move card para status valido."""
         from backend.tools.kanban import kanban_create, kanban_update_status
 
@@ -129,7 +129,7 @@ class TestKanbanUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_status_fora_da_taxonomia_retorna_erro_tipado_sem_lancar(
-        self, db
+        self, db: str
     ) -> None:
         """Erro/borda: `set_status` de baixo nível recusa a transição — o
         teste confirma que o erro chega tratado até o topo (a tool nunca
@@ -153,7 +153,7 @@ class TestKanbanUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_status_blocked_passa_por_block_task_com_kind_tipado(
-        self, db
+        self, db: str
     ) -> None:
         """Verifica o comportamento de status blocked passa por block task com kind tipado."""
         from backend.tools.kanban import kanban_create, kanban_update_status
@@ -181,7 +181,7 @@ class TestKanbanUpdateStatus:
 
 class TestKanbanList:
     @pytest.mark.asyncio
-    async def test_lista_cards_reais_da_sessao(self, db) -> None:
+    async def test_lista_cards_reais_da_sessao(self, db: str) -> None:
         """Verifica o comportamento de lista cards reais da sessao."""
         from backend.tools.kanban import kanban_create, kanban_list
 
@@ -193,7 +193,7 @@ class TestKanbanList:
         assert {c["name"] for c in out["cards"]} == {"card 1", "card 2"}
 
     @pytest.mark.asyncio
-    async def test_board_vazio_retorna_lista_vazia_sem_erro(self, db) -> None:
+    async def test_board_vazio_retorna_lista_vazia_sem_erro(self, db: str) -> None:
         """Erro/borda: sessão sem nenhum card não é uma falha — a coluna
         simplesmente vem vazia."""
         from backend.tools.kanban import kanban_list
@@ -203,7 +203,7 @@ class TestKanbanList:
         assert out["cards"] == []
 
     @pytest.mark.asyncio
-    async def test_filtra_por_status(self, db) -> None:
+    async def test_filtra_por_status(self, db: str) -> None:
         """Verifica o comportamento de filtra por status."""
         from backend.tools.kanban import (
             kanban_create,
@@ -223,7 +223,7 @@ class TestKanbanList:
         assert [c["name"] for c in out["cards"]] == ["card review"]
 
     @pytest.mark.asyncio
-    async def test_recusa_task_de_outra_sessao(self, db) -> None:
+    async def test_recusa_task_de_outra_sessao(self, db: str) -> None:
         """Verifica o comportamento de recusa task de outra sessao."""
         from backend.tools.kanban import kanban_create, kanban_update_status
 
@@ -246,7 +246,7 @@ class TestKanbanList:
         assert (await kanban.get_task_status(created["task_id"]))["status"] == "ready"
 
     @pytest.mark.asyncio
-    async def test_nao_permite_agente_forcar_running_ou_done(self, db) -> None:
+    async def test_nao_permite_agente_forcar_running_ou_done(self, db: str) -> None:
         """Verifica o comportamento de nao permite agente forcar running ou done."""
         from backend.tools.kanban import kanban_create, kanban_update_status
 
@@ -510,7 +510,7 @@ class TestKanbanList:
 
 class TestKanbanDecompose:
     @pytest.mark.asyncio
-    async def test_decompoe_triage_em_children_com_dependencia(self, db) -> None:
+    async def test_decompoe_triage_em_children_com_dependencia(self, db: str) -> None:
         """Verifica o comportamento de decompoe triage em children com dependencia."""
         from backend.tools.kanban import kanban_create, kanban_decompose
 
@@ -563,7 +563,7 @@ class TestKanbanDecompose:
 
     @pytest.mark.asyncio
     async def test_resposta_malformada_do_modelo_nao_quebra_e_mantem_triage(
-        self, db
+        self, db: str
     ) -> None:
         """Erro/borda: JSON inválido, `parents` apontando pra índice
         inexistente ou grafo vazio nunca derrubam a tool — o card original
@@ -592,7 +592,7 @@ class TestKanbanDecompose:
 
     @pytest.mark.asyncio
     async def test_ciclo_proposto_pelo_modelo_e_ignorado_sem_quebrar_os_demais(
-        self, db
+        self, db: str
     ) -> None:
         """Erro/borda: um nó que se autorreferencia como pai (`parents: [1]`
         no próprio índice 1) é descartado nó a nó — o resto do grafo continua
@@ -626,7 +626,7 @@ class TestKanbanDecompose:
 
     @pytest.mark.asyncio
     async def test_task_fora_de_triage_retorna_erro_tipado_sem_chamar_llm(
-        self, db
+        self, db: str
     ) -> None:
         """Verifica o comportamento de task fora de triage retorna erro tipado sem chamar llm."""
         from backend.tools.kanban import kanban_create, kanban_decompose

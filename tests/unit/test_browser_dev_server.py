@@ -132,7 +132,7 @@ async def test_snapshot_sem_dev_server_nao_libera_porta_local(
     assert allowed is False
 
 
-def _ctx_com_workspace(workspace_id: str):
+def _ctx_com_workspace(workspace_id: str) -> MagicMock:
     from unittest.mock import MagicMock
 
     ctx = MagicMock()

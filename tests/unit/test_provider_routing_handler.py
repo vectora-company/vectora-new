@@ -19,11 +19,11 @@ import json
 import os
 import tarfile
 import zipfile
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import AsyncIterator, Callable, Generator, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, NoReturn, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -346,7 +346,7 @@ def test_ollama_test_endpoint_reports_model_catalog(
 
 
 @pytest.fixture
-def clean_openrouter_key():
+def clean_openrouter_key() -> Iterator[None]:
     """Isola OPENROUTER_API_KEY nos dois sentidos — os testes de
     /provider-routing/openrouter/key escrevem em os.environ de verdade.
 
@@ -372,7 +372,7 @@ def clean_openrouter_key():
 
 
 @pytest.fixture
-def clean_nine_router_config():
+def clean_nine_router_config() -> Iterator[None]:
     """Idem (ver `clean_openrouter_key`), para NINE_ROUTER_BASE_URL/
     NINE_ROUTER_API_KEY — reset ANTES e DEPOIS do teste, não só depois."""
     from backend.settings import settings
@@ -397,7 +397,7 @@ def clean_nine_router_config():
 
 
 @pytest.fixture
-def clean_llamacpp_config():
+def clean_llamacpp_config() -> Iterator[None]:
     """Isola as configurações e variáveis de ambiente do llama.cpp."""
     from backend.settings import settings
 
@@ -659,7 +659,7 @@ class TestOllamaDiscovery:
         """Verifica o comportamento de ollama install cancelled phase is observable."""
         from backend.api.handlers import provider_routing
 
-        async def cancelled(_):
+        async def cancelled(_) -> NoReturn:
             """Executa a operação cancelled."""
             raise asyncio.CancelledError
 
@@ -675,7 +675,7 @@ class TestOllamaDiscovery:
         """Verifica o comportamento de ollama unexpected failure leaves failed phase."""
         from backend.api.handlers import provider_routing
 
-        async def broken(_):
+        async def broken(_) -> NoReturn:
             """Executa a operação broken."""
             raise RuntimeError("falha inesperada")
 
@@ -759,7 +759,7 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def aiter_bytes(self, _chunk_size):
+            async def aiter_bytes(self, _chunk_size) -> AsyncIterator[bytes]:
                 """Executa a operação aiter bytes."""
                 yield b"d"
 
@@ -906,7 +906,7 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def aiter_bytes(self, _chunk_size):
+            async def aiter_bytes(self, _chunk_size) -> AsyncIterator[bytes]:
                 """Executa a operação aiter bytes."""
                 yield b"partial"
                 raise httpx.ReadError("connection dropped")
@@ -994,7 +994,7 @@ class TestOllamaDiscovery:
                 """Implementa a operação especial __aexit__."""
                 return False
 
-            async def aiter_bytes(self, _chunk_size):
+            async def aiter_bytes(self, _chunk_size) -> AsyncIterator[bytes]:
                 """Executa a operação aiter bytes."""
                 yield b"full-response"
 
@@ -1902,10 +1902,10 @@ class TestLlamaCppAndHuggingFace:
         monkeypatch.setenv("LLAMACPP_BASE_URL", "http://old.local/v1")
         monkeypatch.setenv("LLAMACPP_MODE", "external")
 
-        async def fake_start(*args, **kwargs):
+        async def fake_start(*args, **kwargs) -> None:
             return None
 
-        async def fail_confirmation(*args, **kwargs):
+        async def fail_confirmation(*args, **kwargs) -> NoReturn:
             raise RuntimeError("probe failed")
 
         stop = AsyncMock()
@@ -1962,10 +1962,10 @@ class TestLlamaCppAndHuggingFace:
             encoding="utf-8",
         )
 
-        async def fake_start(*args, **kwargs):
+        async def fake_start(*args, **kwargs) -> None:
             return None
 
-        async def fail_confirmation(*args, **kwargs):
+        async def fail_confirmation(*args, **kwargs) -> NoReturn:
             raise RuntimeError("probe failed")
 
         stop = AsyncMock()
@@ -2129,7 +2129,7 @@ class TestLlamaCppAndHuggingFace:
 
 class TestOpenRouterKey:
     def test_status_not_configured_by_default(
-        self, client, clean_openrouter_key
+        self, client, clean_openrouter_key: None
     ) -> None:
         """Verifica o comportamento de status not configured by default."""
         os.environ.pop("OPENROUTER_API_KEY", None)
@@ -2138,7 +2138,7 @@ class TestOpenRouterKey:
         assert resp.json() == {"configured": False, "masked": ""}
 
     def test_set_key_valid_persists_and_masks(
-        self, client, clean_openrouter_key, tmp_path: Path
+        self, client, clean_openrouter_key: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set key valid persists and masks."""
         mock_response = MagicMock()
@@ -2170,7 +2170,7 @@ class TestOpenRouterKey:
         assert os.environ["OPENROUTER_API_KEY"] == "sk-or-v1-abcdef123456"
 
     def test_set_key_rejected_by_openrouter_returns_400(
-        self, client, clean_openrouter_key, tmp_path: Path
+        self, client, clean_openrouter_key: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set key rejected by openrouter returns 400."""
         mock_response = MagicMock()
@@ -2197,7 +2197,7 @@ class TestOpenRouterKey:
         assert "OPENROUTER_API_KEY" not in os.environ
 
     def test_set_key_empty_returns_400_without_network_call(
-        self, client, clean_openrouter_key
+        self, client, clean_openrouter_key: None
     ) -> None:
         """Verifica o comportamento de set key empty returns 400 without network call."""
         with patch("httpx.AsyncClient") as mock_httpx:
@@ -2208,7 +2208,7 @@ class TestOpenRouterKey:
         mock_httpx.assert_not_called()
 
     def test_clear_key_removes_env(
-        self, client, clean_openrouter_key, tmp_path: Path
+        self, client, clean_openrouter_key: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de clear key removes env."""
         os.environ["OPENROUTER_API_KEY"] = "sk-or-v1-should-be-removed"
@@ -2232,7 +2232,7 @@ class TestOpenRouterCatalog:
         _catalog_cache["models"] = []
 
     @pytest.fixture(autouse=True)
-    def _isolated_cache(self):
+    def _isolated_cache(self) -> Iterator[None]:
         # Reseta antes E depois — o fixture `client` deste arquivo é
         # module-scoped (mesmo TestClient/app pra todos os testes), então
         # qualquer estado deixado em `_catalog_cache` por este teste não
@@ -2680,7 +2680,7 @@ class TestOpenRouterModelSupportsImage:
 
 class TestNineRouterConfig:
     def test_status_not_configured_by_default(
-        self, client, clean_nine_router_config
+        self, client, clean_nine_router_config: None
     ) -> None:
         """Verifica o comportamento de status not configured by default."""
         resp = client.get("/provider-routing/nine-router/status")
@@ -2690,7 +2690,7 @@ class TestNineRouterConfig:
         assert body["masked"] == ""
 
     def test_set_config_persists_both_fields(
-        self, client, clean_nine_router_config, tmp_path: Path
+        self, client, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set config persists both fields."""
         with patch(
@@ -2714,7 +2714,7 @@ class TestNineRouterConfig:
         assert os.environ["NINE_ROUTER_API_KEY"] == "9r-abcdef123456"
 
     def test_set_config_empty_base_url_returns_400(
-        self, client, clean_nine_router_config, tmp_path: Path
+        self, client, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set config empty base url returns 400."""
         with patch(
@@ -2729,7 +2729,7 @@ class TestNineRouterConfig:
         assert "NINE_ROUTER_BASE_URL" not in os.environ
 
     def test_set_config_empty_api_key_returns_400(
-        self, client, clean_nine_router_config, tmp_path: Path
+        self, client, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de set config empty api key returns 400."""
         with patch(
@@ -2744,7 +2744,7 @@ class TestNineRouterConfig:
         assert "NINE_ROUTER_API_KEY" not in os.environ
 
     def test_clear_config_removes_both(
-        self, client, clean_nine_router_config, tmp_path: Path
+        self, client, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de clear config removes both."""
         with patch(
@@ -2764,7 +2764,7 @@ class TestNineRouterConfig:
 
 class TestNineRouterDiscovery:
     def test_not_configured_returns_reachable_false_not_500(
-        self, client, clean_nine_router_config
+        self, client, clean_nine_router_config: None
     ) -> None:
         """Verifica o comportamento de not configured returns reachable false not 500."""
         resp = client.get("/provider-routing/nine-router/models")
@@ -2774,7 +2774,7 @@ class TestNineRouterDiscovery:
         assert body["models"] == []
 
     def test_host_unreachable_returns_reachable_false_not_500(
-        self, client, clean_nine_router_config, tmp_path: Path
+        self, client, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de host unreachable returns reachable false not 500."""
         with patch(
@@ -2800,7 +2800,7 @@ class TestNineRouterDiscovery:
         assert body["models"] == []
 
     def test_host_reachable_returns_models(
-        self, client, clean_nine_router_config, tmp_path: Path
+        self, client, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """Verifica o comportamento de host reachable returns models."""
         with patch(
@@ -2837,7 +2837,7 @@ class TestNineRouterDiscovery:
         ]
 
     def test_only_chat_models_are_listed_with_their_provider(
-        self, client, clean_nine_router_config, tmp_path: Path
+        self, client, clean_nine_router_config: None, tmp_path: Path
     ) -> None:
         """O OmniRoute lista imagem, áudio e embedding junto: só chat sai, e o
         provider de origem acompanha cada modelo. Pede `kind=chat` ao roteador."""
@@ -2881,7 +2881,7 @@ class TestNineRouterDiscovery:
 
 @pytest.mark.asyncio
 async def test_nine_router_model_without_modalities_is_unknown(
-    clean_nine_router_config,
+    clean_nine_router_config: None,
 ) -> None:
     """Catálogo sem metadados não deve bloquear imagem como se fosse texto-only."""
     from backend.api.handlers import provider_routing as pr
@@ -2908,7 +2908,7 @@ async def test_nine_router_model_without_modalities_is_unknown(
 
 @pytest.mark.asyncio
 async def test_nine_router_explicit_text_modality_is_unsupported(
-    clean_nine_router_config,
+    clean_nine_router_config: None,
 ) -> None:
     """Uma declaração explícita de texto continua identificando modelo sem visão."""
     from backend.api.handlers import provider_routing as pr
@@ -2991,7 +2991,7 @@ class TestLlamaCppConfiguration:
     def test_external_mode_is_persisted_without_copying_credentials(
         self,
         client,
-        clean_llamacpp_config,
+        clean_llamacpp_config: None,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -3010,7 +3010,7 @@ class TestLlamaCppConfiguration:
     def test_config_syncs_model_environment(
         self,
         client,
-        clean_llamacpp_config,
+        clean_llamacpp_config: None,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:

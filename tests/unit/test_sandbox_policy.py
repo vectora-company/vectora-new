@@ -3,7 +3,9 @@ arquivo existe mas está malformado ou tem campo de tipo errado."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -395,7 +397,7 @@ def test_empty_rw_and_ro_paths_lists_are_valid(tmp_path: Path) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _reset_wsl2_cache():
+def _reset_wsl2_cache() -> Iterator[None]:
     policy_module._wsl2_distro_cache = policy_module._UNSET
     yield
     policy_module._wsl2_distro_cache = policy_module._UNSET
@@ -530,7 +532,7 @@ class TestAutoEnableNativoLinuxMacos:
         assert policy_module._native_sandbox_available_sync() is True
 
 
-def _fake_wsl_proc(stdout_bytes: bytes = b"", returncode: int = 0):
+def _fake_wsl_proc(stdout_bytes: bytes = b"", returncode: int = 0) -> MagicMock:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(stdout_bytes, b""))
     proc.wait = AsyncMock(return_value=returncode)
@@ -546,7 +548,7 @@ def _mock_wsl_exec(list_output: str, usable_distros: set[str] | None = None):
     stdout_bytes = list_output.encode("utf-16-le")
     usable = usable_distros if usable_distros is not None else None
 
-    async def _exec(*args, **_kwargs):
+    async def _exec(*args, **_kwargs) -> MagicMock:
         if args[:2] == ("wsl.exe", "-l"):
             return _fake_wsl_proc(stdout_bytes, returncode=0)
         if args[0] == "wsl.exe" and args[1] == "--status":
@@ -614,7 +616,7 @@ async def test_detect_wsl2_sem_wsl_exe_instalado_retorna_none_sem_lancar(
 ) -> None:
     # Erro/borda: wsl.exe ausente do sistema (não é Windows, ou WSL nunca
     # foi instalado) — FileNotFoundError nunca deve propagar.
-    async def _raise(*args, **kwargs):
+    async def _raise(*args, **kwargs) -> NoReturn:
         raise FileNotFoundError("wsl.exe not found")
 
     monkeypatch.setattr(policy_module.asyncio, "create_subprocess_exec", _raise)
@@ -628,7 +630,7 @@ async def test_detect_wsl2_sem_wsl_exe_instalado_retorna_none_sem_lancar(
 async def test_detect_wsl2_com_codigo_de_saida_diferente_de_zero_retorna_none(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _exec(*args, **_kwargs):
+    async def _exec(*args, **_kwargs) -> MagicMock:
         return _fake_wsl_proc(b"", returncode=1)
 
     monkeypatch.setattr(policy_module.asyncio, "create_subprocess_exec", _exec)
@@ -738,7 +740,7 @@ async def test_detect_wsl2_nenhuma_distro_com_shell_utilizavel_retorna_none(
 async def test_wsl2_diagnostic_sem_wsl_instalado(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _raise(*args, **kwargs):
+    async def _raise(*args, **kwargs) -> NoReturn:
         raise FileNotFoundError("wsl.exe not found")
 
     monkeypatch.setattr(policy_module.asyncio, "create_subprocess_exec", _raise)

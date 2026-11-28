@@ -46,7 +46,7 @@ def _req(uid: str | None = _UUID) -> MagicMock:
 
 
 @pytest.fixture
-async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     from backend.scheduling import background_tasks as bg
 
     db_path = str(tmp_path / "boards_api.db")
@@ -68,7 +68,7 @@ async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return db_path
 
 
-async def test_post_board_cria_com_slug_derivado(db) -> None:
+async def test_post_board_cria_com_slug_derivado(db: str) -> None:
     board = await post_board(_req(), CreateBoardRequest(name="Board Alfa"))
 
     assert board.name == "Board Alfa"
@@ -84,7 +84,7 @@ async def test_board_rejeita_chamada_sem_usuario(db: str) -> None:
     assert exc_info.value.status_code == 401
 
 
-async def test_get_boards_so_lista_do_proprio_usuario(db) -> None:
+async def test_get_boards_so_lista_do_proprio_usuario(db: str) -> None:
     await post_board(_req(), CreateBoardRequest(name="Meu board"))
     await post_board(_req(_OUTRO_UUID), CreateBoardRequest(name="De outro"))
 
@@ -93,7 +93,7 @@ async def test_get_boards_so_lista_do_proprio_usuario(db) -> None:
     assert [b.name for b in boards] == ["Meu board"]
 
 
-async def test_patch_board_atualiza_e_recusa_dono_errado(db) -> None:
+async def test_patch_board_atualiza_e_recusa_dono_errado(db: str) -> None:
     board = await post_board(_req(), CreateBoardRequest(name="Original"))
 
     updated = await patch_board(_req(), board.id, UpdateBoardRequest(name="Renomeado"))
@@ -108,7 +108,7 @@ async def test_patch_board_atualiza_e_recusa_dono_errado(db) -> None:
     assert wrong_owner.value.status_code == 404
 
 
-async def test_delete_board_vazio_e_recusa_board_com_tasks(db) -> None:
+async def test_delete_board_vazio_e_recusa_board_com_tasks(db: str) -> None:
     vazio = await post_board(_req(), CreateBoardRequest(name="Vazio"))
     await delete_board_endpoint(_req(), vazio.id)
     assert await get_boards(_req()) == []
@@ -134,7 +134,7 @@ async def test_delete_board_vazio_e_recusa_board_com_tasks(db) -> None:
     assert conflito.value.status_code == 409
 
 
-async def test_delete_board_dono_errado_e_404(db) -> None:
+async def test_delete_board_dono_errado_e_404(db: str) -> None:
     board = await post_board(_req(), CreateBoardRequest(name="x"))
 
     with pytest.raises(HTTPException) as wrong_owner:
@@ -142,7 +142,7 @@ async def test_delete_board_dono_errado_e_404(db) -> None:
     assert wrong_owner.value.status_code == 404
 
 
-async def test_post_task_com_board_id_associa_e_aparece_no_board_view(db) -> None:
+async def test_post_task_com_board_id_associa_e_aparece_no_board_view(db: str) -> None:
     board = await post_board(_req(), CreateBoardRequest(name="Sprint"))
 
     task = await post_task(
@@ -163,7 +163,7 @@ async def test_post_task_com_board_id_associa_e_aparece_no_board_view(db) -> Non
     assert task.id in cartoes
 
 
-async def test_post_task_com_board_id_de_outro_usuario_e_404(db) -> None:
+async def test_post_task_com_board_id_de_outro_usuario_e_404(db: str) -> None:
     """Erro/borda: sem essa checagem, um usuário conseguiria anexar uma
     task sua a um board que não é dele — vazamento de dado entre contas."""
     board_alheio = await post_board(_req(_OUTRO_UUID), CreateBoardRequest(name="x"))
@@ -183,7 +183,7 @@ async def test_post_task_com_board_id_de_outro_usuario_e_404(db) -> None:
     assert wrong_owner.value.status_code == 404
 
 
-async def test_get_board_view_agrupa_por_coluna_e_dono_errado_e_404(db) -> None:
+async def test_get_board_view_agrupa_por_coluna_e_dono_errado_e_404(db: str) -> None:
     from backend.scheduling.kanban import set_status
 
     board = await post_board(_req(), CreateBoardRequest(name="Sprint"))
@@ -214,7 +214,7 @@ async def test_get_board_view_agrupa_por_coluna_e_dono_errado_e_404(db) -> None:
 
 
 async def test_board_batch_queries_treatem_ids_como_dados(
-    db, monkeypatch: pytest.MonkeyPatch
+    db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """IDs com sintaxe SQL devem continuar sendo valores, nunca parte da query."""
     from backend.scheduling import background_tasks as bg

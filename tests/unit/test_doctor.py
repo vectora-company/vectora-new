@@ -4,6 +4,7 @@ de imagem (não só os PIDs conhecidos pelo pid file de nats_sidecar.py)."""
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -94,7 +95,7 @@ class TestFindNatsServerPidsPosix:
 
 class TestRunDoctor:
     @pytest.fixture(autouse=True)
-    def _no_sandbox_check(self):
+    def _no_sandbox_check(self) -> Iterator[None]:
         # run_doctor() também dispara _report_sandbox_status (checa WSL2 no
         # Windows) — testes desta classe cobrem só a lógica de nats-server,
         # então neutraliza pra não disparar `wsl.exe` de verdade (não-hermético).

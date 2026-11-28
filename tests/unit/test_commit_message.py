@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
 
 import pytest
 
 from backend.services import commit_message as cm
+from backend.vtypes.message import VMessage
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -226,7 +228,7 @@ class _FakeLLM:
         self.answer = answer
         self.messages: list = []
 
-    async def agenerate(self, messages):
+    async def agenerate(self, messages: list[VMessage]) -> SimpleNamespace:
         self.messages = messages
         if isinstance(self.answer, Exception):
             raise self.answer
@@ -270,7 +272,7 @@ class TestGenerate:
     async def test_unavailable_model_falls_back_to_the_diff_heuristic(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        def boom[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
+        def boom[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
             raise RuntimeError("sem provider")
 
         monkeypatch.setattr("backend.services.utils.load_native_llm", boom)

@@ -22,7 +22,7 @@ class _FakeSpawnedProc:
 
 
 @pytest.fixture(autouse=True)
-def _fake_backend(monkeypatch: pytest.MonkeyPatch):
+def _fake_backend(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """Substitui `_Backend.spawn` por um fake que captura o argv/cwd/env
     recebidos, sem depender de pywinpty/ptyprocess reais instalados."""
     spawn_mock = MagicMock(return_value=_FakeSpawnedProc())
@@ -34,7 +34,7 @@ def _fake_backend(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_sem_policy_spawna_shell_padrao_sem_bwrap(
-    _fake_backend, tmp_path: Path
+    _fake_backend: MagicMock, tmp_path: Path
 ) -> None:
     session = PtySession.create(
         terminal_id="t1", workspace_id="ws-1", thread_id="th-1", cwd=str(tmp_path)
@@ -61,7 +61,7 @@ def test_shell_configurado_inexistente_usa_shell_posix_disponivel(
 
 
 def test_policy_desabilitada_nao_envolve_com_bwrap(
-    _fake_backend, tmp_path: Path
+    _fake_backend: MagicMock, tmp_path: Path
 ) -> None:
     PtySession.create(
         terminal_id="t1",
@@ -76,7 +76,7 @@ def test_policy_desabilitada_nao_envolve_com_bwrap(
 
 
 def test_policy_habilitada_backend_local_com_bwrap_disponivel_envolve_argv(
-    _fake_backend, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    _fake_backend: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import shutil
 
@@ -100,7 +100,7 @@ def test_policy_habilitada_backend_local_com_bwrap_disponivel_envolve_argv(
 
 
 def test_policy_habilitada_sem_bwrap_no_sistema_falha_com_mensagem_clara(
-    _fake_backend, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    _fake_backend: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import shutil
 
@@ -119,7 +119,7 @@ def test_policy_habilitada_sem_bwrap_no_sistema_falha_com_mensagem_clara(
 
 
 def test_policy_habilitada_backend_nao_local_falha_com_mensagem_clara(
-    _fake_backend, tmp_path: Path
+    _fake_backend: MagicMock, tmp_path: Path
 ) -> None:
     with pytest.raises(RuntimeError, match="docker"):
         PtySession.create(

@@ -12,6 +12,7 @@ import hashlib
 import io
 import tarfile
 from pathlib import Path
+from typing import NoReturn
 
 import httpx
 import pytest
@@ -88,7 +89,7 @@ def _make_tar_gz(files: dict[str, bytes]) -> bytes:
 async def test_download_incompatible_embed_model_raises_before_touching_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> httpx.Response:
         assert "download" not in url  # nunca chega a baixar o arquivo
         return _catalog_response(
             [{"id": "b1", "embed_model": "voyage-3", "name": "Bucket 1"}]
@@ -109,7 +110,7 @@ async def test_download_incompatible_embed_model_raises_before_touching_files(
 async def test_download_bucket_not_found_raises_clear_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> httpx.Response:
         return _catalog_response([])
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -122,7 +123,7 @@ async def test_download_bucket_not_found_raises_clear_error(
 async def test_download_distingue_catalogo_indisponivel_de_catalogo_vazio(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -366,7 +367,7 @@ async def test_publish_network_failure_raises_memory_buckets_error(
     bucket_dir.mkdir()
     (bucket_dir / "table.lance").write_bytes(b"data")
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "post", _fake_post)
@@ -387,7 +388,7 @@ async def test_publish_network_failure_raises_memory_buckets_error(
 async def test_list_catalog_falha_de_rede_preserva_indisponibilidade(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -402,7 +403,7 @@ async def test_list_catalog_consulta_a_rota_memory_buckets(
 ) -> None:
     calls: list[str] = []
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> httpx.Response:
         calls.append(url)
         return _catalog_response([{"id": "legacy", "name": "Legado"}])
 
@@ -416,7 +417,7 @@ async def test_list_catalog_consulta_a_rota_memory_buckets(
 async def test_list_catalog_vazio_do_servidor_e_estado_valido(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> httpx.Response:
         return _catalog_response([])
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -434,7 +435,7 @@ async def test_list_catalog_repassa_q_como_query_param(
     parâmetro fica órfão e a busca sempre devolve o catálogo inteiro."""
     captured: dict = {}
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> httpx.Response:
         captured["params"] = kwargs.get("params")
         return _catalog_response([])
 
@@ -451,7 +452,7 @@ async def test_list_catalog_sem_q_nao_manda_param_vazio(
 ) -> None:
     captured: dict = {}
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> httpx.Response:
         captured["params"] = kwargs.get("params")
         return _catalog_response([])
 
@@ -495,7 +496,7 @@ async def test_download_catalogo_com_ids_duplicados_usa_a_primeira_ocorrencia(
     # catálogo remoto) — _fetch_bucket_metadata não deve travar, usa o
     # primeiro que encontrar (comportamento determinístico, documentado
     # pelo teste em vez de implícito).
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> httpx.Response:
         return _catalog_response(
             [
                 {"id": "dup", "embed_model": "modelo-a", "name": "primeiro"},
@@ -568,7 +569,7 @@ async def test_download_embed_model_case_sensitive_nao_normaliza(
     # Erro/borda: comparação de embed_model é exata (==) — variação de
     # caixa não é tolerada silenciosamente (evita falso-positivo de
     # compatibilidade entre modelos com nomes parecidos).
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> httpx.Response:
         return _catalog_response(
             [{"id": "b1", "embed_model": "Embed-Multilingual-V3.0"}]
         )
@@ -774,7 +775,7 @@ async def test_download_bucket_without_embed_model_skips_compatibility_check(
 async def test_download_network_error_during_fetch_raises_memory_buckets_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> httpx.Response:
         if url.rstrip("/").endswith("/memory-buckets"):
             return _catalog_response(
                 [{"id": "b1", "embed_model": "embed-multilingual-v3.0", "name": "b1"}]
@@ -795,7 +796,7 @@ async def test_download_network_error_during_fetch_raises_memory_buckets_error(
 async def test_list_catalog_network_error_returns_unavailable_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -1007,7 +1008,7 @@ async def test_publish_recusa_bucket_acima_do_limite_sem_chamar_o_servico(
     (bucket_dir / "table.lance").write_bytes(b"x")
     monkeypatch.setattr("backend.services.memory_buckets.MAX_PUBLISH_BYTES", 1)
 
-    async def _fake_post(self, url, **kwargs):
+    async def _fake_post(self, url, **kwargs) -> NoReturn:
         raise AssertionError("não deveria publicar")
 
     monkeypatch.setattr(httpx.AsyncClient, "post", _fake_post)

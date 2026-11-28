@@ -20,10 +20,12 @@ import json
 import re
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
 from backend.api.handlers import github
+from tests.fake_requests import fake_request
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "tests" / "fixtures" / "github"
@@ -50,8 +52,8 @@ def _api(name: str) -> dict:
     return json.loads((API / name).read_text(encoding="utf-8"))
 
 
-def _request():
-    return SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(id="alice")))
+def _request() -> MagicMock:
+    return fake_request(state=SimpleNamespace(user=SimpleNamespace(id="alice")))
 
 
 @pytest.fixture

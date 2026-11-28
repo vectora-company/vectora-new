@@ -10,6 +10,7 @@ faz broadcast pra todas.
 from __future__ import annotations
 
 import asyncio
+from typing import NoReturn
 
 import pytest
 
@@ -33,7 +34,7 @@ class _FakeProc:
     def isalive(self) -> bool:
         return bool(self._outputs)
 
-    def setwinsize(self, _rows: int, _cols: int) -> None:
+    def setwinsize(self, _rows: int, _cols: int) -> NoReturn:
         raise AssertionError("este fake não redimensiona")
 
     def terminate(self, force: bool = False) -> bool | None:

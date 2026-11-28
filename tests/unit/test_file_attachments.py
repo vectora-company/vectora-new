@@ -11,7 +11,7 @@ from __future__ import annotations
 import base64
 from contextlib import AbstractContextManager, ExitStack
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 from unittest.mock import AsyncMock, MagicMock, _patch, patch
 
 import pytest
@@ -319,7 +319,7 @@ class TestBuildUserVMessage:
 
         called = False
 
-        def fail_create[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
+        def fail_create[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
             nonlocal called
             called = True
             raise ValueError("asset inválido")
@@ -402,7 +402,7 @@ class TestBuildUserVMessage:
 
         from backend.api.handlers.chat import _persist_image_attachment
 
-        def _boom[**P](self, *_a: P.args, **_kw: P.kwargs) -> None:
+        def _boom[**P](self, *_a: P.args, **_kw: P.kwargs) -> NoReturn:
             raise OSError("disco cheio")
 
         monkeypatch.setattr(PathCls, "mkdir", _boom)

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from starlette.requests import Request
@@ -1132,7 +1133,7 @@ class TestSandboxInit:
         assert exc_info.value.status_code == 404
 
 
-def _fake_request(user_id: str = "u1"):
+def _fake_request(user_id: str = "u1") -> MagicMock:
     from unittest.mock import MagicMock
 
     req = MagicMock()

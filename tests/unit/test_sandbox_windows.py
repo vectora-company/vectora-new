@@ -10,6 +10,7 @@ Cobre:
 from __future__ import annotations
 
 import ctypes as _real_ctypes
+from typing import NoReturn
 
 import pytest
 
@@ -67,7 +68,7 @@ class TestAssignJobObject:
     ) -> None:
         class _FakeCtypes:
             @property
-            def windll(self):
+            def windll(self) -> NoReturn:
                 raise AttributeError("windll not available")
 
         monkeypatch.setattr(win, "ctypes", _FakeCtypes())

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -16,11 +17,12 @@ from backend.api.handlers.agent_profiles import (
     patch_agent_profile,
     post_agent_profile,
 )
+from tests.fake_requests import fake_request
 
 
-def _req(user_id: str | None = "user-1"):
+def _req(user_id: str | None = "user-1") -> MagicMock:
     user = SimpleNamespace(id=user_id) if user_id else None
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    return fake_request(state=SimpleNamespace(user=user))
 
 
 @pytest.fixture

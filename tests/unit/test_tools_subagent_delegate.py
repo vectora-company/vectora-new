@@ -7,6 +7,7 @@ que o loop nativo chama pra invocar uma SOUL, consumindo ``run_subagent``
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
@@ -15,26 +16,38 @@ from backend.engine.subagents import LivenessConfig, SubagentSpec
 from backend.persistence.native.session_store import SessionStore
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
-from backend.tools.registry import TOOL_REGISTRY
+from backend.tools.registry import TOOL_REGISTRY, ToolSpec
 from backend.tools.subagent_delegate import SubagentDeps
-from backend.vtypes.message import ToolCallChunk, VMessageChunk
+from backend.vtypes.message import ToolCallChunk, VMessage, VMessageChunk
 from tests.chat_fakes import ScriptedChatClient, texto_chunk
 
 
 class _HangingChatClient:
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         await asyncio.sleep(3600)
-        yield  # pragma: no cover - nunca alcançado
+        yield VMessageChunk()  # pragma: no cover - mantém a função geradora
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         msg = "não usado (astream-only)"
         raise NotImplementedError(msg)
 
 
 @pytest.fixture
-async def session_store(tmp_path: Path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(
         str(tmp_path / "subagent_delegate.db"), min_size=1, max_size=2
     )
@@ -97,7 +110,7 @@ class TestDelegateToSubagent:
         assert spec.needs_ctx is True
 
     async def test_delegacao_bem_sucedida_devolve_texto_do_subagente(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         client = ScriptedChatClient([[texto_chunk("respondido pela SOUL")]])
         deps = SubagentDeps(
@@ -117,7 +130,7 @@ class TestDelegateToSubagent:
         assert resultado == "respondido pela SOUL"
 
     async def test_soul_inexistente_e_timeout_devolvem_erro_tipado_sem_propagar(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         """Erro/borda (2 casos, mesmo teste): `subagent_type` fora do
         catálogo devolve erro tipado sem tocar no chat client; SOUL que
@@ -178,7 +191,7 @@ class TestShouldRequireApprovalObrigatorio:
     silencioso que injeta dependências sem política de aprovação."""
 
     def test_subagent_deps_sem_should_require_approval_estoura_typeerror(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         with pytest.raises(TypeError, match="should_require_approval"):
             SubagentDeps(  # type: ignore[call-arg]  # ty: ignore[missing-argument]

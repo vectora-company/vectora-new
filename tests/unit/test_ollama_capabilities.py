@@ -12,6 +12,9 @@ resultar em "tudo suportado", senão a UI oferece o que vai falhar depois.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import NoReturn
+
 import httpx
 import pytest
 
@@ -32,7 +35,7 @@ def _client(handler) -> OllamaClient:
 
 
 @pytest.fixture(autouse=True)
-def _limpa_cache():
+def _limpa_cache() -> Iterator[None]:
     clear_capabilities_cache()
     yield
     clear_capabilities_cache()
@@ -94,7 +97,7 @@ class TestApiShow:
         """Erro/borda crítico: sem resposta, **nenhuma** capacidade é
         assumida. Falhar aberto faria a UI oferecer o que vai quebrar."""
 
-        def handler(_req):
+        def handler(_req) -> NoReturn:
             raise httpx.ConnectError("connection refused")
 
         caps = await fetch_model_capabilities(_client(handler), "qualquer")

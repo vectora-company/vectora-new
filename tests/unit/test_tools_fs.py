@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import patch
 
 import pytest
@@ -571,7 +572,7 @@ class TestActiveWorkspaceFallback:
         monkeypatch.setattr(ws_mod.workspace_registry, "get", lambda _wid: None)
         monkeypatch.setattr(ws_mod.workspace_registry, "get_active", lambda _uid: ativo)
 
-        def _boom(*_a, **_kw):
+        def _boom(*_a, **_kw) -> NoReturn:
             """Executa a operação  boom."""
             raise AssertionError(
                 "não deveria cair no diretório de trabalho do processo "
@@ -935,7 +936,7 @@ class TestCreateArtifact:
 
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-        def _boom(*args, **kwargs):
+        def _boom(*args, **kwargs) -> NoReturn:
             """Executa a operação  boom."""
             raise AssertionError("não deveria resolver workspace sem workspace_id")
 

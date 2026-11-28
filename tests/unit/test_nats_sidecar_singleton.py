@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -55,7 +56,7 @@ async def test_sidecar_vivo_e_respondendo_e_reusado_nunca_morto(
     monkeypatch.setattr(ns, "_kill_pid", _registra_morte)
     chamou_spawn = {"sim": False}
 
-    async def _nunca_spawna(*_a, **_k):
+    async def _nunca_spawna(*_a, **_k) -> NoReturn:
         chamou_spawn["sim"] = True
         raise OSError("não deveria subir um segundo servidor no mesmo store")
 
@@ -91,7 +92,7 @@ async def test_pid_vivo_mas_mudo_e_descartado(
 
     monkeypatch.setattr(ns, "_kill_pid", _registra_morte)
 
-    async def _spawn_falha(*_a, **_k):
+    async def _spawn_falha(*_a, **_k) -> NoReturn:
         raise OSError("sem binário de verdade neste teste")
 
     monkeypatch.setattr(ns.asyncio, "create_subprocess_exec", _spawn_falha)
@@ -122,7 +123,7 @@ async def test_pid_file_legado_sem_url_nao_reusa_as_cegas(
 
     monkeypatch.setattr(ns, "_kill_pid", _registra_morte)
 
-    async def _spawn_falha(*_a, **_k):
+    async def _spawn_falha(*_a, **_k) -> NoReturn:
         raise OSError("sem binário de verdade neste teste")
 
     monkeypatch.setattr(ns.asyncio, "create_subprocess_exec", _spawn_falha)
@@ -164,12 +165,12 @@ async def test_consumo_para_quando_a_conexao_morre_de_vez() -> None:
     class _SubMorta:
         tentativas = 0
 
-        async def fetch(self, *_a, **_k):
+        async def fetch(self, *_a, **_k) -> NoReturn:
             type(self).tentativas += 1
             raise RuntimeError("nats: connection closed")
 
     class _JS:
-        async def add_stream(self, **_k):
+        async def add_stream(self, **_k) -> None:
             return None
 
         async def pull_subscribe(self, *_a, **_k):
@@ -181,7 +182,7 @@ async def test_consumo_para_quando_a_conexao_morre_de_vez() -> None:
     mq._connect = _connect
     mq._failed = True  # `_closed_cb` já rodou
 
-    async def _handler(_msg):
+    async def _handler(_msg) -> NoReturn:
         raise AssertionError("não deveria receber mensagem")
 
     # Sem o fix isto nunca retornaria; o timeout prova a saída do laço.

@@ -7,13 +7,14 @@ signin/refresh/get_user_by_id carregam o valor gravado.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Cada teste usa um SQLite temporário isolado (espelha test_services_auth)."""
     db_file = str(tmp_path / "test_auth.db")
     import backend.rbac.auth as auth_mod

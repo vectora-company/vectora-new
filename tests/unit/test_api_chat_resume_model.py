@@ -106,7 +106,7 @@ class TestResumeChatUsesSameNativeAgentAsStreamChat:
     ) -> None:
         get_native_agent_calls: list[JsonObject] = []
 
-        async def _fake_get_native_agent(user_id, **kwargs):
+        async def _fake_get_native_agent(user_id, **kwargs) -> NativeAgent:
             get_native_agent_calls.append({"user_id": user_id, **kwargs})
             return NativeAgent(
                 tool_registry=ToolRegistry(), subagent_catalog={}, system_prompt="p"
@@ -221,7 +221,7 @@ class TestResumeChatUsesSameNativeAgentAsStreamChat:
         resume."""
         get_native_agent_calls: list[JsonObject] = []
 
-        async def _fake_get_native_agent(user_id, **kwargs):
+        async def _fake_get_native_agent(user_id, **kwargs) -> NativeAgent:
             get_native_agent_calls.append({"user_id": user_id, **kwargs})
             return NativeAgent(
                 tool_registry=ToolRegistry(), subagent_catalog={}, system_prompt="p"

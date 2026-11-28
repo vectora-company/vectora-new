@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -11,6 +12,7 @@ from backend.services.media_hydration import (
     hydrate_media_blocks,
     max_recent_tool_images,
 )
+from backend.tools.registry import ToolSpec
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -135,12 +137,17 @@ async def test_provider_que_recusa_imagem_de_ferramenta_recebe_o_turno_sem_ela(
     class _Client:
         calls = 0
 
-        async def agenerate(self, messages, **_kwargs):
+        async def agenerate(self, messages: list[VMessage], **_kwargs) -> VMessage:
             raise NotImplementedError
 
         async def astream(
-            self, messages, *, tools=None, temperature=None, max_tokens=None
-        ):
+            self,
+            messages: list[VMessage],
+            *,
+            tools: list[ToolSpec] | None = None,
+            temperature: float | None = None,
+            max_tokens: int | None = None,
+        ) -> AsyncIterator[VMessageChunk]:
             received.append(list(messages))
             _Client.calls += 1
             if _Client.calls == 1:

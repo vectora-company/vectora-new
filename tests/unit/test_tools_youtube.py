@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -134,7 +135,7 @@ class TestGetTranscript:
         download de vídeo."""
         import backend.tools.youtube as mod
 
-        def _sem_captions(video_id, languages):
+        def _sem_captions(video_id, languages) -> NoReturn:
             raise RuntimeError("TranscriptsDisabled")
 
         monkeypatch.setattr(mod, "_fetch_captions_sync", _sem_captions)
@@ -307,7 +308,7 @@ class TestYoutubeFrameAt:
         traceback cru."""
         import backend.tools.youtube as mod
 
-        def _falha(*_a):
+        def _falha(*_a) -> NoReturn:
             raise RuntimeError("vídeo indisponível")
 
         monkeypatch.setattr(mod, "_download_clip_sync", _falha)

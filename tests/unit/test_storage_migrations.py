@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -399,7 +400,7 @@ class TestReadSchemaPermissionRetry:
         schema_file.write_text("CREATE TABLE x (id INTEGER);", encoding="utf-8")
         monkeypatch.setattr(runner_mod, "_READ_SCHEMA_RETRY_DELAY_S", 0.01)
 
-        def _sempre_nega(self, *args, **kwargs):
+        def _sempre_nega(self, *args, **kwargs) -> NoReturn:
             raise PermissionError("Permission denied (simulado)")
 
         monkeypatch.setattr(Path, "read_text", _sempre_nega)
@@ -515,7 +516,7 @@ class TestDataMigrationLanceDBSource:
     pytestmark = pytest.mark.real_lancedb
 
     @pytest.fixture
-    async def source_table(self, tmp_path: Path):
+    async def source_table(self, tmp_path: Path) -> str:
         import lancedb
 
         db = await lancedb.connect_async(str(tmp_path / "lancedb"))
@@ -553,7 +554,9 @@ class TestDataMigrationLanceDBSource:
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_to_qdrant_dry_run_conta_sem_conectar(self, source_table) -> None:
+    async def test_to_qdrant_dry_run_conta_sem_conectar(
+        self, source_table: str
+    ) -> None:
         from backend.storage.migrations.data_migration import migrate_to_qdrant
 
         result = await migrate_to_qdrant(
@@ -568,7 +571,7 @@ class TestDataMigrationLanceDBSource:
 
     @pytest.mark.asyncio
     async def test_to_qdrant_upsert_todos_os_vetores_em_batches(
-        self, source_table
+        self, source_table: str
     ) -> None:
         from unittest.mock import MagicMock, patch
 
@@ -652,7 +655,9 @@ class TestDataMigrationLanceDBSource:
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_to_pgvector_dry_run_conta_sem_conectar(self, source_table) -> None:
+    async def test_to_pgvector_dry_run_conta_sem_conectar(
+        self, source_table: str
+    ) -> None:
         from backend.storage.migrations.data_migration import migrate_to_pgvector
 
         result = await migrate_to_pgvector(
@@ -667,7 +672,7 @@ class TestDataMigrationLanceDBSource:
 
     @pytest.mark.asyncio
     async def test_to_pgvector_upsert_todos_os_vetores_em_batches(
-        self, source_table
+        self, source_table: str
     ) -> None:
         from unittest.mock import AsyncMock, patch
 
@@ -738,7 +743,7 @@ class TestDataMigrationLanceDBSource:
 
     @pytest.mark.asyncio
     async def test_to_pgvector_fecha_conexao_mesmo_com_falha_no_insert(
-        self, source_table
+        self, source_table: str
     ) -> None:
         """Erro/borda: se um INSERT falhar no meio da migração, `pg_conn`
         precisa ser fechado mesmo assim (bloco `finally`) — senão a conexão
@@ -749,7 +754,7 @@ class TestDataMigrationLanceDBSource:
 
         mock_conn = AsyncMock()
 
-        async def _execute(query: str, *_args):
+        async def _execute(query: str, *_args) -> None:
             if "INSERT INTO" in query:
                 raise RuntimeError("conexão perdida")
 

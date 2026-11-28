@@ -6,6 +6,8 @@ deve se traduzir corretamente para o dict ``configurable`` consumido pelo grafo.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 
 from backend.api.handlers.chat import (
@@ -167,7 +169,7 @@ def test_resolve_reuses_active_workspace(monkeypatch: pytest.MonkeyPatch) -> Non
             calls["get_active"] = user_id
             return _ActiveWs()
 
-        def get_or_create_session_workspace(self, *_args, **_kwargs):
+        def get_or_create_session_workspace(self, *_args, **_kwargs) -> NoReturn:
             calls["created"] = True  # não deve ser chamado
             raise AssertionError("não deveria criar workspace de sessão")
 
@@ -238,7 +240,7 @@ def test_resolve_creates_session_workspace_when_no_active(
         id = "sess-ws"
 
     class _FakeRegistry:
-        def get_active(self, *_args, **_kwargs):
+        def get_active(self, *_args, **_kwargs) -> None:
             return None
 
         def get_or_create_session_workspace(self, thread_id, user_id=None):

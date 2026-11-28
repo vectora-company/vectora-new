@@ -13,13 +13,15 @@ Invariante: provider que falha aparece **com o erro**, nunca zerado. Um
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import NoReturn
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def _sem_credenciais(monkeypatch: pytest.MonkeyPatch):
+def _sem_credenciais(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Sem credencial e sem cache.
 
     O cache é module-level: sem limpar, o resultado bom de um teste vaza pro
@@ -187,7 +189,7 @@ class TestCache:
 
         chamadas = 0
 
-        async def _usage(_self):
+        async def _usage(_self) -> NoReturn:
             nonlocal chamadas
             chamadas += 1
             raise RuntimeError("instável")

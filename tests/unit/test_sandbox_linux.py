@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,7 +19,7 @@ from backend.sandbox.policy import SandboxPolicy
 async def test_missing_bwrap_binary_returns_clear_error_not_exception(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _raise_not_found(*_args, **_kwargs):
+    async def _raise_not_found(*_args, **_kwargs) -> NoReturn:
         raise FileNotFoundError("bwrap")
 
     monkeypatch.setattr(
@@ -144,7 +145,7 @@ async def test_permission_denied_returns_clear_error_not_exception(
 ) -> None:
     # Erro/borda: bwrap presente mas sem permissão de execução —
     # PermissionError não é FileNotFoundError, precisa degradar igual.
-    async def _raise_permission_denied(*_args, **_kwargs):
+    async def _raise_permission_denied(*_args, **_kwargs) -> NoReturn:
         raise PermissionError("Permission denied: bwrap")
 
     monkeypatch.setattr(
@@ -375,7 +376,7 @@ class _FakeSeccompFilter:
         self.defaction = defaction
         self.rules: list[tuple[int | str, str]] = []
 
-    def add_rule(self, action, name):
+    def add_rule(self, action, name) -> None:
         if name == "syscall_inexistente":
             raise OSError(f"syscall {name!r} desconhecida nesta arch")
         self.rules.append((action, name))
@@ -392,7 +393,7 @@ def _install_fake_seccomp_module(
 
     created: list[_FakeSeccompFilter] = []
 
-    def _syscall_filter(defaction):
+    def _syscall_filter(defaction) -> _FakeSeccompFilter:
         f = _FakeSeccompFilter(defaction)
         created.append(f)
         return f

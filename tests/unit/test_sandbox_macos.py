@@ -5,6 +5,7 @@ real mockada — mesmo padrão de test_sandbox_docker.py."""
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -166,7 +167,7 @@ async def test_permission_denied_returns_clear_error_not_exception(
         lambda name: "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None,
     )
 
-    async def _raise_permission_denied(*_args, **_kwargs):
+    async def _raise_permission_denied(*_args, **_kwargs) -> NoReturn:
         raise PermissionError("Permission denied: sandbox-exec")
 
     monkeypatch.setattr(

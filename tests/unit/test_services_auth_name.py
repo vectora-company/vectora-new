@@ -11,6 +11,7 @@ Cobre:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from pathlib import Path
 
 import aiosqlite
@@ -22,7 +23,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     db_file = str(tmp_path / "test_auth_name.db")
 
     import backend.rbac.auth as auth_mod

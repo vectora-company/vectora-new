@@ -195,7 +195,7 @@ async def test_browser_select_tab_inexistente_retorna_erro(
 # ---------------------------------------------------------------------------
 
 
-def _fake_tab(console=None, network=None):
+def _fake_tab(console=None, network=None) -> SimpleNamespace:
     return SimpleNamespace(
         console_log=list(console or []),
         network_log=list(network or []),
@@ -315,7 +315,7 @@ async def test_browser_get_network_request_nao_encontrada_retorna_erro(
 # ---------------------------------------------------------------------------
 
 
-def _fake_tab_with_page(evaluate_result=None, evaluate_error=None):
+def _fake_tab_with_page(evaluate_result=None, evaluate_error=None) -> SimpleNamespace:
     async def _evaluate(script):
         if evaluate_error is not None:
             raise evaluate_error
@@ -417,7 +417,7 @@ async def test_browser_set_dialog_policy_sucesso(
 # ---------------------------------------------------------------------------
 
 
-def _fake_tab_for_emulate():
+def _fake_tab_for_emulate() -> SimpleNamespace:
     page = SimpleNamespace(set_viewport_size=AsyncMock())
     cdp = SimpleNamespace(send=AsyncMock())
     return SimpleNamespace(page=page, cdp=cdp)
@@ -530,7 +530,7 @@ class _FakeCDPForTrace:
             h(params)
 
 
-def _fake_tab_for_trace():
+def _fake_tab_for_trace() -> SimpleNamespace:
     return SimpleNamespace(cdp=_FakeCDPForTrace())
 
 
@@ -651,7 +651,7 @@ def _sample_heap_snapshot() -> dict:
     }
 
 
-def _fake_tab_for_heap(snapshot: dict):
+def _fake_tab_for_heap(snapshot: dict) -> SimpleNamespace:
     cdp = SimpleNamespace()
     payload = json.dumps(snapshot)
 
@@ -798,7 +798,7 @@ async def test_browser_lighthouse_audit_sem_url_usa_url_da_aba_ativa(
 
     captured = {}
 
-    async def _fake_exec(*args, **kwargs):
+    async def _fake_exec(*args, **kwargs) -> _FakeLighthouseProc:
         captured["args"] = args
         return _FakeLighthouseProc(
             json.dumps({"categories": {}, "audits": {}}).encode()
@@ -886,7 +886,7 @@ def test_build_ax_outline_respeita_max_nodes() -> None:
     assert outline.count("[uid=") == 1
 
 
-def _fake_tab_for_snapshot(ax_nodes: list[AxNode]):
+def _fake_tab_for_snapshot(ax_nodes: list[AxNode]) -> SimpleNamespace:
     cdp = SimpleNamespace(send=AsyncMock(side_effect=[{}, {"nodes": ax_nodes}]))
     return SimpleNamespace(cdp=cdp)
 
@@ -1105,7 +1105,7 @@ class _FakeCDPForScreencast:
             h(params)
 
 
-def _fake_tab_for_screencast():
+def _fake_tab_for_screencast() -> SimpleNamespace:
     return SimpleNamespace(cdp=_FakeCDPForScreencast())
 
 

@@ -6,6 +6,7 @@ quando não há política configurada).
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -15,7 +16,7 @@ from backend.sandbox import runner
 from backend.sandbox.policy import trusted_policy_path
 
 
-def _fake_proc(stdout=b"ok\n", stderr=b"", returncode=0):
+def _fake_proc(stdout=b"ok\n", stderr=b"", returncode=0) -> MagicMock:
     proc = MagicMock()
     proc.communicate = AsyncMock(return_value=(stdout, stderr))
     proc.returncode = returncode
@@ -333,7 +334,7 @@ async def test_backend_none_via_toml_nulo_falha_fechado(
     create_mock.assert_not_awaited()
 
 
-def _docker_workspace(tmp_path: Path):
+def _docker_workspace(tmp_path: Path) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     trusted_policy_path(tmp_path).write_text(
         '[sandbox]\nenabled = true\nbackend = "docker"\n', encoding="utf-8"
@@ -342,7 +343,7 @@ def _docker_workspace(tmp_path: Path):
 
 
 @pytest.fixture(autouse=True)
-def _quota_limpa():
+def _quota_limpa() -> Iterator[None]:
     # A contagem de execuções em voo é estado de módulo — um teste que
     # deixe resíduo envenenaria os seguintes.
     runner._active_batch_runs.clear()

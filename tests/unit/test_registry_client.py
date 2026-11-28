@@ -8,6 +8,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import TracebackType
+from typing import NoReturn
 
 import httpx
 import pytest
@@ -50,7 +51,7 @@ async def test_fetch_catalog_network_error_falls_back_to_existing_cache(
         "mcp", [{"id": "cached-entry", "catalog_source": "official"}]
     )
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -64,7 +65,7 @@ async def test_fetch_catalog_network_error_falls_back_to_existing_cache(
 async def test_fetch_catalog_no_network_no_cache_returns_empty_list_not_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -89,7 +90,7 @@ async def test_fetch_catalog_cache_within_offline_ttl_but_past_online_ttl_is_ser
         json.dumps(stale_but_usable), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -112,7 +113,7 @@ async def test_fetch_catalog_cache_expired_beyond_offline_ttl_is_not_used(
     registry_client._cache_path("mcp").parent.mkdir(parents=True, exist_ok=True)
     registry_client._cache_path("mcp").write_text(json.dumps(expired), encoding="utf-8")
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -258,7 +259,7 @@ async def test_fetch_official_mcp_registry_network_error_falls_back_to_cache(
 ) -> None:
     registry_client._write_cache("mcp_official", [{"id": "cached"}])
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url, params=None, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -283,7 +284,7 @@ async def test_fetch_official_mcp_registry_expired_cache_returns_empty_list(
         json.dumps(expired), encoding="utf-8"
     )
 
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url, params=None, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -326,7 +327,7 @@ async def test_fetch_official_mcp_registry_duplicate_id_across_pages_not_duplica
 async def test_fetch_official_mcp_registry_no_network_no_cache_returns_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get(self, url, params=None, **kwargs):
+    async def _fake_get(self, url, params=None, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -345,7 +346,7 @@ async def test_fetch_catalog_corrupted_cache_file_is_ignored_not_raised(
     registry_client._cache_path("mcp").parent.mkdir(parents=True, exist_ok=True)
     registry_client._cache_path("mcp").write_text("{not valid json", encoding="utf-8")
 
-    async def _fake_get(self, url, **kwargs):
+    async def _fake_get(self, url, **kwargs) -> NoReturn:
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)

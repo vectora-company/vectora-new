@@ -100,7 +100,7 @@ def test_missing_key_takes_precedence_over_auth() -> None:
     assert code == "MISSING_KEYS"
 
 
-def test_model_incompatible_not_confused_with_real_quota():
+def test_model_incompatible_not_confused_with_real_quota() -> None:
     """Bug reproduzido ao vivo: Cohere Command A+ rejeita `tool_plan` em
     TODOS os candidatos da cadeia de fallback — o fallback esgota e levanta
     QuotaExhaustedError, cuja mensagem contém a palavra "quota" e casava

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import Literal, cast
+from typing import Literal, NoReturn, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -240,10 +240,10 @@ def test_req_user_id_extrai_do_request_state_ou_usa_fallback_local() -> None:
 async def test_install_uninstall_tratam_excecao_do_store(
     _functional_store: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def boom_add(*args, **kwargs):
+    def boom_add(*args, **kwargs) -> NoReturn:
         raise RuntimeError("disco cheio")
 
-    def boom_remove(*args, **kwargs):
+    def boom_remove(*args, **kwargs) -> NoReturn:
         raise RuntimeError("arquivo corrompido")
 
     monkeypatch.setattr(_functional_store, "add_server", boom_add)

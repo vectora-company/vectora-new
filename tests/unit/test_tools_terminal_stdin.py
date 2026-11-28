@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -43,7 +44,7 @@ def _config(workspace_id: str, thread_id: str = "t1") -> dict:
 
 
 @pytest.fixture(autouse=True)
-def _clear_pending():
+def _clear_pending() -> Iterator[None]:
     _pending_terminal.clear()
     yield
     _pending_terminal.clear()

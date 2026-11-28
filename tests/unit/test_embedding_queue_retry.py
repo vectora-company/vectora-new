@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -107,7 +108,7 @@ async def test_worker_failure_remains_retryable_when_dlq_write_fails(
         )
         monkeypatch.setattr(background, "RETRY_BACKOFF", (0, 0, 0))
 
-        async def fail_dlq(_queue_id: str, _reason: str) -> None:
+        async def fail_dlq(_queue_id: str, _reason: str) -> NoReturn:
             raise RuntimeError("DLQ indisponível")
 
         monkeypatch.setattr(queue, "mark_dlq", fail_dlq)

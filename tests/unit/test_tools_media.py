@@ -12,7 +12,7 @@ import json
 from collections.abc import Awaitable, Callable, Coroutine
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, NoReturn
 from uuid import uuid4
 
 import pytest
@@ -205,7 +205,7 @@ async def test_generate_image_provider_sem_suporte_avisa_e_nao_chama_sdk(
 ) -> None:
     chamou = {"sdk": False}
 
-    def _nunca(*_a, **_k):
+    def _nunca(*_a, **_k) -> NoReturn:
         chamou["sdk"] = True
         raise AssertionError("SDK não deveria ser chamado")
 
@@ -270,7 +270,7 @@ async def test_generate_image_prompt_vazio_e_sdk_quebrado_viram_erro_tipado(
 
     # Erro/borda 2: SDK explodindo vira string de erro, não exceção
     # propagada (falha de tool não derruba o grafo).
-    def _explode(*_a):
+    def _explode(*_a) -> NoReturn:
         raise RuntimeError("cota estourada")
 
     monkeypatch.setattr(media, "_generate_image_bytes", _explode)
@@ -438,7 +438,7 @@ def test_runtime_settings_indisponivel_cai_na_env_sem_estourar(
 
     class _Boom:
         @property
-        def media_settings(self):
+        def media_settings(self) -> NoReturn:
             raise RuntimeError("runtime_settings não inicializado")
 
     monkeypatch.setattr("backend.workspace.runtime_settings.runtime_settings", _Boom())

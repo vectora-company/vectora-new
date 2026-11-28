@@ -3,6 +3,7 @@ import os
 import sqlite3
 from pathlib import Path
 from types import TracebackType
+from typing import NoReturn
 
 import pytest
 
@@ -160,7 +161,7 @@ async def test_finalize_postgres_preserva_falha_para_retry(
         "remote-1", "u1", "2026-10", "generate_image", 1, backend="postgres"
     )
 
-    async def unavailable(*_args):
+    async def unavailable(*_args) -> NoReturn:
         raise ConnectionError("offline")
 
     monkeypatch.setattr(quota, "_finalize_postgres", unavailable)

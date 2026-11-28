@@ -9,6 +9,7 @@ tool calls/results, eventos thread/done/error).
 from __future__ import annotations
 
 import json
+from typing import NoReturn
 
 import pytest
 
@@ -340,7 +341,7 @@ class TestAdaptersRegression:
     async def test_stream_emits_error_event_on_exception(self) -> None:
         from backend.api.native_stream import stream_engine_events
 
-        async def run(on_event):
+        async def run(on_event) -> NoReturn:
             raise RuntimeError("erro simulado")
 
         payloads = [

@@ -10,6 +10,7 @@ from __future__ import annotations
 import http.server
 import os
 import threading
+from collections.abc import AsyncIterator, Iterator
 
 import httpx
 import pytest
@@ -29,7 +30,7 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
 
 
 @pytest.fixture
-def local_http_server():
+def local_http_server() -> Iterator[str]:
     server = http.server.HTTPServer(("127.0.0.1", 0), _EchoHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -79,7 +80,7 @@ pytestmark = [
 
 
 @pytest.fixture(autouse=True)
-async def _clean_sessions():
+async def _clean_sessions() -> AsyncIterator[None]:
     """Garante nenhuma sessão de browser sobrando de um teste anterior."""
     await browser_session.close_all_browser_sessions()
     yield
@@ -276,7 +277,7 @@ async def test_cdp_session_permite_emular_viewport_mobile_real() -> None:
 
 
 @pytest.mark.asyncio
-async def test_network_log_captura_navegacao_real(local_http_server) -> None:
+async def test_network_log_captura_navegacao_real(local_http_server: str) -> None:
     page = await browser_session.get_browser_page("ws-network-1")
     tab = browser_session.get_tab_state("ws-network-1")
     await page.goto(local_http_server, wait_until="domcontentloaded")

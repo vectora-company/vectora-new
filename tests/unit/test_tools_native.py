@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 from types import TracebackType
+from typing import NoReturn
 
 import pytest
 
@@ -300,7 +301,7 @@ class TestHttpRequest:
             ) -> None:
                 pass
 
-            async def request[**P](self, *_: P.args, **__: P.kwargs) -> None:
+            async def request[**P](self, *_: P.args, **__: P.kwargs) -> NoReturn:
                 raise httpx.ConnectError("connection refused")
 
         monkeypatch.setattr(httpx, "AsyncClient", lambda **_kw: _ErrorClient())

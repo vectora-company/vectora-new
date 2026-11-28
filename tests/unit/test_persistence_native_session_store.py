@@ -4,6 +4,7 @@ Fixture com pool real sobre `tmp_path`, sem mock."""
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import cast
 
@@ -22,7 +23,7 @@ from backend.vtypes.message import (
 
 
 @pytest.fixture
-async def store(tmp_path: Path):
+async def store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "sessions.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)

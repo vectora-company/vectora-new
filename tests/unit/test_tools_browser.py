@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -146,7 +146,7 @@ async def test_browser_navigate_exercita_guard_e_remove_handler_em_falha(
         async def unroute(self, pattern: str, handler: _RouteHandler) -> None:
             assert registered[pattern] is handler
 
-        async def goto(self, url: str, **_kwargs: str | float) -> None:
+        async def goto(self, url: str, **_kwargs: str | float) -> NoReturn:
             route_handler = registered["**/*"]
             route = SimpleNamespace(
                 request=SimpleNamespace(url="http://127.0.0.1/private"),
@@ -966,7 +966,7 @@ class TestBrowserFillForm:
             AsyncMock(return_value="http://localhost:5173"),
         )
 
-        async def _fill(selector, value, **_kwargs):
+        async def _fill(selector, value, **_kwargs) -> None:
             if selector == "#missing":
                 raise TimeoutError("not found")
 
@@ -1014,7 +1014,7 @@ async def test_navigation_failure_does_not_reuse_previous_block_reason(
     # A numeric public URL keeps this regression independent of DNS.
     url = "https://93.184.216.34"
 
-    async def blocked_navigation(*args: str, **kwargs: str | float) -> None:
+    async def blocked_navigation(*args: str, **kwargs: str | float) -> NoReturn:
         call = fake_page.route.await_args
         assert call is not None
         handler = call.args[1]

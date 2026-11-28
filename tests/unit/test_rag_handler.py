@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -40,13 +42,15 @@ class _FakeVectorStoreBackend:
             raise RuntimeError(f"coleção {collection!r} não encontrada")
         del self.rows_by_collection[collection]
 
-    async def search(self, collection, query_vector, limit):  # pragma: no cover
+    async def search(
+        self, collection, query_vector, limit
+    ) -> NoReturn:  # pragma: no cover
         raise NotImplementedError
 
-    async def upsert(self, collection, rows):  # pragma: no cover
+    async def upsert(self, collection, rows) -> NoReturn:  # pragma: no cover
         raise NotImplementedError
 
-    async def delete(self, collection, ids):  # pragma: no cover
+    async def delete(self, collection, ids) -> NoReturn:  # pragma: no cover
         raise NotImplementedError
 
 
@@ -65,7 +69,7 @@ def _fake_request() -> Request:
 
 
 @pytest.fixture(autouse=True)
-def _bypass_workspace_ownership():
+def _bypass_workspace_ownership() -> Iterator[None]:
     """As classes deste arquivo testam a lógica de agregação de coleções,
     não o gate de dono do workspace (coberto em test_workspaces_view.py) —
     mantém o mock local só pra não travar em request/workspace reais."""
@@ -308,7 +312,9 @@ class TestRagCollectionsRealLanceDB:
     pytestmark = pytest.mark.real_lancedb
 
     @pytest.fixture(autouse=True)
-    def _reset_vector_store_singleton(self, monkeypatch: pytest.MonkeyPatch):
+    def _reset_vector_store_singleton(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> Iterator[None]:
         """`get_vector_store_backend()` cacheia um singleton por processo —
         sem resetar, o 2º teste desta classe reusaria o `LanceDBBackend` do
         1º, apontando pro `tmp_path` errado.

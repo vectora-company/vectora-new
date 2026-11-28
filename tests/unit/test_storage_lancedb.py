@@ -11,6 +11,7 @@ Isolado em step separado do workflow via marcador `real_lancedb`.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ pytestmark = pytest.mark.real_lancedb
 
 
 @pytest.fixture(autouse=True)
-def reset_storage_singletons():
+def reset_storage_singletons() -> Iterator[None]:
     import backend.storage.factory as _fac
 
     _fac._reset_singletons()

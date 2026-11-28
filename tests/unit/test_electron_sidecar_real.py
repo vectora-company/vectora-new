@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import socket
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -37,7 +38,7 @@ def _free_port() -> int:
 
 
 @pytest.fixture(autouse=True)
-async def _clean_sidecar_state(monkeypatch: pytest.MonkeyPatch):
+async def _clean_sidecar_state(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     """Garante nenhum sidecar sobrando de um teste anterior, antes e depois.
 
     Aponta VECTORA_PORT pra uma porta livre sem nada escutando — sem isso

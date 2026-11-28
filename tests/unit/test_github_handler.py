@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
 
 from backend.api.handlers import github
 from backend.vtypes.contracts import JsonValue
+from tests.fake_requests import fake_request
 
 
-def _request(user_id: str | None = "alice"):
+def _request(user_id: str | None = "alice") -> MagicMock:
     user = SimpleNamespace(id=user_id) if user_id else None
-    return SimpleNamespace(state=SimpleNamespace(user=user))
+    return fake_request(state=SimpleNamespace(user=user))
 
 
 def _fake_gh(monkeypatch: pytest.MonkeyPatch, result: dict):

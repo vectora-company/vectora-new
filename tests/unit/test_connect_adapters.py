@@ -10,8 +10,10 @@ conversa fantasma (ou um laço infinito de auto-resposta).
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
 
 import pytest
 
@@ -55,7 +57,7 @@ async def test_telegram_handler_responde_e_nao_propaga_excecao(
     async def _reply(text: str) -> None:
         enviados.append(text)
 
-    async def _fake_process(incoming):
+    async def _fake_process(incoming) -> SimpleNamespace:
         return SimpleNamespace(text=f"eco: {incoming.text}")
 
     monkeypatch.setattr(telegram, "process_incoming", _fake_process)
@@ -69,7 +71,7 @@ async def test_telegram_handler_responde_e_nao_propaga_excecao(
 
     # Erro/borda: falha no processamento não pode derrubar o loop de polling —
     # a integração ficaria muda até o próximo boot.
-    async def _explode(_incoming):
+    async def _explode(_incoming) -> NoReturn:
         raise RuntimeError("agente fora do ar")
 
     monkeypatch.setattr(telegram, "process_incoming", _explode)
@@ -185,14 +187,14 @@ async def test_email_poll_once_continua_apos_falha_numa_mensagem(
     ]
     monkeypatch.setattr(email, "fetch_unseen", lambda _c: raws)
 
-    async def _process(incoming):
+    async def _process(incoming) -> SimpleNamespace:
         return SimpleNamespace(text=f"resposta para {incoming.platform_user_id}")
 
     monkeypatch.setattr(email, "process_incoming", _process)
 
     enviados: list[str] = []
 
-    def _send(_config, to_address, text):
+    def _send(_config, to_address, text) -> None:
         # A primeira falha; a segunda precisa ser respondida mesmo assim —
         # um email problemático não pode travar a caixa inteira.
         if to_address == "a@example.com":
@@ -218,7 +220,7 @@ async def test_email_caixa_inacessivel_nao_derruba_o_loop(
         smtp_host="smtp.invalido",
     )
 
-    def _explode(_c):
+    def _explode(_c) -> NoReturn:
         raise OSError("conexão recusada")
 
     monkeypatch.setattr(email, "fetch_unseen", _explode)
@@ -232,7 +234,7 @@ async def test_email_caixa_inacessivel_nao_derruba_o_loop(
 
 
 @pytest.fixture(autouse=True)
-def _manager_limpo():
+def _manager_limpo() -> Iterator[None]:
     manager._running.clear()
     yield
     manager._running.clear()
@@ -462,7 +464,7 @@ async def test_sync_adapters_desliga_quem_perdeu_a_credencial(
 
 @pytest.mark.asyncio
 async def test_stop_all_e_idempotente(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _stop(_platform, _handle):
+    async def _stop(_platform, _handle) -> None:
         return None
 
     monkeypatch.setattr(manager, "_stop_platform", _stop)

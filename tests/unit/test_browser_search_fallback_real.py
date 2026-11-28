@@ -7,6 +7,7 @@ conecta ao Chromium já ativo do Electron via CDP.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 
 import httpx
 import pytest
@@ -41,7 +42,7 @@ def _electron_cdp_available() -> bool:
 
 
 @pytest.fixture(autouse=True)
-def _clean_fallback_browser():
+def _clean_fallback_browser() -> Iterator[None]:
     """Garante nenhum Chromium do fallback sobrando de um teste anterior."""
     search_fallback.close_search_fallback_browser()
     yield

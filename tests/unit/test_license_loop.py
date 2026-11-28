@@ -8,6 +8,7 @@ via ``GET /license/status``.
 from __future__ import annotations
 
 import asyncio
+from typing import NoReturn
 
 import pytest
 
@@ -23,7 +24,7 @@ def _run_one_iteration(monkeypatch: pytest.MonkeyPatch, validate) -> list[str]:
 
     sleeps: list[float] = []
 
-    async def fake_sleep(seconds: float) -> None:
+    async def fake_sleep(seconds: float) -> NoReturn:
         sleeps.append(seconds)
         raise asyncio.CancelledError
 
@@ -55,7 +56,7 @@ def test_loop_sucesso_dorme_6h(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_loop_license_error_nao_derruba(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fail(**kw):
+    async def fail(**kw) -> NoReturn:
         raise LicenseError("token inválido")
 
     # Não pode propagar LicenseError — só o CancelledError do sleep fake.
@@ -64,7 +65,7 @@ def test_loop_license_error_nao_derruba(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_loop_erro_inesperado_nao_derruba(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def boom(**kw):
+    async def boom(**kw) -> NoReturn:
         raise RuntimeError("network explodiu")
 
     sleeps = _run_one_iteration(monkeypatch, boom)

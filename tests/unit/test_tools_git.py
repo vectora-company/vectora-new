@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -461,7 +461,7 @@ class TestGitCommandNotFound:
 
         from backend.tools.git import _safe_call
 
-        def _boom():
+        def _boom() -> NoReturn:
             raise gitpy.GitCommandNotFound("git", FileNotFoundError("sumiu"))
 
         result = _safe_call(_boom)
@@ -470,7 +470,7 @@ class TestGitCommandNotFound:
     def test_safe_call_converte_excecao_generica(self) -> None:
         from backend.tools.git import _safe_call
 
-        def _boom():
+        def _boom() -> NoReturn:
             raise RuntimeError("algo inesperado")
 
         result = _safe_call(_boom)

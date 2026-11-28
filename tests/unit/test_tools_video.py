@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -109,7 +110,7 @@ async def test_generate_video_provider_sem_suporte_avisa_sem_chamar_sdk(
 ) -> None:
     chamou = {"sdk": False}
 
-    async def _nunca(*_a, **_k):
+    async def _nunca(*_a, **_k) -> NoReturn:
         chamou["sdk"] = True
         raise AssertionError("SDK não deveria ser chamado")
 
@@ -189,7 +190,7 @@ async def test_generate_video_timeout_vira_erro_legivel(
     """O job pode continuar rodando no provider — a mensagem precisa dizer
     isso, senão o usuário regera (e paga) achando que falhou."""
 
-    async def _estourou(*_a, **_k):
+    async def _estourou(*_a, **_k) -> NoReturn:
         raise media.VideoGenerationTimeoutError(
             "geração não concluiu em 900s — o job pode seguir rodando"
         )
@@ -307,7 +308,7 @@ async def test_analyze_video_provider_sem_entrada_de_video_avisa(
     impede a análise de vídeo de herdar aquela lista por engano."""
     chamou = {"sdk": False}
 
-    async def _nunca(*_a, **_k):
+    async def _nunca(*_a, **_k) -> NoReturn:
         chamou["sdk"] = True
         raise AssertionError("SDK não deveria ser chamado")
 
@@ -372,7 +373,7 @@ async def test_analyze_video_falha_do_sdk_vira_erro_tipado(
 
     monkeypatch.setattr(settings, "vectora_home", tmp_path)
 
-    async def _explode(*_a, **_k):
+    async def _explode(*_a, **_k) -> NoReturn:
         raise RuntimeError("quota estourada")
 
     monkeypatch.setattr(media, "_analyze_video_text", _explode)

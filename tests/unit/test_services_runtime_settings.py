@@ -412,7 +412,7 @@ class TestFrontendPrefs:
                     raise sqlite3.OperationalError("write failed")
                 return connection.execute(query, parameters)
 
-            def commit(self):
+            def commit(self) -> None:
                 if failure == "commit":
                     raise sqlite3.OperationalError("commit failed")
                 connection.commit()

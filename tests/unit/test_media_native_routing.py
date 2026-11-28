@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -14,6 +16,7 @@ from backend.llm.media_parts import (
     prepare_content,
 )
 from backend.services.media_hydration import hydrate_media_blocks
+from backend.tools.registry import ToolSpec
 from backend.vtypes.message import ContentBlock, MessageRole, VMessage, VMessageChunk
 from tests.json_values import dig
 
@@ -174,7 +177,7 @@ class TestHydration:
             attachment_size_bytes=3,
         )
 
-        def reader[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
+        def reader[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
             raise AssertionError("não deveria ler")
 
         [message] = hydrate_media_blocks(
@@ -189,11 +192,23 @@ class _Script:
         self.received: list[list[VMessage]] = []
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         raise NotImplementedError
 
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         self.received.append(list(messages))
         step = self.steps.pop(0)
         if isinstance(step, BaseException):
@@ -274,12 +289,17 @@ async def test_loop_registra_e_emite_o_envio_dos_anexos(
         class _Client:
             last_model_id = "anthropic:claude"
 
-            async def agenerate(self, messages, **_kwargs):
+            async def agenerate(self, messages: list[VMessage], **_kwargs) -> VMessage:
                 raise NotImplementedError
 
             async def astream(
-                self, messages, *, tools=None, temperature=None, max_tokens=None
-            ):
+                self,
+                messages: list[VMessage],
+                *,
+                tools: list[ToolSpec] | None = None,
+                temperature: float | None = None,
+                max_tokens: int | None = None,
+            ) -> AsyncIterator[VMessageChunk]:
                 received.append(list(messages))
                 yield VMessageChunk(delta_text="resumo")
 

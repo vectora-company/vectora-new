@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import gc
 import sys
+from typing import NoReturn
 
 import pytest
 
@@ -164,7 +165,7 @@ async def test_pipe_side_fecha_quando_tcp_falha(
 ) -> None:
     """Se o uvicorn TCP não estiver acessível, a pipe fecha graciosamente."""
 
-    async def fail_create_conn(proto_factory, host, port):
+    async def fail_create_conn(proto_factory, host, port) -> NoReturn:
         raise OSError("connection refused")
 
     loop = asyncio.get_event_loop()

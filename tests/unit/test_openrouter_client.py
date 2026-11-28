@@ -7,6 +7,8 @@ mapeamento status → exceção tipada em vez de repetir.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import httpx
 import pytest
 
@@ -273,7 +275,7 @@ class _StreamQueQuebraNoMeio(httpx.AsyncByteStream):
     meio do stream (diferente de falhar ao conectar, que é síncrono e
     acontece antes de qualquer `yield`)."""
 
-    async def __aiter__(self):
+    async def __aiter__(self) -> AsyncIterator[bytes]:
         yield b'data: {"choices":[{"delta":{"content":"parcial"}}]}\n\n'
         raise httpx.ReadError("connection reset")
 

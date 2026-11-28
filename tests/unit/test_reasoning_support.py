@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import httpx
@@ -31,7 +32,7 @@ from backend.llm.reasoning import (
 from backend.persistence.native.session_store import SessionStore
 from backend.storage.sqlite.pool import AsyncConnectionPool
 from backend.tools.context import ToolContext
-from backend.tools.registry import ToolRegistry
+from backend.tools.registry import ToolRegistry, ToolSpec
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -214,18 +215,30 @@ def test_reasoning_chunk_becomes_sse_event() -> None:
 
 class _ThinkingClient:
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
-    ):
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> VMessage:
         raise NotImplementedError
 
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         yield VMessageChunk(delta_reasoning="analiso ")
         yield VMessageChunk(delta_reasoning="o pedido")
         yield VMessageChunk(delta_text="pronto")
 
 
 @pytest.fixture
-async def session_store(tmp_path: Path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     pool = AsyncConnectionPool(str(tmp_path / "reasoning.db"), min_size=1, max_size=2)
     await pool.open()
     store = SessionStore(pool)
@@ -237,7 +250,7 @@ async def session_store(tmp_path: Path):
         await pool.close()
 
 
-async def test_loop_emits_and_persists_reasoning(session_store) -> None:
+async def test_loop_emits_and_persists_reasoning(session_store: SessionStore) -> None:
     ctx = ToolContext(user_id="alice", thread_id="thread-r")
     await session_store.append_message(
         "thread-r", text_message(MessageRole.USER, "ajude")

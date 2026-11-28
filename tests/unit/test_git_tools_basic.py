@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from importlib import import_module
 from pathlib import Path
+from typing import NoReturn
 
 import git
 import pytest
@@ -201,7 +202,7 @@ class TestGitStatusImpl:
             workspaces, "_open_workspace_repo", lambda workspace_id: object()
         )
 
-        def _boom(repo):
+        def _boom(repo) -> NoReturn:
             raise RuntimeError("estado transitório do gitpython")
 
         monkeypatch.setattr(git_tools, "_git_status_impl", _boom)

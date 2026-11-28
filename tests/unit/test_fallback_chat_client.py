@@ -7,10 +7,13 @@ propaga sem tentar fallback.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import pytest
 
 from backend.llm.fallback_chat_client import FallbackChatClient
 from backend.llm.provider_fallback import QuotaExhaustedError
+from backend.tools.registry import ToolSpec
 from backend.vtypes.message import (
     ContentBlock,
     MessageRole,
@@ -28,14 +31,26 @@ class _FakeChatClient:
         self._comportamento = comportamento
 
     async def agenerate(
-        self, messages, *, tools=None, temperature=None, max_tokens=None
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ):
         resultado = self._comportamento
         if isinstance(resultado, BaseException):
             raise resultado
         return resultado
 
-    async def astream(self, messages, *, tools=None, temperature=None, max_tokens=None):
+    async def astream(
+        self,
+        messages: list[VMessage],
+        *,
+        tools: list[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[VMessageChunk]:
         for item in self._comportamento:
             if isinstance(item, BaseException):
                 raise item
@@ -60,7 +75,7 @@ def _make_client(
     fallback_chain,
     clients_por_modelo,
     on_model_switch=None,
-):
+) -> FallbackChatClient:
     monkeypatch.setattr(
         "backend.llm.fallback_chat_client.get_fallback_chain",
         lambda _mid: fallback_chain,

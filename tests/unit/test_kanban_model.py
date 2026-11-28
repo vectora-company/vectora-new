@@ -19,6 +19,7 @@ E um invariante do Vectora que o Hermes também tem: delegação síncrona
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -777,7 +778,7 @@ class TestEventoSSE:
 
         await _cria(db, "t1", status="ready")
 
-        def _explode(**kw):
+        def _explode(**kw) -> NoReturn:
             raise RuntimeError("fila SSE indisponível")
 
         monkeypatch.setattr(webhooks, "_emit_sse_event", _explode)

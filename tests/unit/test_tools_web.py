@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from types import TracebackType
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -283,7 +284,7 @@ class TestFetchUrlSsrfGuard:
             def raise_for_status(self) -> None:
                 return None
 
-            async def aiter_bytes(self):
+            async def aiter_bytes(self) -> AsyncIterator[bytes]:
                 yield b"conteudo"
 
         class _Stream:

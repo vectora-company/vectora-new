@@ -7,6 +7,7 @@ restart, sobre o SessionStore).
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Literal
 
@@ -27,7 +28,7 @@ from backend.vtypes.message import ContentBlock, MessageRole, VMessage, text_mes
 
 
 @pytest.fixture
-async def session_store(tmp_path: Path):
+async def session_store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     """Executa a operação session store."""
     pool = AsyncConnectionPool(str(tmp_path / "hitl.db"), min_size=1, max_size=2)
     await pool.open()
@@ -313,7 +314,7 @@ class TestApprovalGate:
         assert pendente["args"] == {"path": "a.py"}
 
     async def test_resolve_limpa_a_pendencia_e_libera_o_fast_path(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         """Verifica o comportamento de resolve limpa a pendencia e libera o fast path."""
         gate = ApprovalGate(session_store)
@@ -329,7 +330,9 @@ class TestApprovalGate:
 
         assert await session_store.get_pending_approval("thread-1") is None
 
-    async def test_resolve_limpa_args_efemeros_apos_claim(self, session_store) -> None:
+    async def test_resolve_limpa_args_efemeros_apos_claim(
+        self, session_store: SessionStore
+    ) -> None:
         """A limpeza usa o interrupt_id mesmo depois de a pendência ser consumida."""
         gate = ApprovalGate(session_store)
         await gate.request_approval(
@@ -351,7 +354,7 @@ class TestApprovalGate:
         assert gate.ephemeral_args("int-media") is None
 
     async def test_wait_for_resume_retorna_true_quando_resolve_e_chamado(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         """Verifica o comportamento de wait for resume retorna true quando resolve e chamado."""
         gate = ApprovalGate(session_store)
@@ -375,7 +378,7 @@ class TestApprovalGate:
         assert liberado is True
 
     async def test_wait_for_resume_sem_pedido_previo_devolve_false_sem_travar(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         """Verifica o comportamento de wait for resume sem pedido previo devolve false sem travar."""
         gate = ApprovalGate(session_store)
@@ -385,7 +388,7 @@ class TestApprovalGate:
         assert liberado is False
 
     async def test_wait_for_resume_expira_no_timeout_se_ninguem_resolver(
-        self, session_store
+        self, session_store: SessionStore
     ) -> None:
         """Verifica o comportamento de wait for resume expira no timeout se ninguem resolver."""
         gate = ApprovalGate(session_store)

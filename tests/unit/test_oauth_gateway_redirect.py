@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from types import TracebackType
+from typing import NoReturn
 from unittest.mock import patch
 
 import pytest
@@ -169,7 +170,7 @@ class TestBrokerTransaction:
             ) -> None:
                 return None
 
-            async def get[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> None:
+            async def get[**P](self, *_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
                 raise httpx.ConnectError("broker offline")
 
         monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: FailingClient())

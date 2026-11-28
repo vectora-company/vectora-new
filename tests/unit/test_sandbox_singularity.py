@@ -4,7 +4,9 @@ test_sandbox_docker.py."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,7 +21,7 @@ from backend.sandbox.singularity import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_binary_cache():
+def _reset_binary_cache() -> Iterator[None]:
     singularity_mod._reset_binary_cache_for_tests()
     yield
     singularity_mod._reset_binary_cache_for_tests()
@@ -200,7 +202,7 @@ async def test_permission_denied_returns_clear_error_not_exception(
         lambda name: "/usr/bin/singularity" if name == "singularity" else None,
     )
 
-    async def _raise_permission_denied(*_args, **_kwargs):
+    async def _raise_permission_denied(*_args, **_kwargs) -> NoReturn:
         raise PermissionError("Permission denied: singularity")
 
     monkeypatch.setattr(

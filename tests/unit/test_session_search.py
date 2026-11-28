@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,7 @@ def test_fts_expression_is_safe() -> None:
 
 
 @pytest.fixture
-async def store(tmp_path: Path):
+async def store(tmp_path: Path) -> AsyncIterator[SessionStore]:
     from backend.storage.sqlite.pool import AsyncConnectionPool
 
     pool = AsyncConnectionPool(str(tmp_path / "sessions.db"), min_size=1, max_size=2)
@@ -34,7 +35,7 @@ async def store(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_search_finds_message_from_other_thread(store) -> None:
+async def test_search_finds_message_from_other_thread(store: SessionStore) -> None:
     await store.create_session("t1", user_id="ana")
     await store.create_session("t2", user_id="ana")
     await store.create_session("t3", user_id="bia")
@@ -57,7 +58,9 @@ async def test_search_finds_message_from_other_thread(store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_search_excludes_current_thread_and_synthetic_notices(store) -> None:
+async def test_search_excludes_current_thread_and_synthetic_notices(
+    store: SessionStore,
+) -> None:
     await store.create_session("t1", user_id="ana")
     await store.append_message(
         "t1", text_message(MessageRole.USER, "projeto vectora engine")
@@ -72,12 +75,12 @@ async def test_search_excludes_current_thread_and_synthetic_notices(store) -> No
 
 
 @pytest.mark.asyncio
-async def test_empty_query_does_not_search(store) -> None:
+async def test_empty_query_does_not_search(store: SessionStore) -> None:
     assert await store.search_messages("ana", "") == []
 
 
 @pytest.mark.asyncio
-async def test_thread_token_usage_sums_runs(store) -> None:
+async def test_thread_token_usage_sums_runs(store: SessionStore) -> None:
     await store.create_session("t1", user_id="ana")
     async with store._pool.acquire() as conn:
         for run_id, metrics in (

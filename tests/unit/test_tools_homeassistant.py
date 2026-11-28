@@ -12,7 +12,9 @@ Cada caminho feliz tem o par de erro/borda no mesmo teste.
 from __future__ import annotations
 
 import json
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
+from typing import NoReturn
 from unittest.mock import patch
 
 import httpx
@@ -25,7 +27,7 @@ _RealAsyncClient = httpx.AsyncClient
 
 
 @contextmanager
-def _mocked_client(handler):
+def _mocked_client(handler) -> Generator[None]:
     """Substitui `httpx.AsyncClient` real por um `MockTransport` — a tool não
     recebe client por parâmetro (deixaria de fazer parte do schema exposto
     ao LLM), então o teste intercepta a própria construção do client dentro
@@ -67,7 +69,7 @@ class TestCredenciais:
 
         monkeypatch.setattr(settings, "home_assistant_token", "")
 
-        def _nunca(_req):
+        def _nunca(_req) -> NoReturn:
             raise AssertionError("não deveria chamar o Home Assistant")
 
         with _mocked_client(_nunca):

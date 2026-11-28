@@ -26,6 +26,7 @@ import types
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
 from unittest.mock import MagicMock
 
 import pytest
@@ -173,7 +174,7 @@ class TestAcoes:
         """Regra 11: tool defensiva — exceção vira observação pro LLM, o
         grafo não cai."""
 
-        def _explode(_x, _y):
+        def _explode(_x, _y) -> NoReturn:
             raise RuntimeError("X11 display não encontrado")
 
         monkeypatch.setattr(cu, "_click_sync", _explode)

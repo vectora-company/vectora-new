@@ -4,6 +4,7 @@ testável sem o binário docker instalado; execução real mockada."""
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -43,7 +44,7 @@ def test_build_docker_command_lockdown_disables_network() -> None:
 async def test_missing_docker_binary_returns_clear_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _raise_not_found(*_args, **_kwargs):
+    async def _raise_not_found(*_args, **_kwargs) -> NoReturn:
         raise FileNotFoundError("docker")
 
     monkeypatch.setattr(
@@ -82,7 +83,7 @@ async def test_successful_run_returns_output(
 async def test_permission_denied_returns_clear_error_not_exception(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _raise_permission_denied(*_args, **_kwargs):
+    async def _raise_permission_denied(*_args, **_kwargs) -> NoReturn:
         raise PermissionError("Permission denied: docker")
 
     monkeypatch.setattr(

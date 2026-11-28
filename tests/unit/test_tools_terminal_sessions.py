@@ -5,13 +5,17 @@ pty_registry."""
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from types import SimpleNamespace
+from typing import NoReturn
+from unittest.mock import MagicMock
 
 import pytest
 
 from backend.services.pty_registry import pty_registry
 from backend.tools.context import ToolContext
 from backend.tools.terminal_sessions import (
+    PtySession,
     attach_terminal,
     close_terminal,
     list_terminals,
@@ -28,8 +32,9 @@ def _fake_session(
     workspace_id: str,
     alive: bool = True,
     user_id: str = "local",
-):
-    return SimpleNamespace(
+) -> MagicMock:
+    session = MagicMock(spec=PtySession)
+    session.configure_mock(
         terminal_id=terminal_id,
         thread_id=thread_id,
         workspace_id=workspace_id,
@@ -41,10 +46,11 @@ def _fake_session(
             "terminal_id": terminal_id,
         },
     )
+    return session
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     pty_registry._sessions.clear()
     yield
     pty_registry._sessions.clear()
@@ -226,13 +232,13 @@ class TestInteractiveTerminalTools:
             thread_id = "thr-1"
             workspace_id = "ws-1"
 
-            def consume_rate_limit(self):
+            def consume_rate_limit(self) -> None:
                 return None
 
-            def read_since(self, cursor, max_bytes):
+            def read_since(self, cursor, max_bytes) -> NoReturn:
                 raise AssertionError("usuário não autorizado não deve ler")
 
-            def write_input(self, data, request_id):
+            def write_input(self, data, request_id) -> NoReturn:
                 raise AssertionError("usuário não autorizado não deve escrever")
 
         pty_registry.add(OwnedSession())  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]

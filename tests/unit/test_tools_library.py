@@ -8,6 +8,7 @@ a mesma lógica `_impl` que os handlers HTTP já expõem, sem duplicar.
 from __future__ import annotations
 
 import json
+from typing import NoReturn
 from unittest.mock import AsyncMock
 
 import pytest
@@ -300,7 +301,7 @@ async def test_verify_skill_propagates_internal_error_as_typed_error(
 ) -> None:
     from backend.workspace import skills as skills_mod
 
-    def _boom(user_id, skill_id):
+    def _boom(user_id, skill_id) -> NoReturn:
         raise FileNotFoundError("SKILL.md ausente")
 
     monkeypatch.setattr(skills_mod, "verify_skill", _boom)
@@ -415,7 +416,7 @@ async def test_save_mcp_env_var_internal_error_returns_typed_error(
 ) -> None:
     from backend.rbac import auth as auth_svc
 
-    async def _boom(user_id, key, value):
+    async def _boom(user_id, key, value) -> NoReturn:
         raise RuntimeError("banco indisponível")
 
     monkeypatch.setattr(auth_svc, "set_env_override", _boom)

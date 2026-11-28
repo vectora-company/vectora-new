@@ -450,7 +450,7 @@ class TestVectorSearchBucketFanout:
     workspace (backend/services/rag_buckets.py) — não a tabela `articles`
     inteira sempre."""
 
-    def _mock_backend(self, tables: dict[str, list[dict]]):
+    def _mock_backend(self, tables: dict[str, list[dict]]) -> AsyncMock:
         """`tables` mapeia nome de coleção -> lista de linhas (dicts com
         id/_distance/text/metadata) que essa coleção "contém". Devolve um
         `VectorStoreBackend` fake cujo `.search()` só sabe responder pelas
@@ -987,7 +987,7 @@ class TestIngestDocs:
 
         capturado: list[str] = []
 
-        async def _fake_embedding(*, text, collection, metadata):
+        async def _fake_embedding(*, text, collection, metadata) -> str:
             """Executa a operação  fake embedding."""
             capturado.append(text)
             return json.dumps({"status": "fire_and_forget", "queue_id": "q1"})

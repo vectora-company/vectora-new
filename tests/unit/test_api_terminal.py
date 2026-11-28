@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 
 import pytest
 from fastapi import HTTPException, Request
@@ -96,7 +97,7 @@ class _FakeInteractiveSession:
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     pty_registry._sessions.clear()
     pty_registry._closed.clear()
     yield
@@ -325,7 +326,7 @@ async def test_terminal_websocket_returns_pty_creation_error_to_client(
         owner_id=None,
     )
 
-    def fail_to_create[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
+    def fail_to_create[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
         raise RuntimeError("PTY backend unavailable")
 
     async def no_egress(_workspace_id: str, _policy: EgressPolicy) -> None:

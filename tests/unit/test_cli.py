@@ -12,6 +12,7 @@ import io
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn
 
 import pytest
 from pydantic import BaseModel
@@ -63,7 +64,7 @@ def test_sem_subcomando_e_help_imprimem_ajuda_sem_subir_servidor(
 ) -> None:
     from backend import main
 
-    def _nao_deve_subir[**P](*_args: P.args, **_kwargs: P.kwargs) -> None:
+    def _nao_deve_subir[**P](*_args: P.args, **_kwargs: P.kwargs) -> NoReturn:
         raise AssertionError("help não pode iniciar o Vectora")
 
     monkeypatch.setattr(main, "_run_start", _nao_deve_subir)
@@ -297,7 +298,7 @@ def test_run_redis_falha_conexao_sai(
     monkeypatch.setattr("backend.cli.infra.Console", _null_console)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
 
-    async def _boom(url: str) -> None:
+    async def _boom(url: str) -> NoReturn:
         raise ConnectionError("recusado")
 
     monkeypatch.setattr(infra, "_test_redis", _boom)

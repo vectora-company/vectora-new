@@ -8,7 +8,7 @@ import threading
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from functools import partial
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -134,7 +134,7 @@ async def test_new_tab_preserva_motivo_de_bloqueio_e_remove_guard(
             assert registered[pattern] is handler
             unroutes.append((pattern, handler))
 
-        async def goto(self, _url: str, **_kwargs: str | float) -> None:
+        async def goto(self, _url: str, **_kwargs: str | float) -> NoReturn:
             handler = registered["**/*"]
             route = SimpleNamespace(
                 request=SimpleNamespace(url="http://127.0.0.1/private"),
@@ -245,7 +245,7 @@ async def test_new_tab_instala_guard_no_contexto_antes_do_primeiro_request(
             return page
 
     class _Page:
-        async def goto(self, _url: str, **_kwargs: str | float) -> None:
+        async def goto(self, _url: str, **_kwargs: str | float) -> NoReturn:
             handler = registered["**/*"]
             route = SimpleNamespace(
                 request=SimpleNamespace(url="http://127.0.0.1/private"),

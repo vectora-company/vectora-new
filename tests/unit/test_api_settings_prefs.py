@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -44,7 +45,9 @@ def _req(
 
 
 @pytest.fixture(autouse=True)
-def _isolated_runtime_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def _isolated_runtime_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[RuntimeSettings]:
     """Isola cada teste com um RuntimeSettings próprio (nunca toca o real)."""
     from backend.api.handlers import flags as handler
     from backend.workspace import runtime_settings as rs_module

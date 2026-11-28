@@ -592,7 +592,7 @@ class TestStreamingToolCallsEUsage:
 
 
 class TestPromptCache:
-    def _client(self, model: str, origin: str):
+    def _client(self, model: str, origin: str) -> OpenRouterChatClient:
         from backend.llm.openrouter.chat_client import OpenRouterChatClient
 
         http = OpenRouterClient(

@@ -11,7 +11,7 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NoReturn
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -708,7 +708,7 @@ class TestPostBuild:
 
         registry, _ = _make_registry(tmp_path)
 
-        async def pipeline_ok(*_a, resume=False, **_k):
+        async def pipeline_ok(*_a, resume=False, **_k) -> MagicMock:
             return MagicMock(error=None, node_count=0, edge_count=0)
 
         mock_pipeline = AsyncMock(side_effect=pipeline_ok)
@@ -732,7 +732,7 @@ class TestPostBuild:
 
         registry, _ = _make_registry(tmp_path)
 
-        async def pipeline_ok(*_a, **_k):
+        async def pipeline_ok(*_a, **_k) -> MagicMock:
             return MagicMock(error=None, node_count=0, edge_count=0)
 
         mock_pipeline = AsyncMock(side_effect=pipeline_ok)
@@ -827,7 +827,7 @@ class TestRunBuildStatus:
     async def test_quota_exhausted_writes_paused(self, tmp_path: Path) -> None:
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        async def boom(*a, **k):
+        async def boom(*a, **k) -> NoReturn:
             raise QuotaExhaustedError("todos os providers esgotaram a quota")
 
         s = await self._run(tmp_path, boom)
@@ -837,7 +837,7 @@ class TestRunBuildStatus:
 
     @pytest.mark.asyncio
     async def test_generic_error_writes_error(self, tmp_path: Path) -> None:
-        async def boom(*a, **k):
+        async def boom(*a, **k) -> NoReturn:
             raise ValueError("pipeline quebrou")
 
         s = await self._run(tmp_path, boom)
@@ -848,7 +848,7 @@ class TestRunBuildStatus:
     async def test_quota_not_classified_as_error(self, tmp_path: Path) -> None:
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        async def boom(*a, **k):
+        async def boom(*a, **k) -> NoReturn:
             raise QuotaExhaustedError("quota")
 
         s = await self._run(tmp_path, boom)
@@ -895,7 +895,7 @@ class TestRunBuildStatus:
 
         registry, _ = _make_registry(tmp_path)
 
-        async def boom_after_progress(*a, on_progress=None, **k):
+        async def boom_after_progress(*a, on_progress=None, **k) -> NoReturn:
             if on_progress:
                 on_progress(3, 9, "Análise semântica", 5, 10)
             raise QuotaExhaustedError("quota")
@@ -923,7 +923,7 @@ class TestRunBuildStatus:
         """Se quota estoura antes de qualquer on_progress, step deve ser None."""
         from backend.llm.provider_fallback import QuotaExhaustedError
 
-        async def boom_imediato(*a, **k):
+        async def boom_imediato(*a, **k) -> NoReturn:
             raise QuotaExhaustedError("quota imediata")
 
         s = await self._run(tmp_path, boom_imediato)
@@ -940,7 +940,7 @@ class TestRunBuildStatus:
 
 
 class TestCheckWorkspaceAccess:
-    def _fake_owned_workspace(self, owner_id: str | None):
+    def _fake_owned_workspace(self, owner_id: str | None) -> MagicMock:
         ws = MagicMock()
         ws.owner_id = owner_id
         return ws

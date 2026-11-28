@@ -40,7 +40,9 @@ class _FakeTable:
         self.optimize_calls: list[dict] = []
         self._should_fail = False
 
-    async def optimize(self, *, cleanup_older_than=None, **_kwargs):
+    async def optimize(
+        self, *, cleanup_older_than=None, **_kwargs
+    ) -> _FakeOptimizeStats:
         self.optimize_calls.append({"cleanup_older_than": cleanup_older_than})
         if self._should_fail:
             msg = "storage backend indisponível"

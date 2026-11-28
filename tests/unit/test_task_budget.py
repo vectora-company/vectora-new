@@ -10,6 +10,8 @@ definido (`None`), a tarefa nunca é barrada.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
+from typing import NoReturn
 
 import pytest
 
@@ -207,7 +209,7 @@ class TestCorteAutomatico:
         await _task(db, "t1", budget_cents=None, agent_profile_id="prof-1")
         await _run(db, "t1", "r1", custo=150.0)
 
-        async def _fake_get_profile(profile_id):
+        async def _fake_get_profile(profile_id) -> SimpleNamespace:
             assert profile_id == "prof-1"
             return SimpleNamespace(budget_cents=100)
 
@@ -228,7 +230,7 @@ class TestCorteAutomatico:
         await _task(db, "t1", budget_cents=1000, agent_profile_id="prof-1")
         await _run(db, "t1", "r1", custo=150.0)
 
-        async def _fake_get_profile(profile_id):
+        async def _fake_get_profile(profile_id) -> NoReturn:
             # Nunca deveria ser chamado — task já tem budget_cents próprio.
             raise AssertionError("get_profile não deveria ser chamado")
 
@@ -249,7 +251,7 @@ class TestCorteAutomatico:
         await _task(db, "t1", budget_cents=None, agent_profile_id="prof-sumiu")
         await _run(db, "t1", "r1", custo=9999.0)
 
-        async def _fake_get_profile(profile_id):
+        async def _fake_get_profile(profile_id) -> NoReturn:
             raise RuntimeError("perfil não encontrado")
 
         monkeypatch.setattr(

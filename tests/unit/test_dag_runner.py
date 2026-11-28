@@ -38,12 +38,12 @@ async def test_dag_dispatches_only_dependency_ready_stage_then_advances(
     async def connect_db():
         return await aiosqlite.connect(db_path)
 
-    async def create_task(**kwargs):
+    async def create_task(**kwargs) -> SimpleNamespace:
         scheduled.append(kwargs)
         return SimpleNamespace(id="task")
 
     class Sessions:
-        async def get_agent_run(self, run_id: str):
+        async def get_agent_run(self, run_id: str) -> AgentRun:
             assert run_id == "origin-run"
             return AgentRun(
                 run_id=run_id,

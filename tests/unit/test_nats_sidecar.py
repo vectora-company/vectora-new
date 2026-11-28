@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -20,7 +21,9 @@ from backend.scheduling import nats_sidecar
 
 
 @pytest.fixture(autouse=True)
-def _reset_sidecar_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def _reset_sidecar_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
     # `Path.home()` isolado por padrão em TODO teste deste arquivo — sem
     # isso, qualquer teste que não pense em PID file acaba lendo/escrevendo
     # o ~/.vectora/nats real do dev (um pid file real deixado por uma

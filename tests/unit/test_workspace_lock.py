@@ -77,7 +77,7 @@ async def test_raises_timeout_when_lock_held_too_long() -> None:
 
 
 @pytest.mark.asyncio
-async def test_releases_lock_on_exception_inside_block():
+async def test_releases_lock_on_exception_inside_block() -> None:
     wsid, tid = "ws-exception", "thread-1"
 
     with pytest.raises(RuntimeError):

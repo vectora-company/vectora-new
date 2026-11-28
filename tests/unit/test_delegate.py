@@ -19,7 +19,7 @@ from backend.scheduling.delegate import (
 )
 
 
-def _fake_workspace(cwd: str = "/tmp/ws1"):
+def _fake_workspace(cwd: str = "/tmp/ws1") -> MagicMock:
     ws = MagicMock()
     ws.cwd = cwd
     return ws

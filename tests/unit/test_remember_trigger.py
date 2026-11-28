@@ -13,6 +13,7 @@ from backend.services.remember_trigger import (
 )
 from backend.settings import Settings
 from backend.tools.context import ToolContext
+from backend.vtypes.message import VMessage
 
 
 @pytest.fixture
@@ -330,7 +331,7 @@ async def test_distillation_uses_most_recent_part_of_thread(
     captured: dict[str, str] = {}
 
     class _Llm:
-        async def agenerate(self, messages):
+        async def agenerate(self, messages: list[VMessage]):
             captured["user"] = messages[-1].text()
 
             class _R:

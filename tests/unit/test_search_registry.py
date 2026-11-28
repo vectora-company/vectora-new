@@ -7,6 +7,8 @@ por padrão e escolha explícita via `rag_settings.search_backend`.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 
 from backend.tools.search_registry import (
@@ -157,7 +159,7 @@ class TestExecucao:
         """Erro/borda crítico: lista vazia faz o LLM concluir que não há
         resultados, que é diferente de a busca ter falhado."""
 
-        def _explode(query, max_results=5):
+        def _explode(query, max_results=5) -> NoReturn:
             raise RuntimeError("rede fora")
 
         monkeypatch.setattr("backend.browser.search_fallback.search_fallback", _explode)

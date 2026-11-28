@@ -8,6 +8,8 @@ com ``VMessage``.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 
 from backend.api.handlers import threads as threads_mod
@@ -49,7 +51,7 @@ async def test_ai_title_trims_to_six_words_and_strips(
 async def test_ai_title_fallback_on_llm_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _boom():
+    def _boom() -> NoReturn:
         raise RuntimeError("provider down")
 
     monkeypatch.setattr("backend.services.utils.load_native_llm", _boom)
@@ -59,7 +61,7 @@ async def test_ai_title_fallback_on_llm_failure(
 
 @pytest.mark.asyncio
 async def test_ai_title_fallback_empty_user(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _boom():
+    def _boom() -> NoReturn:
         raise RuntimeError("provider down")
 
     monkeypatch.setattr("backend.services.utils.load_native_llm", _boom)

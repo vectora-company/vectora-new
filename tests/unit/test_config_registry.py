@@ -9,6 +9,7 @@ usa um `RuntimeSettings` apontando pra `tmp_path`, `ConfigTomlAdapter` usa
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -36,7 +37,7 @@ from backend.vtypes.contracts import JsonValue
 
 
 @pytest.fixture
-def clean_registry():
+def clean_registry() -> Iterator[None]:
     """Isola o registry global entre testes que registram campos ad hoc —
     sem isso, o segundo teste que registrar `"x"` colidiria com o primeiro."""
     snapshot = dict(registry_mod._REGISTRY)
@@ -55,7 +56,7 @@ class _NoopAdapter:
 
 
 class TestSettingField:
-    def test_registra_e_recupera(self, clean_registry) -> None:
+    def test_registra_e_recupera(self, clean_registry: None) -> None:
         setting_field(
             "x",
             category="preferences",
@@ -68,7 +69,7 @@ class TestSettingField:
         assert field.category == "preferences"
         assert field.cli_flag == "--x"
 
-    def test_chave_duplicada_levanta_erro(self, clean_registry) -> None:
+    def test_chave_duplicada_levanta_erro(self, clean_registry: None) -> None:
         setting_field(
             "y",
             category="preferences",
@@ -85,7 +86,7 @@ class TestSettingField:
                 adapter=_NoopAdapter(),
             )
 
-    def test_chave_inexistente_retorna_none(self, clean_registry) -> None:
+    def test_chave_inexistente_retorna_none(self, clean_registry: None) -> None:
         assert get_field("nao-existe") is None
 
     def test_get_set_value_delegam_para_adapter(
@@ -118,7 +119,9 @@ class TestSettingField:
         with pytest.raises(KeyError):
             get_value("missing")
 
-    def test_fields_for_category_filtra_corretamente(self, clean_registry) -> None:
+    def test_fields_for_category_filtra_corretamente(
+        self, clean_registry: None
+    ) -> None:
         setting_field(
             "a",
             category="cat1",
@@ -137,7 +140,7 @@ class TestSettingField:
         assert [f.key for f in fields_for_category("cat2")] == ["b"]
         assert fields_for_category("cat-vazia") == []
 
-    def test_get_set_delegam_pro_adapter(self, clean_registry) -> None:
+    def test_get_set_delegam_pro_adapter(self, clean_registry: None) -> None:
         calls: list[tuple[str, JsonValue]] = []
 
         class _RecordingAdapter:

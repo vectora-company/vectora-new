@@ -20,11 +20,13 @@ import shutil
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
 
 from backend.api.handlers import github
+from tests.fake_requests import fake_request
 
 pytestmark = [pytest.mark.live, pytest.mark.asyncio]
 
@@ -41,8 +43,8 @@ READ_ONLY = {
 }
 
 
-def _request():
-    return SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(id="live")))
+def _request() -> MagicMock:
+    return fake_request(state=SimpleNamespace(user=SimpleNamespace(id="live")))
 
 
 @pytest.fixture(scope="module")

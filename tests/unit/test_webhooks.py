@@ -500,7 +500,7 @@ class TestObservabilityWebhookEndpoint:
     webhook de saída pra cá."""
 
     @pytest.fixture
-    def obs_db(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def obs_db(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
         import asyncio
         from pathlib import Path
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from collections.abc import Coroutine
-from typing import Any
+from typing import Any, NoReturn
 from unittest.mock import AsyncMock
 
 import pytest
@@ -16,7 +16,7 @@ from backend.transport.codespace import CodespaceTransport
 async def _timed_out[T](
     awaitable: Coroutine[None, None, T],
     timeout: float,  # noqa: ASYNC109
-) -> None:
+) -> NoReturn:
     awaitable.close()
     raise TimeoutError(f"timeout={timeout}")
 

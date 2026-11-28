@@ -1,3 +1,4 @@
+from typing import NoReturn
 from unittest.mock import MagicMock
 
 import pytest
@@ -109,7 +110,7 @@ async def test_create_tab_state_rejects_cdp_exception_and_detaches() -> None:
         def __init__(self) -> None:
             self.detached = False
 
-        async def send(self, method: str, *args, **kwargs):
+        async def send(self, method: str, *args, **kwargs) -> NoReturn:
             raise ConnectionResetError("CDP connection lost")
 
         async def detach(self) -> None:

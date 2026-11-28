@@ -8,8 +8,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 from anyio import BrokenResourceError
@@ -27,7 +29,7 @@ _DUMMY_SERVER_CRASHES = str(
 
 
 @pytest.fixture(autouse=True)
-async def _reset_global_client(monkeypatch: pytest.MonkeyPatch):
+async def _reset_global_client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     """Cada teste começa sem client global cacheado — evita vazamento de
     estado entre testes (o módulo usa um singleton lazy).
 
@@ -296,7 +298,7 @@ class TestVectoraMCPClientAcloseNuncaPropaga:
             # subprocess real do servidor dummy nunca é encerrado.
             real_aclose = client._stack.aclose
 
-            async def _stack_aclose_quebrado() -> None:
+            async def _stack_aclose_quebrado() -> NoReturn:
                 with contextlib.suppress(Exception):
                     await real_aclose()
                 raise ExceptionGroup(

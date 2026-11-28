@@ -327,7 +327,7 @@ async def test_cliente_passa_os_destinos_do_servidor_ao_jail(
     @asynccontextmanager
     async def sessao(_r, _w):
         class _S:
-            async def initialize(self):
+            async def initialize(self) -> None:
                 return None
 
         yield _S()

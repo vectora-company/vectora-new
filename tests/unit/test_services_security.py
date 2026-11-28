@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -40,7 +41,7 @@ class TestIsSensitivePath:
     def test_erro_ao_resolver_falha_fechado(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        def _resolve_falha(self):
+        def _resolve_falha(self) -> NoReturn:
             raise OSError("path inválido")
 
         monkeypatch.setattr(Path, "resolve", _resolve_falha)

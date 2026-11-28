@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import socket
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -29,7 +30,7 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture(autouse=True)
-async def _clean_sidecar_state():
+async def _clean_sidecar_state() -> AsyncIterator[None]:
     """Garante nenhum sidecar sobrando de um teste anterior, antes e depois."""
     await stop_nats_sidecar()
     yield

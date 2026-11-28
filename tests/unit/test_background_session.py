@@ -6,8 +6,12 @@ Verifica que após a "desconexão" do cliente, o motor nativo continua
 consumindo eventos em background (multi-tarefas real) em vez de ser cancelado.
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
+from collections.abc import AsyncIterator
+from typing import NoReturn
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -52,7 +56,7 @@ class TestConsumeRemainder:
     async def test_consume_remainder_suprime_excecao_do_iterador(self) -> None:
         """Erros durante consumo do background não devem propagar."""
 
-        async def error_iterator():
+        async def error_iterator() -> AsyncIterator[int]:
             yield 1
             raise RuntimeError("LLM erro de quota")
 
@@ -66,7 +70,7 @@ class TestConsumeRemainder:
     async def test_consume_remainder_suprime_excecao_do_pending_task(self) -> None:
         """Erro na pending_task pendente não deve propagar."""
 
-        async def failing_task():
+        async def failing_task() -> NoReturn:
             raise ValueError("task falhou")
 
         pending = asyncio.create_task(failing_task())
@@ -114,7 +118,7 @@ class TestConsumeRemainder:
         """
         flag = []
 
-        async def slow_iterator():
+        async def slow_iterator() -> AsyncIterator[int]:
             await asyncio.sleep(0.5)
             flag.append("done")
             yield 1

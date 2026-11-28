@@ -174,7 +174,7 @@ async def test_job_endpoints_report_queue_unavailable(
 
     from backend.api.handlers.workspaces import rag_job_status, rag_jobs
 
-    async def unavailable(_dsn: str | None) -> None:
+    async def unavailable(_dsn: str | None) -> NoReturn:
         raise RuntimeError("database unavailable")
 
     monkeypatch.setattr(
@@ -199,7 +199,7 @@ async def test_enqueue_failure_is_visible_even_when_queue_is_unavailable(
         "enqueue_error": "Falha ao preparar a fila de indexação.",
     }
 
-    async def unavailable(_dsn: str | None) -> None:
+    async def unavailable(_dsn: str | None) -> NoReturn:
         raise RuntimeError("database unavailable")
 
     monkeypatch.setattr(

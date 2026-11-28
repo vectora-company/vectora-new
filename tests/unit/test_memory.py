@@ -14,11 +14,13 @@ Verifica:
 from __future__ import annotations
 
 import json
+from typing import NoReturn
 
 import pytest
 
 from backend.testing.mocks import NativeInMemoryStore
 from backend.tools.context import ToolContext
+from tests.json_values import dig
 
 # ---------------------------------------------------------------------------
 # _user_id_from_ctx prioridade
@@ -218,7 +220,7 @@ class TestGetStore:
 
 
 @pytest.fixture
-def store(monkeypatch: pytest.MonkeyPatch):
+def store(monkeypatch: pytest.MonkeyPatch) -> NativeInMemoryStore:
     """Executa a operação store."""
     real_store = NativeInMemoryStore()
     monkeypatch.setattr("backend.tools.memory._get_store", lambda ctx: real_store)
@@ -234,7 +236,7 @@ def store(monkeypatch: pytest.MonkeyPatch):
 class TestSaveMemoryCategory:
     @pytest.mark.asyncio
     async def test_proveniencia_nao_pode_ser_promovida_por_metadata(
-        self, store
+        self, store: NativeInMemoryStore
     ) -> None:
         from backend.tools.memory import save_memory
 
@@ -247,11 +249,11 @@ class TestSaveMemoryCategory:
         )
         item = await store.aget(("user", "u1", "memories"), "untrusted")
         assert item is not None
-        assert item.value["metadata"]["trust_level"] == "untrusted"
+        assert dig(item.value["metadata"], "trust_level") == "untrusted"
 
     @pytest.mark.asyncio
     async def test_contexto_sem_marcador_persiste_trusted_mesmo_com_extra_invalido(
-        self, store
+        self, store: NativeInMemoryStore
     ) -> None:
         from backend.tools.memory import save_memory
 
@@ -266,10 +268,10 @@ class TestSaveMemoryCategory:
             )
             item = await store.aget(("user", "u1", "memories"), key)
             assert item is not None
-            assert item.value["metadata"]["trust_level"] == "trusted"
+            assert dig(item.value["metadata"], "trust_level") == "trusted"
 
     async def test_ttl_persiste_valid_until_e_rejeita_valor_invalido(
-        self, store
+        self, store: NativeInMemoryStore
     ) -> None:
         """Verifica o comportamento de ttl persiste valid until e rejeita valor invalido."""
         from backend.tools.memory import get_memory, save_memory
@@ -293,7 +295,9 @@ class TestSaveMemoryCategory:
             json.loads(await get_memory(ctx=ctx, key="temporary"))["status"] == "found"
         )
 
-    async def test_memoria_expirada_nao_aparece_e_e_removida(self, store) -> None:
+    async def test_memoria_expirada_nao_aparece_e_e_removida(
+        self, store: NativeInMemoryStore
+    ) -> None:
         """Verifica o comportamento de memoria expirada nao aparece e e removida."""
         from backend.tools.memory import get_memory
 
@@ -310,7 +314,9 @@ class TestSaveMemoryCategory:
         )
         assert await store.aget(("user", "u1", "memories"), "expired") is None
 
-    async def test_category_e_persistida_e_volta_no_get(self, store) -> None:
+    async def test_category_e_persistida_e_volta_no_get(
+        self, store: NativeInMemoryStore
+    ) -> None:
         """Verifica o comportamento de category e persistida e volta no get."""
         from backend.tools.memory import get_memory, save_memory
 
@@ -323,7 +329,9 @@ class TestSaveMemoryCategory:
 
         assert out["category"] == "preference"
 
-    async def test_sem_category_fica_none_retrocompativel(self, store) -> None:
+    async def test_sem_category_fica_none_retrocompativel(
+        self, store: NativeInMemoryStore
+    ) -> None:
         """Chamadas existentes sem `category` continuam funcionando —
         parâmetro é opcional, não quebra nenhum caller atual."""
         from backend.tools.memory import get_memory, save_memory
@@ -335,7 +343,9 @@ class TestSaveMemoryCategory:
 
         assert out["category"] is None
 
-    async def test_category_invalida_e_rejeitada_sem_persistir(self, store) -> None:
+    async def test_category_invalida_e_rejeitada_sem_persistir(
+        self, store: NativeInMemoryStore
+    ) -> None:
         """Erro/borda: categoria fora do conjunto válido não é aceita
         silenciosamente. `save_memory` chamada via `TOOL_REGISTRY` (caminho
         real de uma tool call do LLM) valida os argumentos contra o schema
@@ -358,7 +368,9 @@ class TestSaveMemoryCategory:
         item = await store.aget(("user", "u1", "memories"), "categoria_ruim")
         assert item is None
 
-    async def test_listar_todas_inclui_category_de_cada_uma(self, store) -> None:
+    async def test_listar_todas_inclui_category_de_cada_uma(
+        self, store: NativeInMemoryStore
+    ) -> None:
         """Verifica o comportamento de listar todas inclui category de cada uma."""
         from backend.tools.memory import get_memory, save_memory
 
@@ -380,7 +392,9 @@ class TestListFactContents:
     `_get_store()` (contextvar só válido durante a execução do motor
     nativo), por isso usa `agent_factory.get_store()` em vez disso."""
 
-    async def test_retorna_conteudo_de_todos_os_fatos_do_usuario(self, store) -> None:
+    async def test_retorna_conteudo_de_todos_os_fatos_do_usuario(
+        self, store: NativeInMemoryStore
+    ) -> None:
         """Verifica o comportamento de retorna conteudo de todos os fatos do usuario."""
         from backend.tools.memory import list_fact_contents, save_memory
 
@@ -392,7 +406,9 @@ class TestListFactContents:
 
         assert sorted(result) == ["Fato A", "Fato B"]
 
-    async def test_usuario_sem_nenhum_fato_retorna_lista_vazia(self, store) -> None:
+    async def test_usuario_sem_nenhum_fato_retorna_lista_vazia(
+        self, store: NativeInMemoryStore
+    ) -> None:
         """Verifica o comportamento de usuario sem nenhum fato retorna lista vazia."""
         from backend.tools.memory import list_fact_contents
 
@@ -400,7 +416,9 @@ class TestListFactContents:
 
         assert result == []
 
-    async def test_nao_retorna_fatos_expirados(self, store) -> None:
+    async def test_nao_retorna_fatos_expirados(
+        self, store: NativeInMemoryStore
+    ) -> None:
         """Verifica o comportamento de nao retorna fatos expirados."""
         from backend.tools.memory import list_fact_contents
 
@@ -426,7 +444,7 @@ class TestListFactContents:
         depende mais de `_get_store()`."""
         from backend.tools.memory import list_fact_contents
 
-        def _boom() -> None:
+        def _boom() -> NoReturn:
             """Executa a operação  boom."""
             raise RuntimeError("Called get_config outside of a runnable context")
 

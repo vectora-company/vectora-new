@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import NoReturn, cast
 
 import pytest
 from pydantic import BaseModel
@@ -425,7 +425,7 @@ async def test_subagent_exception_marks_child_failed_and_propagates(
 ) -> None:
     """Falha inesperada do loop fica persistida e não é engolida."""
 
-    async def failing(*_args, **_kwargs):
+    async def failing(*_args, **_kwargs) -> NoReturn:
         raise RuntimeError("boom")
 
     monkeypatch.setattr("backend.engine.subagents.run_conversation", failing)

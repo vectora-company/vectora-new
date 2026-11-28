@@ -45,7 +45,7 @@ class _Connection:
         self.fetchrow = AsyncMock()
         self.execute = AsyncMock()
 
-    def transaction(self):
+    def transaction(self) -> _AsyncContext:
         """Executa a operação transaction."""
         return _AsyncContext(None)
 
@@ -55,7 +55,7 @@ class _Pool:
         """Inicializa o estado da instância."""
         self.connection = connection
 
-    def acquire(self):
+    def acquire(self) -> _AsyncContext:
         """Executa a operação acquire."""
         return _AsyncContext(self.connection)
 
