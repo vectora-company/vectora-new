@@ -44,7 +44,7 @@ def test_correlation_sanitization_and_unhandled_exception_headers() -> None:
     app = create_app(serve_static=False)
 
     @app.get("/test/error-route")
-    async def _failing_route() -> NoReturn:
+    async def _failing_route() -> None:
         """Executa a operação failing route."""
         raise RuntimeError("Simulated unhandled explosion")
 
